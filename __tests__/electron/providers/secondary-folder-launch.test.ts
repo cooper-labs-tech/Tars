@@ -42,7 +42,7 @@ afterAll(() => {
 });
 
 /** The four providers that hand a secondary folder, and the flag each hands it with. */
-const HANDING = { claude: '--add-dir', codex: '--add-dir', gemini: '--include-directories', 'qwen-code': '--include-directories' } as const;
+const HANDING = { claude: '--add-dir', codex: '--add-dir', gemini: '--include-directories', 'qwen-code': '--include-directories', 'kimi-code': '--add-dir' } as const;
 
 async function lineFor(id: keyof typeof HANDING, secondaryProjectPath?: string, obsidianVaultPaths?: string[]): Promise<string> {
   vi.resetModules();

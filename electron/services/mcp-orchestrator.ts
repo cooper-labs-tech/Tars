@@ -198,8 +198,10 @@ export async function setupMcpOrchestrator(appSettings?: AppSettings): Promise<v
           // Every one of Tars's servers reads the agent's identity and token
           // from its environment, which codex hands only by name.
           const registered = provider.isMcpServerRegistered(name, serverPath, TARS_MCP_ENV);
+          // There, but not written as this Tars writes it now (pi's without its tools declared): written again.
+          const current = registered && (provider.isMcpServerCurrent?.(name, serverPath, TARS_MCP_ENV) ?? true);
           const moveOver = mayMove && !isTypeScript && !movedBefore.has(provider.id);
-          if (!registered || moveOver) {
+          if (!current || moveOver) {
             // Registering spawns a CLI, and this is the main thread, the one
             // that paints the window and pumps every PTY. Yield between each
             // so the app stays answerable while it catches up.

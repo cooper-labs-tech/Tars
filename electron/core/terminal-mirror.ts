@@ -108,6 +108,54 @@ interface Mirror {
    *  for it on every call, the Kanban and the tray included: an agent at rest
    *  writes nothing, and its snapshot is not made again. */
   snapshot?: string;
+  /**
+   * What the terminal was sent since the CLI now in it was launched (markCliLaunch), or since the terminal began when
+   * none was: replayed into a fresh terminal, it is that CLI's screen and nothing before it (rowsSinceLaunch).
+   */
+  launchLog?: LaunchLog;
+}
+
+interface LaunchLog {
+  chunks: string[];
+  /** UTF-8 bytes kept (the Audit's L4 on #601: counted in characters, wide ones ran past the cap). */
+  bytes: number;
+  /** More was written than is kept: what the CLI drew cannot be known from it. */
+  overflowed: boolean;
+  /** The last reading, kept until a chunk comes. */
+  cache?: { count: number; rows: string[] };
+  /** Lets it go at the launch window's end, written to or not. */
+  timer: ReturnType<typeof setTimeout>;
+}
+
+/** How much of a launch's output is kept, and for how long: the launch window (core/agent-launch.ts, CLI_UP_MS). */
+const LAUNCH_LOG_BYTES = 1024 * 1024;
+const LAUNCH_LOG_MS = 180_000;
+
+/** A launch log from now, for the launch window and no longer, in place of any before it. */
+function startLaunchLog(mirror: Mirror): void {
+  dropLaunchLog(mirror);
+  const log: LaunchLog = {
+    chunks: [], bytes: 0, overflowed: false,
+    timer: setTimeout(() => { if (mirror.launchLog === log) mirror.launchLog = undefined; }, LAUNCH_LOG_MS),
+  };
+  log.timer.unref?.();
+  mirror.launchLog = log;
+}
+
+function dropLaunchLog(mirror: Mirror): void {
+  if (mirror.launchLog) clearTimeout(mirror.launchLog.timer);
+  mirror.launchLog = undefined;
+}
+
+function logLaunchOutput(mirror: Mirror, data: string): void {
+  const log = mirror.launchLog;
+  if (!log || log.overflowed) return;
+  log.chunks.push(data);
+  log.bytes += Buffer.byteLength(data, 'utf8');
+  if (log.bytes > LAUNCH_LOG_BYTES) {
+    log.overflowed = true;
+    log.chunks = [];
+  }
 }
 
 const mirrors = new WeakMap<IPty, Mirror>();
@@ -126,7 +174,7 @@ const mirrors = new WeakMap<IPty, Mirror>();
  */
 export function attachTerminalMirror(
   pty: IPty,
-  opts: { cols: number; rows: number; watchRepaint: boolean; label: string },
+  opts: { cols: number; rows: number; watchRepaint: boolean; label: string; logLaunch?: boolean },
 ): void {
   if (!xterm) return;
   const term = new xterm.Terminal({
@@ -146,6 +194,9 @@ export function attachTerminalMirror(
     serializer,
     repaint: opts.watchRepaint ? new RepaintWatch(term, opts.label) : undefined,
   };
+  // From its first byte, for a CLI that reads as up from its screen: one spawned as the terminal itself is launched with
+  // it. Any other terminal keeps none (the Audit's L4 on #601).
+  if (opts.logLaunch) startLaunchLog(mirror);
   mirrors.set(pty, mirror);
 
   pty.onData(data => {
@@ -153,6 +204,8 @@ export function attachTerminalMirror(
     try {
       mirror.snapshot = undefined;
       mirror.core.writeSync(data);
+      // After the parse, inside the guard: a chunk the mirror cannot take costs no other listener anything.
+      logLaunchOutput(mirror, data);
       mirror.repaint?.endChunk();
     } catch (err) {
       // node-pty calls its data listeners in a loop with nothing around them,
@@ -168,6 +221,7 @@ export function attachTerminalMirror(
 
 function forget(pty: IPty, mirror: Mirror): void {
   if (mirrors.get(pty) === mirror) mirrors.delete(pty);
+  dropLaunchLog(mirror);
   mirror.term.dispose();
 }
 
@@ -366,6 +420,54 @@ function textOf(term: Terminal): string[] {
 export function terminalText(pty: IPty | undefined): string[] | undefined {
   const mirror = pty && mirrors.get(pty);
   return mirror ? textOf(mirror.term) : undefined;
+}
+
+/**
+ * A CLI is being launched into `pty` (core/agent-manager.ts, launchIntoTerminal; core/agent-restart.ts): what the
+ * terminal is sent from here on is that CLI's, and rowsSinceLaunch reads only that.
+ */
+export function markCliLaunch(pty: IPty | undefined, log: boolean): void {
+  const mirror = pty && mirrors.get(pty);
+  if (!mirror) return;
+  // Only for a CLI that reads as up from its screen (CLIProvider.upOnScreen); the log of an earlier CLI goes either way.
+  if (log) startLaunchLog(mirror);
+  else dropLaunchLog(mirror);
+}
+
+/** How many of the bottom rows a provider's upOnScreen is given: a TUI's field and its footer, never the answer above. */
+const LAUNCH_ROWS = 8;
+
+/**
+ * The bottom rows the CLI launched into `pty` has drawn since its launch, empty rows left out, at most `max`: what a
+ * provider's upOnScreen reads (core/agent-launch.ts, sessionUp). What the terminal was sent since markCliLaunch (since
+ * the terminal began when nothing marked a launch) is replayed into a fresh terminal of its size, so nothing from
+ * before the launch can be read: no earlier CLI's box in the history, below the cursor or on an alternate screen it
+ * left on, whatever the output since does to the screen (a deleted line, reverse indexes); and only the bottom rows,
+ * never a box quoted higher up in an answer (the Audit's L1 and L2 on #601). Read on the alternate screen when the CLI
+ * entered one. Empty when it cannot be known: more was written than is kept, or the launch window is past. Undefined
+ * with no mirror.
+ */
+export function rowsSinceLaunch(pty: IPty | undefined, max = LAUNCH_ROWS): string[] | undefined {
+  const mirror = pty && mirrors.get(pty);
+  if (!mirror) return undefined;
+  const log = mirror.launchLog;
+  if (!log || log.overflowed || !xterm) return [];
+  if (log.cache && log.cache.count === log.chunks.length) return log.cache.rows.slice(-max);
+  const term = new xterm.Terminal({ cols: mirror.term.cols, rows: mirror.term.rows, scrollback: 0, convertEol: true, allowProposedApi: true, logLevel: 'error' });
+  try {
+    const core = (term as unknown as { _core: XtermInternals })._core;
+    for (const chunk of log.chunks) core.writeSync(chunk);
+    const buffer = term.buffer.active;
+    const rows: string[] = [];
+    for (let y = buffer.length - 1; y >= 0 && rows.length < LAUNCH_ROWS; y--) {
+      const text = buffer.getLine(y)?.translateToString(true) ?? '';
+      if (text.trim()) rows.unshift(text);
+    }
+    log.cache = { count: log.chunks.length, rows };
+    return rows.slice(-max);
+  } finally {
+    term.dispose();
+  }
 }
 
 /**

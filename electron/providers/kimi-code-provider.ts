@@ -1,0 +1,239 @@
+import * as path from 'path';
+import * as fs from 'fs';
+import type { AppSettings } from '../types';
+import { kimiHome, kimiIdOf, kimiUuidOf } from './kimi-cli';
+import { execCli } from './cli-exec';
+import { handedSecondaryFolder } from '../utils/handed-folder';
+import { updateSharedJsonSync } from '../utils/shared-file';
+import type {
+  CLIProvider,
+  InteractiveCommandParams,
+  OneShotCommandParams,
+  ProviderModel,
+  HookConfig,
+} from './cli-provider';
+import { shellQuote } from './cli-provider';
+import { endpointLaunchForAgent } from '../services/traces-runtime';
+
+/**
+ * Kimi Code CLI, the binary `kimi` (MoonshotAI/kimi-code, MIT), measured on 2.6.3 (19/11/2026) in a PTY against a
+ * loopback endpoint:
+ * - its TUI takes no task on its command line (`kimi [options]`; `-p` is one-shot), so a launch types the task in
+ *   once it runs (taskTypedAfterLaunch, core/typed-task.ts), with a bracketed paste and Enter like every CLI;
+ * - `--auto` is its Never Ask mode; without it, it asks (manual). Its `--plan` still runs commands, each after an
+ *   approval dialog nobody answers in an agent's terminal (measured), so Tars offers no plan mode for it
+ *   (plan-mode.ts refuses plan, and the window agrees once kimi-code is in its registry);
+ * - its first start in a folder asks "Trust this folder?": KIMI_CODE_TRUST_WORKSPACE=1 trusts it for that process
+ *   only, writing nothing;
+ * - its MCP servers are read from `$KIMI_CODE_HOME/mcp.json` (`mcpServers`), each started with kimi's whole
+ *   environment, the agent's token in it (measured: the probe's variables reached the server);
+ * - `--session <id>` resumes a session, with its history (measured);
+ * - its turns, its answer and its sessions are read from its session log (services/kimi-sessions.ts): it runs no
+ *   hook Tars installs, and the user's own Kimi home (its login, its providers) is the one it runs on.
+ * Its model is the user's own (`default_model` in its config.toml), or the endpoint Tars hands it
+ * (services/endpoint-harness.ts): no model of any family is assumed here.
+ */
+
+/**
+ * The session a kimi launch line resumes (`--session session_<uuid>`, as buildInteractiveCommand writes it, in the
+ * POSIX or the Windows quoting), or undefined: what the session reader is told at the launch, so that the session
+ * there before it counts only as that one (services/kimi-sessions.ts, the Audit's M1 on #601).
+ */
+export function kimiSessionOfCommand(command: string): string | undefined {
+  return /--session\s+['"]?(session_[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})['"]?(?=\s|$)/.exec(command)?.[1];
+}
+
+/** A model alias of the user's config (`-m`), letters, digits and `. _ : / -` only: it reaches a command line. */
+const SAFE_MODEL = /^[A-Za-z0-9._:/-]{1,200}$/;
+
+const mcpConfigFile = (): string => path.join(kimiHome(), 'mcp.json');
+type McpServersFile = { mcpServers?: Record<string, unknown>; [key: string]: unknown };
+
+export class KimiCodeProvider implements CLIProvider {
+  readonly id = 'kimi-code' as const;
+  readonly displayName = 'Kimi Code';
+  readonly binaryName = 'kimi';
+  get configDir(): string { return kimiHome(); }
+
+  getModels(): ProviderModel[] {
+    return [{ id: 'default', name: 'Default', description: 'The model set in Kimi Code' }];
+  }
+
+  resolveBinaryPath(appSettings: AppSettings): string {
+    return appSettings.cliPaths?.kimi || 'kimi';
+  }
+
+  buildInteractiveCommand(params: InteractiveCommandParams): string {
+    let command = shellQuote(params.binaryPath);
+    // Never --plan: kimi's runs commands after dialogs nobody answers (measured). Refused, with the reason create and
+    // update give (plan-mode.ts planModeRefusal, not imported here: it reads the registry, which loads this file).
+    if (params.permissionMode === 'plan') throw new Error(`${this.displayName} has no plan mode here: plan would run as manual. Ask for normal, auto or bypass.`);
+    if (params.permissionMode === 'auto' || params.permissionMode === 'bypass') command += ' --auto';
+    // On an inference endpoint the model is KIMI_MODEL_NAME's (getPtyEnvVars): `-m` names an alias of the user's
+    // config.toml, which the endpoint's model is not, and kimi then starts no session (measured on 2.6.3).
+    const onEndpoint = !!endpointLaunchForAgent(params.agentId, 'kimi-code');
+    if (params.model && params.model !== 'default' && !onEndpoint) {
+      if (!SAFE_MODEL.test(params.model)) throw new Error('Invalid model name');
+      command += ` -m ${shellQuote(params.model)}`;
+    }
+    // A resume continues the session under its own id. A restart that forks would resume the session it just stopped,
+    // whose id is the stop's tombstone (hooks-routes.ts refuses its posts): forked ahead by `kimi fork` (forkAhead), the
+    // launch resumes the fork instead; when that fork could not be made, a new session.
+    // Tars knows the session by its UUID (kimi-cli.ts): kimi takes its own name for it.
+    const session = params.forkSession ? null : kimiIdOf(params.resumeSessionId);
+    if (session) command += ` --session ${shellQuote(session)}`;
+    const secondary = handedSecondaryFolder(params.secondaryProjectPath);
+    if (secondary) command += ` --add-dir ${shellQuote(secondary)}`;
+    for (const vp of params.obsidianVaultPaths ?? []) {
+      if (handedSecondaryFolder(vp) && fs.existsSync(vp)) command += ` --add-dir ${shellQuote(vp)}`;
+    }
+    return command;
+  }
+
+  /**
+   * A restart's fork, ahead of its line: `kimi fork -y <id>` (2.6.3, measured 21/11) makes a new session holding the
+   * conversation's turns in about 1.4 s, with no terminal, prints `Forked to session_<uuid> (...)` and exits; `--session`
+   * then resumes it under that id, never the stopped session's, the stop's tombstone. Run as codex's `--help` is (cli-
+   * exec.ts), off the main thread, in Tars's environment, which the agent's terminal inherits, KIMI_CODE_HOME with it,
+   * and in the agent's folder (the Audit's L3 on #601: a fork from `/` still kept the session's own folder, measured,
+   * and from the agent's folder there is nothing to measure). Null when kimi fails, hangs past 20 s, prints no
+   * session, or the session is not of kimi's form.
+   */
+  async forkAhead(binaryPath: string, sessionId: string, cwd: string): Promise<string | null> {
+    const id = kimiIdOf(sessionId);
+    if (!id) return null;
+    try {
+      const { stdout } = await execCli(binaryPath, ['fork', '-y', id], { encoding: 'utf-8', timeout: 20_000, maxBuffer: 1024 * 1024, cwd });
+      const forked = /Forked to (session_[0-9a-f-]{36})\b/.exec(stdout)?.[1];
+      return forked ? kimiUuidOf(forked) : null;
+    } catch (err) {
+      console.warn(`[kimi-code] could not fork ${id}, a new session instead:`, err instanceof Error ? err.message : err);
+      return null;
+    }
+  }
+
+  readonly taskTypedAfterLaunch = true;
+
+  /**
+   * Up once its input box is drawn (`│ >`): it writes nothing to disk before its first prompt, and a paste sent before
+   * the box was lost (measured on 2.6.3, the box about 6 s after the process ran, under load).
+   */
+  upOnScreen(lines: readonly string[]): boolean {
+    return lines.some((line) => /^\s*│ >/.test(line));
+  }
+
+  /** Measured on 2.6.3: a note typed with Enter during a slow tool call went out as its own next turn. */
+  readonly noteDuringTurn = 'after-the-turn' as const;
+
+  /** What a launch types into the TUI: the task, with the skills line before it. No task, nothing. */
+  typedTask(params: Pick<InteractiveCommandParams, 'prompt' | 'skills' | 'isSuperAgent'>): string {
+    if (!params.prompt?.trim()) return '';
+    if (params.skills && params.skills.length > 0 && !params.isSuperAgent) {
+      return `[IMPORTANT: Use these skills for this session: ${params.skills.join(', ')}. Invoke them with /<skill-name> when relevant to the task.] ${params.prompt}`;
+    }
+    return params.prompt;
+  }
+
+  buildOneShotCommand(params: OneShotCommandParams): string {
+    let command = shellQuote(params.binaryPath);
+    if (params.model && params.model !== 'default' && SAFE_MODEL.test(params.model)) command += ` -m ${shellQuote(params.model)}`;
+    return `${command} -p ${shellQuote(params.prompt)}`;
+  }
+
+  getPtyEnvVars(agentId: string, projectPath: string, skills: string[] | undefined): Record<string, string> {
+    return {
+      DOROTHY_SKILLS: (skills ?? []).join(','),
+      DOROTHY_AGENT_ID: agentId,
+      DOROTHY_PROJECT_PATH: projectPath,
+      CLAUDE_AGENT_ID: agentId,
+      CLAUDE_PROJECT_PATH: projectPath,
+      CLAUDE_PROVIDER: this.id,
+      // The folder trusted for this process, nothing written (measured on 2.6.3).
+      KIMI_CODE_TRUST_WORKSPACE: '1',
+      // On an inference endpoint, its model from the launch (services/endpoint-harness.ts); the proxy token's
+      // variable is filled at the spawn (core/agent-pty.ts), never here.
+      ...(endpointLaunchForAgent(agentId, 'kimi-code')?.env ?? {}),
+    };
+  }
+
+  getEnvVarsToDelete(): string[] {
+    return [];
+  }
+
+  getHookConfig(): HookConfig {
+    return {
+      supportsNativeHooks: false,
+      // Its turns are read from its session log and posted as the hooks would (services/kimi-sessions.ts).
+      turnsReported: true,
+      configDir: this.configDir,
+      settingsFile: path.join(this.configDir, 'config.toml'),
+    };
+  }
+
+  async configureHooks(_hooksDir: string): Promise<void> {
+    // Nothing to install: its session log is read instead.
+  }
+
+  getMcpConfigStrategy(): 'flag' | 'config-file' {
+    return 'config-file';
+  }
+
+  async registerMcpServer(name: string, command: string, args: string[]): Promise<void> {
+    const file = mcpConfigFile();
+    fs.mkdirSync(path.dirname(file), { recursive: true });
+    const outcome = updateSharedJsonSync<McpServersFile>(file, current => {
+      const config: McpServersFile = current ?? {};
+      const servers = config.mcpServers && typeof config.mcpServers === 'object' ? config.mcpServers : {};
+      config.mcpServers = { ...servers, [name]: { command, args } };
+      return config;
+    }, { createMode: 0o600 });
+    if (outcome === 'unreadable') console.warn(`[kimi-code] MCP server ${name} not registered: ${file} is not JSON, left untouched`);
+    else if (outcome === 'busy') console.warn(`[kimi-code] MCP server ${name} not registered: ${file} changed under every attempt`);
+  }
+
+  async removeMcpServer(name: string): Promise<void> {
+    updateSharedJsonSync<McpServersFile>(mcpConfigFile(), current => {
+      const servers = current?.mcpServers;
+      if (!servers || typeof servers !== 'object' || !(name in servers)) return undefined;
+      delete servers[name];
+      return current;
+    });
+  }
+
+  isMcpServerRegistered(name: string, expectedServerPath: string): boolean {
+    try {
+      const config = JSON.parse(fs.readFileSync(mcpConfigFile(), 'utf-8')) as McpServersFile;
+      const server = config.mcpServers && typeof config.mcpServers === 'object' ? config.mcpServers[name] : undefined;
+      if (!server) return false;
+      const entry = JSON.stringify(server);
+      return entry.includes(expectedServerPath) || entry.includes(JSON.stringify(expectedServerPath).slice(1, -1));
+    } catch {
+      return false;
+    }
+  }
+
+  getSkillDirectories(): string[] {
+    return [path.join(this.configDir, 'skills')];
+  }
+
+  getInstalledSkills(): string[] {
+    const dir = this.getSkillDirectories()[0];
+    try {
+      return fs.readdirSync(dir, { withFileTypes: true }).filter((e) => e.isDirectory() || e.isSymbolicLink()).map((e) => e.name);
+    } catch {
+      return [];
+    }
+  }
+
+  supportsSkills(): boolean {
+    return false;
+  }
+
+  getMemoryBasePath(): string {
+    return this.configDir;
+  }
+
+  getAddDirFlag(): string {
+    return '--add-dir';
+  }
+}

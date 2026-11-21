@@ -153,7 +153,9 @@ export class PiProvider implements CLIProvider {
     const outcome = updateSharedJsonSync<McpServersFile>(file, current => {
       const config: McpServersFile = current ?? {};
       const servers = config.mcpServers && typeof config.mcpServers === 'object' ? config.mcpServers : {};
-      config.mcpServers = { ...servers, [name]: { command, args } };
+      // Declared to the model like a built-in tool: pi 1.5.2's default exposure, `codemode`, leaves a server's tools
+      // callable from its code tool alone, and an agent on pi never saw send_message or delegate_task (measured 19/11).
+      config.mcpServers = { ...servers, [name]: { command, args, exposure: 'direct' } };
       return config;
     }, { createMode: 0o644 });
     if (outcome === 'unreadable') console.warn(`[pi] MCP server ${name} not registered: ${file} is not JSON, left untouched`);
@@ -176,6 +178,18 @@ export class PiProvider implements CLIProvider {
       // doubled there, never matched, and was registered again at every launch.
       const entry = JSON.stringify(server);
       return entry.includes(expectedServerPath) || entry.includes(JSON.stringify(expectedServerPath).slice(1, -1));
+    } catch {
+      return false;
+    }
+  }
+
+  /** Registered, and with its tools declared to the model: a server an older Tars wrote without that is written again. */
+  isMcpServerCurrent(name: string, expectedServerPath: string): boolean {
+    if (!this.isMcpServerRegistered(name, expectedServerPath)) return false;
+    try {
+      const config = JSON.parse(fs.readFileSync(mcpConfigFile(), 'utf-8')) as McpServersFile;
+      const server = config.mcpServers?.[name] as { exposure?: unknown } | undefined;
+      return server?.exposure === 'direct';
     } catch {
       return false;
     }

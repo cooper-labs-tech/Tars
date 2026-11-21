@@ -10,6 +10,7 @@ import { pendingBackgroundWork } from '../services/agent-truth';
 import { broadcastToAllWindows } from '../utils/broadcast';
 import { scheduleTick } from '../utils/agents-tick';
 import { hasOrchestratorPowers } from './agent-role';
+import { launchPlanRefusal } from '../providers/plan-mode';
 import type { AgentStatus } from '../types';
 
 /**
@@ -391,6 +392,9 @@ async function settle(agentId: string): Promise<void> {
  * session would be dropped as stale.
  */
 async function restartNow(agent: AgentStatus, cause: 'settings' | 'asked'): Promise<{ success: boolean; error?: string }> {
+  // Decided before the terminal is killed: a launch refused after it would leave the agent with none (the Audit's L3).
+  const noPlan = launchPlanRefusal(agent.provider, agent.permissionMode);
+  if (noPlan) return { success: false, error: noPlan };
   restarting.add(agent.id);
   restartedAt.set(agent.id, Date.now());
   try {

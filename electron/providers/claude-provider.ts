@@ -21,6 +21,8 @@ import { usesNodeHooks, mergeNodeHooks, legacyShCommand } from '../utils/hook-co
 export class ClaudeProvider implements CLIProvider {
   readonly id = 'claude' as const;
   readonly displayName = 'Claude Code';
+  /** A message typed while a turn runs reaches the model with the turn's next tool result. */
+  readonly noteDuringTurn = 'next-tool-round' as const;
   readonly binaryName = 'claude';
   readonly configDir = path.join(os.homedir(), '.claude');
 
