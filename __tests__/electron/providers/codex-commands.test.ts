@@ -40,6 +40,13 @@ import * as path from 'node:path';
  *    ended the turn and left no process. So: `--no-daemon` in every mode, resumed and forked alike, on a codex whose
  *    --help lists it; never on one that does not (an unknown flag is exit 2, as in 4); never in `codex exec`, whose
  *    --help does not list it.
+ * 10. (QA's gate of the stack, measured on 0.170.0, 21/11) codex's update prompt at its start ("1. Update now (runs
+ *    `npm install -g @openai/codex`)  2. Skip  3. Skip until next version", enter to continue) takes the Enter of a
+ *    task Tars types at its exec (codex has no screen of its own to wait for): codex installed itself globally with
+ *    npm, said to restart it, and exited. The task was lost, a restart's fork with it, and the user's machine got a
+ *    global codex nobody asked for. Every interactive line, started, resumed or forked, switches that check off for
+ *    its run (`-c check_for_update_on_startup=false`, after the subcommand, before the session), never in the user's
+ *    own config.
  */
 
 import { CodexProvider } from '../../../electron/providers/codex-provider';
@@ -171,6 +178,29 @@ describe("codex's shared background server", () => {
     const { bin } = fakeCodex(HELP_0170);
     await provider.prepareLaunch(bin, 'bypass');
     expect(words(provider.buildOneShotCommand({ binaryPath: bin, prompt: PROMPT }))).not.toContain('--no-daemon');
+  });
+});
+
+describe("codex's update prompt (10)", () => {
+  const ID = '01a14fb7-9e95-7c81-8980-2b82c8316805';
+  const OFF = 'check_for_update_on_startup=false';
+  const offAt = (argv: string[]) => argv.findIndex((a, i) => a === '-c' && argv[i + 1] === OFF);
+
+  it('is switched off on every interactive line, started in any mode, resumed or forked, whatever codex it is', async () => {
+    const { bin } = fakeCodex(HELP_0170);
+    await provider.prepareLaunch(bin, 'bypass');
+    for (const binary of [bin, codex016, nowhere]) {
+      for (const mode of ['normal', 'auto', 'bypass', undefined]) {
+        expect(offAt(argvOf(provider.buildInteractiveCommand({ binaryPath: binary, prompt: PROMPT, permissionMode: mode }))), `started in ${mode ?? 'no mode'}`).toBeGreaterThan(0);
+      }
+    }
+    const resumed = argvOf(provider.buildInteractiveCommand({ binaryPath: bin, prompt: PROMPT, permissionMode: 'bypass', resumeSessionId: ID }));
+    expect(offAt(resumed)).toBeGreaterThan(resumed.indexOf('resume'));
+    expect(offAt(resumed)).toBeLessThan(resumed.indexOf(ID));
+    const forked = argvOf(provider.buildInteractiveCommand({ binaryPath: bin, prompt: '', resumeSessionId: ID, forkSession: true }));
+    expect(offAt(forked)).toBeGreaterThan(forked.indexOf('fork'));
+    expect(offAt(forked)).toBeLessThan(forked.indexOf(ID));
+    expect(forked.filter((a) => a === OFF)).toHaveLength(1);
   });
 });
 
