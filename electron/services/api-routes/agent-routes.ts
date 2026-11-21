@@ -206,7 +206,8 @@ async function spawnAgentSession(
     return false;
   }
   // One launch at a time per agent: a session started over a launch still making its terminal ready (a restart, a start
-  // from a window, another session) ended or typed over it (the Audit's L1 on #601). Refused, nothing spawned.
+  // from a window, another session) ended or typed over it (the Audit's L1 on #601), and one while a restart's old tree
+  // still ends started beside it (the Audit's L8 on #620). Refused, nothing spawned.
   if (launchPreparing(agent.id)) {
     sendJson({
       error: `${agent.name || agent.id} is already starting: its CLI is on its way, and no session was started over it. Send it again in a moment.`,
