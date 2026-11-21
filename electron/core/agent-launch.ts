@@ -110,6 +110,18 @@ export const CLI_BOOT_MS = 15_000;
 export const CLI_UP_MS = 180_000;
 
 /**
+ * How long a CLI with no SessionStart and nothing to read on its screen (codex, pi) must have held its terminal before
+ * its session reads up. Its launch line reaches it through steps, and one can bear the shell's own name, which
+ * cliRunningIn reads as no CLI: `env CODEX_HOME=... codex fork ...`, then `#!/usr/bin/env node` finds a `#!/bin/sh`
+ * relay for node (the e2e sandbox's, an asdf or nodenv shim in bash), then node, then codex. Traced in the app on 21/11
+ * (QA's gate of the stack under #613): read up at `env` (+513 ms after the restart), a task's dispatch read the relay's
+ * `bash` 8 ms later, took the terminal for the shell, and started a new codex over the launch, without the
+ * conversation. From `env` to codex itself took 30 to 110 ms (replayed outside the app); a read of the shell in the
+ * meantime starts the time again (a shim that takes longer).
+ */
+export const CLI_SETTLED_MS = 300;
+
+/**
  * The longest a sender answering an HTTP caller waits on a launch: the MCP
  * tools give up on a call after 30 s (mcp-orchestrator/src/utils/api.ts), and
  * an answer sent after that reaches nobody.
@@ -120,7 +132,10 @@ export const SENDER_WAIT_MS = 20_000;
  * Launches under way, by agent: when each began, and whether it carries a
  * task for the CLI to start on. One per agent, the latest.
  */
-const launchesUnderWay = new Map<string, { since: number; withTask: boolean }>();
+const launchesUnderWay = new Map<string, Launch>();
+
+/** A launch under way: when it began, whether it carries a task, and since when its CLI has held the terminal. */
+type Launch = { since: number; withTask: boolean; runningSince?: number };
 
 /**
  * Agents whose launch is still being made ready before its line: an API start from its first wait, a session its CLI
@@ -155,7 +170,7 @@ export function launchesPending(): string[] {
  * launchAbandoned.
  */
 export function launchBegins(agentId: string, opts: { withTask?: boolean } = {}): object {
-  const launch = { since: Date.now(), withTask: !!opts.withTask };
+  const launch: Launch = { since: Date.now(), withTask: !!opts.withTask };
   launchesUnderWay.set(agentId, launch);
   launchListener?.();
   return launch;
@@ -237,14 +252,20 @@ type StartingAgent = {
  * once in five after the SessionStart wait). Typed once the turn runs, claude
  * queues it and takes it after the turn.
  */
-function sessionUp(agent: StartingAgent, launch: { since: number; withTask: boolean }): boolean {
+function sessionUp(agent: StartingAgent, launch: Launch): boolean {
   const terminal = agent.ptyId ? ptyProcesses.get(agent.ptyId) : undefined;
-  if (!terminal || !cliRunningIn(terminal)) return false;
+  if (!terminal || !cliRunningIn(terminal)) {
+    launch.runningSince = undefined;
+    return false;
+  }
   // A CLI with no SessionStart is up at its exec, unless it says its TUI takes keys only once its field is drawn.
   if (!hasClaudeHooks(agent)) {
     const provider = getProvider(agent.provider);
     // The rows drawn since its launch, at the bottom: never a box left in the history (the Audit's L1 on #601).
-    return provider.upOnScreen ? provider.upOnScreen(rowsSinceLaunch(terminal) ?? []) : true;
+    if (provider.upOnScreen) return provider.upOnScreen(rowsSinceLaunch(terminal) ?? []);
+    // At its exec once it has held the terminal, never at a step of its launch line (CLI_SETTLED_MS).
+    launch.runningSince ??= Date.now();
+    return Date.now() - launch.runningSince >= CLI_SETTLED_MS;
   }
   const at = launch.withTask ? agent.lastTurnStartedAt : agent.sessionRegisteredAt;
   return !!at && Date.parse(at) >= launch.since;
