@@ -33,7 +33,8 @@ import { writeFakeClis } from './fake-clis.mjs';
  * fails when a cell outside it is red (a regression) and when a cell in it turns green or goes red for another
  * reason (the table is then out of date: the PR that fixed it removes its rule). On main (371d3c70), in short:
  *   - gemini cannot call Tars: its MCP servers get no TOKEN variable (documented by gemini, not measured on a real install);
- *   - Tars reads no answer and no turn from a CLI without hooks (opencode, amp, grok); pi's are read from its session file (#483);
+ *   - Tars reads no answer and no turn from a CLI without hooks (amp, grok); pi's are read from its session file (#483),
+ *     and opencode's from its database since #613 (its fake writes it as 1.19.6 does, e2e/opencode-db.cjs);
  * OpenRouter starts since #458 and codex since #465; gemini's tasks close since #478, and opencode and pi reach Tars's
  * tools since #476: their rules went with them.
  * KNOWN_RED has the rules, each with what its cells must say. A project of its own since 19/10 (playwright.config.ts):
@@ -68,8 +69,8 @@ const ALL: Step[] = ['delegate.reaches', 'delegate.answer', 'turn', 'message', '
 const KNOWN_RED: Rule[] = [
   { from: ['gemini'], steps: ALL, why: 'gemini hands its MCP servers no variable named like TOKEN (documented by gemini, not measured on a real install): Tars\'s server has no token to present then, since #466 put the shared one out of its reach, and Tars answers Unauthorized', seen: /Unauthorized|B never got the message|no task reached B/ },
   { to: ['gemini'], steps: ['reply'], why: 'gemini has no identity (above; documented, not measured)', seen: /Unauthorized/ },
-  { to: ['opencode', 'amp', 'grok'], steps: ['delegate.answer'], why: 'a CLI without hooks: Tars reads no answer from it', seen: /gives Tars no hook/ },
-  { to: ['opencode', 'amp', 'grok'], steps: ['turn'], why: 'a CLI without hooks: running once the task goes in, never at rest again', seen: /after running/ },
+  { to: ['amp', 'grok'], steps: ['delegate.answer'], why: 'a CLI without hooks: Tars reads no answer from it', seen: /gives Tars no hook/ },
+  { to: ['amp', 'grok'], steps: ['turn'], why: 'a CLI without hooks: running once the task goes in, never at rest again', seen: /after running/ },
 ];
 
 const expectedRed = (cell: Cell): Rule | undefined => KNOWN_RED.find((r) =>
