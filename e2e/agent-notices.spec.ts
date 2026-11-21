@@ -146,7 +146,8 @@ test("Tars's notices about an agent reach the window, live, kept across a restar
       const req = process.mainModule!.require;
       const cline = req(`${dist}/providers/cline-cli.js`);
       const p = req('path');
-      const Database = req('better-sqlite3');
+      // By its path, as harness-conformance.spec.ts loads it: the main module is not beside node_modules.
+      const Database = req(p.join(dist, '..', '..', 'node_modules', 'better-sqlite3'));
       const sessionId = '1732171234567_abcde';
       const dir = p.join(cline.clineAgentDir(id), 'data', 'db');
       req('fs').mkdirSync(dir, { recursive: true });
