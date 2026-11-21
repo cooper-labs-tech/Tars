@@ -41,21 +41,35 @@ import { DEV_URL, apiPort } from './ports.mjs';
  * listing), a screenshot of the Agents page, the app's trace with E2E_TRACE=on.
  */
 
-/** opencode's stand-in: records its command line, and each message typed into it. */
+/**
+ * opencode's stand-in: records its command line, and each message typed into it. Since #613 Tars reads opencode's turns
+ * from its database: the stand-in writes each turn there as opencode 1.19.6 does (e2e/opencode-db.cjs), the one its
+ * --prompt starts and each message typed in, and draws its bar (its folder by its name, then its keys), which Tars
+ * waits for before it types into opencode.
+ */
 const STAND_IN = String.raw`
-const fs = require('fs');
+const fs = require('fs'), path = require('path');
+const { beginTurn, endTurn } = require(process.env.OPENCODE_DB_HELPER);
+let queue = Promise.resolve();
+const turn = (prompt) => { queue = queue.then(() => new Promise((done) => {
+  const last = prompt.split('\n').map((l) => l.trim()).filter(Boolean).pop() || '';
+  beginTurn(prompt);
+  setTimeout(() => { endTurn('done: ' + last); done(); }, 600);
+})); };
 const log = (entry) => fs.appendFileSync(process.env.STAND_IN_LOG, JSON.stringify({ at: new Date().toISOString(), agent: process.env.CLAUDE_AGENT_ID || null, ...entry }) + '\n');
 log({ terminal: process.argv.slice(2) });
+const at = process.argv.indexOf('--prompt');
+if (at !== -1 && process.argv[at + 1]) turn(process.argv[at + 1]);
 // Its screen: every message Tars types in, recorded at its Enter.
 let typed = '';
 process.stdin.setRawMode(true);
 process.stdin.on('data', (chunk) => {
   for (const ch of String(chunk)) {
-    if (ch === '\r') { log({ typed }); typed = ''; } else typed += ch;
+    if (ch === '\r') { log({ typed }); const line = typed.replace(/\x1b\[20[01]~/g, ''); if (line.trim()) turn(line); typed = ''; } else typed += ch;
   }
 });
 process.stdin.resume();
-process.stdout.write('opencode ready\r\n');
+process.stdout.write('opencode ready\r\n  ' + path.basename(process.cwd()) + '  tab agents  ctrl+p commands\r\n');
 `;
 
 const SECTION = '## How Tars works';
@@ -70,7 +84,7 @@ for (const newInterface of [false, true]) {
     for (const d of [project, dir, bin]) fs.mkdirSync(d, { recursive: true });
     const standInLog = path.join(home, 'stand-in.jsonl');
     const opencode = path.join(bin, 'opencode');
-    fs.writeFileSync(opencode, `#!${process.execPath}\nprocess.env.STAND_IN_LOG = ${JSON.stringify(standInLog)};\n${STAND_IN}`, { mode: 0o755 });
+    fs.writeFileSync(opencode, `#!${process.execPath}\nprocess.env.STAND_IN_LOG = ${JSON.stringify(standInLog)};\nprocess.env.OPENCODE_DB_HELPER = ${JSON.stringify(path.resolve('e2e', 'opencode-db.cjs'))};\n${STAND_IN}`, { mode: 0o755 });
     const agent = (id: string, name: string, role: string, provider: string) => ({
       id, name, character: 'robot', provider, status: 'idle', role, projectPath: project, skills: [], permissionMode: 'normal',
       createdAt: '2026-10-18T08:00:00.000Z', lastActivity: '2026-10-18T08:00:00.000Z',
@@ -188,8 +202,9 @@ for (const newInterface of [false, true]) {
       const delegated = await tool('delegate_task', { id: 'dl', prompt: 'DELEGATED>> read the guide', timeoutSeconds: 120, clientRequestId: `e2e-agent-guide-${newInterface}` });
       keep({ delegated });
       expect.soft(delegated.isError, delegated.text).toBe(false);
-      // opencode gives Tars no hook: delivered, and nothing invented.
-      expect.soft(delegated.text).toContain("The task went into Delegated Worker's terminal");
+      // Since #613 Tars reads opencode: the answer its stand-in wrote in its database, never said delivered.
+      expect.soft(delegated.text, 'the answer opencode wrote').toContain('done: DELEGATED>> read the guide');
+      expect.soft(delegated.text).not.toMatch(/cannot see when its turn ends/);
       await expect.poll(() => entries().filter((e) => e.terminal && e.agent === 'dl').length, { timeout: 30_000 }).toBe(1);
       const delegatedArgv = entries().find((e) => e.terminal && e.agent === 'dl')!.terminal as string[];
       keep({ standIn: entries() });

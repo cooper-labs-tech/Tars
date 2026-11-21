@@ -110,6 +110,11 @@ export class CodexProvider implements CLIProvider {
 
     command += this.modelAndEffort(params.model, params.effort);
 
+    // No update prompt in an agent's terminal: codex 0.170's ("1. Update now (runs `npm install -g @openai/codex`)",
+    // Enter to continue) took the Enter of the task Tars types at its exec, installed codex globally and exited, the
+    // task lost (measured 21/11, a restart's fork). Switched off for this run only, never in the user's config.
+    command += ` -c ${shellQuote('check_for_update_on_startup=false')}`;
+
     // The mode in flags the installed codex has: 0.163 refuses --full-auto, and
     // every agent in auto or bypass died at launch on it (codex-cli.ts).
     const accepts = codexAccepts(params.binaryPath);
