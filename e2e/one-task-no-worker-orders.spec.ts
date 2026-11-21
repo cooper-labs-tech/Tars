@@ -37,8 +37,8 @@ import { DEV_URL, apiPort } from './ports.mjs';
  * g. A task behind the task in hand (the Audit's gate of #449, M1 and L3): while a task of lead's works in oc's
  *    terminal, lead's start_agent to oc is answered queued, with its id; it is not typed in beside that turn, goes in
  *    once the turn answered, and task_status by its id reads its own answer. A CLI that tells Tars nothing of its
- *    turns (nh, an opencode stand-in with no hook) given a task does not hold its agent: lead's next task to nh goes in
- *    too (H1). dev's kanban claim of a task for qa is refused, with the code of an order (M2). Until 2.0.4 the task in
+ *    turns (nh, an amp stand-in with no hook; opencode was the example until #613, since which Tars reads its turns)
+ *    given a task does not hold its agent: lead's next task to nh goes in too (H1). dev's kanban claim of a task for qa is refused, with the code of an order (M2). Until 2.0.4 the task in
  *    hand was a run over ACP and the queued one went into a terminal open beside it.
  * f. A task waiting its turn is kept across a restart, its queue paused (#536; until 2.0.5 it was in Tars's memory
  *    only): lead delegates to oc while a run of Tars's holds it, Tars quits and starts again on the same home, and
@@ -176,9 +176,10 @@ for (const newInterface of [false, true]) {
     const turnsLog = path.join(home, 'oc-turns.jsonl');
     const ocCli = path.join(bin, 'claude');
     fs.writeFileSync(ocCli, `#!${process.execPath}\n${TURN_STAND_IN(turnsLog)}`, { mode: 0o755 });
-    // nh's CLI, an opencode stand-in with no hook: it records how it was started and every byte typed into it.
+    // nh's CLI, an amp stand-in with no hook: it records how it was started and every byte typed into it. amp, since
+    // Tars reads opencode's turns from its database (#613): amp still tells Tars nothing of its turns.
     const nhFile = path.join(home, 'nh.log');
-    const nhCli = path.join(bin, 'opencode');
+    const nhCli = path.join(bin, 'amp');
     fs.writeFileSync(nhCli, `#!${process.execPath}\nconst fs = require('fs');\nfs.appendFileSync(${JSON.stringify(nhFile)}, JSON.stringify(process.argv.slice(2)) + '\\n');\nif (process.stdin.isTTY) process.stdin.setRawMode(true);\nprocess.stdin.on('data', (d) => fs.appendFileSync(${JSON.stringify(nhFile)}, d));\nprocess.stdout.write('opencode ready' + String.fromCharCode(10));\n`, { mode: 0o755 });
     const nhLog = () => (fs.existsSync(nhFile) ? fs.readFileSync(nhFile, 'utf8') : '');
     const qaReceived = path.join(home, 'qa.received');
@@ -193,7 +194,7 @@ for (const newInterface of [false, true]) {
       agent('oc', 'Review Agent', 'worker', 'claude', { cliPath: ocCli }),
       agent('dev', 'Dev Agent', 'worker', 'claude'),
       agent('qa', 'QA Agent', 'worker', 'claude', { cliPath: qaCli }),
-      agent('nh', 'No Hook Agent', 'worker', 'opencode', { cliPath: nhCli }),
+      agent('nh', 'No Hook Agent', 'worker', 'amp', { cliPath: nhCli }),
     ], null, 2));
     fs.writeFileSync(path.join(dir, 'projects.json'), JSON.stringify([project]));
     fs.writeFileSync(path.join(dir, 'hermes-connection.json'), JSON.stringify({ mode: 'local', localPort: 9, authMode: 'token' }));
