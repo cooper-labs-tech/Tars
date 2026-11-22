@@ -327,6 +327,14 @@ Linux and Windows read from Cline's source and its launcher, not measured:
 - **Always**: `CLINE_DISABLE_CLINE_PASS_NOTICE=1` (its first-run notice took an Enter and opened a page in the owner's
   browser), `CLINE_SESSION_BACKEND_MODE=local`. With its own `--data-dir`, Cline 3.0.74 starts no hub (measured, even with
   the hub backend asked for), so Tars has none to stop; the conformance checks a decoy hub of the user's survives.
+- **Never its own update**: `CLINE_NO_AUTO_UPDATE=1` (22/11, QA's gate). Cline checks for a newer version at every start,
+  `--version` included, and at its exit runs its package manager's global update (`npm update -g cline --tag latest
+  --min-release-age=0` under npm; `pnpm add -g`, `yarn global add` or `bun add -g` under the others), detached through a
+  shell, outliving it, over the user's own Cline, unless that variable is exactly 1 (read in 3.0.74's binary; QA saw npm
+  write into the prefix during a Cline agent's run). On macOS and Linux it is on the line (`env
+  CLINE_NO_AUTO_UPDATE=1 cline -i ...`), which no rc file of the agent's shell runs after; on every platform in the
+  terminal's environment, after the inherited one; and on every version probe (`core/version-probe.ts`). The variable
+  is enough: Cline reads it before its `autoUpdateEnabled` setting, which Tars does not write.
 - A note typed during its turn waits for the turn's end (`after-the-turn`).
 
 ### Inference endpoints and native traces (`services/inference-endpoints.ts`, `endpoint-proxy.ts`, `trace-store.ts`)
