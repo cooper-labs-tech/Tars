@@ -2,7 +2,7 @@ import { test, expect, _electron as electron } from '@playwright/test';
 import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
-import { launchSandboxed, recordValues, writeNodeCli } from './fixture.mjs';
+import { launchSandboxed, recordValues, removeHome, writeNodeCli } from './fixture.mjs';
 import { DEV_URL, apiPort } from './ports.mjs';
 
 /**
@@ -113,5 +113,6 @@ test('a message cannot show its receiver a forged second sender line', async () 
     expect(lines).toContain(ORDINARY);
   } finally {
     await app.close().catch(() => { /* gone */ });
+    await removeHome(home);
   }
 });

@@ -2,7 +2,7 @@ import { test, expect, _electron as electron } from '@playwright/test';
 import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
-import { launchSandboxed, recordValues } from './fixture.mjs';
+import { launchSandboxed, recordValues, removeHome } from './fixture.mjs';
 import { DEV_URL, apiPort } from './ports.mjs';
 
 /**
@@ -119,5 +119,6 @@ test('stopping an agent ends its CLI deaf to the hangup, and records who stopped
   } finally {
     for (const pid of readPids()) { try { process.kill(pid, 'SIGKILL'); } catch { /* gone */ } }
     await app.close().catch(() => { /* gone */ });
+    await removeHome(home);
   }
 });

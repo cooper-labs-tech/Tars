@@ -3,7 +3,7 @@ import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
 import { execFileSync } from 'child_process';
-import { launchSandboxed, recordValues } from './fixture.mjs';
+import { launchSandboxed, recordValues, removeHome } from './fixture.mjs';
 import { DEV_URL, apiPort } from './ports.mjs';
 import { startFakeRelay } from '../__tests__/fixtures/fake-tars-relay';
 
@@ -194,6 +194,7 @@ test('deleting a chat removes its worktree, a global git ignore of settings.loca
     expect(fs.existsSync(four.runner.worktreePath!)).toBe(true);
   } finally {
     await app.close();
+    await removeHome(home);
   }
 });
 
@@ -251,5 +252,6 @@ test('a project with only Main, the new interface off, reads on Telegram and in 
     recordValues(values);
     await app.close();
     await hermes.close();
+    await removeHome(home);
   }
 });

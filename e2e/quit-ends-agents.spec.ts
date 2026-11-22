@@ -2,7 +2,7 @@ import { test, expect, _electron as electron } from '@playwright/test';
 import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
-import { launchSandboxed, recordValues } from './fixture.mjs';
+import { launchSandboxed, recordValues, removeHome } from './fixture.mjs';
 import { DEV_URL, apiPort } from './ports.mjs';
 
 /**
@@ -178,5 +178,6 @@ test('quitting ends a CLI deaf to the hangup, refuses a /start mid-quit, and exi
     for (const pid of readPids()) { try { process.kill(pid, 'SIGKILL'); } catch { /* gone */ } }
     // Past will-quit everything is saved; its lingering teardown is not waited for.
     if (exitedAt === null) { try { appProcess.kill('SIGKILL'); } catch { /* gone */ } }
+    await removeHome(home);
   }
 });

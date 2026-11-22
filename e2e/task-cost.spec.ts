@@ -2,7 +2,7 @@ import { test, expect, _electron as electron } from '@playwright/test';
 import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
-import { launchSandboxed, recordValues, writeNodeCli } from './fixture.mjs';
+import { launchSandboxed, recordValues, removeHome, writeNodeCli } from './fixture.mjs';
 import { DEV_URL, apiPort } from './ports.mjs';
 
 /**
@@ -199,5 +199,6 @@ test('a task handed on is priced under the task it was handed for, from the tran
     if (process.platform !== 'win32') expect(fs.statSync(texts).mode & 0o777).toBe(0o600);
   } finally {
     await app.close();
+    await removeHome(home);
   }
 });

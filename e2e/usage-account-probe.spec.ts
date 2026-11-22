@@ -2,7 +2,7 @@ import { test, expect, _electron as electron } from '@playwright/test';
 import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
-import { launchSandboxed, recordValues } from './fixture.mjs';
+import { launchSandboxed, recordValues, removeHome } from './fixture.mjs';
 import { DEV_URL, apiPort } from './ports.mjs';
 
 /**
@@ -120,5 +120,6 @@ test("the Usage page is handed each Claude account's windows as Claude Code read
     expect(probes.every(p => p.traffic === null), 'a probe ran with the traffic switch, which empties the answer').toBe(true);
   } finally {
     await app.close();
+    await removeHome(home);
   }
 });

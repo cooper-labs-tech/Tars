@@ -2,7 +2,7 @@ import { test, expect, _electron as electron } from '@playwright/test';
 import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
-import { launchSandboxed, recordValues, writeNodeCli } from './fixture.mjs';
+import { launchSandboxed, recordValues, removeHome, writeNodeCli } from './fixture.mjs';
 import { DEV_URL, apiPort } from './ports.mjs';
 
 /**
@@ -125,5 +125,6 @@ test("a message to an idle agent goes in after its panel answered the terminal's
     expect(typedIn, 'the room message reached the CLI').toBe(true);
   } finally {
     await app.close();
+    await removeHome(home);
   }
 });

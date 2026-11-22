@@ -2,7 +2,7 @@ import { test, expect, _electron as electron } from '@playwright/test';
 import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
-import { launchSandboxed, recordValues, seedSandbox } from './fixture.mjs';
+import { launchSandboxed, recordValues, removeHome, seedSandbox } from './fixture.mjs';
 import { DEV_URL, apiPort } from './ports.mjs';
 import { currentUserSid, readDacls } from '../__tests__/electron/platform/read-dacl';
 
@@ -109,5 +109,6 @@ test('the Sentry token moves out of ~/.tars at the first start, and a save never
     recordValues({ moved, handedAtStart, afterOther, afterNew, kept, cleared, keysOnDisk: Object.keys(JSON.parse(onDisk())).sort() });
   } finally {
     await app.close();
+    await removeHome(home);
   }
 });

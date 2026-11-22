@@ -3,7 +3,7 @@ import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
 import { execFileSync } from 'child_process';
-import { launchSandboxed, recordValues } from './fixture.mjs';
+import { launchSandboxed, recordValues, removeHome } from './fixture.mjs';
 import { DEV_URL, apiPort } from './ports.mjs';
 import { startFakeRelay } from '../__tests__/fixtures/fake-tars-relay';
 
@@ -283,5 +283,6 @@ test('every start of an agent\'s CLI runs at that agent\'s own effort: window, r
     keep();
     await app.close();
     await hermes.close();
+    await removeHome(home);
   }
 });

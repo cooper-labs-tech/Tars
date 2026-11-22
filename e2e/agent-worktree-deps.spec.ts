@@ -3,7 +3,7 @@ import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
 import { execFileSync } from 'child_process';
-import { launchSandboxed, recordValues } from './fixture.mjs';
+import { launchSandboxed, recordValues, removeHome } from './fixture.mjs';
 import { DEV_URL, apiPort } from './ports.mjs';
 
 /**
@@ -96,5 +96,6 @@ test('an agent created on a worktree gets its project\'s dependencies, cloned', 
     expect(pageErrors).toEqual([]);
   } finally {
     await app.close().catch(() => { /* gone */ });
+    await removeHome(home);
   }
 });
