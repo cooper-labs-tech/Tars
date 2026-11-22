@@ -102,6 +102,7 @@ const sizeWindow = (app: ElectronApplication, width: number, height: number) => 
 const CASES = [
   { name: 'at a pixel ratio of 1.25', tag: 'dpr-1.25', scale: 1.25, oddOnRetina: false, port: 31587 },
   { name: 'at a pixel ratio of 1.5', tag: 'dpr-1.5', scale: 1.5, oddOnRetina: false, port: 31591 },
+  { name: 'at a pixel ratio of 1.75', tag: 'dpr-1.75', scale: 1.75, oddOnRetina: false, port: 31595 },
   { name: 'on Retina, an odd cell height and an odd number of rows', tag: 'retina-odd', scale: 2, oddOnRetina: true, port: 31588 },
 ];
 
