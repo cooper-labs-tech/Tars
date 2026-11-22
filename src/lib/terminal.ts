@@ -263,17 +263,21 @@ export function passWheelToProgram(term: Terminal, send: (data: string) => void)
  *   taken to its end while lines arrive is read as a row a few lines short of
  *   the last, so the terminal stays scrolled up there instead of following.
  *
- * So the viewport's position is turned into the buffer's row here, as xterm
- * turns it, but at once and without either fault:
- * - The wheel: right after xterm's wheel handler has moved the element, before
- *   the next line can move it back.
- * - Every `scroll` event of the element, in its place: the end of the scroll
- *   area is the last line, followed; anywhere else is the row it shows. xterm
- *   itself only ever puts the element at the end while it follows, and on the
- *   buffer's own row while it is scrolled up, so its own events change nothing
- *   and need no ignoring. xterm's listener is not run for them: it would read
- *   the end as a row of an area that may be short. The rows are drawn again as
- *   it would have drawn them.
+ * So every `scroll` event of the element is turned into the buffer's row here,
+ * in xterm's place and without either fault: the end of the scroll area is the
+ * last line, followed; anywhere else is the row it shows. xterm itself only
+ * ever puts the element at the end while it follows, and on the buffer's own
+ * row while it is scrolled up, so its own events change nothing and need no
+ * ignoring. xterm's listener is not run for them: it would read the end as a
+ * row of an area that may be short. The rows are drawn again as it would have
+ * drawn them.
+ *
+ * The wheel needs nothing more. Chromium dispatches a wheel with the frame, in
+ * the same update as that frame's `scroll` events and ahead of them, and xterm
+ * puts the element back only in an animation-frame callback, which comes after
+ * them (or at once after a resize, which comes from a fit, in a task or after
+ * layout, never in between). So the event the wheel causes is read before
+ * anything can move the element again (QA's mutation bench on #629, X1).
  *
  * Only where xterm scrolls its viewport itself: the main buffer, no mouse
  * tracking of xterm's own, no smooth scroll (which moves the element over
@@ -281,12 +285,11 @@ export function passWheelToProgram(term: Terminal, send: (data: string) => void)
  * `stopWheelTyping` or `passWheelToProgram` keep the wheel from xterm, this
  * never sees it either: they stop it first.
  *
- * Call it right after `term.open()`, which registers xterm's listeners: the
- * wheel listener here, on the same element and added after xterm's, runs after
- * it, and the scroll listener, in the capture phase on an ancestor of the
- * element, runs before xterm's and can keep the event from it.
+ * Call it right after `term.open()`, which creates the element: the listener
+ * here, in the capture phase on an ancestor of the viewport, runs before
+ * xterm's own and can keep the event from it.
  *
- * Returns what removes both listeners: call it where the terminal is disposed.
+ * Returns what removes the listener: call it where the terminal is disposed.
  */
 export function keepUserScroll(term: Terminal): () => void {
   const ours = () => term.buffer.active.type === 'normal' && term.modes.mouseTrackingMode === 'none' && !term.options.smoothScrollDuration;
@@ -311,10 +314,6 @@ export function keepUserScroll(term: Terminal): () => void {
     if (lines !== 0) term.scrollLines(lines);
     else term.refresh(0, term.rows - 1);
   };
-  const onWheel = () => {
-    const viewport = term.element?.querySelector('.xterm-viewport');
-    if (viewport && ours()) settle(viewport);
-  };
   const onScroll = (event: Event) => {
     const viewport = event.target;
     if (!(viewport instanceof Element) || !viewport.classList.contains('xterm-viewport') || !ours()) return;
@@ -322,12 +321,8 @@ export function keepUserScroll(term: Terminal): () => void {
     settle(viewport);
   };
   const element = term.element;
-  element?.addEventListener('wheel', onWheel, { passive: true });
   element?.addEventListener('scroll', onScroll, { capture: true, passive: true });
-  return () => {
-    element?.removeEventListener('wheel', onWheel);
-    element?.removeEventListener('scroll', onScroll, { capture: true });
-  };
+  return () => element?.removeEventListener('scroll', onScroll, { capture: true });
 }
 
 /**

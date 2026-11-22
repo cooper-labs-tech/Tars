@@ -20,7 +20,7 @@ interface TerminalEntry {
   lastRows: number;
   /** Sends typed keys to the agent's terminal, and says so in the panel when there is none. */
   typeKeys: (input: string) => void;
-  /** Removes keepUserScroll's listeners, with the terminal. */
+  /** Removes keepUserScroll's listener, with the terminal. */
   releaseScroll: () => void;
 }
 

@@ -32,7 +32,7 @@ export function useTrayTerminal({ agentId, container }: UseTrayTerminalProps) {
     let cancelled = false;
     let unsubOutput: (() => void) | null = null;
     let resizeObserver: ResizeObserver | null = null;
-    /** Removes keepUserScroll's listeners, with the terminal. */
+    /** Removes keepUserScroll's listener, with the terminal. */
     let releaseScroll: (() => void) | null = null;
     const fitTimers: ReturnType<typeof setTimeout>[] = [];
 

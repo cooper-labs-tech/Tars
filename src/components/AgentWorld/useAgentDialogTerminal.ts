@@ -26,7 +26,7 @@ export function useAgentDialogTerminal({
   const terminalRef = useRef<HTMLDivElement>(null);
   const xtermRef = useRef<import('xterm').Terminal | null>(null);
   const fitAddonRef = useRef<import('xterm-addon-fit').FitAddon | null>(null);
-  /** Removes keepUserScroll's listeners, with the terminal. */
+  /** Removes keepUserScroll's listener, with the terminal. */
   const releaseScrollRef = useRef<(() => void) | null>(null);
   const agentIdRef = useRef<string | null>(null);
   const isAtBottomRef = useRef(true);
