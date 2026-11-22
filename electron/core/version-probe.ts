@@ -55,8 +55,11 @@ export function probeVersion(
     // detached: a group of its own, which endProbe() can signal whole; a timeout on
     // the binary alone would leave what it started running. Not on Windows,
     // where it would open a console of its own and taskkill ends the tree.
+    // Cline checks for a newer version at every start, `--version` included, and installs itself over the user's
+    // global Cline at its exit unless CLINE_NO_AUTO_UPDATE is 1 (providers/cline-provider.ts, NO_AUTO_UPDATE). A probe
+    // does not know which CLI a path is, so every probe carries it, over the caller's own value.
     const child = spawn(cli.file, [...cli.prefixArgs, '--version'], {
-      env, detached: process.platform !== 'win32', windowsHide: true, stdio: ['ignore', 'pipe', 'pipe'],
+      env: { ...env, CLINE_NO_AUTO_UPDATE: '1' }, detached: process.platform !== 'win32', windowsHide: true, stdio: ['ignore', 'pipe', 'pipe'],
     });
     running.add(child);
     let stdout = '';
