@@ -14,6 +14,7 @@ import { useRestartPending } from '@/hooks/useRestartPending';
 import { asleepHint } from '@/lib/asleep-line';
 import TerminalPanelHeader from './TerminalPanelHeader';
 import TaskBanner from '@/components/TaskBanner';
+import AgentNotices from './AgentNotices';
 
 interface TerminalPanelProps {
   agent: AgentStatus;
@@ -178,6 +179,11 @@ function TerminalPanel({
       {/* Its CLI says it is blocked, and on what (OSC 7501): the message and the
           way to its terminal. Frame: `Blocked (2.0.5) · an agent blocked, its reason`. */}
       {blocked && <BlockedNotice blocked={blocked} onOpen={handleFullscreen} />}
+
+      {/* What Tars says about this agent that its terminal never shows (a session
+          refused, a conversation that starts over): last before the terminal,
+          never in it. Frame: `Agent notices (2.0.7) · in its panel and in Logs`. */}
+      <AgentNotices agentId={agent.id} />
 
       {/* Terminal body */}
       <div className="flex-1 min-h-0 overflow-hidden relative bg-background">

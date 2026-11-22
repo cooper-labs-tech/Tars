@@ -55,9 +55,9 @@ test('the Logs page reads a Claude Code session as its terminal showed it', asyn
     await page.goto(`${DEV_URL}/logs`, { waitUntil: 'domcontentloaded' });
 
     await page.getByRole('button', { name: /Session Reader/ }).click();
-    const tail = page.locator('pre').filter({ hasText: 'Claude Code' });
-    await expect(tail).toBeVisible({ timeout: 30_000 });
-    const tailText = await tail.innerText();
+    // Each line of the tail is a block of its own since the notices sit among them (#626): read them all, in order.
+    await expect(page.locator('pre').filter({ hasText: 'Claude Code' }).first()).toBeVisible({ timeout: 30_000 });
+    const tailText = (await page.locator('pre').allInnerTexts()).join('\n');
     await stepShot(page, 'tail');
 
     await page.getByPlaceholder(/ECONNREFUSED/).fill('three files');
@@ -125,7 +125,7 @@ test('the Logs page reads a stopped full-screen Claude agent from its transcript
     await page.goto(`${DEV_URL}/logs`, { waitUntil: 'domcontentloaded' });
     await page.getByRole('button', { name: /Fullscreen Reader/ }).click();
     await expect(page.locator('pre').first()).toBeVisible({ timeout: 30_000 });
-    const tailText = await page.locator('pre').first().innerText();
+    const tailText = (await page.locator('pre').allInnerTexts()).join('\n');
     await stepShot(page, 'fullscreen-tail');
 
     await page.getByPlaceholder(/ECONNREFUSED/).fill('Paragraph two');
