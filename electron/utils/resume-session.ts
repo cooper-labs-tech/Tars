@@ -6,6 +6,7 @@ import { codexHome, codexRolloutOf } from '../providers/codex-cli';
 import { kimiHome, kimiSessionDir } from '../providers/kimi-cli';
 import { opencodeDbPath, opencodeSessionOf } from '../providers/opencode-cli';
 import { gooseDbPath, gooseSessionOf } from '../providers/goose-cli';
+import { clineSessionOf } from '../providers/cline-cli';
 
 /**
  * Whether an agent's last session can actually be resumed.
@@ -77,7 +78,7 @@ export function transcriptRoots(...paths: Array<string | undefined>): string[] {
  * session id, or a transcript that is no longer on disk.
  */
 export function resolveResumeSessionId(
-  agent: { provider?: string; resumableSessionId?: string; forkedFromSessionId?: string; projectPath?: string; worktreePath?: string },
+  agent: { id?: string; provider?: string; resumableSessionId?: string; forkedFromSessionId?: string; projectPath?: string; worktreePath?: string },
   homeDir = os.homedir(),
 ): string | null {
   // Qwen Code's transcripts are its own (services/qwen-code.ts, which this cannot import: it is below the providers).
@@ -110,6 +111,14 @@ export function resolveResumeSessionId(
     if (agent.provider === 'opencode' || agent.provider === 'kilo') {
       const folders = [agent.worktreePath, agent.projectPath].filter((p): p is string => !!p);
       const own = opencodeSessionOf(sessionId, folders, opencodeDbPath(process.env, homeDir, agent.provider));
+      if (own) return own;
+      continue;
+    }
+
+    // Cline: the same, from the agent's own sessions.db (providers/cline-cli.ts), Cline running each agent on a folder of its own.
+    if (agent.provider === 'cline') {
+      const folders = [agent.worktreePath, agent.projectPath].filter((p): p is string => !!p);
+      const own = agent.id ? clineSessionOf(sessionId, folders, agent.id) : null;
       if (own) return own;
       continue;
     }

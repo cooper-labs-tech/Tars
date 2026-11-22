@@ -317,6 +317,7 @@ function loadAppSettings(): AppSettings {
       kimi: '',
       kilo: '',
       goose: '',
+      cline: '',
       gws: '',
       gcloud: '',
       gh: '',

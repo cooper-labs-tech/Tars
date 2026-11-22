@@ -41,9 +41,14 @@ import * as path from 'node:path';
  *      one set since.
  *  K10. (the Audit's L3 on #459) A variable chosen for a CLI whose variable is
  *      its own (codex, amp) is stored, or changes where its key goes.
+ *  K11. (the Audit's M1 on #622) A key Tars keeps for a CLI that takes none
+ *      from it: a Cline agent reads its provider from its own providers.json
+ *      (a copy of `cline auth`'s, or Tars's proxy), never from its
+ *      environment, so a key set for Cline went nowhere. Cline has no key
+ *      entry, as Goose has none: listed nowhere, and one sent is refused.
  */
 
-import { CLI_KEYS, keyEnvFor, keyVariableOf, cliKeyStates, withCliKey, withoutCliKeys, keepCliKeys, codexKeyConfig, qwenEnvKey } from '../../../electron/services/cli-keys';
+import { CLI_KEYS, keyEnvFor, keyVariableOf, cliKeyStates, withCliKey, withoutCliKeys, keepCliKeys, codexKeyConfig, qwenEnvKey, cliKeyOf } from '../../../electron/services/cli-keys';
 import { getProvider } from '../../../electron/providers';
 import type { AppSettings } from '../../../electron/types';
 
@@ -175,6 +180,15 @@ describe('a key per CLI, in its agents\' environment', () => {
     const cleared = withCliKey(r.settings, 'amp', { key: null });
     if (!cleared.ok) throw new Error(cleared.error);
     expect(getProvider('amp').getPtyEnvVars('a', '/p', [], cleared.settings).AMP_API_KEY).toBeUndefined();
+  });
+
+  it('K11. Cline, as Goose, takes no key from Tars: none is listed, one sent is refused, and its provider names none', () => {
+    for (const id of ['cline', 'goose']) {
+      expect(CLI_KEYS.map((c) => c.id), id).not.toContain(id);
+      expect(cliKeyStates(settings(), { homeDir: home }).map((c) => c.id), id).not.toContain(id);
+      expect(withCliKey(settings(), id as never, { key: KEY }), id).toMatchObject({ ok: false });
+      expect(cliKeyOf(id), id).toBeUndefined();
+    }
   });
 
   it('K10. the variable of codex and amp is theirs: a change is refused, and the key still goes there', () => {

@@ -23,7 +23,14 @@ import { encodeProjectDirName } from '../../../electron/utils/resume-session';
  */
 
 vi.mock('electron', () => ({ BrowserWindow: { getAllWindows: () => [] } }));
-const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'tars-bg-notice-'));
+// Made before the imports, with the mock that reads it: a module imported above loads the constants on its way in
+// (providers/cline-cli.ts, through utils/resume-session.ts), which runs that mock before a plain const would be set.
+const tmp = await vi.hoisted(async () => {
+  const { mkdtempSync } = await import('fs');
+  const { tmpdir } = await import('os');
+  const { join } = await import('path');
+  return mkdtempSync(join(tmpdir(), 'tars-bg-notice-'));
+});
 vi.mock('../../../electron/constants', async (importOriginal) => {
   const actual = await importOriginal<typeof import('../../../electron/constants')>();
   return { ...actual, DATA_DIR: tmp, AGENTS_FILE: path.join(tmp, 'agents.json'), dataPath: (f: string) => path.join(tmp, f) };

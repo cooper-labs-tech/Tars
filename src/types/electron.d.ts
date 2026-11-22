@@ -486,6 +486,8 @@ export type AgentProvider =
   | 'kilo'
   /** Goose, the binary `goose`. */
   | 'goose'
+  /** Cline CLI, the binary `cline`. */
+  | 'cline'
   | 'zhipu'
   | 'minimax'
   | 'nvidia'
@@ -2108,6 +2110,7 @@ export interface ElectronAPI {
         kimi: string;
         kilo: string;
         goose: string;
+        cline: string;
         gws: string;
         gcloud: string;
         gh: string;
@@ -2195,6 +2198,7 @@ export interface ElectronAPI {
         kimi?: string;
         kilo?: string;
         goose?: string;
+        cline?: string;
         gws: string;
         gcloud: string;
         gh: string;
@@ -2379,6 +2383,7 @@ export interface ElectronAPI {
       kimi: string;
       kilo: string;
       goose: string;
+      cline: string;
       gws: string;
       gcloud: string;
       gh: string;
@@ -2397,6 +2402,7 @@ export interface ElectronAPI {
       kimi: string;
       kilo: string;
       goose: string;
+      cline: string;
       gws: string;
       gcloud: string;
       gh: string;
@@ -2417,6 +2423,7 @@ export interface ElectronAPI {
       kimi?: string;
       kilo?: string;
       goose?: string;
+      cline?: string;
       gws: string;
       gcloud: string;
       gh: string;
@@ -2969,7 +2976,7 @@ export interface ElectronAPI {
   platform: string;
 }
 
-export type HarnessId = 'codex' | 'pi' | 'qwen-code' | 'opencode' | 'kimi-code' | 'kilo' | 'goose';
+export type HarnessId = 'codex' | 'pi' | 'qwen-code' | 'opencode' | 'kimi-code' | 'kilo' | 'goose' | 'cline';
 
 export interface EndpointHealth { ok: boolean; status?: number; latencyMs?: number; at: string; error?: string }
 

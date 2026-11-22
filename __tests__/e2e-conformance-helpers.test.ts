@@ -19,6 +19,10 @@ import { describe, it, expect, vi } from 'vitest';
  * 5. A refusal, or an answer that is no error, resent.
  * 6. (Goose, 20/11) The runner's Goose settings reach the version read: GOOSE_PROVIDER, GOOSE_MODE, GOOSE_PATH_ROOT
  *    (which moves every folder of Goose's), so a Goose reads, and may write, the runner's own.
+ * 7. (Cline, 22/11) The version read of Cline runs without CLINE_NO_AUTO_UPDATE=1, or with the runner's own value:
+ *    `cline --version` checks for a newer version and, at its exit, installs itself (`npm update -g cline`) into the npm
+ *    prefix it inherits, the runner's own (measured on 3.0.74: lib/ in the prefix within 40 s). And the conformance,
+ *    which reads it at the start of Cline's run, then saw that install as the agent's own, whatever Tars does.
  */
 
 import { delegateOnceUp, versionEnv } from '../e2e/conformance-helpers.mjs';
@@ -50,6 +54,12 @@ describe("the version read's environment (1)", () => {
     expect(env).toMatchObject({ PATH: '/usr/bin:/bin', LANG: 'en_US.UTF-8', HOME: '/sandbox', TMPDIR: '/sandbox/tmp', ...harnessHomes });
     const leaked = Object.keys(env).filter((name) => /^(KILO_|OPENCODE_|PI_CODING_AGENT_|GOOSE_|GIT_|CLAUDE|DOROTHY|TARS_|ANTHROPIC)|^ZDOTDIR$/.test(name));
     expect(leaked).toEqual([]);
+  });
+
+  it("turns Cline's own update off, over the runner's own value (7)", () => {
+    for (const runner of [{ PATH: '/usr/bin' }, { PATH: '/usr/bin', CLINE_NO_AUTO_UPDATE: '0' }]) {
+      expect(versionEnv(runner, { home: '/sandbox', tmp: '/sandbox/tmp', harnessHomes: {} }).CLINE_NO_AUTO_UPDATE).toBe('1');
+    }
   });
 });
 

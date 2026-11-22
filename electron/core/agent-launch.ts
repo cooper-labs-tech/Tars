@@ -1,10 +1,11 @@
 import { hasClaudeHooks } from './end-of-turn';
 import type { AgentPermissionMode, AgentProvider } from '../types';
-import { ptyProcesses, type MessageSender } from './pty-manager';
+import { endTerminalTree, ptyProcesses, type MessageSender } from './pty-manager';
 import { cliRunningIn } from './agent-pty';
 import { dialogOnScreen, launchLineOf, rowsSinceLaunch } from './terminal-mirror';
 import { getProvider } from '../providers';
 import { lastInterruptAt } from '../services/agent-truth';
+import type { IPty } from 'node-pty';
 
 /**
  * The launch of an agent's CLI in its terminal, reachable without a renderer.
@@ -145,6 +146,9 @@ type Launch = { since: number; withTask: boolean; runningSince?: number };
  */
 const preparing = new Map<string, number>();
 
+/** Agents whose replaced terminal is still ending, with how many ends each (endReplacedTerminal). */
+const replacing = new Map<string, number>();
+
 /**
  * Told when a launch begins or is abandoned, so the page can say `starting`
  * (AgentStatus.launching) without a status change to carry it: a restart keeps
@@ -197,6 +201,8 @@ export function launchAbandoned(agentId: string, launch: object): void {
  * error while its CLI answered.
  */
 export function sessionStarting(agent: StartingAgent): boolean {
+  // Its old terminal still ending, the next not open: a launch on its way too (endReplacedTerminal).
+  if (replacing.has(agent.id)) return true;
   // Still being made ready, its terminal not touched yet: a launch on its way, whatever the clock says.
   if (preparing.has(agent.id)) return true;
   const launch = launchesUnderWay.get(agent.id);
@@ -301,11 +307,40 @@ export async function sessionStarted(agent: StartingAgent, maxWaitMs = Infinity)
 }
 
 /**
- * Whether a launch of this agent is still making its terminal ready (whilePreparing): another start is refused then.
- * Once its line is typed, the guards on a running CLI answer, as before.
+ * An agent terminal replaced, for a new provider, CLI, folder or keys, or by a start that opens another, ended with
+ * its whole tree as a stop ends it (endTerminalTree: taskkill /T on Windows), the caller having taken it off the
+ * agent first. The hangup alone ended a CLI's launcher and left what it started: Cline's .cline, behind its node,
+ * orphaned and holding the agent's folder (#620).
+ *
+ * Until that tree is gone, which takes up to its grace, the replacement reads as a launch on its way
+ * (sessionStarting): the agent has no terminal then, and a task delegated or a message sent meanwhile launched it
+ * beside the tree being ended (the Audit's L4 on #620). Every sender waits for it instead. An end that fails is
+ * said, never thrown, and stops reading as one all the same.
+ */
+export async function endReplacedTerminal(agentId: string, terminal: IPty, who: string): Promise<void> {
+  replacing.set(agentId, (replacing.get(agentId) ?? 0) + 1);
+  launchListener?.();
+  try {
+    await endTerminalTree(terminal);
+  } catch (err) {
+    console.warn(`[replace] ${who}: the terminal it replaces did not close cleanly:`, err);
+  } finally {
+    const left = (replacing.get(agentId) ?? 1) - 1;
+    if (left > 0) replacing.set(agentId, left);
+    else replacing.delete(agentId);
+    launchListener?.();
+  }
+}
+
+/**
+ * Whether a launch of this agent is still making its terminal ready (whilePreparing), or a restart is still ending the
+ * terminal it replaces (endReplacedTerminal): another start is refused then, and a restart ends nothing. A start in a
+ * replacement opened a terminal beside the tree being ended, and a restart in a preparation ended that launch's
+ * terminal, then had its own launch refused, the agent left in error with none (the Audit's L8 on #620). A restart's own
+ * launch comes after its replacement has ended. Once a line is typed, the guards on a running CLI answer, as before.
  */
 export function launchPreparing(agentId: string): boolean {
-  return preparing.has(agentId);
+  return preparing.has(agentId) || replacing.has(agentId);
 }
 
 /**
@@ -350,6 +385,7 @@ export async function resumeOfLaunch(
 export function resetLaunches(): void {
   launchesUnderWay.clear();
   preparing.clear();
+  replacing.clear();
 }
 
 /**
