@@ -20,7 +20,7 @@ import { DEV_URL, apiPort } from './ports.mjs';
  *    (/dispatch, the delivery delegate_task and /run-task go through). The task must wait for the restart and go into
  *    the CLI it started (`message`), one CLI after the restart and not two, and the agent must not be in error.
  * 3. QA's gate of #620 (22/11): Cline checks for a newer version at every start and, at its exit, installs itself over
- *    the user's own global Cline (`npm install -g`), unless CLINE_NO_AUTO_UPDATE is 1. Every Cline launch, the first
+ *    the user's own global Cline (`npm update -g cline`), unless CLINE_NO_AUTO_UPDATE is 1. Every Cline launch, the first
  *    ones and the restart's, must run with it, though the user's own environment turns it back on: Tars's own (the
  *    app runs with CLINE_NO_AUTO_UPDATE=0) and the rc files of the agent's shell (each sets it to 0). Red on
  *    083b95e71: no launch has it.

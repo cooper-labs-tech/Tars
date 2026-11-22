@@ -48,7 +48,8 @@ import Database from 'better-sqlite3';
  *     providers whose hooks it installs, and Cline's said it had none.
  *
  * And its own update (QA's gate of #620, 22/11): Cline checks for a newer version at every start and, at its exit, runs
- * its package manager's global install over the user's own Cline (`npm install -g cline@<latest>`, detached, outliving
+ * its package manager's global update over the user's own Cline (`npm update -g cline --tag latest --min-release-age=0`
+ * under npm; `pnpm add -g`, `yarn global add` or `bun add -g` under the others; detached through a shell, outliving
  * it), unless CLINE_NO_AUTO_UPDATE is exactly 1 or its autoUpdateEnabled setting is false (read in 3.0.74's binary: its
  * entry calls the check before it reads its arguments, the variable first). QA's run saw npm write into the prefix.
  * 11. A Cline agent's terminal without CLINE_NO_AUTO_UPDATE=1: on a start, on a resume (`--id`), on a restart (a fresh

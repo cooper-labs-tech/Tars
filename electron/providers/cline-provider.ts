@@ -35,7 +35,8 @@ import { agentNotice } from '../core/agent-notices';
 
 /**
  * CLINE_NO_AUTO_UPDATE's value that turns Cline's own update off. Cline checks for a newer version at every start and,
- * at its exit, runs its package manager's global install (`npm install -g cline@<latest>`, detached, outliving it) over
+ * at its exit, runs its package manager's global update (`npm update -g cline --tag latest --min-release-age=0` under
+ * npm; `pnpm add -g`, `yarn global add` or `bun add -g` under the others), detached through a shell, outliving it, over
  * the user's own Cline and npm prefix, unless this variable is exactly `1` or its autoUpdateEnabled setting is false
  * (read in 3.0.74's binary: its entry calls the check before it reads its arguments, the variable first). QA's gate of
  * #620 saw npm write into the prefix during a Cline agent's run. Every cline Tars starts carries it: an agent's
