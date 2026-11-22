@@ -28,6 +28,14 @@ import { skipOnWindows } from '../../setup/platform-limits';
  * once the probe answered survived.
  * 7. A probe that answers at once leaves what it started running, and
  *    writing, after its answer.
+ *
+ * And from QA's gate of #620 (2026-11-22): Cline checks for a newer version at
+ * every start, `--version` included (its entry calls the check before it reads
+ * its arguments, read in 3.0.74's binary), and at its exit installs itself
+ * over the user's own global Cline, unless CLINE_NO_AUTO_UPDATE is exactly 1.
+ * 8. A probe of Cline runs without it, or with the caller's own value (0, or
+ *    none), which turns the update back on. A probe does not know which CLI a
+ *    path is (`shell:version` takes any binary), so every probe carries it.
  */
 
 const ELECTRON = path.join(__dirname, '../../../electron');
@@ -77,6 +85,19 @@ describe('a version probe', () => {
     const { bin, dir } = standIn('echo "amp 1.2.3"', "console.log('amp 1.2.3');");
     try {
       await expect(probe.probeVersion(bin, process.env)).resolves.toMatchObject({ stdout: 'amp 1.2.3\n' });
+    } finally {
+      fs.rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  it("8. runs with CLINE_NO_AUTO_UPDATE=1, whatever the caller's environment says", async () => {
+    const { probe } = await fresh();
+    const { bin, dir } = standIn('echo "no-auto-update=$CLINE_NO_AUTO_UPDATE"', "console.log('no-auto-update=' + process.env.CLINE_NO_AUTO_UPDATE);");
+    try {
+      await expect(probe.probeVersion(bin, { ...process.env, CLINE_NO_AUTO_UPDATE: '0' })).resolves.toMatchObject({ stdout: 'no-auto-update=1\n' });
+      const without: NodeJS.ProcessEnv = { ...process.env };
+      delete without.CLINE_NO_AUTO_UPDATE;
+      await expect(probe.probeVersion(bin, without)).resolves.toMatchObject({ stdout: 'no-auto-update=1\n' });
     } finally {
       fs.rmSync(dir, { recursive: true, force: true });
     }

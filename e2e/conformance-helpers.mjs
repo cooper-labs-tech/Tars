@@ -14,11 +14,13 @@ const CLI_SETTINGS = /^(KILO_|OPENCODE_|PI_CODING_AGENT_|CODEX_|KIMI_|GOOSE_|GIT
 
 /**
  * The environment a harness's `--version` is read with: what the fixture lets a sandboxed process inherit, without the
- * runner's CLI settings, and the sandbox's HOME, TMPDIR and harness homes over it.
+ * runner's CLI settings, and the sandbox's HOME, TMPDIR and harness homes over it. And Cline's own update off: `cline
+ * --version` checks for a newer version and installs itself into the inherited npm prefix at its exit (measured on
+ * 3.0.74), as Tars's own probes are told (electron/core/version-probe.ts).
  */
 export function versionEnv(runnerEnv, { home, tmp, harnessHomes }) {
   const kept = Object.fromEntries(Object.entries(inheritable(runnerEnv)).filter(([name]) => !CLI_SETTINGS.test(name)));
-  return { ...kept, HOME: home, TMPDIR: tmp, ...harnessHomes };
+  return { ...kept, HOME: home, TMPDIR: tmp, ...harnessHomes, CLINE_NO_AUTO_UPDATE: '1' };
 }
 
 /**
