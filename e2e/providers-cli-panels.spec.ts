@@ -61,10 +61,11 @@ for (const newInterface of [false, true]) {
       const soon = page.getByRole('list', { name: 'To come' });
       const toCome = (await soon.count()) ? await soon.innerText() : '';
       keep({ listed, toCome, before: await keys() });
-      for (const name of ['Claude Code', 'Codex', 'Qwen Code', 'Gemini CLI', 'Grok CLI', 'OpenCode', 'Pi', 'Amp']) expect.soft(listed, `${name} is listed`).toContain(name);
+      for (const name of ['Claude Code', 'Codex', 'Qwen Code', 'Gemini CLI', 'Grok CLI', 'OpenCode', 'Pi', 'Amp', 'Cline']) expect.soft(listed, `${name} is listed`).toContain(name);
       expect.soft(listed, 'Qwen Code under its command').toMatch(/Qwen Code[\s\S]*\bqwen\b/);
       expect.soft(listed, 'never qwen-code').not.toContain('qwen-code');
-      for (const name of ['oh-my-pi', 'Cline CLI', 'Kilo CLI']) expect.soft(toCome, `${name} is to come`).toContain(name);
+      for (const name of ['oh-my-pi', 'Kilo CLI']) expect.soft(toCome, `${name} is to come`).toContain(name);
+      expect.soft(toCome, 'Cline is driven, no longer to come').not.toContain('Cline');
       await stepShot(page, '01-providers-claude');
 
       // 5. Claude Code: the Sign-in row, and the key saved by an earlier version never shown back.
