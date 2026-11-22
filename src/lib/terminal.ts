@@ -241,6 +241,50 @@ export function passWheelToProgram(term: Terminal, send: (data: string) => void)
 }
 
 /**
+ * Keep a terminal where the wheel left it while its output goes on, also when
+ * the window is slow.
+ *
+ * Whether xterm 5.3 follows the output is its buffer's decision: a line written
+ * while the buffer stands at its last row moves it down with the line, and a
+ * buffer scrolled up stays (`isUserScrolling`, set only by a scroll of the
+ * buffer). But its wheel handler scrolls the viewport's element, not the
+ * buffer: it adds the wheel's pixels to `scrollTop`, and the buffer learns of
+ * it from the `scroll` event the element fires later, on the next frame. Each
+ * line the terminal follows sets that `scrollTop` too, to the new last row, and
+ * tells xterm to ignore the `scroll` event it causes. When a followed line and
+ * the wheel fall in the same frame, the browser fires one `scroll` event for
+ * both, xterm ignores it as its own, and the wheel never reaches the buffer:
+ * the next line puts the viewport back on the last row, and the terminal goes on
+ * following. A slow window has long frames, so under load (several agents
+ * writing) it happened often: the wheel visibly moved the terminal up, then it
+ * went back down within a second (e2e/orchestrator-board-wheel-under-load.spec.ts).
+ *
+ * So right after xterm's own wheel handler has moved the viewport, the row it
+ * moved to is given to the buffer at once, with xterm's own scroll of the
+ * buffer: the decision no longer waits for a `scroll` event that may be
+ * dropped. xterm reads the row the same way when the event does come, so it
+ * then finds nothing left to do.
+ *
+ * Only where xterm scrolls its viewport for the wheel: the main buffer, no
+ * mouse tracking of xterm's own, no smooth scroll (which moves the viewport
+ * over several frames). Where `stopWheelTyping` or `passWheelToProgram` keep
+ * the wheel from xterm, this never sees it either: they stop it first.
+ *
+ * Call it right after `term.open()`, which registers xterm's wheel listener on
+ * the same element: this one, added after it, runs after it.
+ */
+export function keepWheelScroll(term: Terminal): void {
+  term.element?.addEventListener('wheel', () => {
+    if (term.buffer.active.type !== 'normal' || term.modes.mouseTrackingMode !== 'none' || term.options.smoothScrollDuration) return;
+    const viewport = term.element?.querySelector('.xterm-viewport');
+    const screen = term.element?.querySelector('.xterm-screen')?.getBoundingClientRect();
+    if (!viewport || !screen || screen.height <= 0 || term.rows <= 0) return;
+    const lines = Math.round(viewport.scrollTop / (screen.height / term.rows)) - term.buffer.active.viewportY;
+    if (lines !== 0) term.scrollLines(lines);
+  }, { passive: true });
+}
+
+/**
  * Install the terminal's custom key handler. xterm keeps exactly one, so every
  * key this app claims has to live here (terminalKeyAction says which):
  *
