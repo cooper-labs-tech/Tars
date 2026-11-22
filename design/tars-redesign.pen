@@ -826093,6 +826093,3034 @@
           ]
         }
       ]
+    },
+    {
+      "type": "frame",
+      "id": "K2zY6o",
+      "x": 0,
+      "y": 199000,
+      "name": "Agent notices (2.0.7) · in its panel and in Logs",
+      "theme": {
+        "mode": "dark"
+      },
+      "width": 1440,
+      "fill": "$bg",
+      "layout": "vertical",
+      "gap": 22,
+      "padding": 24,
+      "children": [
+        {
+          "type": "text",
+          "id": "Iwhp6",
+          "fill": "$text-primary",
+          "content": "Agent notices (2.0.7) · what Tars says about a running agent: in its panel, above its terminal, and in Logs",
+          "lineHeight": 1.4,
+          "fontFamily": "$font-display",
+          "fontSize": 20,
+          "fontWeight": "normal"
+        },
+        {
+          "type": "text",
+          "id": "Pc89E",
+          "fill": "$text-secondary",
+          "textGrowth": "fixed-width",
+          "width": 1100,
+          "content": "Tars keeps some lines in an agent's output that its terminal never shows: a conversation that starts over on a restart, a session refused on a hook. While the agent runs, its panel and Logs show its live screen, so these lines are drawn above it, as Tars's, until you mark them seen.",
+          "lineHeight": 1.4,
+          "fontFamily": "$font-ui",
+          "fontSize": 12,
+          "fontWeight": "normal"
+        },
+        {
+          "type": "frame",
+          "id": "hi34b",
+          "name": "panel one",
+          "width": "fill_container",
+          "gap": 24,
+          "children": [
+            {
+              "type": "frame",
+              "id": "J4a6l2",
+              "name": "panel",
+              "width": 760,
+              "layout": "vertical",
+              "gap": 8,
+              "children": [
+                {
+                  "type": "text",
+                  "id": "hhrqs",
+                  "fill": "$text-muted",
+                  "content": "an agent's panel, its terminal live: Tars's notice above the screen, never in it",
+                  "lineHeight": 1.4,
+                  "fontFamily": "$font-mono",
+                  "fontSize": 10,
+                  "fontWeight": "normal"
+                },
+                {
+                  "type": "frame",
+                  "id": "nPc7i",
+                  "name": "panel Cline Coder",
+                  "width": 760,
+                  "fill": "$surface",
+                  "stroke": "$border",
+                  "strokeWidth": 1,
+                  "layout": "vertical",
+                  "children": [
+                    {
+                      "type": "frame",
+                      "id": "rdfjE",
+                      "name": "head",
+                      "width": "fill_container",
+                      "stroke": "$border",
+                      "strokeWidth": {
+                        "bottom": 1
+                      },
+                      "gap": 8,
+                      "padding": [
+                        10,
+                        14
+                      ],
+                      "alignItems": "center",
+                      "children": [
+                        {
+                          "type": "rectangle",
+                          "id": "fkGYr",
+                          "name": "d",
+                          "fill": "$status-running",
+                          "width": 6,
+                          "height": 6
+                        },
+                        {
+                          "type": "text",
+                          "id": "L8JPL",
+                          "fill": "$text-primary",
+                          "content": "Cline Coder",
+                          "lineHeight": 1.4,
+                          "fontFamily": "$font-ui",
+                          "fontSize": 13,
+                          "fontWeight": "normal"
+                        },
+                        {
+                          "type": "text",
+                          "id": "Dac3u",
+                          "fill": "$text-muted",
+                          "content": "feat/cli-window",
+                          "lineHeight": 1.4,
+                          "fontFamily": "$font-mono",
+                          "fontSize": 10.5,
+                          "fontWeight": "normal"
+                        },
+                        {
+                          "type": "frame",
+                          "id": "Yga1n",
+                          "name": "sp",
+                          "width": "fill_container",
+                          "height": 1
+                        },
+                        {
+                          "type": "text",
+                          "id": "EUxoH",
+                          "fill": "$status-running",
+                          "content": "running",
+                          "lineHeight": 1.4,
+                          "fontFamily": "$font-mono",
+                          "fontSize": 10.5,
+                          "fontWeight": "normal"
+                        }
+                      ]
+                    },
+                    {
+                      "type": "frame",
+                      "id": "w4noLS",
+                      "name": "notice 14:02",
+                      "width": "fill_container",
+                      "fill": "$surface-raised",
+                      "stroke": "$border",
+                      "strokeWidth": {
+                        "bottom": 1
+                      },
+                      "gap": 10,
+                      "padding": [
+                        8,
+                        14
+                      ],
+                      "alignItems": "center",
+                      "children": [
+                        {
+                          "type": "rectangle",
+                          "id": "B7Fnv",
+                          "name": "d",
+                          "fill": "$status-waiting",
+                          "width": 6,
+                          "height": 6
+                        },
+                        {
+                          "type": "text",
+                          "id": "nknsv",
+                          "fill": "$text-muted",
+                          "content": "Tars · 14:02",
+                          "lineHeight": 1.4,
+                          "fontFamily": "$font-mono",
+                          "fontSize": 10.5,
+                          "fontWeight": "normal"
+                        },
+                        {
+                          "type": "text",
+                          "id": "FANmn",
+                          "fill": "$text-primary",
+                          "textGrowth": "fixed-width",
+                          "width": 460,
+                          "content": "Its conversation starts over: Cline cannot fork a session, and a restart cannot continue the one it stops.",
+                          "lineHeight": 1.4,
+                          "fontFamily": "$font-ui",
+                          "fontSize": 11.5,
+                          "fontWeight": "normal"
+                        },
+                        {
+                          "type": "frame",
+                          "id": "wezFX",
+                          "name": "sp",
+                          "width": "fill_container",
+                          "height": 1
+                        },
+                        {
+                          "type": "frame",
+                          "id": "I6Ht7",
+                          "name": "b seen",
+                          "height": 26,
+                          "padding": [
+                            0,
+                            11
+                          ],
+                          "justifyContent": "center",
+                          "alignItems": "center",
+                          "children": [
+                            {
+                              "type": "text",
+                              "id": "pM9RR",
+                              "fill": "$text-muted",
+                              "content": "seen",
+                              "lineHeight": 1.4,
+                              "fontFamily": "$font-mono",
+                              "fontSize": 11,
+                              "fontWeight": "normal"
+                            }
+                          ]
+                        }
+                      ]
+                    },
+                    {
+                      "type": "frame",
+                      "id": "GviCx",
+                      "name": "terminal",
+                      "width": "fill_container",
+                      "fill": "$bg",
+                      "layout": "vertical",
+                      "gap": 3,
+                      "padding": [
+                        10,
+                        14
+                      ],
+                      "children": [
+                        {
+                          "type": "text",
+                          "id": "nHfyy",
+                          "fill": "$text-secondary",
+                          "content": "● I'll pick up the task from its description, the earlier turns are gone.",
+                          "lineHeight": 1.4,
+                          "fontFamily": "$font-mono",
+                          "fontSize": 11,
+                          "fontWeight": "normal"
+                        },
+                        {
+                          "type": "text",
+                          "id": "t5aLVk",
+                          "fill": "$text-secondary",
+                          "content": "● Read(src/lib/clis.ts)",
+                          "lineHeight": 1.4,
+                          "fontFamily": "$font-mono",
+                          "fontSize": 11,
+                          "fontWeight": "normal"
+                        },
+                        {
+                          "type": "text",
+                          "id": "XJ2vO",
+                          "fill": "$text-muted",
+                          "content": "  └ Read 52 lines",
+                          "lineHeight": 1.4,
+                          "fontFamily": "$font-mono",
+                          "fontSize": 11,
+                          "fontWeight": "normal"
+                        },
+                        {
+                          "type": "text",
+                          "id": "gmZjb",
+                          "fill": "$text-secondary",
+                          "content": "> ▊",
+                          "lineHeight": 1.4,
+                          "fontFamily": "$font-mono",
+                          "fontSize": 11,
+                          "fontWeight": "normal"
+                        }
+                      ]
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "type": "frame",
+              "id": "FNS3n",
+              "name": "what it is",
+              "width": "fill_container",
+              "layout": "vertical",
+              "gap": 8,
+              "children": [
+                {
+                  "type": "text",
+                  "id": "th07c",
+                  "fill": "$text-muted",
+                  "content": "Tars's words, not the CLI's",
+                  "lineHeight": 1.4,
+                  "fontFamily": "$font-mono",
+                  "fontSize": 10,
+                  "fontWeight": "normal"
+                },
+                {
+                  "type": "text",
+                  "id": "n1xqI7",
+                  "fill": "$text-secondary",
+                  "textGrowth": "fixed-width",
+                  "width": 400,
+                  "content": "The notice is Tars's: it sits between the agent's header and its terminal, with when Tars wrote it. seen takes it off the panel; Logs keeps it.",
+                  "lineHeight": 1.5,
+                  "fontFamily": "$font-ui",
+                  "fontSize": 12,
+                  "fontWeight": "normal"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "type": "frame",
+          "id": "P4IwV",
+          "name": "panel several",
+          "width": "fill_container",
+          "gap": 24,
+          "children": [
+            {
+              "type": "frame",
+              "id": "s79Piy",
+              "name": "panel",
+              "width": 760,
+              "layout": "vertical",
+              "gap": 8,
+              "children": [
+                {
+                  "type": "text",
+                  "id": "bkBxP",
+                  "fill": "$text-muted",
+                  "content": "several notices: the newest first, at most three, then how many more",
+                  "lineHeight": 1.4,
+                  "fontFamily": "$font-mono",
+                  "fontSize": 10,
+                  "fontWeight": "normal"
+                },
+                {
+                  "type": "frame",
+                  "id": "oZRTR",
+                  "name": "panel Goose Runner",
+                  "width": 760,
+                  "fill": "$surface",
+                  "stroke": "$border",
+                  "strokeWidth": 1,
+                  "layout": "vertical",
+                  "children": [
+                    {
+                      "type": "frame",
+                      "id": "Uljqc",
+                      "name": "head",
+                      "width": "fill_container",
+                      "stroke": "$border",
+                      "strokeWidth": {
+                        "bottom": 1
+                      },
+                      "gap": 8,
+                      "padding": [
+                        10,
+                        14
+                      ],
+                      "alignItems": "center",
+                      "children": [
+                        {
+                          "type": "rectangle",
+                          "id": "Yd5Ao",
+                          "name": "d",
+                          "fill": "$status-running",
+                          "width": 6,
+                          "height": 6
+                        },
+                        {
+                          "type": "text",
+                          "id": "mei0a",
+                          "fill": "$text-primary",
+                          "content": "Goose Runner",
+                          "lineHeight": 1.4,
+                          "fontFamily": "$font-ui",
+                          "fontSize": 13,
+                          "fontWeight": "normal"
+                        },
+                        {
+                          "type": "text",
+                          "id": "PjdAv",
+                          "fill": "$text-muted",
+                          "content": "feat/ops",
+                          "lineHeight": 1.4,
+                          "fontFamily": "$font-mono",
+                          "fontSize": 10.5,
+                          "fontWeight": "normal"
+                        },
+                        {
+                          "type": "frame",
+                          "id": "HxCdC",
+                          "name": "sp",
+                          "width": "fill_container",
+                          "height": 1
+                        },
+                        {
+                          "type": "text",
+                          "id": "Zt44f",
+                          "fill": "$status-running",
+                          "content": "running",
+                          "lineHeight": 1.4,
+                          "fontFamily": "$font-mono",
+                          "fontSize": 10.5,
+                          "fontWeight": "normal"
+                        }
+                      ]
+                    },
+                    {
+                      "type": "frame",
+                      "id": "ekJMO",
+                      "name": "notice 15:40",
+                      "width": "fill_container",
+                      "fill": "$surface-raised",
+                      "stroke": "$border",
+                      "strokeWidth": {
+                        "bottom": 1
+                      },
+                      "gap": 10,
+                      "padding": [
+                        8,
+                        14
+                      ],
+                      "alignItems": "center",
+                      "children": [
+                        {
+                          "type": "rectangle",
+                          "id": "h77SpE",
+                          "name": "d",
+                          "fill": "$status-waiting",
+                          "width": 6,
+                          "height": 6
+                        },
+                        {
+                          "type": "text",
+                          "id": "rb2DR",
+                          "fill": "$text-muted",
+                          "content": "Tars · 15:40",
+                          "lineHeight": 1.4,
+                          "fontFamily": "$font-mono",
+                          "fontSize": 10.5,
+                          "fontWeight": "normal"
+                        },
+                        {
+                          "type": "text",
+                          "id": "caIbm",
+                          "fill": "$text-primary",
+                          "textGrowth": "fixed-width",
+                          "width": 460,
+                          "content": "Its conversation starts over: Tars's servers moved, and a Goose session keeps the servers it began with.",
+                          "lineHeight": 1.4,
+                          "fontFamily": "$font-ui",
+                          "fontSize": 11.5,
+                          "fontWeight": "normal"
+                        },
+                        {
+                          "type": "frame",
+                          "id": "m3GLO",
+                          "name": "sp",
+                          "width": "fill_container",
+                          "height": 1
+                        },
+                        {
+                          "type": "frame",
+                          "id": "zm5KH",
+                          "name": "b seen",
+                          "height": 26,
+                          "padding": [
+                            0,
+                            11
+                          ],
+                          "justifyContent": "center",
+                          "alignItems": "center",
+                          "children": [
+                            {
+                              "type": "text",
+                              "id": "ie7LW",
+                              "fill": "$text-muted",
+                              "content": "seen",
+                              "lineHeight": 1.4,
+                              "fontFamily": "$font-mono",
+                              "fontSize": 11,
+                              "fontWeight": "normal"
+                            }
+                          ]
+                        }
+                      ]
+                    },
+                    {
+                      "type": "frame",
+                      "id": "NMvH6",
+                      "name": "notice 15:12",
+                      "width": "fill_container",
+                      "fill": "$surface-raised",
+                      "stroke": "$border",
+                      "strokeWidth": {
+                        "bottom": 1
+                      },
+                      "gap": 10,
+                      "padding": [
+                        8,
+                        14
+                      ],
+                      "alignItems": "center",
+                      "children": [
+                        {
+                          "type": "rectangle",
+                          "id": "GkMdr",
+                          "name": "d",
+                          "fill": "$status-error",
+                          "width": 6,
+                          "height": 6
+                        },
+                        {
+                          "type": "text",
+                          "id": "UmrYm",
+                          "fill": "$text-muted",
+                          "content": "Tars · 15:12",
+                          "lineHeight": 1.4,
+                          "fontFamily": "$font-mono",
+                          "fontSize": 10.5,
+                          "fontWeight": "normal"
+                        },
+                        {
+                          "type": "text",
+                          "id": "ptLOz",
+                          "fill": "$text-primary",
+                          "textGrowth": "fixed-width",
+                          "width": 460,
+                          "content": "Refused a session (5f2c9a1e): its CLI (pid 48211) is not this terminal's (pid 48190).",
+                          "lineHeight": 1.4,
+                          "fontFamily": "$font-ui",
+                          "fontSize": 11.5,
+                          "fontWeight": "normal"
+                        },
+                        {
+                          "type": "frame",
+                          "id": "R7wM1",
+                          "name": "sp",
+                          "width": "fill_container",
+                          "height": 1
+                        },
+                        {
+                          "type": "frame",
+                          "id": "En96D",
+                          "name": "b seen",
+                          "height": 26,
+                          "padding": [
+                            0,
+                            11
+                          ],
+                          "justifyContent": "center",
+                          "alignItems": "center",
+                          "children": [
+                            {
+                              "type": "text",
+                              "id": "YegTe",
+                              "fill": "$text-muted",
+                              "content": "seen",
+                              "lineHeight": 1.4,
+                              "fontFamily": "$font-mono",
+                              "fontSize": 11,
+                              "fontWeight": "normal"
+                            }
+                          ]
+                        }
+                      ]
+                    },
+                    {
+                      "type": "frame",
+                      "id": "xXhAi",
+                      "name": "more",
+                      "width": "fill_container",
+                      "fill": "$surface-raised",
+                      "stroke": "$border",
+                      "strokeWidth": {
+                        "bottom": 1
+                      },
+                      "gap": 8,
+                      "padding": [
+                        6,
+                        14
+                      ],
+                      "alignItems": "center",
+                      "children": [
+                        {
+                          "type": "text",
+                          "id": "dPfsX",
+                          "fill": "$text-muted",
+                          "content": "2 earlier notices, in Logs",
+                          "lineHeight": 1.4,
+                          "fontFamily": "$font-mono",
+                          "fontSize": 10.5,
+                          "fontWeight": "normal"
+                        },
+                        {
+                          "type": "frame",
+                          "id": "CMsYI",
+                          "name": "sp",
+                          "width": "fill_container",
+                          "height": 1
+                        },
+                        {
+                          "type": "frame",
+                          "id": "Vjtsr",
+                          "name": "b mark all seen",
+                          "height": 26,
+                          "padding": [
+                            0,
+                            11
+                          ],
+                          "justifyContent": "center",
+                          "alignItems": "center",
+                          "children": [
+                            {
+                              "type": "text",
+                              "id": "FVpcr",
+                              "fill": "$text-muted",
+                              "content": "mark all seen",
+                              "lineHeight": 1.4,
+                              "fontFamily": "$font-mono",
+                              "fontSize": 11,
+                              "fontWeight": "normal"
+                            }
+                          ]
+                        }
+                      ]
+                    },
+                    {
+                      "type": "frame",
+                      "id": "XmBxQ",
+                      "name": "terminal",
+                      "width": "fill_container",
+                      "fill": "$bg",
+                      "layout": "vertical",
+                      "gap": 3,
+                      "padding": [
+                        10,
+                        14
+                      ],
+                      "children": [
+                        {
+                          "type": "text",
+                          "id": "ZNOZr",
+                          "fill": "$text-secondary",
+                          "content": "( goose ) ready",
+                          "lineHeight": 1.4,
+                          "fontFamily": "$font-mono",
+                          "fontSize": 11,
+                          "fontWeight": "normal"
+                        },
+                        {
+                          "type": "text",
+                          "id": "jjTch",
+                          "fill": "$text-secondary",
+                          "content": "> ▊",
+                          "lineHeight": 1.4,
+                          "fontFamily": "$font-mono",
+                          "fontSize": 11,
+                          "fontWeight": "normal"
+                        }
+                      ]
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "type": "frame",
+              "id": "QgQ6E",
+              "name": "what it is",
+              "width": "fill_container",
+              "layout": "vertical",
+              "gap": 8,
+              "children": [
+                {
+                  "type": "text",
+                  "id": "JiSg7",
+                  "fill": "$text-muted",
+                  "content": "a refused session is an error",
+                  "lineHeight": 1.4,
+                  "fontFamily": "$font-mono",
+                  "fontSize": 10,
+                  "fontWeight": "normal"
+                },
+                {
+                  "type": "text",
+                  "id": "O40lp",
+                  "fill": "$text-secondary",
+                  "textGrowth": "fixed-width",
+                  "width": 400,
+                  "content": "A session refused on a hook is said in the error tone; a conversation that starts over in the waiting tone. Older notices are counted, not listed: Logs has them all.",
+                  "lineHeight": 1.5,
+                  "fontFamily": "$font-ui",
+                  "fontSize": 12,
+                  "fontWeight": "normal"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "type": "frame",
+          "id": "aBTPG",
+          "name": "logs",
+          "width": "fill_container",
+          "gap": 24,
+          "children": [
+            {
+              "type": "frame",
+              "id": "yC9iy",
+              "name": "logs",
+              "width": 760,
+              "layout": "vertical",
+              "gap": 8,
+              "children": [
+                {
+                  "type": "text",
+                  "id": "g2ekbk",
+                  "fill": "$text-muted",
+                  "content": "Logs, a search across agents: Tars's lines among the agent's own, marked as Tars's",
+                  "lineHeight": 1.4,
+                  "fontFamily": "$font-mono",
+                  "fontSize": 10,
+                  "fontWeight": "normal"
+                },
+                {
+                  "type": "frame",
+                  "id": "cLCgO",
+                  "name": "logs Cline Coder",
+                  "width": 760,
+                  "fill": "$surface",
+                  "stroke": "$border",
+                  "strokeWidth": 1,
+                  "layout": "vertical",
+                  "padding": [
+                    0,
+                    0,
+                    8,
+                    0
+                  ],
+                  "children": [
+                    {
+                      "type": "frame",
+                      "id": "YJ5ZN",
+                      "name": "head",
+                      "width": "fill_container",
+                      "gap": 8,
+                      "padding": [
+                        10,
+                        14
+                      ],
+                      "alignItems": "center",
+                      "children": [
+                        {
+                          "type": "text",
+                          "id": "eQRPV",
+                          "fill": "$text-primary",
+                          "content": "Cline Coder",
+                          "lineHeight": 1.4,
+                          "fontFamily": "$font-ui",
+                          "fontSize": 13,
+                          "fontWeight": "normal"
+                        },
+                        {
+                          "type": "text",
+                          "id": "syazO",
+                          "fill": "$text-muted",
+                          "content": "feat/cli-window",
+                          "lineHeight": 1.4,
+                          "fontFamily": "$font-mono",
+                          "fontSize": 10.5,
+                          "fontWeight": "normal"
+                        }
+                      ]
+                    },
+                    {
+                      "type": "frame",
+                      "id": "ehKrf",
+                      "name": "line",
+                      "width": "fill_container",
+                      "gap": 10,
+                      "padding": [
+                        3,
+                        14
+                      ],
+                      "children": [
+                        {
+                          "type": "text",
+                          "id": "sz5mj",
+                          "fill": "$text-secondary",
+                          "content": "❯ npm test",
+                          "lineHeight": 1.4,
+                          "fontFamily": "$font-mono",
+                          "fontSize": 11,
+                          "fontWeight": "normal"
+                        }
+                      ]
+                    },
+                    {
+                      "type": "frame",
+                      "id": "jQsMD",
+                      "name": "line tars",
+                      "width": "fill_container",
+                      "fill": "$surface-raised",
+                      "gap": 10,
+                      "padding": [
+                        5,
+                        14
+                      ],
+                      "alignItems": "center",
+                      "children": [
+                        {
+                          "type": "rectangle",
+                          "id": "pHZZW",
+                          "name": "d",
+                          "fill": "$status-waiting",
+                          "width": 6,
+                          "height": 6
+                        },
+                        {
+                          "type": "text",
+                          "id": "UfFzx",
+                          "fill": "$text-muted",
+                          "content": "Tars · 14:02",
+                          "lineHeight": 1.4,
+                          "fontFamily": "$font-mono",
+                          "fontSize": 10.5,
+                          "fontWeight": "normal"
+                        },
+                        {
+                          "type": "text",
+                          "id": "T5SIUf",
+                          "fill": "$text-primary",
+                          "textGrowth": "fixed-width",
+                          "width": 560,
+                          "content": "Its conversation starts over: Cline cannot fork a session, and a restart cannot continue the one it stops.",
+                          "lineHeight": 1.4,
+                          "fontFamily": "$font-ui",
+                          "fontSize": 11.5,
+                          "fontWeight": "normal"
+                        }
+                      ]
+                    },
+                    {
+                      "type": "frame",
+                      "id": "Gh8QE",
+                      "name": "line",
+                      "width": "fill_container",
+                      "gap": 10,
+                      "padding": [
+                        3,
+                        14
+                      ],
+                      "children": [
+                        {
+                          "type": "text",
+                          "id": "qcdM3",
+                          "fill": "$text-secondary",
+                          "content": "● I'll pick up the task from its description, the earlier turns are gone.",
+                          "lineHeight": 1.4,
+                          "fontFamily": "$font-mono",
+                          "fontSize": 11,
+                          "fontWeight": "normal"
+                        }
+                      ]
+                    }
+                  ]
+                },
+                {
+                  "type": "frame",
+                  "id": "CXFYl",
+                  "name": "logs Goose Runner",
+                  "width": 760,
+                  "fill": "$surface",
+                  "stroke": "$border",
+                  "strokeWidth": 1,
+                  "layout": "vertical",
+                  "padding": [
+                    0,
+                    0,
+                    8,
+                    0
+                  ],
+                  "children": [
+                    {
+                      "type": "frame",
+                      "id": "CEpca",
+                      "name": "head",
+                      "width": "fill_container",
+                      "gap": 8,
+                      "padding": [
+                        10,
+                        14
+                      ],
+                      "alignItems": "center",
+                      "children": [
+                        {
+                          "type": "text",
+                          "id": "sIzQ9",
+                          "fill": "$text-primary",
+                          "content": "Goose Runner",
+                          "lineHeight": 1.4,
+                          "fontFamily": "$font-ui",
+                          "fontSize": 13,
+                          "fontWeight": "normal"
+                        },
+                        {
+                          "type": "text",
+                          "id": "GnAK7",
+                          "fill": "$text-muted",
+                          "content": "feat/ops",
+                          "lineHeight": 1.4,
+                          "fontFamily": "$font-mono",
+                          "fontSize": 10.5,
+                          "fontWeight": "normal"
+                        }
+                      ]
+                    },
+                    {
+                      "type": "frame",
+                      "id": "NK37a",
+                      "name": "line tars",
+                      "width": "fill_container",
+                      "fill": "$surface-raised",
+                      "gap": 10,
+                      "padding": [
+                        5,
+                        14
+                      ],
+                      "alignItems": "center",
+                      "children": [
+                        {
+                          "type": "rectangle",
+                          "id": "JcYtM",
+                          "name": "d",
+                          "fill": "$status-error",
+                          "width": 6,
+                          "height": 6
+                        },
+                        {
+                          "type": "text",
+                          "id": "KjSPm",
+                          "fill": "$text-muted",
+                          "content": "Tars · 15:12",
+                          "lineHeight": 1.4,
+                          "fontFamily": "$font-mono",
+                          "fontSize": 10.5,
+                          "fontWeight": "normal"
+                        },
+                        {
+                          "type": "text",
+                          "id": "Lnk7h",
+                          "fill": "$text-primary",
+                          "textGrowth": "fixed-width",
+                          "width": 560,
+                          "content": "Refused a session (5f2c9a1e): its CLI (pid 48211) is not this terminal's (pid 48190).",
+                          "lineHeight": 1.4,
+                          "fontFamily": "$font-ui",
+                          "fontSize": 11.5,
+                          "fontWeight": "normal"
+                        }
+                      ]
+                    },
+                    {
+                      "type": "frame",
+                      "id": "pKqBv",
+                      "name": "line",
+                      "width": "fill_container",
+                      "gap": 10,
+                      "padding": [
+                        3,
+                        14
+                      ],
+                      "children": [
+                        {
+                          "type": "text",
+                          "id": "QRsGg",
+                          "fill": "$text-secondary",
+                          "content": "( goose ) ready",
+                          "lineHeight": 1.4,
+                          "fontFamily": "$font-mono",
+                          "fontSize": 11,
+                          "fontWeight": "normal"
+                        }
+                      ]
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "type": "frame",
+              "id": "E1t8U",
+              "name": "what it is",
+              "width": "fill_container",
+              "layout": "vertical",
+              "gap": 8,
+              "children": [
+                {
+                  "type": "text",
+                  "id": "utINW",
+                  "fill": "$text-muted",
+                  "content": "found like any line",
+                  "lineHeight": 1.4,
+                  "fontFamily": "$font-mono",
+                  "fontSize": 10,
+                  "fontWeight": "normal"
+                },
+                {
+                  "type": "text",
+                  "id": "PhieZ",
+                  "fill": "$text-secondary",
+                  "textGrowth": "fixed-width",
+                  "width": 400,
+                  "content": "Logs searches Tars's notices with the agent's output, at their place in time, so a search for \"starts over\" finds them while the terminal runs.",
+                  "lineHeight": 1.5,
+                  "fontFamily": "$font-ui",
+                  "fontSize": 12,
+                  "fontWeight": "normal"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "type": "frame",
+          "id": "qqqpn",
+          "name": "logs running",
+          "width": "fill_container",
+          "gap": 24,
+          "children": [
+            {
+              "type": "frame",
+              "id": "Pu2h8",
+              "name": "logs",
+              "width": 760,
+              "layout": "vertical",
+              "gap": 8,
+              "children": [
+                {
+                  "type": "text",
+                  "id": "Z0uRL",
+                  "fill": "$text-muted",
+                  "content": "Logs, a running agent's tail: Tars's notices as a group, by time, then its screen",
+                  "lineHeight": 1.4,
+                  "fontFamily": "$font-mono",
+                  "fontSize": 10,
+                  "fontWeight": "normal"
+                },
+                {
+                  "type": "frame",
+                  "id": "SiC03",
+                  "name": "logs Goose Runner: last 4 lines",
+                  "width": 760,
+                  "fill": "$surface",
+                  "stroke": "$border",
+                  "strokeWidth": 1,
+                  "layout": "vertical",
+                  "padding": [
+                    0,
+                    0,
+                    8,
+                    0
+                  ],
+                  "children": [
+                    {
+                      "type": "frame",
+                      "id": "ciCec",
+                      "name": "head",
+                      "width": "fill_container",
+                      "gap": 8,
+                      "padding": [
+                        10,
+                        14
+                      ],
+                      "alignItems": "center",
+                      "children": [
+                        {
+                          "type": "text",
+                          "id": "e389H",
+                          "fill": "$text-primary",
+                          "content": "Goose Runner: last 4 lines",
+                          "lineHeight": 1.4,
+                          "fontFamily": "$font-ui",
+                          "fontSize": 13,
+                          "fontWeight": "normal"
+                        },
+                        {
+                          "type": "text",
+                          "id": "MKPTY",
+                          "fill": "$text-muted",
+                          "content": "feat/ops",
+                          "lineHeight": 1.4,
+                          "fontFamily": "$font-mono",
+                          "fontSize": 10.5,
+                          "fontWeight": "normal"
+                        }
+                      ]
+                    },
+                    {
+                      "type": "frame",
+                      "id": "OA562",
+                      "name": "group",
+                      "width": "fill_container",
+                      "padding": [
+                        6,
+                        14,
+                        2,
+                        14
+                      ],
+                      "children": [
+                        {
+                          "type": "text",
+                          "id": "q46a1m",
+                          "fill": "$text-muted",
+                          "content": "Tars's notices, by time",
+                          "lineHeight": 1.4,
+                          "fontFamily": "$font-mono",
+                          "fontSize": 10,
+                          "fontWeight": "normal"
+                        }
+                      ]
+                    },
+                    {
+                      "type": "frame",
+                      "id": "ZUe85",
+                      "name": "line tars",
+                      "width": "fill_container",
+                      "fill": "$surface-raised",
+                      "gap": 10,
+                      "padding": [
+                        5,
+                        14
+                      ],
+                      "alignItems": "center",
+                      "children": [
+                        {
+                          "type": "rectangle",
+                          "id": "AnVYY",
+                          "name": "d",
+                          "fill": "$status-error",
+                          "width": 6,
+                          "height": 6
+                        },
+                        {
+                          "type": "text",
+                          "id": "W4SuI",
+                          "fill": "$text-muted",
+                          "content": "Tars · 15:12",
+                          "lineHeight": 1.4,
+                          "fontFamily": "$font-mono",
+                          "fontSize": 10.5,
+                          "fontWeight": "normal"
+                        },
+                        {
+                          "type": "text",
+                          "id": "JInWn",
+                          "fill": "$text-primary",
+                          "textGrowth": "fixed-width",
+                          "width": 560,
+                          "content": "Refused a session (5f2c9a1e): its CLI (pid 48211) is not this terminal's (pid 48190).",
+                          "lineHeight": 1.4,
+                          "fontFamily": "$font-ui",
+                          "fontSize": 11.5,
+                          "fontWeight": "normal"
+                        }
+                      ]
+                    },
+                    {
+                      "type": "frame",
+                      "id": "LV47N",
+                      "name": "line tars",
+                      "width": "fill_container",
+                      "fill": "$surface-raised",
+                      "gap": 10,
+                      "padding": [
+                        5,
+                        14
+                      ],
+                      "alignItems": "center",
+                      "children": [
+                        {
+                          "type": "rectangle",
+                          "id": "T8v5YJ",
+                          "name": "d",
+                          "fill": "$status-waiting",
+                          "width": 6,
+                          "height": 6
+                        },
+                        {
+                          "type": "text",
+                          "id": "RlEkY",
+                          "fill": "$text-muted",
+                          "content": "Tars · 15:40",
+                          "lineHeight": 1.4,
+                          "fontFamily": "$font-mono",
+                          "fontSize": 10.5,
+                          "fontWeight": "normal"
+                        },
+                        {
+                          "type": "text",
+                          "id": "b3A1zB",
+                          "fill": "$text-primary",
+                          "textGrowth": "fixed-width",
+                          "width": 560,
+                          "content": "Its conversation starts over: Tars's servers moved, and a Goose session keeps the servers it began with.",
+                          "lineHeight": 1.4,
+                          "fontFamily": "$font-ui",
+                          "fontSize": 11.5,
+                          "fontWeight": "normal"
+                        }
+                      ]
+                    },
+                    {
+                      "type": "frame",
+                      "id": "reEXM",
+                      "name": "sep",
+                      "width": "fill_container",
+                      "padding": [
+                        6,
+                        0,
+                        4,
+                        0
+                      ],
+                      "children": [
+                        {
+                          "type": "rectangle",
+                          "id": "CTi6g",
+                          "name": "rule",
+                          "fill": "$border",
+                          "width": "fill_container",
+                          "height": 1
+                        }
+                      ]
+                    },
+                    {
+                      "type": "frame",
+                      "id": "rXLnX",
+                      "name": "line",
+                      "width": "fill_container",
+                      "gap": 10,
+                      "padding": [
+                        3,
+                        14
+                      ],
+                      "children": [
+                        {
+                          "type": "text",
+                          "id": "PUbhJ",
+                          "fill": "$text-secondary",
+                          "content": "( goose ) ready",
+                          "lineHeight": 1.4,
+                          "fontFamily": "$font-mono",
+                          "fontSize": 11,
+                          "fontWeight": "normal"
+                        }
+                      ]
+                    },
+                    {
+                      "type": "frame",
+                      "id": "Avjmy",
+                      "name": "line",
+                      "width": "fill_container",
+                      "gap": 10,
+                      "padding": [
+                        3,
+                        14
+                      ],
+                      "children": [
+                        {
+                          "type": "text",
+                          "id": "XTSnv",
+                          "fill": "$text-secondary",
+                          "content": "[Tars] Paste your API key here to continue",
+                          "lineHeight": 1.4,
+                          "fontFamily": "$font-mono",
+                          "fontSize": 11,
+                          "fontWeight": "normal"
+                        }
+                      ]
+                    },
+                    {
+                      "type": "frame",
+                      "id": "hGKsf",
+                      "name": "line",
+                      "width": "fill_container",
+                      "gap": 10,
+                      "padding": [
+                        3,
+                        14
+                      ],
+                      "children": [
+                        {
+                          "type": "text",
+                          "id": "V64Fle",
+                          "fill": "$text-secondary",
+                          "content": "> ▊",
+                          "lineHeight": 1.4,
+                          "fontFamily": "$font-mono",
+                          "fontSize": 11,
+                          "fontWeight": "normal"
+                        }
+                      ]
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "type": "frame",
+              "id": "lYTkg",
+              "name": "what it is",
+              "width": "fill_container",
+              "layout": "vertical",
+              "gap": 8,
+              "children": [
+                {
+                  "type": "text",
+                  "id": "Dr7c6",
+                  "fill": "$text-muted",
+                  "content": "the screen holds no time, and no line of Tars's",
+                  "lineHeight": 1.4,
+                  "fontFamily": "$font-mono",
+                  "fontSize": 10,
+                  "fontWeight": "normal"
+                },
+                {
+                  "type": "text",
+                  "id": "BTmY5",
+                  "fill": "$text-secondary",
+                  "textGrowth": "fixed-width",
+                  "width": 400,
+                  "content": "A running agent's screen never shows Tars's lines and says nothing of when its own were written, so its notices are a group of their own, oldest first, above the screen, not its first lines. A line the agent prints with [Tars] in front stays the agent's: Tars's style is only for a notice Tars kept.",
+                  "lineHeight": 1.5,
+                  "fontFamily": "$font-ui",
+                  "fontSize": 12,
+                  "fontWeight": "normal"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "type": "frame",
+          "id": "iqkZy",
+          "name": "none",
+          "width": "fill_container",
+          "gap": 24,
+          "children": [
+            {
+              "type": "frame",
+              "id": "tTxED",
+              "name": "panel",
+              "width": 760,
+              "layout": "vertical",
+              "gap": 8,
+              "children": [
+                {
+                  "type": "text",
+                  "id": "BBByM",
+                  "fill": "$text-muted",
+                  "content": "no notice, or all seen: the panel as it was",
+                  "lineHeight": 1.4,
+                  "fontFamily": "$font-mono",
+                  "fontSize": 10,
+                  "fontWeight": "normal"
+                },
+                {
+                  "type": "frame",
+                  "id": "ndNkr",
+                  "name": "panel Cline Coder",
+                  "width": 760,
+                  "fill": "$surface",
+                  "stroke": "$border",
+                  "strokeWidth": 1,
+                  "layout": "vertical",
+                  "children": [
+                    {
+                      "type": "frame",
+                      "id": "bXlOH",
+                      "name": "head",
+                      "width": "fill_container",
+                      "stroke": "$border",
+                      "strokeWidth": {
+                        "bottom": 1
+                      },
+                      "gap": 8,
+                      "padding": [
+                        10,
+                        14
+                      ],
+                      "alignItems": "center",
+                      "children": [
+                        {
+                          "type": "rectangle",
+                          "id": "jr3KC",
+                          "name": "d",
+                          "fill": "$status-running",
+                          "width": 6,
+                          "height": 6
+                        },
+                        {
+                          "type": "text",
+                          "id": "t8s1II",
+                          "fill": "$text-primary",
+                          "content": "Cline Coder",
+                          "lineHeight": 1.4,
+                          "fontFamily": "$font-ui",
+                          "fontSize": 13,
+                          "fontWeight": "normal"
+                        },
+                        {
+                          "type": "text",
+                          "id": "pFcxA",
+                          "fill": "$text-muted",
+                          "content": "feat/cli-window",
+                          "lineHeight": 1.4,
+                          "fontFamily": "$font-mono",
+                          "fontSize": 10.5,
+                          "fontWeight": "normal"
+                        },
+                        {
+                          "type": "frame",
+                          "id": "c6JS13",
+                          "name": "sp",
+                          "width": "fill_container",
+                          "height": 1
+                        },
+                        {
+                          "type": "text",
+                          "id": "upxSQ",
+                          "fill": "$status-running",
+                          "content": "running",
+                          "lineHeight": 1.4,
+                          "fontFamily": "$font-mono",
+                          "fontSize": 10.5,
+                          "fontWeight": "normal"
+                        }
+                      ]
+                    },
+                    {
+                      "type": "frame",
+                      "id": "Y6bMVO",
+                      "name": "terminal",
+                      "width": "fill_container",
+                      "fill": "$bg",
+                      "layout": "vertical",
+                      "gap": 3,
+                      "padding": [
+                        10,
+                        14
+                      ],
+                      "children": [
+                        {
+                          "type": "text",
+                          "id": "MIhu7",
+                          "fill": "$text-secondary",
+                          "content": "● Read(src/lib/clis.ts)",
+                          "lineHeight": 1.4,
+                          "fontFamily": "$font-mono",
+                          "fontSize": 11,
+                          "fontWeight": "normal"
+                        },
+                        {
+                          "type": "text",
+                          "id": "X97I8L",
+                          "fill": "$text-secondary",
+                          "content": "> ▊",
+                          "lineHeight": 1.4,
+                          "fontFamily": "$font-mono",
+                          "fontSize": 11,
+                          "fontWeight": "normal"
+                        }
+                      ]
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "type": "frame",
+              "id": "fQAeW",
+              "name": "what it is",
+              "width": "fill_container",
+              "layout": "vertical",
+              "gap": 8,
+              "children": [
+                {
+                  "type": "text",
+                  "id": "qvRPv",
+                  "fill": "$text-muted",
+                  "content": "nothing added",
+                  "lineHeight": 1.4,
+                  "fontFamily": "$font-mono",
+                  "fontSize": 10,
+                  "fontWeight": "normal"
+                },
+                {
+                  "type": "text",
+                  "id": "aZMXN",
+                  "fill": "$text-secondary",
+                  "textGrowth": "fixed-width",
+                  "width": 400,
+                  "content": "With no notice to show, nothing sits above the terminal.",
+                  "lineHeight": 1.5,
+                  "fontFamily": "$font-ui",
+                  "fontSize": 12,
+                  "fontWeight": "normal"
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "type": "frame",
+      "id": "DlpZI",
+      "x": 1540,
+      "y": 199000,
+      "name": "Agent notices (2.0.7) · in its panel and in Logs · light",
+      "theme": {
+        "mode": "light"
+      },
+      "width": 1440,
+      "fill": "$bg",
+      "layout": "vertical",
+      "gap": 22,
+      "padding": 24,
+      "children": [
+        {
+          "type": "text",
+          "id": "CYQ5B",
+          "fill": "$text-primary",
+          "content": "Agent notices (2.0.7) · what Tars says about a running agent: in its panel, above its terminal, and in Logs",
+          "lineHeight": 1.4,
+          "fontFamily": "$font-display",
+          "fontSize": 20,
+          "fontWeight": "normal"
+        },
+        {
+          "type": "text",
+          "id": "Zakx9",
+          "fill": "$text-secondary",
+          "textGrowth": "fixed-width",
+          "width": 1100,
+          "content": "Tars keeps some lines in an agent's output that its terminal never shows: a conversation that starts over on a restart, a session refused on a hook. While the agent runs, its panel and Logs show its live screen, so these lines are drawn above it, as Tars's, until you mark them seen.",
+          "lineHeight": 1.4,
+          "fontFamily": "$font-ui",
+          "fontSize": 12,
+          "fontWeight": "normal"
+        },
+        {
+          "type": "frame",
+          "id": "a81lUu",
+          "name": "panel one",
+          "width": "fill_container",
+          "gap": 24,
+          "children": [
+            {
+              "type": "frame",
+              "id": "D33xX",
+              "name": "panel",
+              "width": 760,
+              "layout": "vertical",
+              "gap": 8,
+              "children": [
+                {
+                  "type": "text",
+                  "id": "KQVmW",
+                  "fill": "$text-muted",
+                  "content": "an agent's panel, its terminal live: Tars's notice above the screen, never in it",
+                  "lineHeight": 1.4,
+                  "fontFamily": "$font-mono",
+                  "fontSize": 10,
+                  "fontWeight": "normal"
+                },
+                {
+                  "type": "frame",
+                  "id": "i8gcFb",
+                  "name": "panel Cline Coder",
+                  "width": 760,
+                  "fill": "$surface",
+                  "stroke": "$border",
+                  "strokeWidth": 1,
+                  "layout": "vertical",
+                  "children": [
+                    {
+                      "type": "frame",
+                      "id": "wg6nG",
+                      "name": "head",
+                      "width": "fill_container",
+                      "stroke": "$border",
+                      "strokeWidth": {
+                        "bottom": 1
+                      },
+                      "gap": 8,
+                      "padding": [
+                        10,
+                        14
+                      ],
+                      "alignItems": "center",
+                      "children": [
+                        {
+                          "type": "rectangle",
+                          "id": "ywI8I",
+                          "name": "d",
+                          "fill": "$status-running",
+                          "width": 6,
+                          "height": 6
+                        },
+                        {
+                          "type": "text",
+                          "id": "Byyfu",
+                          "fill": "$text-primary",
+                          "content": "Cline Coder",
+                          "lineHeight": 1.4,
+                          "fontFamily": "$font-ui",
+                          "fontSize": 13,
+                          "fontWeight": "normal"
+                        },
+                        {
+                          "type": "text",
+                          "id": "ZgsSY",
+                          "fill": "$text-muted",
+                          "content": "feat/cli-window",
+                          "lineHeight": 1.4,
+                          "fontFamily": "$font-mono",
+                          "fontSize": 10.5,
+                          "fontWeight": "normal"
+                        },
+                        {
+                          "type": "frame",
+                          "id": "PJaWL",
+                          "name": "sp",
+                          "width": "fill_container",
+                          "height": 1
+                        },
+                        {
+                          "type": "text",
+                          "id": "UepvL",
+                          "fill": "$status-running",
+                          "content": "running",
+                          "lineHeight": 1.4,
+                          "fontFamily": "$font-mono",
+                          "fontSize": 10.5,
+                          "fontWeight": "normal"
+                        }
+                      ]
+                    },
+                    {
+                      "type": "frame",
+                      "id": "Tl7H0",
+                      "name": "notice 14:02",
+                      "width": "fill_container",
+                      "fill": "$surface-raised",
+                      "stroke": "$border",
+                      "strokeWidth": {
+                        "bottom": 1
+                      },
+                      "gap": 10,
+                      "padding": [
+                        8,
+                        14
+                      ],
+                      "alignItems": "center",
+                      "children": [
+                        {
+                          "type": "rectangle",
+                          "id": "t4KwVU",
+                          "name": "d",
+                          "fill": "$status-waiting",
+                          "width": 6,
+                          "height": 6
+                        },
+                        {
+                          "type": "text",
+                          "id": "zg0Um",
+                          "fill": "$text-muted",
+                          "content": "Tars · 14:02",
+                          "lineHeight": 1.4,
+                          "fontFamily": "$font-mono",
+                          "fontSize": 10.5,
+                          "fontWeight": "normal"
+                        },
+                        {
+                          "type": "text",
+                          "id": "PVCkS",
+                          "fill": "$text-primary",
+                          "textGrowth": "fixed-width",
+                          "width": 460,
+                          "content": "Its conversation starts over: Cline cannot fork a session, and a restart cannot continue the one it stops.",
+                          "lineHeight": 1.4,
+                          "fontFamily": "$font-ui",
+                          "fontSize": 11.5,
+                          "fontWeight": "normal"
+                        },
+                        {
+                          "type": "frame",
+                          "id": "yVPSB",
+                          "name": "sp",
+                          "width": "fill_container",
+                          "height": 1
+                        },
+                        {
+                          "type": "frame",
+                          "id": "UNawp",
+                          "name": "b seen",
+                          "height": 26,
+                          "padding": [
+                            0,
+                            11
+                          ],
+                          "justifyContent": "center",
+                          "alignItems": "center",
+                          "children": [
+                            {
+                              "type": "text",
+                              "id": "s3kEnr",
+                              "fill": "$text-muted",
+                              "content": "seen",
+                              "lineHeight": 1.4,
+                              "fontFamily": "$font-mono",
+                              "fontSize": 11,
+                              "fontWeight": "normal"
+                            }
+                          ]
+                        }
+                      ]
+                    },
+                    {
+                      "type": "frame",
+                      "id": "DxnBJ",
+                      "name": "terminal",
+                      "width": "fill_container",
+                      "fill": "$bg",
+                      "layout": "vertical",
+                      "gap": 3,
+                      "padding": [
+                        10,
+                        14
+                      ],
+                      "children": [
+                        {
+                          "type": "text",
+                          "id": "B2BdsB",
+                          "fill": "$text-secondary",
+                          "content": "● I'll pick up the task from its description, the earlier turns are gone.",
+                          "lineHeight": 1.4,
+                          "fontFamily": "$font-mono",
+                          "fontSize": 11,
+                          "fontWeight": "normal"
+                        },
+                        {
+                          "type": "text",
+                          "id": "SwM7G",
+                          "fill": "$text-secondary",
+                          "content": "● Read(src/lib/clis.ts)",
+                          "lineHeight": 1.4,
+                          "fontFamily": "$font-mono",
+                          "fontSize": 11,
+                          "fontWeight": "normal"
+                        },
+                        {
+                          "type": "text",
+                          "id": "KAf0p",
+                          "fill": "$text-muted",
+                          "content": "  └ Read 52 lines",
+                          "lineHeight": 1.4,
+                          "fontFamily": "$font-mono",
+                          "fontSize": 11,
+                          "fontWeight": "normal"
+                        },
+                        {
+                          "type": "text",
+                          "id": "MvOf7",
+                          "fill": "$text-secondary",
+                          "content": "> ▊",
+                          "lineHeight": 1.4,
+                          "fontFamily": "$font-mono",
+                          "fontSize": 11,
+                          "fontWeight": "normal"
+                        }
+                      ]
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "type": "frame",
+              "id": "wEePk",
+              "name": "what it is",
+              "width": "fill_container",
+              "layout": "vertical",
+              "gap": 8,
+              "children": [
+                {
+                  "type": "text",
+                  "id": "vy8eQ",
+                  "fill": "$text-muted",
+                  "content": "Tars's words, not the CLI's",
+                  "lineHeight": 1.4,
+                  "fontFamily": "$font-mono",
+                  "fontSize": 10,
+                  "fontWeight": "normal"
+                },
+                {
+                  "type": "text",
+                  "id": "d3P8W",
+                  "fill": "$text-secondary",
+                  "textGrowth": "fixed-width",
+                  "width": 400,
+                  "content": "The notice is Tars's: it sits between the agent's header and its terminal, with when Tars wrote it. seen takes it off the panel; Logs keeps it.",
+                  "lineHeight": 1.5,
+                  "fontFamily": "$font-ui",
+                  "fontSize": 12,
+                  "fontWeight": "normal"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "type": "frame",
+          "id": "Q0OSvL",
+          "name": "panel several",
+          "width": "fill_container",
+          "gap": 24,
+          "children": [
+            {
+              "type": "frame",
+              "id": "IH8rB",
+              "name": "panel",
+              "width": 760,
+              "layout": "vertical",
+              "gap": 8,
+              "children": [
+                {
+                  "type": "text",
+                  "id": "GUzP8",
+                  "fill": "$text-muted",
+                  "content": "several notices: the newest first, at most three, then how many more",
+                  "lineHeight": 1.4,
+                  "fontFamily": "$font-mono",
+                  "fontSize": 10,
+                  "fontWeight": "normal"
+                },
+                {
+                  "type": "frame",
+                  "id": "HrMo5",
+                  "name": "panel Goose Runner",
+                  "width": 760,
+                  "fill": "$surface",
+                  "stroke": "$border",
+                  "strokeWidth": 1,
+                  "layout": "vertical",
+                  "children": [
+                    {
+                      "type": "frame",
+                      "id": "jz1EP",
+                      "name": "head",
+                      "width": "fill_container",
+                      "stroke": "$border",
+                      "strokeWidth": {
+                        "bottom": 1
+                      },
+                      "gap": 8,
+                      "padding": [
+                        10,
+                        14
+                      ],
+                      "alignItems": "center",
+                      "children": [
+                        {
+                          "type": "rectangle",
+                          "id": "r8tXH",
+                          "name": "d",
+                          "fill": "$status-running",
+                          "width": 6,
+                          "height": 6
+                        },
+                        {
+                          "type": "text",
+                          "id": "Hownh",
+                          "fill": "$text-primary",
+                          "content": "Goose Runner",
+                          "lineHeight": 1.4,
+                          "fontFamily": "$font-ui",
+                          "fontSize": 13,
+                          "fontWeight": "normal"
+                        },
+                        {
+                          "type": "text",
+                          "id": "Kxiyt",
+                          "fill": "$text-muted",
+                          "content": "feat/ops",
+                          "lineHeight": 1.4,
+                          "fontFamily": "$font-mono",
+                          "fontSize": 10.5,
+                          "fontWeight": "normal"
+                        },
+                        {
+                          "type": "frame",
+                          "id": "RENl3",
+                          "name": "sp",
+                          "width": "fill_container",
+                          "height": 1
+                        },
+                        {
+                          "type": "text",
+                          "id": "TKAxB",
+                          "fill": "$status-running",
+                          "content": "running",
+                          "lineHeight": 1.4,
+                          "fontFamily": "$font-mono",
+                          "fontSize": 10.5,
+                          "fontWeight": "normal"
+                        }
+                      ]
+                    },
+                    {
+                      "type": "frame",
+                      "id": "wU1sP",
+                      "name": "notice 15:40",
+                      "width": "fill_container",
+                      "fill": "$surface-raised",
+                      "stroke": "$border",
+                      "strokeWidth": {
+                        "bottom": 1
+                      },
+                      "gap": 10,
+                      "padding": [
+                        8,
+                        14
+                      ],
+                      "alignItems": "center",
+                      "children": [
+                        {
+                          "type": "rectangle",
+                          "id": "kLKF2",
+                          "name": "d",
+                          "fill": "$status-waiting",
+                          "width": 6,
+                          "height": 6
+                        },
+                        {
+                          "type": "text",
+                          "id": "b5143k",
+                          "fill": "$text-muted",
+                          "content": "Tars · 15:40",
+                          "lineHeight": 1.4,
+                          "fontFamily": "$font-mono",
+                          "fontSize": 10.5,
+                          "fontWeight": "normal"
+                        },
+                        {
+                          "type": "text",
+                          "id": "xk08N",
+                          "fill": "$text-primary",
+                          "textGrowth": "fixed-width",
+                          "width": 460,
+                          "content": "Its conversation starts over: Tars's servers moved, and a Goose session keeps the servers it began with.",
+                          "lineHeight": 1.4,
+                          "fontFamily": "$font-ui",
+                          "fontSize": 11.5,
+                          "fontWeight": "normal"
+                        },
+                        {
+                          "type": "frame",
+                          "id": "wgtXk",
+                          "name": "sp",
+                          "width": "fill_container",
+                          "height": 1
+                        },
+                        {
+                          "type": "frame",
+                          "id": "i4cUM",
+                          "name": "b seen",
+                          "height": 26,
+                          "padding": [
+                            0,
+                            11
+                          ],
+                          "justifyContent": "center",
+                          "alignItems": "center",
+                          "children": [
+                            {
+                              "type": "text",
+                              "id": "pOyWA",
+                              "fill": "$text-muted",
+                              "content": "seen",
+                              "lineHeight": 1.4,
+                              "fontFamily": "$font-mono",
+                              "fontSize": 11,
+                              "fontWeight": "normal"
+                            }
+                          ]
+                        }
+                      ]
+                    },
+                    {
+                      "type": "frame",
+                      "id": "mPfco",
+                      "name": "notice 15:12",
+                      "width": "fill_container",
+                      "fill": "$surface-raised",
+                      "stroke": "$border",
+                      "strokeWidth": {
+                        "bottom": 1
+                      },
+                      "gap": 10,
+                      "padding": [
+                        8,
+                        14
+                      ],
+                      "alignItems": "center",
+                      "children": [
+                        {
+                          "type": "rectangle",
+                          "id": "RrHfy",
+                          "name": "d",
+                          "fill": "$status-error",
+                          "width": 6,
+                          "height": 6
+                        },
+                        {
+                          "type": "text",
+                          "id": "KTUIP",
+                          "fill": "$text-muted",
+                          "content": "Tars · 15:12",
+                          "lineHeight": 1.4,
+                          "fontFamily": "$font-mono",
+                          "fontSize": 10.5,
+                          "fontWeight": "normal"
+                        },
+                        {
+                          "type": "text",
+                          "id": "f4YB4N",
+                          "fill": "$text-primary",
+                          "textGrowth": "fixed-width",
+                          "width": 460,
+                          "content": "Refused a session (5f2c9a1e): its CLI (pid 48211) is not this terminal's (pid 48190).",
+                          "lineHeight": 1.4,
+                          "fontFamily": "$font-ui",
+                          "fontSize": 11.5,
+                          "fontWeight": "normal"
+                        },
+                        {
+                          "type": "frame",
+                          "id": "zIdtA",
+                          "name": "sp",
+                          "width": "fill_container",
+                          "height": 1
+                        },
+                        {
+                          "type": "frame",
+                          "id": "oX8Cf",
+                          "name": "b seen",
+                          "height": 26,
+                          "padding": [
+                            0,
+                            11
+                          ],
+                          "justifyContent": "center",
+                          "alignItems": "center",
+                          "children": [
+                            {
+                              "type": "text",
+                              "id": "GMNWZ",
+                              "fill": "$text-muted",
+                              "content": "seen",
+                              "lineHeight": 1.4,
+                              "fontFamily": "$font-mono",
+                              "fontSize": 11,
+                              "fontWeight": "normal"
+                            }
+                          ]
+                        }
+                      ]
+                    },
+                    {
+                      "type": "frame",
+                      "id": "PsAgU",
+                      "name": "more",
+                      "width": "fill_container",
+                      "fill": "$surface-raised",
+                      "stroke": "$border",
+                      "strokeWidth": {
+                        "bottom": 1
+                      },
+                      "gap": 8,
+                      "padding": [
+                        6,
+                        14
+                      ],
+                      "alignItems": "center",
+                      "children": [
+                        {
+                          "type": "text",
+                          "id": "hJnjv",
+                          "fill": "$text-muted",
+                          "content": "2 earlier notices, in Logs",
+                          "lineHeight": 1.4,
+                          "fontFamily": "$font-mono",
+                          "fontSize": 10.5,
+                          "fontWeight": "normal"
+                        },
+                        {
+                          "type": "frame",
+                          "id": "suCER",
+                          "name": "sp",
+                          "width": "fill_container",
+                          "height": 1
+                        },
+                        {
+                          "type": "frame",
+                          "id": "xyN6z",
+                          "name": "b mark all seen",
+                          "height": 26,
+                          "padding": [
+                            0,
+                            11
+                          ],
+                          "justifyContent": "center",
+                          "alignItems": "center",
+                          "children": [
+                            {
+                              "type": "text",
+                              "id": "riKH8",
+                              "fill": "$text-muted",
+                              "content": "mark all seen",
+                              "lineHeight": 1.4,
+                              "fontFamily": "$font-mono",
+                              "fontSize": 11,
+                              "fontWeight": "normal"
+                            }
+                          ]
+                        }
+                      ]
+                    },
+                    {
+                      "type": "frame",
+                      "id": "A8CNQM",
+                      "name": "terminal",
+                      "width": "fill_container",
+                      "fill": "$bg",
+                      "layout": "vertical",
+                      "gap": 3,
+                      "padding": [
+                        10,
+                        14
+                      ],
+                      "children": [
+                        {
+                          "type": "text",
+                          "id": "C8MyRa",
+                          "fill": "$text-secondary",
+                          "content": "( goose ) ready",
+                          "lineHeight": 1.4,
+                          "fontFamily": "$font-mono",
+                          "fontSize": 11,
+                          "fontWeight": "normal"
+                        },
+                        {
+                          "type": "text",
+                          "id": "XTeiC",
+                          "fill": "$text-secondary",
+                          "content": "> ▊",
+                          "lineHeight": 1.4,
+                          "fontFamily": "$font-mono",
+                          "fontSize": 11,
+                          "fontWeight": "normal"
+                        }
+                      ]
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "type": "frame",
+              "id": "nR98a",
+              "name": "what it is",
+              "width": "fill_container",
+              "layout": "vertical",
+              "gap": 8,
+              "children": [
+                {
+                  "type": "text",
+                  "id": "Z8Iq2X",
+                  "fill": "$text-muted",
+                  "content": "a refused session is an error",
+                  "lineHeight": 1.4,
+                  "fontFamily": "$font-mono",
+                  "fontSize": 10,
+                  "fontWeight": "normal"
+                },
+                {
+                  "type": "text",
+                  "id": "ZkDEi",
+                  "fill": "$text-secondary",
+                  "textGrowth": "fixed-width",
+                  "width": 400,
+                  "content": "A session refused on a hook is said in the error tone; a conversation that starts over in the waiting tone. Older notices are counted, not listed: Logs has them all.",
+                  "lineHeight": 1.5,
+                  "fontFamily": "$font-ui",
+                  "fontSize": 12,
+                  "fontWeight": "normal"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "type": "frame",
+          "id": "Qzku7",
+          "name": "logs",
+          "width": "fill_container",
+          "gap": 24,
+          "children": [
+            {
+              "type": "frame",
+              "id": "bEPiF",
+              "name": "logs",
+              "width": 760,
+              "layout": "vertical",
+              "gap": 8,
+              "children": [
+                {
+                  "type": "text",
+                  "id": "VgdqU",
+                  "fill": "$text-muted",
+                  "content": "Logs, a search across agents: Tars's lines among the agent's own, marked as Tars's",
+                  "lineHeight": 1.4,
+                  "fontFamily": "$font-mono",
+                  "fontSize": 10,
+                  "fontWeight": "normal"
+                },
+                {
+                  "type": "frame",
+                  "id": "tNu5k",
+                  "name": "logs Cline Coder",
+                  "width": 760,
+                  "fill": "$surface",
+                  "stroke": "$border",
+                  "strokeWidth": 1,
+                  "layout": "vertical",
+                  "padding": [
+                    0,
+                    0,
+                    8,
+                    0
+                  ],
+                  "children": [
+                    {
+                      "type": "frame",
+                      "id": "VyDdg",
+                      "name": "head",
+                      "width": "fill_container",
+                      "gap": 8,
+                      "padding": [
+                        10,
+                        14
+                      ],
+                      "alignItems": "center",
+                      "children": [
+                        {
+                          "type": "text",
+                          "id": "DqORK",
+                          "fill": "$text-primary",
+                          "content": "Cline Coder",
+                          "lineHeight": 1.4,
+                          "fontFamily": "$font-ui",
+                          "fontSize": 13,
+                          "fontWeight": "normal"
+                        },
+                        {
+                          "type": "text",
+                          "id": "A9nqh",
+                          "fill": "$text-muted",
+                          "content": "feat/cli-window",
+                          "lineHeight": 1.4,
+                          "fontFamily": "$font-mono",
+                          "fontSize": 10.5,
+                          "fontWeight": "normal"
+                        }
+                      ]
+                    },
+                    {
+                      "type": "frame",
+                      "id": "Si4OC",
+                      "name": "line",
+                      "width": "fill_container",
+                      "gap": 10,
+                      "padding": [
+                        3,
+                        14
+                      ],
+                      "children": [
+                        {
+                          "type": "text",
+                          "id": "X33A0",
+                          "fill": "$text-secondary",
+                          "content": "❯ npm test",
+                          "lineHeight": 1.4,
+                          "fontFamily": "$font-mono",
+                          "fontSize": 11,
+                          "fontWeight": "normal"
+                        }
+                      ]
+                    },
+                    {
+                      "type": "frame",
+                      "id": "jLzOp",
+                      "name": "line tars",
+                      "width": "fill_container",
+                      "fill": "$surface-raised",
+                      "gap": 10,
+                      "padding": [
+                        5,
+                        14
+                      ],
+                      "alignItems": "center",
+                      "children": [
+                        {
+                          "type": "rectangle",
+                          "id": "lv1a3",
+                          "name": "d",
+                          "fill": "$status-waiting",
+                          "width": 6,
+                          "height": 6
+                        },
+                        {
+                          "type": "text",
+                          "id": "LQ0w6",
+                          "fill": "$text-muted",
+                          "content": "Tars · 14:02",
+                          "lineHeight": 1.4,
+                          "fontFamily": "$font-mono",
+                          "fontSize": 10.5,
+                          "fontWeight": "normal"
+                        },
+                        {
+                          "type": "text",
+                          "id": "UKoyj",
+                          "fill": "$text-primary",
+                          "textGrowth": "fixed-width",
+                          "width": 560,
+                          "content": "Its conversation starts over: Cline cannot fork a session, and a restart cannot continue the one it stops.",
+                          "lineHeight": 1.4,
+                          "fontFamily": "$font-ui",
+                          "fontSize": 11.5,
+                          "fontWeight": "normal"
+                        }
+                      ]
+                    },
+                    {
+                      "type": "frame",
+                      "id": "a1R3Qs",
+                      "name": "line",
+                      "width": "fill_container",
+                      "gap": 10,
+                      "padding": [
+                        3,
+                        14
+                      ],
+                      "children": [
+                        {
+                          "type": "text",
+                          "id": "CP93w",
+                          "fill": "$text-secondary",
+                          "content": "● I'll pick up the task from its description, the earlier turns are gone.",
+                          "lineHeight": 1.4,
+                          "fontFamily": "$font-mono",
+                          "fontSize": 11,
+                          "fontWeight": "normal"
+                        }
+                      ]
+                    }
+                  ]
+                },
+                {
+                  "type": "frame",
+                  "id": "ekOfe",
+                  "name": "logs Goose Runner",
+                  "width": 760,
+                  "fill": "$surface",
+                  "stroke": "$border",
+                  "strokeWidth": 1,
+                  "layout": "vertical",
+                  "padding": [
+                    0,
+                    0,
+                    8,
+                    0
+                  ],
+                  "children": [
+                    {
+                      "type": "frame",
+                      "id": "iqTrZ",
+                      "name": "head",
+                      "width": "fill_container",
+                      "gap": 8,
+                      "padding": [
+                        10,
+                        14
+                      ],
+                      "alignItems": "center",
+                      "children": [
+                        {
+                          "type": "text",
+                          "id": "BBBx4",
+                          "fill": "$text-primary",
+                          "content": "Goose Runner",
+                          "lineHeight": 1.4,
+                          "fontFamily": "$font-ui",
+                          "fontSize": 13,
+                          "fontWeight": "normal"
+                        },
+                        {
+                          "type": "text",
+                          "id": "x23Gd",
+                          "fill": "$text-muted",
+                          "content": "feat/ops",
+                          "lineHeight": 1.4,
+                          "fontFamily": "$font-mono",
+                          "fontSize": 10.5,
+                          "fontWeight": "normal"
+                        }
+                      ]
+                    },
+                    {
+                      "type": "frame",
+                      "id": "mmRk6",
+                      "name": "line tars",
+                      "width": "fill_container",
+                      "fill": "$surface-raised",
+                      "gap": 10,
+                      "padding": [
+                        5,
+                        14
+                      ],
+                      "alignItems": "center",
+                      "children": [
+                        {
+                          "type": "rectangle",
+                          "id": "mf1FF",
+                          "name": "d",
+                          "fill": "$status-error",
+                          "width": 6,
+                          "height": 6
+                        },
+                        {
+                          "type": "text",
+                          "id": "srE6v",
+                          "fill": "$text-muted",
+                          "content": "Tars · 15:12",
+                          "lineHeight": 1.4,
+                          "fontFamily": "$font-mono",
+                          "fontSize": 10.5,
+                          "fontWeight": "normal"
+                        },
+                        {
+                          "type": "text",
+                          "id": "Y2KXO",
+                          "fill": "$text-primary",
+                          "textGrowth": "fixed-width",
+                          "width": 560,
+                          "content": "Refused a session (5f2c9a1e): its CLI (pid 48211) is not this terminal's (pid 48190).",
+                          "lineHeight": 1.4,
+                          "fontFamily": "$font-ui",
+                          "fontSize": 11.5,
+                          "fontWeight": "normal"
+                        }
+                      ]
+                    },
+                    {
+                      "type": "frame",
+                      "id": "FJTKp",
+                      "name": "line",
+                      "width": "fill_container",
+                      "gap": 10,
+                      "padding": [
+                        3,
+                        14
+                      ],
+                      "children": [
+                        {
+                          "type": "text",
+                          "id": "D44Ly",
+                          "fill": "$text-secondary",
+                          "content": "( goose ) ready",
+                          "lineHeight": 1.4,
+                          "fontFamily": "$font-mono",
+                          "fontSize": 11,
+                          "fontWeight": "normal"
+                        }
+                      ]
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "type": "frame",
+              "id": "pTYD7",
+              "name": "what it is",
+              "width": "fill_container",
+              "layout": "vertical",
+              "gap": 8,
+              "children": [
+                {
+                  "type": "text",
+                  "id": "S50aoe",
+                  "fill": "$text-muted",
+                  "content": "found like any line",
+                  "lineHeight": 1.4,
+                  "fontFamily": "$font-mono",
+                  "fontSize": 10,
+                  "fontWeight": "normal"
+                },
+                {
+                  "type": "text",
+                  "id": "oIBZ9",
+                  "fill": "$text-secondary",
+                  "textGrowth": "fixed-width",
+                  "width": 400,
+                  "content": "Logs searches Tars's notices with the agent's output, at their place in time, so a search for \"starts over\" finds them while the terminal runs.",
+                  "lineHeight": 1.5,
+                  "fontFamily": "$font-ui",
+                  "fontSize": 12,
+                  "fontWeight": "normal"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "type": "frame",
+          "id": "MmZft",
+          "name": "logs running",
+          "width": "fill_container",
+          "gap": 24,
+          "children": [
+            {
+              "type": "frame",
+              "id": "XJLyN",
+              "name": "logs",
+              "width": 760,
+              "layout": "vertical",
+              "gap": 8,
+              "children": [
+                {
+                  "type": "text",
+                  "id": "Cnx6J",
+                  "fill": "$text-muted",
+                  "content": "Logs, a running agent's tail: Tars's notices as a group, by time, then its screen",
+                  "lineHeight": 1.4,
+                  "fontFamily": "$font-mono",
+                  "fontSize": 10,
+                  "fontWeight": "normal"
+                },
+                {
+                  "type": "frame",
+                  "id": "Z7Mw7g",
+                  "name": "logs Goose Runner: last 4 lines",
+                  "width": 760,
+                  "fill": "$surface",
+                  "stroke": "$border",
+                  "strokeWidth": 1,
+                  "layout": "vertical",
+                  "padding": [
+                    0,
+                    0,
+                    8,
+                    0
+                  ],
+                  "children": [
+                    {
+                      "type": "frame",
+                      "id": "Sj4lB",
+                      "name": "head",
+                      "width": "fill_container",
+                      "gap": 8,
+                      "padding": [
+                        10,
+                        14
+                      ],
+                      "alignItems": "center",
+                      "children": [
+                        {
+                          "type": "text",
+                          "id": "zlhmD",
+                          "fill": "$text-primary",
+                          "content": "Goose Runner: last 4 lines",
+                          "lineHeight": 1.4,
+                          "fontFamily": "$font-ui",
+                          "fontSize": 13,
+                          "fontWeight": "normal"
+                        },
+                        {
+                          "type": "text",
+                          "id": "WLjEz",
+                          "fill": "$text-muted",
+                          "content": "feat/ops",
+                          "lineHeight": 1.4,
+                          "fontFamily": "$font-mono",
+                          "fontSize": 10.5,
+                          "fontWeight": "normal"
+                        }
+                      ]
+                    },
+                    {
+                      "type": "frame",
+                      "id": "BViQv",
+                      "name": "group",
+                      "width": "fill_container",
+                      "padding": [
+                        6,
+                        14,
+                        2,
+                        14
+                      ],
+                      "children": [
+                        {
+                          "type": "text",
+                          "id": "vkSWY",
+                          "fill": "$text-muted",
+                          "content": "Tars's notices, by time",
+                          "lineHeight": 1.4,
+                          "fontFamily": "$font-mono",
+                          "fontSize": 10,
+                          "fontWeight": "normal"
+                        }
+                      ]
+                    },
+                    {
+                      "type": "frame",
+                      "id": "EgPuM",
+                      "name": "line tars",
+                      "width": "fill_container",
+                      "fill": "$surface-raised",
+                      "gap": 10,
+                      "padding": [
+                        5,
+                        14
+                      ],
+                      "alignItems": "center",
+                      "children": [
+                        {
+                          "type": "rectangle",
+                          "id": "hhE6s",
+                          "name": "d",
+                          "fill": "$status-error",
+                          "width": 6,
+                          "height": 6
+                        },
+                        {
+                          "type": "text",
+                          "id": "wKruk",
+                          "fill": "$text-muted",
+                          "content": "Tars · 15:12",
+                          "lineHeight": 1.4,
+                          "fontFamily": "$font-mono",
+                          "fontSize": 10.5,
+                          "fontWeight": "normal"
+                        },
+                        {
+                          "type": "text",
+                          "id": "M9vqP",
+                          "fill": "$text-primary",
+                          "textGrowth": "fixed-width",
+                          "width": 560,
+                          "content": "Refused a session (5f2c9a1e): its CLI (pid 48211) is not this terminal's (pid 48190).",
+                          "lineHeight": 1.4,
+                          "fontFamily": "$font-ui",
+                          "fontSize": 11.5,
+                          "fontWeight": "normal"
+                        }
+                      ]
+                    },
+                    {
+                      "type": "frame",
+                      "id": "q4tURv",
+                      "name": "line tars",
+                      "width": "fill_container",
+                      "fill": "$surface-raised",
+                      "gap": 10,
+                      "padding": [
+                        5,
+                        14
+                      ],
+                      "alignItems": "center",
+                      "children": [
+                        {
+                          "type": "rectangle",
+                          "id": "p03CHR",
+                          "name": "d",
+                          "fill": "$status-waiting",
+                          "width": 6,
+                          "height": 6
+                        },
+                        {
+                          "type": "text",
+                          "id": "vXBHj",
+                          "fill": "$text-muted",
+                          "content": "Tars · 15:40",
+                          "lineHeight": 1.4,
+                          "fontFamily": "$font-mono",
+                          "fontSize": 10.5,
+                          "fontWeight": "normal"
+                        },
+                        {
+                          "type": "text",
+                          "id": "vBPri",
+                          "fill": "$text-primary",
+                          "textGrowth": "fixed-width",
+                          "width": 560,
+                          "content": "Its conversation starts over: Tars's servers moved, and a Goose session keeps the servers it began with.",
+                          "lineHeight": 1.4,
+                          "fontFamily": "$font-ui",
+                          "fontSize": 11.5,
+                          "fontWeight": "normal"
+                        }
+                      ]
+                    },
+                    {
+                      "type": "frame",
+                      "id": "a7Wh0",
+                      "name": "sep",
+                      "width": "fill_container",
+                      "padding": [
+                        6,
+                        0,
+                        4,
+                        0
+                      ],
+                      "children": [
+                        {
+                          "type": "rectangle",
+                          "id": "rigEM",
+                          "name": "rule",
+                          "fill": "$border",
+                          "width": "fill_container",
+                          "height": 1
+                        }
+                      ]
+                    },
+                    {
+                      "type": "frame",
+                      "id": "lKtMV",
+                      "name": "line",
+                      "width": "fill_container",
+                      "gap": 10,
+                      "padding": [
+                        3,
+                        14
+                      ],
+                      "children": [
+                        {
+                          "type": "text",
+                          "id": "E1Cv6I",
+                          "fill": "$text-secondary",
+                          "content": "( goose ) ready",
+                          "lineHeight": 1.4,
+                          "fontFamily": "$font-mono",
+                          "fontSize": 11,
+                          "fontWeight": "normal"
+                        }
+                      ]
+                    },
+                    {
+                      "type": "frame",
+                      "id": "CB4jT",
+                      "name": "line",
+                      "width": "fill_container",
+                      "gap": 10,
+                      "padding": [
+                        3,
+                        14
+                      ],
+                      "children": [
+                        {
+                          "type": "text",
+                          "id": "xdJ0V",
+                          "fill": "$text-secondary",
+                          "content": "[Tars] Paste your API key here to continue",
+                          "lineHeight": 1.4,
+                          "fontFamily": "$font-mono",
+                          "fontSize": 11,
+                          "fontWeight": "normal"
+                        }
+                      ]
+                    },
+                    {
+                      "type": "frame",
+                      "id": "QInnu",
+                      "name": "line",
+                      "width": "fill_container",
+                      "gap": 10,
+                      "padding": [
+                        3,
+                        14
+                      ],
+                      "children": [
+                        {
+                          "type": "text",
+                          "id": "kCOsQ",
+                          "fill": "$text-secondary",
+                          "content": "> ▊",
+                          "lineHeight": 1.4,
+                          "fontFamily": "$font-mono",
+                          "fontSize": 11,
+                          "fontWeight": "normal"
+                        }
+                      ]
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "type": "frame",
+              "id": "K5gs2",
+              "name": "what it is",
+              "width": "fill_container",
+              "layout": "vertical",
+              "gap": 8,
+              "children": [
+                {
+                  "type": "text",
+                  "id": "RomdG",
+                  "fill": "$text-muted",
+                  "content": "the screen holds no time, and no line of Tars's",
+                  "lineHeight": 1.4,
+                  "fontFamily": "$font-mono",
+                  "fontSize": 10,
+                  "fontWeight": "normal"
+                },
+                {
+                  "type": "text",
+                  "id": "oQepH",
+                  "fill": "$text-secondary",
+                  "textGrowth": "fixed-width",
+                  "width": 400,
+                  "content": "A running agent's screen never shows Tars's lines and says nothing of when its own were written, so its notices are a group of their own, oldest first, above the screen, not its first lines. A line the agent prints with [Tars] in front stays the agent's: Tars's style is only for a notice Tars kept.",
+                  "lineHeight": 1.5,
+                  "fontFamily": "$font-ui",
+                  "fontSize": 12,
+                  "fontWeight": "normal"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "type": "frame",
+          "id": "bY01U",
+          "name": "none",
+          "width": "fill_container",
+          "gap": 24,
+          "children": [
+            {
+              "type": "frame",
+              "id": "xKETm",
+              "name": "panel",
+              "width": 760,
+              "layout": "vertical",
+              "gap": 8,
+              "children": [
+                {
+                  "type": "text",
+                  "id": "mjpIW",
+                  "fill": "$text-muted",
+                  "content": "no notice, or all seen: the panel as it was",
+                  "lineHeight": 1.4,
+                  "fontFamily": "$font-mono",
+                  "fontSize": 10,
+                  "fontWeight": "normal"
+                },
+                {
+                  "type": "frame",
+                  "id": "x7WmN9",
+                  "name": "panel Cline Coder",
+                  "width": 760,
+                  "fill": "$surface",
+                  "stroke": "$border",
+                  "strokeWidth": 1,
+                  "layout": "vertical",
+                  "children": [
+                    {
+                      "type": "frame",
+                      "id": "v24ul",
+                      "name": "head",
+                      "width": "fill_container",
+                      "stroke": "$border",
+                      "strokeWidth": {
+                        "bottom": 1
+                      },
+                      "gap": 8,
+                      "padding": [
+                        10,
+                        14
+                      ],
+                      "alignItems": "center",
+                      "children": [
+                        {
+                          "type": "rectangle",
+                          "id": "dW1SU",
+                          "name": "d",
+                          "fill": "$status-running",
+                          "width": 6,
+                          "height": 6
+                        },
+                        {
+                          "type": "text",
+                          "id": "EAYzN",
+                          "fill": "$text-primary",
+                          "content": "Cline Coder",
+                          "lineHeight": 1.4,
+                          "fontFamily": "$font-ui",
+                          "fontSize": 13,
+                          "fontWeight": "normal"
+                        },
+                        {
+                          "type": "text",
+                          "id": "GY9Ww",
+                          "fill": "$text-muted",
+                          "content": "feat/cli-window",
+                          "lineHeight": 1.4,
+                          "fontFamily": "$font-mono",
+                          "fontSize": 10.5,
+                          "fontWeight": "normal"
+                        },
+                        {
+                          "type": "frame",
+                          "id": "Y9RU3E",
+                          "name": "sp",
+                          "width": "fill_container",
+                          "height": 1
+                        },
+                        {
+                          "type": "text",
+                          "id": "ldFJe",
+                          "fill": "$status-running",
+                          "content": "running",
+                          "lineHeight": 1.4,
+                          "fontFamily": "$font-mono",
+                          "fontSize": 10.5,
+                          "fontWeight": "normal"
+                        }
+                      ]
+                    },
+                    {
+                      "type": "frame",
+                      "id": "NQa0o",
+                      "name": "terminal",
+                      "width": "fill_container",
+                      "fill": "$bg",
+                      "layout": "vertical",
+                      "gap": 3,
+                      "padding": [
+                        10,
+                        14
+                      ],
+                      "children": [
+                        {
+                          "type": "text",
+                          "id": "ndC5F",
+                          "fill": "$text-secondary",
+                          "content": "● Read(src/lib/clis.ts)",
+                          "lineHeight": 1.4,
+                          "fontFamily": "$font-mono",
+                          "fontSize": 11,
+                          "fontWeight": "normal"
+                        },
+                        {
+                          "type": "text",
+                          "id": "W3ofGA",
+                          "fill": "$text-secondary",
+                          "content": "> ▊",
+                          "lineHeight": 1.4,
+                          "fontFamily": "$font-mono",
+                          "fontSize": 11,
+                          "fontWeight": "normal"
+                        }
+                      ]
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "type": "frame",
+              "id": "Z03GK",
+              "name": "what it is",
+              "width": "fill_container",
+              "layout": "vertical",
+              "gap": 8,
+              "children": [
+                {
+                  "type": "text",
+                  "id": "n0kN5",
+                  "fill": "$text-muted",
+                  "content": "nothing added",
+                  "lineHeight": 1.4,
+                  "fontFamily": "$font-mono",
+                  "fontSize": 10,
+                  "fontWeight": "normal"
+                },
+                {
+                  "type": "text",
+                  "id": "PQiya",
+                  "fill": "$text-secondary",
+                  "textGrowth": "fixed-width",
+                  "width": 400,
+                  "content": "With no notice to show, nothing sits above the terminal.",
+                  "lineHeight": 1.5,
+                  "fontFamily": "$font-ui",
+                  "fontSize": 12,
+                  "fontWeight": "normal"
+                }
+              ]
+            }
+          ]
+        }
+      ]
     }
   ],
   "themes": {
