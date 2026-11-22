@@ -224,8 +224,9 @@ describe('9. every provider round-trips', () => {
       for (const [label, prompt] of ADVERSARIAL) {
         const all = posixWords(await commandOf(provider.id, prompt, bin));
         // codex's line hands it Tars's home first, on macOS and Linux (`env CODEX_HOME=<home>`, the Audit's L4 on #465),
-        // and goose's its permission mode (`env GOOSE_MODE=<mode>`, which it reads from its environment only).
-        const words = all[0] === 'env' && /^(CODEX_HOME|GOOSE_MODE)=/.test(all[1] ?? '') ? all.slice(2) : all;
+        // goose's its permission mode (`env GOOSE_MODE=<mode>`, which it reads from its environment only), and cline's
+        // its own update off (`env CLINE_NO_AUTO_UPDATE=1`, which no rc file of its shell may undo).
+        const words = all[0] === 'env' && /^(CODEX_HOME|GOOSE_MODE|CLINE_NO_AUTO_UPDATE)=/.test(all[1] ?? '') ? all.slice(2) : all;
         if (provider.taskTypedAfterLaunch) {
           // Amp's line never carries the task: it is typed in once its TUI runs (core/typed-task.ts, 2.0.4).
           expect([provider.id, label, words[0], words.includes(prompt)]).toEqual([provider.id, label, bin, false]);
