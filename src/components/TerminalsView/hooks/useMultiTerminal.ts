@@ -8,7 +8,7 @@ import { isElectron } from '@/hooks/useElectron';
 import { onAgentMoveLine } from '@/hooks/useClaudeAccounts';
 import { TERMINAL_CONFIG } from '../constants';
 import { getTerminalTheme } from '@/components/AgentWorld/constants';
-import { attachShiftEnterHandler, disposeTerminalSafely, keepWheelScroll, keySender, passWheelToProgram, stripTerminalReplies, suppressMouseTracking } from '@/lib/terminal';
+import { attachShiftEnterHandler, disposeTerminalSafely, keepUserScroll, keySender, passWheelToProgram, stripTerminalReplies, suppressMouseTracking } from '@/lib/terminal';
 
 interface TerminalEntry {
   terminal: Terminal;
@@ -191,8 +191,8 @@ export function useMultiTerminal({ agents, initialFontSize, onFontSizeChange, th
         if (leftFullscreenRef.current.has(agentId)) return;
         if (isElectron()) window.electronAPI!.agent.sendInput({ id: agentId, input }).catch(() => {});
       });
-      // A terminal scrolled up by the wheel stays there while its output goes on, also when the window is slow.
-      keepWheelScroll(term);
+      // A terminal the user scrolled stays there while its output goes on, also when the window is slow.
+      keepUserScroll(term);
 
       const entry: TerminalEntry = {
         terminal: term,
