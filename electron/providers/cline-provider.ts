@@ -29,8 +29,20 @@ import { agentNotice } from '../core/agent-notices';
  *   footer are drawn (upOnScreen), after bracketed paste turns on (measured).
  * - `--auto-approve false` asks in its terminal; `-p` still ran a command, so plan is refused.
  * - `--id <id>` resumes a session under its own id; there is no fork, so a restart starts a fresh session and says so.
- * - The first-run notice (it took an Enter and opened a page in the owner's browser) is always off.
+ * - The first-run notice (it took an Enter and opened a page in the owner's browser) is always off, and so is its own
+ *   update (NO_AUTO_UPDATE), which installed itself over the user's global Cline at its exit.
  */
+
+/**
+ * CLINE_NO_AUTO_UPDATE's value that turns Cline's own update off. Cline checks for a newer version at every start and,
+ * at its exit, runs its package manager's global install (`npm install -g cline@<latest>`, detached, outliving it) over
+ * the user's own Cline and npm prefix, unless this variable is exactly `1` or its autoUpdateEnabled setting is false
+ * (read in 3.0.74's binary: its entry calls the check before it reads its arguments, the variable first). QA's gate of
+ * #620 saw npm write into the prefix during a Cline agent's run. Every cline Tars starts carries it: an agent's
+ * terminal (its line and its environment, a start, a resume, a restart alike) and a version probe
+ * (core/version-probe.ts). The variable is enough, so the setting is not written.
+ */
+export const NO_AUTO_UPDATE = '1';
 
 /** The events Tars reads; Cline runs `<event>.mjs` of the agent's hooks/ with node. */
 const HOOK_EVENTS = ['TaskStart', 'TaskResume', 'TaskComplete', 'TaskCancel', 'TaskError'] as const;
@@ -73,7 +85,11 @@ export class ClineProvider implements CLIProvider {
     if (!params.agentId) throw new Error('Cline runs as an agent of Tars only on a folder of its own: no agent was named.');
     const dir = clineAgentDir(params.agentId);
     this.writeAgentFolder(params.agentId, dir, params.orchestratorMode === true);
-    let command = `${shellQuote(params.binaryPath)} -i --config ${shellQuote(dir)} --data-dir ${shellQuote(path.join(dir, 'data'))}`;
+    // Its own update off (NO_AUTO_UPDATE): on macOS and Linux on the line, which no rc file of the agent's shell runs
+    // after; on Windows, where the line's first word is the binary itself (platform/launch.ts) and nothing is sourced,
+    // in the terminal's environment (getPtyEnvVars).
+    let command = process.platform === 'win32' ? '' : `env CLINE_NO_AUTO_UPDATE=${NO_AUTO_UPDATE} `;
+    command += `${shellQuote(params.binaryPath)} -i --config ${shellQuote(dir)} --data-dir ${shellQuote(path.join(dir, 'data'))}`;
     command += ` --auto-approve ${shellQuote(autoApproves(params.permissionMode) ? 'true' : 'false')}`;
     // Cline's own id and nothing else: it reaches a command line. No fork: a restart, which goes on with the session its
     // stop made a tombstone (hooks-routes.ts refuses its posts), starts a fresh one, and says so.
@@ -153,6 +169,8 @@ export class ClineProvider implements CLIProvider {
       CLAUDE_PROVIDER: this.id,
       CLINE_DISABLE_CLINE_PASS_NOTICE: '1',
       CLINE_SESSION_BACKEND_MODE: 'local',
+      // After the inherited environment (the launch puts these last), so the user's own value never turns it back on.
+      CLINE_NO_AUTO_UPDATE: NO_AUTO_UPDATE,
       // Where the hook reads a task's prompt from (hooks/cline-hook.mjs): the same folder as --data-dir.
       CLINE_DATA_DIR: path.join(clineAgentDir(agentId), 'data'),
       // On an inference endpoint, the token's variable is filled at the spawn (core/agent-pty.ts).
