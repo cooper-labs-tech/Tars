@@ -2,7 +2,7 @@ import { test, expect, _electron as electron } from '@playwright/test';
 import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
-import { launchSandboxed, recordValues } from './fixture.mjs';
+import { launchSandboxed, recordValues, removeHome } from './fixture.mjs';
 import { DEV_URL, apiPort } from './ports.mjs';
 
 /**
@@ -148,5 +148,6 @@ test('the main process heap under a working fleet', async () => {
     expect(samples.length).toBeGreaterThan(4);
   } finally {
     await app.close();
+    await removeHome(home);
   }
 });

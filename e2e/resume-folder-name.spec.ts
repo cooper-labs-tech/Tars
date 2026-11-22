@@ -2,7 +2,7 @@ import { test, expect, _electron as electron } from '@playwright/test';
 import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
-import { launchSandboxed, recordValues } from './fixture.mjs';
+import { launchSandboxed, recordValues, removeHome } from './fixture.mjs';
 import { DEV_URL, apiPort } from './ports.mjs';
 
 /**
@@ -93,4 +93,5 @@ test('an agent of a project whose path holds an underscore and a space resumes i
   const [first, second] = launches();
   expect(first.resume).toBeNull();
   expect(second.resume, 'the relaunch resumes the first session').toBe(first.sid);
+  await removeHome(home);
 });

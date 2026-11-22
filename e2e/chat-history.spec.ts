@@ -2,7 +2,7 @@ import { test, expect, _electron as electron } from '@playwright/test';
 import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
-import { launchSandboxed, recordValues } from './fixture.mjs';
+import { launchSandboxed, recordValues, removeHome } from './fixture.mjs';
 import { DEV_URL, apiPort } from './ports.mjs';
 
 /**
@@ -213,6 +213,7 @@ test("a chat's conversation is read across its sessions, then followed live, and
     values.heard = await heardSoFar().catch(() => null);
     recordValues(values);
     await app.close();
+    await removeHome(home);
   }
 });
 
@@ -269,6 +270,7 @@ test("Main reads a former orchestrator's session where it ran, after the role mo
   } finally {
     recordValues(values);
     await app.close();
+    await removeHome(home);
   }
 });
 

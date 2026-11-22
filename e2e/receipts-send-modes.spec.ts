@@ -2,7 +2,7 @@ import { test, expect, _electron as electron } from '@playwright/test';
 import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
-import { launchSandboxed, recordValues } from './fixture.mjs';
+import { launchSandboxed, recordValues, removeHome } from './fixture.mjs';
 import { DEV_URL, apiPort } from './ports.mjs';
 
 /**
@@ -290,6 +290,7 @@ test('a retried request is sent once, a reused id with another text is refused, 
     values.received = { w1: s.read('w1'), cx: s.read('cx') };
     recordValues(values);
     await app.close();
+    await removeHome(s.home);
   }
 });
 
@@ -375,5 +376,6 @@ test('a task delegated from plan mode is marked so in the target\'s terminal, a 
   } finally {
     recordValues(values);
     await opened.app.close();
+    await removeHome(s.home);
   }
 });
