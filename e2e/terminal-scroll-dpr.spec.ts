@@ -1,4 +1,4 @@
-import { test, expect, _electron as electron, type Page } from '@playwright/test';
+import { test, expect, _electron as electron, type ElectronApplication, type Page } from '@playwright/test';
 import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
@@ -89,6 +89,15 @@ const frames = (page: Page, ms: number): Promise<Frame[]> => page.evaluate(({ se
 
 const lineOf = (first: string) => Number(first.match(/^line (\d+)/)?.[1] ?? NaN);
 
+/**
+ * The window's content size, set on the window itself. page.setViewportSize would set the page's metrics through CDP with
+ * a device scale factor of 1, over --force-device-scale-factor (measured: the ratio read 1 at 1.25 and at 2).
+ */
+const sizeWindow = (app: ElectronApplication, width: number, height: number) => app.evaluate(({ BrowserWindow }, { width, height }) => {
+  const win = BrowserWindow.getAllWindows().filter((w) => w.isVisible()).sort((a, b) => b.getBounds().width - a.getBounds().width)[0];
+  win?.setContentSize(width, height);
+}, { width, height });
+
 const CASES = [
   { name: 'at a pixel ratio of 1.25', scale: 1.25, oddOnRetina: false, port: 31587 },
   { name: 'on Retina, an odd cell height and an odd number of rows', scale: 2, oddOnRetina: true, port: 31588 },
@@ -109,7 +118,7 @@ for (const c of CASES) {
     try {
       const page = await app.firstWindow();
       let height = 900;
-      await page.setViewportSize({ width: 1440, height });
+      await sizeWindow(app, 1440, height);
       await page.goto(`${DEV_URL}/`, { waitUntil: 'domcontentloaded' });
       await expect(page.locator('[data-board-layout="orchestrator"]')).toBeVisible({ timeout: 90_000 });
       const lastLine = page.locator(`${panel(lead)} .xterm-rows`).filter({ hasText: `line ${LINES} of ${lead}` });
@@ -129,7 +138,7 @@ for (const c of CASES) {
           }
           for (const h of [900, 892, 884, 876, 868, 860, 852, 844]) {
             height = h;
-            await page.setViewportSize({ width: 1440, height });
+            await sizeWindow(app, 1440, height);
             await page.waitForTimeout(400);
             g = await geometry(page, fontSize, height);
             tried.push(g);
@@ -164,7 +173,7 @@ for (const c of CASES) {
 
       // 4. A resize while scrolled up (the Audit's I-3): the same first line, and still after it.
       const shown = held.at(-1)!.first;
-      await page.setViewportSize({ width: 1440, height: height - 40 });
+      await sizeWindow(app, 1440, height - 40);
       await page.waitForTimeout(600);
       const afterResize = await frames(page, 1_000);
       seen.afterResize = afterResize;
