@@ -133,12 +133,14 @@ for (const c of CASES) {
       const lastLine = page.locator(`${panel(lead)} .xterm-rows`).filter({ hasText: `line ${LINES} of ${lead}` });
       await expect(lastLine, 'the history is written').toBeVisible({ timeout: 60_000 });
 
-      // 1. The geometry. On Retina, the font sizes are tried until the cell height and the rows are both odd.
+      // 1. The geometry, where the case proves something: on Retina an odd cell height and odd rows; at a fractional
+      //    ratio a rounded screen height that differs from rows times the cell height. Font sizes are tried until it does.
+      const proves = (x: Geometry) => (c.oddOnRetina ? x.dch % 2 === 1 && x.rows % 2 === 1 : x.mismatch > 0);
       let g = await geometry(page, fontSize, height);
-      if (c.oddOnRetina) {
+      {
         const tried: Geometry[] = [g];
         for (const size of [12, 13, 10, 14, 9, 15, 16, 8, 17, 18, 19, 20]) {
-          if (g.dch % 2 === 1 && g.rows % 2 === 1) break;
+          if (proves(g)) break;
           await setFontSize(page, size);
           fontSize = size;
           await expect(lastLine, 'the history is written again').toBeVisible({ timeout: 60_000 });
@@ -148,8 +150,9 @@ for (const c of CASES) {
         }
         seen.tried = tried;
         recordValues(seen);
-        test.skip(!(g.dch % 2 === 1 && g.rows % 2 === 1),
-          'no odd device cell height at a ratio of 2 here: every font size from 8 to 20 lays its cells at a whole CSS height (values.json, tried)');
+        test.skip(!proves(g), c.oddOnRetina
+          ? 'no odd device cell height at a ratio of 2 here: every font size from 8 to 20 lays its cells at a whole CSS height (values.json, tried)'
+          : 'no font size from 8 to 20 gives a screen height that differs from rows times the cell height (values.json, tried)');
       }
       seen.geometry = g;
       expect(g.dpr, 'the window runs at the ratio asked').toBe(c.scale);
