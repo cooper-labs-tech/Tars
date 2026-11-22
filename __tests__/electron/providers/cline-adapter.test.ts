@@ -46,6 +46,18 @@ import Database from 'better-sqlite3';
  * 9. On an endpoint: the key written into a file, or the user's own provider used.
  * 10. Its hooks never written in the app: Tars's start gives its hooks folder (configureStatusHooks) only to the
  *     providers whose hooks it installs, and Cline's said it had none.
+ *
+ * And its own update (QA's gate of #620, 22/11): Cline checks for a newer version at every start and, at its exit, runs
+ * its package manager's global install over the user's own Cline (`npm install -g cline@<latest>`, detached, outliving
+ * it), unless CLINE_NO_AUTO_UPDATE is exactly 1 or its autoUpdateEnabled setting is false (read in 3.0.74's binary: its
+ * entry calls the check before it reads its arguments, the variable first). QA's run saw npm write into the prefix.
+ * 11. A Cline agent's terminal without CLINE_NO_AUTO_UPDATE=1: on a start, on a resume (`--id`), on a restart (a fresh
+ *     session); on macOS and Linux an rc file of the agent's shell unsets it or sets 0 after the terminal's environment
+ *     is read, so it goes on the line, which nothing runs after (as codex's CODEX_HOME and Goose's GOOSE_MODE do); on
+ *     Windows, where the line's first word is the binary itself and nothing is sourced, the terminal's environment
+ *     carries it, and the user's own value inherited from Tars's must not win there (the launch puts the provider's
+ *     variables after the inherited ones: agent-manager.ts, the E2E drives it with the user's set to 0). And no other
+ *     provider's terminal is given Cline's variable.
  */
 
 const hooksRoot = vi.hoisted(() => ({ dir: '' }));
@@ -139,7 +151,9 @@ describe("the agent's own folder, never the user's (2, 3, 4, 6)", () => {
     await cline.registerMcpServer('dorothy-x', '/opt/node', ['/res/mcp-x/dist/bundle.js']);
     const dir = clineAgentDir(AGENT);
     const line = cline.buildInteractiveCommand({ agentId: AGENT, binaryPath: '/opt/cline', prompt: 'do the task', orchestratorMode: false, permissionMode: 'bypass' });
-    expect(line).toBe(`'/opt/cline' -i --config '${dir}' --data-dir '${path.join(dir, 'data')}' --auto-approve 'true'`);
+    // Its own update off, on the line where no rc file runs after it; on Windows in the terminal's environment (11).
+    const noUpdate = process.platform === 'win32' ? '' : 'env CLINE_NO_AUTO_UPDATE=1 ';
+    expect(line).toBe(`${noUpdate}'/opt/cline' -i --config '${dir}' --data-dir '${path.join(dir, 'data')}' --auto-approve 'true'`);
     // In Tars's userData, neither ~/.tars nor ~/.tars-private (the Audit's M1 on #620; cline-agent-folder.test.ts).
     expect(dir).toBe(path.join(os.tmpdir(), 'tars-userdata', 'cline', AGENT));
     expect(readJson(path.join(dir, 'data', 'settings', 'providers.json'))).toEqual(USER_PROVIDERS);
@@ -157,6 +171,7 @@ describe("the agent's own folder, never the user's (2, 3, 4, 6)", () => {
     expect(users.snapshot()).toBe(before);
     expect(cline.getPtyEnvVars(AGENT, project, [])).toMatchObject({
       CLINE_DISABLE_CLINE_PASS_NOTICE: '1', CLINE_SESSION_BACKEND_MODE: 'local', CLINE_DATA_DIR: path.join(dir, 'data'), CLAUDE_AGENT_ID: AGENT,
+      CLINE_NO_AUTO_UPDATE: '1',
     });
   });
 
@@ -253,5 +268,45 @@ describe("its hooks, from Tars's start (10)", () => {
     cline.buildInteractiveCommand({ agentId: AGENT, binaryPath: 'cline', prompt: '', permissionMode: 'bypass' });
     const hook = fs.readFileSync(path.join(clineAgentDir(AGENT), 'hooks', 'TaskComplete.mjs'), 'utf8');
     expect(hook).toContain(pathToFileURL(path.join(hooksRoot.dir, 'cline-hook.mjs')).href);
+  });
+});
+
+describe("its own update, never run from an agent's terminal (11)", () => {
+  const hostPlatform = Object.getOwnPropertyDescriptor(process, 'platform')!;
+  const on = (platform: NodeJS.Platform) => Object.defineProperty(process, 'platform', { ...hostPlatform, value: platform });
+  afterEach(() => { Object.defineProperty(process, 'platform', hostPlatform); });
+
+  it('on macOS and Linux, a start, a resume and a restart each put CLINE_NO_AUTO_UPDATE=1 on the line, which no rc file runs after', async () => {
+    usersCline();
+    const cline = await ready();
+    for (const platform of ['darwin', 'linux'] as const) {
+      on(platform);
+      const lines = {
+        start: cline.buildInteractiveCommand({ agentId: AGENT, binaryPath: 'cline', prompt: '' }),
+        resume: cline.buildInteractiveCommand({ agentId: AGENT, binaryPath: 'cline', prompt: '', resumeSessionId: SID }),
+        restart: cline.buildInteractiveCommand({ agentId: AGENT, binaryPath: 'cline', prompt: '', resumeSessionId: SID, forkSession: true }),
+      };
+      for (const [what, line] of Object.entries(lines)) {
+        expect(line, `${platform}, a ${what}`).toMatch(/^env CLINE_NO_AUTO_UPDATE=1 'cline' -i /);
+      }
+      expect(lines.resume).toContain(`--id '${SID}'`);
+    }
+  });
+
+  it("on Windows, where the line's first word is the binary, the terminal's environment carries it, as on every platform", async () => {
+    usersCline();
+    const cline = await ready();
+    on('win32');
+    expect(cline.buildInteractiveCommand({ agentId: AGENT, binaryPath: 'cline', prompt: '' })).toMatch(/^'cline' -i /);
+    for (const platform of ['win32', 'darwin', 'linux'] as const) {
+      on(platform);
+      expect(cline.getPtyEnvVars(AGENT, project, []).CLINE_NO_AUTO_UPDATE, platform).toBe('1');
+    }
+  });
+
+  it("is given to no other provider's terminal", () => {
+    for (const id of ['claude', 'codex', 'goose', 'opencode', 'kimi-code', 'qwen-code'] as const) {
+      expect(getProvider(id).getPtyEnvVars('a-1', project, [], {} as never), id).not.toHaveProperty('CLINE_NO_AUTO_UPDATE');
+    }
   });
 });

@@ -19,6 +19,11 @@ import { DEV_URL, apiPort } from './ports.mjs';
  *    project's orchestrator hands it a task the moment its old terminal is off it, while its old tree is still ending
  *    (/dispatch, the delivery delegate_task and /run-task go through). The task must wait for the restart and go into
  *    the CLI it started (`message`), one CLI after the restart and not two, and the agent must not be in error.
+ * 3. QA's gate of #620 (22/11): Cline checks for a newer version at every start and, at its exit, installs itself over
+ *    the user's own global Cline (`npm install -g`), unless CLINE_NO_AUTO_UPDATE is 1. Every Cline launch, the first
+ *    ones and the restart's, must run with it, though the user's own environment turns it back on: Tars's own (the
+ *    app runs with CLINE_NO_AUTO_UPDATE=0) and the rc files of the agent's shell (each sets it to 0). Red on
+ *    083b95e71: no launch has it.
  * Red on 3f799a287: the folder is ~/.tars-private/cline/<id> and stays after the removal; the task starts a CLI of its
  * own during the restart's end, whose launch then finds it and fails, the agent in error.
  *
@@ -32,7 +37,7 @@ type Api = { electronAPI: { agent: {
   remove(id: string): Promise<unknown>;
   list(): Promise<Agent[]>;
 } } };
-type Launch = { launcher: number; child: number; argv: string[]; dataDir: string | null; oldAlive: number[] };
+type Launch = { launcher: number; child: number; argv: string[]; dataDir: string | null; oldAlive: number[]; noAutoUpdate: string | null };
 
 const alive = (pid: number) => {
   try { process.kill(pid, 0); } catch { return false; }
@@ -56,7 +61,7 @@ const alive = (pid) => {
 const before = fs.existsSync(file) ? fs.readFileSync(file, 'utf8').trim().split('\n').filter(Boolean).map((l) => JSON.parse(l)) : [];
 const oldAlive = before.flatMap((r) => [r.launcher, r.child]).filter(alive);
 const child = spawn('/bin/sh', ['-c', 'trap "" HUP TERM; exec sleep 300'], { stdio: 'ignore' });
-fs.appendFileSync(file, JSON.stringify({ launcher: process.pid, child: child.pid, argv, dataDir: process.env.CLINE_DATA_DIR || null, oldAlive }) + '\n');
+fs.appendFileSync(file, JSON.stringify({ launcher: process.pid, child: child.pid, argv, dataDir: process.env.CLINE_DATA_DIR || null, oldAlive, noAutoUpdate: process.env.CLINE_NO_AUTO_UPDATE ?? null }) + '\n');
 setTimeout(() => process.stdout.write('\r\n❯ \r\nAuto-approve all disabled (Shift+Tab)\r\n'), 300);
 process.stdin.resume();
 `;
@@ -71,6 +76,10 @@ test("a Cline agent's folder is Tars's own and goes with it; a task sent during 
   const bin = path.join(home, 'bin');
   const records = path.join(home, 'launches');
   for (const d of [project, dir, bin, records]) fs.mkdirSync(d, { recursive: true });
+  // 3. The user's own shell turns Cline's update back on, in every rc file a login shell of the agent's reads.
+  for (const rc of ['.zshenv', '.zprofile', '.zshrc', '.bash_profile', '.bashrc', '.profile']) {
+    fs.writeFileSync(path.join(home, rc), 'export CLINE_NO_AUTO_UPDATE=0\n');
+  }
   const cline = path.join(bin, 'cline');
   fs.writeFileSync(cline, `#!${process.execPath}\n${STAND_IN(records)}`, { mode: 0o755 });
   // The user's own Cline provider, which each agent's folder gets a copy of.
@@ -99,7 +108,8 @@ test("a Cline agent's folder is Tars's own and goes with it; a task sent during 
   const pidsOf = (l: Launch | undefined) => (l ? [l.launcher, l.child] : []);
 
   const app = await launchSandboxed(electron, home, {
-    env: { NODE_ENV: 'development', DOROTHY_DEV_URL: DEV_URL, DOROTHY_API_PORT: port, DOROTHY_E2E: '1' },
+    // 3. And so does Tars's own environment, which a terminal inherits.
+    env: { NODE_ENV: 'development', DOROTHY_DEV_URL: DEV_URL, DOROTHY_API_PORT: port, DOROTHY_E2E: '1', CLINE_NO_AUTO_UPDATE: '0' },
   });
   const pageErrors: string[] = [];
   const values: Record<string, unknown> = { home };
@@ -171,6 +181,10 @@ test("a Cline agent's folder is Tars's own and goes with it; a task sent during 
     expect(dispatched.body.mode, 'the task started a CLI of its own beside the restart instead of going into the one it started').toBe('message');
     expect(launches('c1'), 'a second CLI was started beside the restart\'s').toHaveLength(2);
     expect(launches('c1')[1].oldAlive, 'the restart\'s CLI started while the old one still ran').toEqual([]);
+    // 3. Cline's own update off for every launch: c1's first and its restart's, and c2's.
+    const updates = { c1: launches('c1').map((l) => l.noAutoUpdate), c2: launches('c2').map((l) => l.noAutoUpdate) };
+    keep({ noAutoUpdate: updates });
+    expect(updates, "a Cline agent's terminal left Cline free to install itself over the user's global Cline").toEqual({ c1: ['1', '1'], c2: ['1'] });
     expect(seen?.status, seen?.error).not.toBe('error');
     expect(pageErrors).toEqual([]);
   } finally {
