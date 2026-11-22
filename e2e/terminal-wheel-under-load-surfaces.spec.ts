@@ -105,6 +105,8 @@ for (const s of SURFACES) {
         await page.locator('.xterm-viewport').first().evaluate((el) => { el.scrollTop = el.scrollHeight; });
         await expect.poll(() => fromBottom(page), { timeout: 15_000, message: `round ${round}: back at its last line` }).toBeLessThanOrEqual(rowHeight);
         await page.waitForTimeout(1_000);
+        // Taken to its last line, it follows its output again: 1 s of lines later it is still at the end.
+        expect.soft(await fromBottom(page), `round ${round}: back at its last line, it follows its output again`).toBeLessThanOrEqual(rowHeight);
         const before = await viewportOf(page);
         await page.mouse.wheel(0, -400);
         await expect.poll(() => viewportOf(page), { timeout: 10_000, message: `round ${round}: the wheel moved the terminal up` }).toBeLessThan(before);

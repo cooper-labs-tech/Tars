@@ -104,6 +104,8 @@ for (const newInterface of [false, true]) {
         await page.locator(`[data-agent-panel="${sub}"] .xterm-viewport`).evaluate((el) => { el.scrollTop = el.scrollHeight; });
         await expect.poll(() => fromBottom(page, sub), { timeout: 15_000, message: `round ${round}: the terminal is back at its last line` }).toBeLessThanOrEqual(rowHeight);
         await page.waitForTimeout(1_000);
+        // Taken to its last line, it follows its output again: 1 s of lines later it is still at the end.
+        expect.soft(await fromBottom(page, sub), `round ${round}: back at its last line, it follows its output again`).toBeLessThanOrEqual(rowHeight);
         const before = await viewportOf(page, sub);
         // 1. The wheel moved it up.
         await page.mouse.wheel(0, -400);
