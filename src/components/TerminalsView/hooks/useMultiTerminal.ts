@@ -20,6 +20,8 @@ interface TerminalEntry {
   lastRows: number;
   /** Sends typed keys to the agent's terminal, and says so in the panel when there is none. */
   typeKeys: (input: string) => void;
+  /** Removes keepUserScroll's listeners, with the terminal. */
+  releaseScroll: () => void;
 }
 
 interface UseMultiTerminalOptions {
@@ -192,7 +194,7 @@ export function useMultiTerminal({ agents, initialFontSize, onFontSizeChange, th
         if (isElectron()) window.electronAPI!.agent.sendInput({ id: agentId, input }).catch(() => {});
       });
       // A terminal the user scrolled stays there while its output goes on, also when the window is slow.
-      keepUserScroll(term);
+      const releaseScroll = keepUserScroll(term);
 
       const entry: TerminalEntry = {
         terminal: term,
@@ -207,6 +209,7 @@ export function useMultiTerminal({ agents, initialFontSize, onFontSizeChange, th
         typeKeys: keySender(term, input => (isElectron()
           ? window.electronAPI!.agent.sendInput({ id: agentId, input })
           : Promise.resolve(undefined))),
+        releaseScroll,
       };
 
       terminalsRef.current.set(agentId, entry);
@@ -293,6 +296,7 @@ export function useMultiTerminal({ agents, initialFontSize, onFontSizeChange, th
     if (entry) {
       entry.resizeObserver?.disconnect();
       if (!entry.disposed) {
+        entry.releaseScroll();
         disposeTerminalSafely(entry.terminal);
         entry.disposed = true;
       }
@@ -325,6 +329,7 @@ export function useMultiTerminal({ agents, initialFontSize, onFontSizeChange, th
     // Dispose old terminal if switching containers
     if (existing && !existing.disposed) {
       existing.resizeObserver?.disconnect();
+      existing.releaseScroll();
       disposeTerminalSafely(existing.terminal);
       existing.disposed = true;
     }
@@ -508,6 +513,7 @@ export function useMultiTerminal({ agents, initialFontSize, onFontSizeChange, th
       terminalsRef.current.forEach((entry) => {
         entry.resizeObserver?.disconnect();
         if (!entry.disposed) {
+          entry.releaseScroll();
           disposeTerminalSafely(entry.terminal);
           entry.disposed = true;
         }

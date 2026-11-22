@@ -285,8 +285,10 @@ export function passWheelToProgram(term: Terminal, send: (data: string) => void)
  * wheel listener here, on the same element and added after xterm's, runs after
  * it, and the scroll listener, in the capture phase on an ancestor of the
  * element, runs before xterm's and can keep the event from it.
+ *
+ * Returns what removes both listeners: call it where the terminal is disposed.
  */
-export function keepUserScroll(term: Terminal): void {
+export function keepUserScroll(term: Terminal): () => void {
   const ours = () => term.buffer.active.type === 'normal' && term.modes.mouseTrackingMode === 'none' && !term.options.smoothScrollDuration;
   /** The buffer to the row the viewport shows, or to its last line, followed, when the viewport is at the end. */
   const settle = (viewport: Element): void => {
@@ -301,16 +303,23 @@ export function keepUserScroll(term: Terminal): void {
     if (lines !== 0) term.scrollLines(lines);
     else term.refresh(0, term.rows - 1);
   };
-  term.element?.addEventListener('wheel', () => {
+  const onWheel = () => {
     const viewport = term.element?.querySelector('.xterm-viewport');
     if (viewport && ours()) settle(viewport);
-  }, { passive: true });
-  term.element?.addEventListener('scroll', event => {
+  };
+  const onScroll = (event: Event) => {
     const viewport = event.target;
     if (!(viewport instanceof Element) || !viewport.classList.contains('xterm-viewport') || !ours()) return;
     event.stopPropagation();
     settle(viewport);
-  }, { capture: true, passive: true });
+  };
+  const element = term.element;
+  element?.addEventListener('wheel', onWheel, { passive: true });
+  element?.addEventListener('scroll', onScroll, { capture: true, passive: true });
+  return () => {
+    element?.removeEventListener('wheel', onWheel);
+    element?.removeEventListener('scroll', onScroll, { capture: true });
+  };
 }
 
 /**

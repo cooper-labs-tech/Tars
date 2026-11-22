@@ -4,7 +4,7 @@ import { useState, useEffect, useRef, useCallback } from 'react';
 import type { AgentStatus } from '@/types/electron';
 import { isElectron } from '@/hooks/useElectron';
 import { onAgentMoveLine } from '@/hooks/useClaudeAccounts';
-import { attachShiftEnterHandler, connectionLine, disposeTerminalSafely, keySender, passWheelToProgram, stripCursorSequences, stripTerminalReplies, suppressMouseTracking } from '@/lib/terminal';
+import { attachShiftEnterHandler, connectionLine, disposeTerminalSafely, keepUserScroll, keySender, passWheelToProgram, stripCursorSequences, stripTerminalReplies, suppressMouseTracking } from '@/lib/terminal';
 import { createXtermOptions, useTerminalTheme } from '@/lib/terminal-theme';
 
 interface UseAgentDialogTerminalOptions {
@@ -26,6 +26,8 @@ export function useAgentDialogTerminal({
   const terminalRef = useRef<HTMLDivElement>(null);
   const xtermRef = useRef<import('xterm').Terminal | null>(null);
   const fitAddonRef = useRef<import('xterm-addon-fit').FitAddon | null>(null);
+  /** Removes keepUserScroll's listeners, with the terminal. */
+  const releaseScrollRef = useRef<(() => void) | null>(null);
   const agentIdRef = useRef<string | null>(null);
   const isAtBottomRef = useRef(true);
 
@@ -42,6 +44,8 @@ export function useAgentDialogTerminal({
       const term = xtermRef.current;
       xtermRef.current = null;
       fitAddonRef.current = null;
+      releaseScrollRef.current?.();
+      releaseScrollRef.current = null;
       disposeTerminalSafely(term);
     }
 
@@ -94,7 +98,10 @@ export function useAgentDialogTerminal({
             window.electronAPI.agent.sendInput({ id, input }).catch(() => {});
           }
         });
-        if (cancelled) { disposeTerminalSafely(term); return; }
+        // The agent's output streams in: a terminal the user scrolled stays there, also when the window is slow.
+        const releaseScroll = keepUserScroll(term);
+        if (cancelled) { releaseScroll(); disposeTerminalSafely(term); return; }
+        releaseScrollRef.current = releaseScroll;
 
         xtermRef.current = term;
         fitAddonRef.current = fitAddon;
@@ -204,6 +211,8 @@ export function useAgentDialogTerminal({
         const term = xtermRef.current;
         xtermRef.current = null;
         fitAddonRef.current = null;
+        releaseScrollRef.current?.();
+        releaseScrollRef.current = null;
         disposeTerminalSafely(term);
       }
       setTerminalReady(false);
