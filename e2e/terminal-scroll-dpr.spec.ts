@@ -176,7 +176,10 @@ for (const c of CASES) {
       expect([...new Set(held.map((f) => f.first))], `the first line shown held still for 2 s (${held.length} frames; from ${held[0].first} to ${held.at(-1)!.first})`).toHaveLength(1);
       expect([...new Set(held.map((f) => Math.round(f.top)))], 'the scrollTop held still for 2 s').toHaveLength(1);
 
-      // 4. A resize while scrolled up (the Audit's I-3): the terminal is resized, shows the same first line, and holds.
+      // 4. A resize while scrolled up (the Audit's I-3). xterm 5.3 places the view by its own rule when rows go
+      //    (Buffer.resize): each row taken away drops a blank line below the cursor, or else moves the buffer and the
+      //    view down one line together, scrolled up or not. So the first line shown moves down by no more than the rows
+      //    taken away (measured: 4 rows, 3 lines; 2 rows, 2 lines), the view stays in the history, and it holds still.
       const shown = held.at(-1)!.first;
       await sizeWindow(app, 1200, height - 140);
       await page.waitForTimeout(800);
@@ -186,8 +189,12 @@ for (const c of CASES) {
       seen.afterResize = afterResize;
       recordValues(seen);
       await stepShot(page, `${c.tag}-03-resized`);
-      expect(resized.rows !== g.rows || resized.width !== g.width, `the terminal was resized (${g.rows} rows ${g.width} px wide, then ${resized.rows} rows ${resized.width} px)`).toBe(true);
-      expect(Math.abs(lineOf(afterResize[0].first) - lineOf(shown)), `the resize kept the line shown (${shown}, then ${afterResize[0].first})`).toBeLessThanOrEqual(1);
+      expect(resized.rows < g.rows && resized.width < g.width, `the terminal lost rows and width (${g.rows} rows ${g.width} px wide, then ${resized.rows} rows ${resized.width} px)`).toBe(true);
+      const moved = lineOf(afterResize[0].first) - lineOf(shown);
+      seen.movedByResize = moved;
+      recordValues(seen);
+      expect(moved >= 0 && moved <= g.rows - resized.rows, `the first line moved by xterm's rule only, 0 to ${g.rows - resized.rows} lines (${shown}, then ${afterResize[0].first})`).toBe(true);
+      expect(lineOf(afterResize[0].first) + resized.rows - 1, 'the view stayed in the history').toBeLessThan(LINES);
       expect([...new Set(afterResize.map((f) => f.first))], 'still after the resize').toHaveLength(1);
     } finally {
       recordValues(seen);
