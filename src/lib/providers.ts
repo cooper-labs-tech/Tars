@@ -142,6 +142,19 @@ export const PROVIDER_REGISTRY: ProviderDef[] = [
     defaultModel: 'default',
   },
   {
+    // Cline, the CLI `cline` (2.0.7, #620). On its own account it runs the provider and model set in its own config,
+    // so Default passes none; on an inference endpoint the window offers the endpoint's models instead. It has no plan
+    // mode, as main says (its plan mode still ran a command). A generic mark, the letters CL: its code's licence grants
+    // no right to its trademarks, its logo among them.
+    id: 'cline',
+    label: 'Cline',
+    icon: { type: 'text', content: 'CL' },
+    accent: 'primary',
+    requiresCli: true,
+    models: [{ id: 'default', name: 'Default', description: 'The provider and model set in Cline' }],
+    defaultModel: 'default',
+  },
+  {
     id: 'amp',
     label: 'Amp',
     // No vector mark in the tree, so the same lettered badge OpenCode and
@@ -405,6 +418,8 @@ export function computeProviderAvailability(
     opencode: !!paths?.opencode,
     amp: !!paths?.amp,
     pi: !!paths?.pi,
+    // Cline's binary is cline, found as the other CLIs are.
+    cline: !!paths?.cline,
     local: true,
     openrouter: viaOpenRouter,
     deepseek: keyed(settings?.deepSeekEnabled, 'deepSeekApiKey') || viaOpenRouter,
