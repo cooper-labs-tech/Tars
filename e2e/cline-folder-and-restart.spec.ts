@@ -43,8 +43,19 @@ const alive = (pid: number) => {
   try { process.kill(pid, 0); } catch { return false; }
   try { return !execFileSync('ps', ['-o', 'stat=', '-p', String(pid)]).toString().trim().startsWith('Z'); } catch { return false; }
 };
+/**
+ * A path as the kernel reaches it, through its deepest part that exists: macOS links /var to /private/var, the spec's
+ * sandbox is named through the one and the app reports its folders through the other (a TMPDIR under /var/folders,
+ * the macOS default outside Tars, QA 22/11).
+ */
+const real = (p: string): string => {
+  const rest: string[] = [];
+  let head = path.resolve(p);
+  while (!fs.existsSync(head) && path.dirname(head) !== head) { rest.unshift(path.basename(head)); head = path.dirname(head); }
+  return path.join(fs.realpathSync(head), ...rest);
+};
 const inside = (child: string, parent: string) => {
-  const rel = path.relative(parent, child);
+  const rel = path.relative(real(parent), real(child));
   return rel === '' || (!rel.startsWith('..') && !path.isAbsolute(rel));
 };
 
