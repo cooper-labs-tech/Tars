@@ -297,9 +297,17 @@ export function keepUserScroll(term: Terminal): () => void {
       if (buffer.viewportY < buffer.baseY) term.scrollToBottom();
       return;
     }
-    const screen = term.element?.querySelector('.xterm-screen')?.getBoundingClientRect();
-    if (!screen || screen.height <= 0 || term.rows <= 0) return;
-    const lines = Math.round(viewport.scrollTop / (screen.height / term.rows)) - buffer.viewportY;
+    const screen = term.element?.querySelector<HTMLElement>('.xterm-screen');
+    if (!screen || screen.offsetHeight <= 0 || term.rows <= 0) return;
+    // xterm's own row height, the one it places the viewport with: its device cell height over the pixel ratio
+    // (Viewport). The screen is not that height times the rows: the DOM renderer rounds it to a whole pixel, so dividing
+    // it by the rows maps a row a little off, and deep in the history off by one, which scrolls the buffer, which makes
+    // xterm place the viewport again, every frame, with no input. The device cell height is recovered from the screen
+    // instead: off by at most half a pixel over the rows, times the ratio, it rounds back to it exactly whenever there
+    // are more rows than the ratio. xterm 5.3 gives no public way to read it.
+    const ratio = screen.ownerDocument.defaultView?.devicePixelRatio || 1;
+    const rowHeight = Math.round(screen.offsetHeight * ratio / term.rows) / ratio;
+    const lines = Math.round(viewport.scrollTop / rowHeight) - buffer.viewportY;
     if (lines !== 0) term.scrollLines(lines);
     else term.refresh(0, term.rows - 1);
   };
