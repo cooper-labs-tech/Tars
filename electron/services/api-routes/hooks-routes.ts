@@ -16,8 +16,9 @@ import { dropPermissionAsks, holdPermissionAsk, logPermission, permissionHoldMs,
 import { levelOf } from '../../core/permission-ceiling';
 import { hasOrchestratorPowers } from '../../core/agent-role';
 import { slotTurnEnded } from '../heavy-slot-runtime';
-import { isTerminalsOwnCli, ownCliAtOnce } from '../../core/terminal-cli';
+import { asPid, isTerminalsOwnCli, ownCliAtOnce } from '../../core/terminal-cli';
 import { terminalIsTheCli } from '../../core/agent-pty';
+import { noticeLog } from '../agent-notice-log';
 
 /**
  * The four shell hooks whose posts the state mod makes instead, for a session
@@ -364,10 +365,22 @@ export function registerHooksRoutes(app: RouteApp, ctx: RouteContext): void {
       const terminalPid = terminal?.pid;
       const execLaunch = terminalIsTheCli(terminal) === true;
       const refuse = () => {
-        console.log(`[hooks] Refused session ${session_id} for ${agent.id}: its CLI (pid ${String(cli_pid)}) is not its terminal's (pid ${terminalPid})`);
+        // Only what Tars checked: the session id, a UUID by now, and the pid
+        // as a number. The post's cli_pid is anything its poster wrote, and
+        // the notice is drawn as Tars's own words (the Audit's M1 on #624).
+        const pid = asPid(cli_pid);
+        const from = pid === undefined ? 'a CLI that named no pid' : `its CLI (pid ${pid})`;
+        const terminalSaid = terminalPid === undefined ? "the agent's terminal's" : `this terminal's (pid ${terminalPid})`;
+        console.log(`[hooks] Refused session ${session_id} for ${agent.id}: ${from} is not ${terminalSaid}`);
         // Where a person can find it (Logs reads the kept output): a refusal
         // that should not have been reads as an agent stuck in its last status.
-        appendAgentOutput(agent, `\r\n[Tars] Refused a session (${session_id}): its CLI (pid ${String(cli_pid)}) is not this terminal's (pid ${terminalPid}). A Claude Code run from inside this agent does not take its session.\r\n`);
+        // And as a notice the window reads, told as it is written (2.0.7,
+        // services/agent-notice-log.ts): while the agent has a terminal, its
+        // panel and Logs read that terminal's screen, which this never reaches.
+        // One notice a minute at most; the kept output says each.
+        const said = `Refused a session (${session_id}): ${from} is not ${terminalSaid}. A Claude Code run from inside this agent does not take its session.`;
+        appendAgentOutput(agent, `\r\n[Tars] ${said}\r\n`);
+        noticeLog().record(agent.id, said, 'session-refused');
         sendJson({ success: false, stale: true, foreign: true, agent: { id: agent.id, status: agent.status } });
       };
       const atOnce = ownCliAtOnce(terminalPid, cli_pid, process.platform, execLaunch);

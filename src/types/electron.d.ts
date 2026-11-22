@@ -243,6 +243,29 @@ export type AgentRestartWait =
   | 'turn' | 'permission' | 'note' | 'background' | 'launch'
   | 'draft' | 'typing' | 'queued' | 'writing';
 
+/**
+ * A notice of Tars's about an agent (2.0.7, main's core/agent-notices.ts and services/agent-notice-log.ts). `line` is
+ * the sentence, without "[Tars] "; `kind`, its writer's word, sets its tone: a conversation that starts over (Goose,
+ * Cline), a session the hook route refused, or another line.
+ */
+export interface AgentNotice {
+  id: string;
+  agentId: string;
+  /** When it was written, in ms. */
+  at: number;
+  line: string;
+  kind: 'conversation-restart' | 'session-refused' | 'other';
+  /** When a window marked it seen, in ms. */
+  seenAt?: number;
+}
+
+/** A window marked some of an agent's notices seen (`agent:notice-seen`). */
+export interface AgentNoticeSeen {
+  agentId: string;
+  ids: string[];
+  seenAt: number;
+}
+
 export interface AgentPendingRestart {
   agentId: string;
   /** The settings it applies: `model`, `effort`, `permissionMode`, `orchestrator`, `secondaryProjectPath`, `obsidianVaultPaths`, `localModel`. */
@@ -1671,6 +1694,15 @@ export interface ElectronAPI {
      *  session id, whatever it is doing. A stop then a start begins a new
      *  conversation instead. Mirror of `agent:restart`. */
     restart?: (id: string) => Promise<{ success: boolean; error?: string }>;
+    /** Tars's notices about an agent (2.0.7, main's services/agent-notice-log.ts): that agent's, or every agent's with
+     *  no id, newest first; kept across a restart of Tars, 50 per agent. Mirror of `agent:notices`. */
+    notices?: (agentId?: string) => Promise<AgentNotice[]>;
+    /** Pushed as a notice is written. Mirror of `agent:notice` in electron/preload.ts. */
+    onNotice?: (callback: (notice: AgentNotice) => void) => () => void;
+    /** Mark an agent's notices seen: those ids, or all of them not seen yet with none. Mirror of `agent:notices-seen`. */
+    markNoticesSeen?: (agentId: string, ids?: string[]) => Promise<void>;
+    /** Pushed when a window marked notices seen, so another one updates. Mirror of `agent:notice-seen`. */
+    onNoticeSeen?: (callback: (event: AgentNoticeSeen) => void) => () => void;
     /** The restarts waiting right now, for a window that opened after the
      *  wait began. An agent absent from the list has none waiting. */
     pendingRestarts?: () => Promise<{ success: boolean; pending: AgentPendingRestart[] }>;

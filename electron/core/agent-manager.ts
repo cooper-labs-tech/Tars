@@ -27,6 +27,7 @@ import { opencodeWatchFor } from '../services/opencode-sessions';
 import { opencodeLaunchOf } from '../providers/opencode-cli';
 import { gooseSessionWatch } from '../services/goose-sessions';
 import { setAgentNoticeSink } from './agent-notices';
+import { noticeLog, setNoticeFleet } from '../services/agent-notice-log';
 import { gooseLaunchOf } from '../providers/goose-cli';
 import { kimiSessionOfCommand } from '../providers/kimi-code-provider';
 import type * as pty from 'node-pty';
@@ -426,11 +427,19 @@ export function appendAgentOutput(agent: AgentStatus, chunk: string): void {
 // reaches). On the normal screen: a restart's notice followed a TUI killed on its alternate screen, and the next TUI's
 // switch wiped it from that replay (the Cline conformance on 187508db4). ?1047l rather than ?1049l, which restores a
 // saved cursor and would print it over earlier lines of a stream already on the normal screen.
-setAgentNoticeSink((agentId, line) => {
+// And kept as a notice the window reads, of its writer's kind, told to every window as it is written (2.0.7,
+// services/agent-notice-log.ts): while the agent has a terminal, nothing else would show it.
+setAgentNoticeSink((agentId, line, kind) => {
   const agent = agents.get(agentId);
-  if (agent) appendAgentOutput(agent, `\x1b[?1047l\r\n[Tars] ${line}\r\n`);
-  else console.log(`[notice] ${agentId}: ${line}`);
+  if (!agent) {
+    console.log(`[notice] ${agentId}: ${line}`);
+    return;
+  }
+  appendAgentOutput(agent, `\x1b[?1047l\r\n[Tars] ${line}\r\n`);
+  noticeLog().record(agentId, line, kind);
 });
+// The notices read back from their file are the fleet's agents' only (the Audit's L1 on #624).
+setNoticeFleet((agentId) => agents.has(agentId));
 
 interface AgentsFile {
   version: number;

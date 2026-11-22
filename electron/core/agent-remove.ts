@@ -12,6 +12,7 @@ import { ignoredNotCaches, saveUncommittedWork, submodulesWithWork } from '../se
 import { gitRefusal } from './chat-slots';
 import { endBornOf } from './agent-stop';
 import { removeClineAgentDir } from '../providers/cline-cli';
+import { noticeLog } from '../services/agent-notice-log';
 
 export interface RemovedAgent {
   success: true;
@@ -63,6 +64,8 @@ export async function removeAgent(id: string): Promise<RemovedAgent> {
   // Its own Cline folder, once nothing of its runs: a copy of the user's provider file and its sessions (the Audit's
   // M1 on #620). Whatever its provider is now, an agent once on Cline keeps one.
   removeClineAgentDir(id);
+  // Tars's notices about it (services/agent-notice-log.ts): Logs reads every agent's, and none would name it again.
+  noticeLog().forget(id);
 
   let savedTo: string | undefined;
   let worktreeKept: string | undefined;

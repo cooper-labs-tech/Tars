@@ -87,6 +87,8 @@ const SID = '1795204260136_9ovct';
 let root: string;
 let project: string;
 let notices: string[];
+/** The kind each notice was written with: its writer's (agent-notice-channel.test.ts, 6). */
+let kinds: Array<string | undefined>;
 const USER_PROVIDERS = { version: 1, lastUsedProvider: 'anthropic', modes: {}, providers: { anthropic: { settings: { provider: 'anthropic', apiKey: 'the-users-key', model: 'm' }, tokenSource: 'manual' } } };
 
 beforeEach(() => {
@@ -94,7 +96,8 @@ beforeEach(() => {
   project = path.join(root, 'project');
   fs.mkdirSync(project, { recursive: true });
   notices = [];
-  setAgentNoticeSink((agentId, line) => { notices.push(`${agentId}: ${line}`); });
+  kinds = [];
+  setAgentNoticeSink((agentId, line, kind) => { notices.push(`${agentId}: ${line}`); kinds.push(kind); });
 });
 afterEach(() => {
   vi.unstubAllEnvs();
@@ -238,6 +241,8 @@ describe('its sessions (8)', () => {
     const line = cline.buildInteractiveCommand({ agentId: AGENT, binaryPath: 'cline', prompt: '', resumeSessionId: SID, forkSession: true });
     expect(line).not.toContain('--id');
     expect(notices).toEqual([`${AGENT}: Its conversation starts over: Cline cannot fork a session, and a restart cannot continue the one it stops.`]);
+    // Its kind is the writer's, for the window's tone (agent-notice-channel.test.ts, 6).
+    expect(kinds).toEqual(['conversation-restart']);
   });
 });
 
