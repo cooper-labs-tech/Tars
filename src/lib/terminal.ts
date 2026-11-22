@@ -241,6 +241,91 @@ export function passWheelToProgram(term: Terminal, send: (data: string) => void)
 }
 
 /**
+ * Keep a terminal where the user scrolled it while its output goes on, also
+ * when the window is slow.
+ *
+ * Whether xterm 5.3 follows the output is its buffer's decision: a line written
+ * while the buffer stands at its last row moves it down with the line, and a
+ * buffer scrolled up stays (`isUserScrolling`, set only by a scroll of the
+ * buffer). But the user scrolls the viewport's element, not the buffer: the
+ * wheel (xterm's own handler adds its pixels to `scrollTop`) and the scrollbar
+ * both move the element, and xterm's `scroll` listener turns the element's
+ * position into a row of the buffer later, when the event comes, on a next
+ * frame. Two things go wrong there when the window is slow (several agents
+ * writing), both measured by e2e/orchestrator-board-wheel-under-load.spec.ts:
+ * - xterm moves the element too, to the buffer's row, on every line written,
+ *   and ignores the next `scroll` event as its own. When that and the user's
+ *   scroll fall in the same frame, the one event the browser fires for both is
+ *   ignored, and the user's scroll never reaches the buffer: the wheel visibly
+ *   moved the terminal up, then the next line put it back on its last row, and
+ *   it went on following.
+ * - The element's scroll area grows on the frame after each line. A scrollbar
+ *   taken to its end while lines arrive is read as a row a few lines short of
+ *   the last, so the terminal stays scrolled up there instead of following.
+ *
+ * So every `scroll` event of the element is turned into the buffer's row here,
+ * in xterm's place and without either fault: the end of the scroll area is the
+ * last line, followed; anywhere else is the row it shows. xterm itself only
+ * ever puts the element at the end while it follows, and on the buffer's own
+ * row while it is scrolled up, so its own events change nothing and need no
+ * ignoring. xterm's listener is not run for them: it would read the end as a
+ * row of an area that may be short. The rows are drawn again as it would have
+ * drawn them.
+ *
+ * The wheel needs nothing more. Chromium dispatches a wheel with the frame, in
+ * the same update as that frame's `scroll` events and ahead of them, and xterm
+ * puts the element back only in an animation-frame callback, which comes after
+ * them (or at once after a resize, which comes from a fit, in a task or after
+ * layout, never in between). So the event the wheel causes is read before
+ * anything can move the element again (QA's mutation bench on #629, X1).
+ *
+ * Only where xterm scrolls its viewport itself: the main buffer, no mouse
+ * tracking of xterm's own, no smooth scroll (which moves the element over
+ * several frames). Elsewhere xterm keeps its own handling. Where
+ * `stopWheelTyping` or `passWheelToProgram` keep the wheel from xterm, this
+ * never sees it either: they stop it first.
+ *
+ * Call it right after `term.open()`, which creates the element: the listener
+ * here, in the capture phase on an ancestor of the viewport, runs before
+ * xterm's own and can keep the event from it.
+ *
+ * Returns what removes the listener: call it where the terminal is disposed.
+ */
+export function keepUserScroll(term: Terminal): () => void {
+  const ours = () => term.buffer.active.type === 'normal' && term.modes.mouseTrackingMode === 'none' && !term.options.smoothScrollDuration;
+  /** The buffer to the row the viewport shows, or to its last line, followed, when the viewport is at the end. */
+  const settle = (viewport: Element): void => {
+    const buffer = term.buffer.active;
+    if (viewport.scrollTop + viewport.clientHeight >= viewport.scrollHeight - 1) {
+      if (buffer.viewportY < buffer.baseY) term.scrollToBottom();
+      return;
+    }
+    const screen = term.element?.querySelector<HTMLElement>('.xterm-screen');
+    if (!screen || screen.offsetHeight <= 0 || term.rows <= 0) return;
+    // xterm's own row height, the one it places the viewport with: its device cell height over the pixel ratio
+    // (Viewport). The screen is not that height times the rows: the DOM renderer rounds it to a whole pixel, so dividing
+    // it by the rows maps a row a little off, and deep in the history off by one, which scrolls the buffer, which makes
+    // xterm place the viewport again, every frame, with no input. The device cell height is recovered from the screen
+    // instead: off by at most half a pixel over the rows, times the ratio, it rounds back to it exactly whenever there
+    // are more rows than the ratio. xterm 5.3 gives no public way to read it.
+    const ratio = screen.ownerDocument.defaultView?.devicePixelRatio || 1;
+    const rowHeight = Math.round(screen.offsetHeight * ratio / term.rows) / ratio;
+    const lines = Math.round(viewport.scrollTop / rowHeight) - buffer.viewportY;
+    if (lines !== 0) term.scrollLines(lines);
+    else term.refresh(0, term.rows - 1);
+  };
+  const onScroll = (event: Event) => {
+    const viewport = event.target;
+    if (!(viewport instanceof Element) || !viewport.classList.contains('xterm-viewport') || !ours()) return;
+    event.stopPropagation();
+    settle(viewport);
+  };
+  const element = term.element;
+  element?.addEventListener('scroll', onScroll, { capture: true, passive: true });
+  return () => element?.removeEventListener('scroll', onScroll, { capture: true });
+}
+
+/**
  * Install the terminal's custom key handler. xterm keeps exactly one, so every
  * key this app claims has to live here (terminalKeyAction says which):
  *

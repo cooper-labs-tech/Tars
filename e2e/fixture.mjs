@@ -620,12 +620,16 @@ const RENDERING_ARGS = ['--lang=fr-FR', ...(onWindows ? ['--disable-lcd-text'] :
  * `profile` names the profile folder in the sandbox, `electron-profile` unless
  * given: Tars is one instance per profile (core/desktop-lifecycle.ts), so a
  * spec that runs two Tars on one home gives the second a profile of its own.
+ *
+ * `switches` are Chromium switches added after the fixture's own, such as
+ * `--force-device-scale-factor=1.25` for a display of that pixel ratio
+ * (terminal-scroll-dpr.spec.ts). None unless given.
  */
-export async function launchSandboxed(electron, sandboxHome, { env = {}, profile = 'electron-profile', ...options } = {}) {
+export async function launchSandboxed(electron, sandboxHome, { env = {}, profile = 'electron-profile', switches = [], ...options } = {}) {
   const app = await electron.launch({
     ...options,
     // A packed app (executablePath, e2e/sandbox-build.packed.spec.ts) runs its own code: no '.' to name it.
-    args: [...(options.executablePath ? [] : ['.']), `--user-data-dir=${path.join(sandboxHome, profile)}`, ...RENDERING_ARGS],
+    args: [...(options.executablePath ? [] : ['.']), `--user-data-dir=${path.join(sandboxHome, profile)}`, ...RENDERING_ARGS, ...switches],
     env: withSandboxPath({ ...inheritable(process.env), PATH: sandboxPath(sandboxHome), DOROTHY_TAILSCALE_BIN: writeFakeTailscale(sandboxHome), ...env, ...windowsHome(sandboxHome), HOME: sandboxHome, CFFIXED_USER_HOME: sandboxHome }, env),
   });
   // What the app inherited, checked the way its folders are below: a run

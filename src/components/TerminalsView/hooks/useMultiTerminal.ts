@@ -8,7 +8,7 @@ import { isElectron } from '@/hooks/useElectron';
 import { onAgentMoveLine } from '@/hooks/useClaudeAccounts';
 import { TERMINAL_CONFIG } from '../constants';
 import { getTerminalTheme } from '@/components/AgentWorld/constants';
-import { attachShiftEnterHandler, disposeTerminalSafely, keySender, passWheelToProgram, stripTerminalReplies, suppressMouseTracking } from '@/lib/terminal';
+import { attachShiftEnterHandler, disposeTerminalSafely, keepUserScroll, keySender, passWheelToProgram, stripTerminalReplies, suppressMouseTracking } from '@/lib/terminal';
 
 interface TerminalEntry {
   terminal: Terminal;
@@ -20,6 +20,8 @@ interface TerminalEntry {
   lastRows: number;
   /** Sends typed keys to the agent's terminal, and says so in the panel when there is none. */
   typeKeys: (input: string) => void;
+  /** Removes keepUserScroll's listener, with the terminal. */
+  releaseScroll: () => void;
 }
 
 interface UseMultiTerminalOptions {
@@ -191,6 +193,8 @@ export function useMultiTerminal({ agents, initialFontSize, onFontSizeChange, th
         if (leftFullscreenRef.current.has(agentId)) return;
         if (isElectron()) window.electronAPI!.agent.sendInput({ id: agentId, input }).catch(() => {});
       });
+      // A terminal the user scrolled stays there while its output goes on, also when the window is slow.
+      const releaseScroll = keepUserScroll(term);
 
       const entry: TerminalEntry = {
         terminal: term,
@@ -205,6 +209,7 @@ export function useMultiTerminal({ agents, initialFontSize, onFontSizeChange, th
         typeKeys: keySender(term, input => (isElectron()
           ? window.electronAPI!.agent.sendInput({ id: agentId, input })
           : Promise.resolve(undefined))),
+        releaseScroll,
       };
 
       terminalsRef.current.set(agentId, entry);
@@ -291,6 +296,7 @@ export function useMultiTerminal({ agents, initialFontSize, onFontSizeChange, th
     if (entry) {
       entry.resizeObserver?.disconnect();
       if (!entry.disposed) {
+        entry.releaseScroll();
         disposeTerminalSafely(entry.terminal);
         entry.disposed = true;
       }
@@ -323,6 +329,7 @@ export function useMultiTerminal({ agents, initialFontSize, onFontSizeChange, th
     // Dispose old terminal if switching containers
     if (existing && !existing.disposed) {
       existing.resizeObserver?.disconnect();
+      existing.releaseScroll();
       disposeTerminalSafely(existing.terminal);
       existing.disposed = true;
     }
@@ -506,6 +513,7 @@ export function useMultiTerminal({ agents, initialFontSize, onFontSizeChange, th
       terminalsRef.current.forEach((entry) => {
         entry.resizeObserver?.disconnect();
         if (!entry.disposed) {
+          entry.releaseScroll();
           disposeTerminalSafely(entry.terminal);
           entry.disposed = true;
         }

@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useRef } from 'react';
-import { attachShiftEnterHandler, disposeTerminalSafely, keySender, passWheelToProgram, stripTerminalReplies, suppressMouseTracking } from '@/lib/terminal';
+import { attachShiftEnterHandler, disposeTerminalSafely, keepUserScroll, keySender, passWheelToProgram, stripTerminalReplies, suppressMouseTracking } from '@/lib/terminal';
 import { createXtermOptions, useTerminalTheme } from '@/lib/terminal-theme';
 
 interface UseTrayTerminalProps {
@@ -32,6 +32,8 @@ export function useTrayTerminal({ agentId, container }: UseTrayTerminalProps) {
     let cancelled = false;
     let unsubOutput: (() => void) | null = null;
     let resizeObserver: ResizeObserver | null = null;
+    /** Removes keepUserScroll's listener, with the terminal. */
+    let releaseScroll: (() => void) | null = null;
     const fitTimers: ReturnType<typeof setTimeout>[] = [];
 
     const init = async () => {
@@ -71,8 +73,10 @@ export function useTrayTerminal({ agentId, container }: UseTrayTerminalProps) {
       passWheelToProgram(term, input => {
         window.electronAPI?.agent?.sendInput({ id: agentIdRef.current, input });
       });
+      // The agent's output streams in: a terminal the user scrolled stays there, also when the window is slow.
+      releaseScroll = keepUserScroll(term);
 
-      if (cancelled) { disposeTerminalSafely(term); return; }
+      if (cancelled) { releaseScroll(); releaseScroll = null; disposeTerminalSafely(term); return; }
 
       xtermRef.current = term;
       fitAddonRef.current = fitAddon;
@@ -152,6 +156,8 @@ export function useTrayTerminal({ agentId, container }: UseTrayTerminalProps) {
         const term = xtermRef.current;
         xtermRef.current = null;
         fitAddonRef.current = null;
+        releaseScroll?.();
+        releaseScroll = null;
         disposeTerminalSafely(term);
       }
     };
