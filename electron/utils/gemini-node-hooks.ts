@@ -1,5 +1,5 @@
 import * as path from 'path';
-import { updateSharedJsonSync } from './shared-file';
+import { updateSharedJsoncSync, type SharedJsonOutcome } from './shared-file';
 import { mergeNodeHooks, legacyShCommand, type HookTable } from './hook-command';
 
 /**
@@ -22,10 +22,12 @@ import { mergeNodeHooks, legacyShCommand, type HookTable } from './hook-command'
  *   hook post is refused (403). A per-hook `env` cannot carry it: this file
  *   is shared by every agent and the token is per terminal. allowAgentToken,
  *   below, which the .sh wiring calls too: Gemini redacts on every platform.
- * - Written through updateSharedJsonSync: a file that is not JSON is left
- *   as it is rather than replaced by the hooks alone.
+ * - Written through updateSharedJsoncSync, as on macOS and Linux: read as
+ *   gemini reads it, with its comments, which stay; a file gemini could not
+ *   read either is left as it is rather than replaced by the hooks alone.
+ *   Returns what became of it, for the provider to say (GeminiProvider).
  */
-export function configureGeminiNodeHooks(configDir: string, hooksDir: string): void {
+export function configureGeminiNodeHooks(configDir: string, hooksDir: string): SharedJsonOutcome {
   const settingsPath = path.join(configDir, 'settings.json');
   const specs = [
     { type: 'AfterTool', file: 'post-tool-use.sh', matcher: '*' },
@@ -39,7 +41,7 @@ export function configureGeminiNodeHooks(configDir: string, hooksDir: string): v
   }));
 
   type Settings = { hooks?: HookTable; security?: Record<string, unknown>; [key: string]: unknown };
-  const outcome = updateSharedJsonSync<Settings>(settingsPath, current => {
+  const outcome = updateSharedJsoncSync<Settings>(settingsPath, current => {
     const settings: Settings = current ?? {};
     if (!settings.hooks || typeof settings.hooks !== 'object') settings.hooks = {};
     let updated = mergeNodeHooks(settings.hooks, specs, hooksDir, 10000);
@@ -49,8 +51,7 @@ export function configureGeminiNodeHooks(configDir: string, hooksDir: string): v
 
   if (outcome === 'written') console.log('Gemini hooks configured/updated in', settingsPath);
   else if (outcome === 'unchanged') console.log('Gemini hooks already configured');
-  else if (outcome === 'unreadable') console.warn(`Gemini hooks not configured: ${settingsPath} is not valid JSON, left untouched`);
-  else console.warn(`Gemini hooks not configured: ${settingsPath} kept changing`);
+  return outcome;
 }
 
 /**
