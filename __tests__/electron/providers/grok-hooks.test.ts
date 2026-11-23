@@ -2,6 +2,7 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import * as fs from 'fs';
 import * as path from 'path';
 import * as os from 'os';
+import { spawnSync } from 'child_process';
 
 import { pinPlatform } from './win-fake-disk';
 
@@ -28,6 +29,11 @@ import { pinPlatform } from './win-fake-disk';
  *    compatibility: every event posted twice.
  * 5. On Windows the `.sh` scripts, which cannot run there, instead of the Node runner (`tars-hook.mjs <event>`).
  * 6. A hook Tars has no script for wired anyway, or a hook wired to a script that is not there.
+ * 7. The Claude compatibility turned off in the terminal's environment only (the Audit's I-3 on #635): on macOS and
+ *    Linux the agent's line runs in the user's shell, whose rc files are read first, and an rc file that exports
+ *    GROK_CLAUDE_HOOKS_ENABLED=1 turns it back on, every event doubled again. On its line, as codex's CODEX_HOME is,
+ *    no rc file can change it. On Windows nothing is sourced and the line's first word is the binary: the environment
+ *    carries it there.
  */
 
 let tmpDir: string;
@@ -76,6 +82,34 @@ describe('a grok agent (1, 4)', () => {
   it("runs with grok's Claude compatibility for hooks off, so Tars's hooks run once", async () => {
     const p = await grok();
     expect(p.getPtyEnvVars('a-1', '/p', [])).toMatchObject({ GROK_CLAUDE_HOOKS_ENABLED: '0' });
+  });
+});
+
+describe('its Claude compatibility stays off whatever the rc files set (7)', () => {
+  it('on macOS and Linux: an rc file that exports GROK_CLAUDE_HOOKS_ENABLED=1 is read, and grok still gets 0', async () => {
+    const p = await grok();
+    const seen = path.join(tmpDir, 'seen.txt');
+    const bin = path.join(tmpDir, 'grok');
+    fs.writeFileSync(bin, `#!/bin/sh\nprintf '%s' "\${GROK_CLAUDE_HOOKS_ENABLED-unset}" > '${seen}'\n`, { mode: 0o755 });
+    const rc = path.join(tmpDir, '.rc');
+    fs.writeFileSync(rc, 'export GROK_CLAUDE_HOOKS_ENABLED=1\n');
+    const line = p.buildInteractiveCommand({ binaryPath: bin, prompt: 'go' } as never);
+    // The agent's terminal: its environment (getPtyEnvVars), then the user's shell, its rc file read, then the line.
+    const r = spawnSync('/bin/sh', ['-c', `. '${rc}'; ${line}`], {
+      env: { PATH: '/usr/bin:/bin', HOME: tmpDir, ...p.getPtyEnvVars('a-1', tmpDir, []) },
+      encoding: 'utf8',
+      timeout: 10_000,
+    });
+    expect(r.status, r.stderr).toBe(0);
+    expect(fs.readFileSync(seen, 'utf8')).toBe('0');
+  });
+
+  it('on Windows: the line starts with the binary, and the environment carries the 0', async () => {
+    unpin();
+    unpin = pinPlatform('win32');
+    const p = await grok();
+    expect(p.buildInteractiveCommand({ binaryPath: 'C:\\grok\\grok.exe', prompt: 'go' } as never)).toMatch(/^'C:\\grok\\grok\.exe'/);
+    expect(p.getPtyEnvVars('a-1', 'C:\\p', [])).toMatchObject({ GROK_CLAUDE_HOOKS_ENABLED: '0' });
   });
 });
 
