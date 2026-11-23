@@ -2,7 +2,7 @@ import { test, expect, _electron as electron } from '@playwright/test';
 import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
-import { launchSandboxed, recordValues } from './fixture.mjs';
+import { launchSandboxed, recordValues, removeHome } from './fixture.mjs';
 import { DEV_URL, apiPort } from './ports.mjs';
 
 /**
@@ -260,6 +260,7 @@ test(`the status follows the CLI's own record, and the sleep acts on it${newInte
     recordValues(seen);
     await app.close().catch(() => { /* gone */ });
     mainLog.end();
+    await removeHome(home);
   }
 });
 }

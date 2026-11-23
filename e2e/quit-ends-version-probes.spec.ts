@@ -2,7 +2,7 @@ import { test, expect, _electron as electron } from '@playwright/test';
 import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
-import { launchSandboxed, recordValues, writeNodeCli } from './fixture.mjs';
+import { launchSandboxed, recordValues, removeHome, writeNodeCli } from './fixture.mjs';
 import { DEV_URL, apiPort } from './ports.mjs';
 
 /**
@@ -78,4 +78,5 @@ test('quitting ends a version probe still running, and what it started', async (
 
   expect(all.some(w => w.who === 'amp') && all.some(w => w.who === 'child')).toBe(true);
   expect(after, 'the probe, or what it started, wrote after Tars had quit').toEqual([]);
+  await removeHome(home);
 });

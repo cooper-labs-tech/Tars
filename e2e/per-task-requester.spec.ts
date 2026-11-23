@@ -218,6 +218,7 @@ test("each result goes back to the agent that asked for that piece of work", asy
   } finally {
     recordValues({ steps, received: { w1: read('w1'), o1: read('o1'), b1: read('b1') } });
     await app.close().catch(() => { /* gone */ });
+    await removeHome(home);
   }
 });
 

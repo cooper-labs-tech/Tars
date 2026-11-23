@@ -3,7 +3,7 @@ import * as crypto from 'crypto';
 import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
-import { launchSandboxed, recordValues } from './fixture.mjs';
+import { launchSandboxed, recordValues, removeHome } from './fixture.mjs';
 import { DEV_URL, apiPort } from './ports.mjs';
 
 /**
@@ -253,4 +253,5 @@ test("chats: Main made once from the project's orchestrator, and every change ke
     await app.close();
   }
   fs.copyFileSync(chatsFile, test.info().outputPath('chats-run2.json'));
+  await removeHome(home);
 });

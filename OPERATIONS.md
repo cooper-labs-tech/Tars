@@ -228,6 +228,21 @@ or a mock:
 5. **Show it bites**: run it against the old build (the base branch's `electron/dist` and
    renderer) or a mutant, and see it red.
 
+**The sandbox HOME** goes with `await removeHome(home)` in the `finally` that closes the app;
+`__tests__/e2e-sandboxes-removed.test.ts` fails a spec that makes one and never removes it.
+- **A passing test's** sandbox is removed once the test is over.
+- **A red test keeps its sandbox**, to be read. `sandbox-kept.txt` in the test's output folder names
+  it, under `$TMPDIR`, `/tmp` or macOS's own temporary folder. Clear one sooner by that path.
+- **The next run's global setup** removes kept sandboxes once they are a day old; each holds
+  `.tars-e2e-kept`.
+- **A file of the real home** (a CLI's credentials or settings, the owner's transcripts) goes in
+  only through `copyFromRealHome(from, to)`. removeHome deletes the copy whatever the outcome, so a
+  kept sandbox holds none, and the guard fails any other copy.
+- **A run killed** (SIGKILL, a crash) never reaches removeHome or its worker's exit. Its sandboxes
+  carry no mark and keep any copy of the real home until the system empties its temporary folder.
+  Whoever kills a run checks there for `dorothy-` and `tars-` folders holding `.codex/auth.json` or
+  `.qwen/settings.json`.
+
 Two E2E runs share the machine when each takes its own `E2E_PORT_OFFSET` (`e2e/ports.mjs`): it
 moves `next dev` (3100) and every suite's API port together. Unset, nothing moves.
 

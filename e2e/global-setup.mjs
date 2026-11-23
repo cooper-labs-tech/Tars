@@ -2,6 +2,7 @@ import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
 import { execFileSync } from 'node:child_process';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 
 /**
  * Makes the directory this run's surfaces write their tolerated page errors
@@ -33,12 +34,33 @@ export default async function globalSetup(config) {
     ].join('\n'));
     console.log(`[e2e] run directory: ${runDir}`);
   }
+  pruneKeptSandboxes();
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'tars-e2e-page-errors-'));
   process.env.E2E_PAGE_ERRORS_DIR = dir;
   return () => {
     fs.rmSync(dir, { recursive: true, force: true });
     restoreTemp();
   };
+}
+
+/**
+ * A red run keeps its sandbox to be read (removeHome), for a day, not for ever
+ * (the Audit's L1 on #628): pruneKeptSandboxes of e2e/fixture.mjs, with its
+ * root check. In a node of its own: a module this setup imports is one the
+ * specs can then no longer import ("Cannot use import statement outside a
+ * module", measured on 2026-11-23 with the fixture; see ports.mjs above).
+ */
+function pruneKeptSandboxes() {
+  const fixture = pathToFileURL(path.join(path.dirname(fileURLToPath(import.meta.url)), 'fixture.mjs')).href;
+  try {
+    const out = execFileSync(process.execPath, ['--input-type=module', '-e',
+      `import { pruneKeptSandboxes } from ${JSON.stringify(fixture)}; process.stdout.write(JSON.stringify(pruneKeptSandboxes()));`],
+      { encoding: 'utf8', timeout: 60_000 });
+    const pruned = JSON.parse(out.trim().split('\n').at(-1) || '[]');
+    if (pruned.length) console.log(`[e2e] removed ${pruned.length} sandbox(es) kept by red runs more than a day ago`);
+  } catch (error) {
+    console.warn(`[e2e] the sandboxes kept by red runs were not pruned: ${error.message}`);
+  }
 }
 
 /**

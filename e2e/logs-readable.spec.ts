@@ -3,7 +3,7 @@ import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
 import * as zlib from 'zlib';
-import { launchSandboxed, recordValues, stepShot } from './fixture.mjs';
+import { launchSandboxed, recordValues, removeHome, stepShot } from './fixture.mjs';
 import { DEV_URL, apiPort } from './ports.mjs';
 
 /**
@@ -74,6 +74,7 @@ test('the Logs page reads a Claude Code session as its terminal showed it', asyn
     expect(hits).toHaveLength(1);
   } finally {
     await app.close();
+    await removeHome(home);
   }
 });
 
@@ -137,6 +138,7 @@ test('the Logs page reads a stopped full-screen Claude agent from its transcript
     expect(tailText).toContain('Paragraph two: the rows are redrawn.');
   } finally {
     await app.close();
+    await removeHome(home);
   }
 });
 

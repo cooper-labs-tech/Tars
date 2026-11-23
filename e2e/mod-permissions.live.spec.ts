@@ -23,7 +23,7 @@ import { test, expect, _electron as electron } from '@playwright/test';
 import fs from 'node:fs';
 import path from 'node:path';
 import { spawn, execFileSync } from 'node:child_process';
-import { launchSandboxed, recordValues } from './fixture.mjs';
+import { launchSandboxed, recordValues, removeHome } from './fixture.mjs';
 import { DEV_URL, PORT_OFFSET, apiPort } from './ports.mjs';
 
 const WT = process.cwd();
@@ -184,5 +184,6 @@ test('a permission claude would ask in its dialog is asked of Tars, and the wind
   } finally {
     await app?.close().catch(() => {});
     stub.kill();
+    await removeHome(HOME);
   }
 });

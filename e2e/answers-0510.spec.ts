@@ -3,7 +3,7 @@ import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
 import { execFileSync } from 'child_process';
-import { launchSandboxed, recordValues, writeNodeCli } from './fixture.mjs';
+import { launchSandboxed, recordValues, removeHome, writeNodeCli } from './fixture.mjs';
 import { DEV_URL, apiPort } from './ports.mjs';
 
 /**
@@ -128,5 +128,6 @@ test('Delete keeps the work on wip/, a restart after a stop says whose stop, a f
     expect(pageErrors).toEqual([]);
   } finally {
     await app.close().catch(() => { /* gone */ });
+    await removeHome(home);
   }
 });

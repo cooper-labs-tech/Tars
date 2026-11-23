@@ -4,7 +4,7 @@ import * as os from 'os';
 import * as path from 'path';
 import { createHash } from 'crypto';
 import { execFileSync, spawn } from 'child_process';
-import { launchSandboxed, recordValues, writeNodeCli } from './fixture.mjs';
+import { launchSandboxed, recordValues, removeHome, writeNodeCli } from './fixture.mjs';
 import { DEV_URL, apiPort } from './ports.mjs';
 
 /**
@@ -163,5 +163,6 @@ test("an agent's CLI gets a temporary folder under ~/.tars/tmp that outlives Tar
     expect(log).toMatch(/removed .*old-but-live\.txt.*untouched for a day, its agent running/);
   } finally {
     listener?.kill();
+    await removeHome(home);
   }
 });

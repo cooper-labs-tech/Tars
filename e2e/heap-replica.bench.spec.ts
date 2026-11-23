@@ -3,7 +3,7 @@ import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
 import { execFileSync } from 'child_process';
-import { launchSandboxed, recordValues, removeHome } from './fixture.mjs';
+import { copyFromRealHome, launchSandboxed, recordValues, removeHome } from './fixture.mjs';
 import { DEV_URL, apiPort } from './ports.mjs';
 
 /**
@@ -37,7 +37,7 @@ test('the main process heap with the machine\'s own transcripts and fleet', asyn
   const home = fs.mkdtempSync(path.join(os.tmpdir(), 'tars-heap-replica-'));
   try {
     fs.mkdirSync(path.join(home, '.claude'), { recursive: true });
-    execFileSync('/bin/cp', ['-c', '-R', path.join(REAL_HOME, '.claude', 'projects'), path.join(home, '.claude', 'projects')]);
+    copyFromRealHome(path.join(REAL_HOME, '.claude', 'projects'), path.join(home, '.claude', 'projects'));
     const dir = path.join(home, '.tars');
     fs.mkdirSync(dir, { recursive: true });
     const real = JSON.parse(fs.readFileSync(path.join(REAL_HOME, '.tars', 'agents.json'), 'utf8'));

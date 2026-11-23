@@ -17,7 +17,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { spawn, execFileSync } from 'node:child_process';
-import { launchSandboxed } from './fixture.mjs';
+import { launchSandboxed, removeHome } from './fixture.mjs';
 import { DEV_URL, PORT_OFFSET, apiPort } from './ports.mjs';
 
 const WT = process.cwd();
@@ -457,5 +457,6 @@ test('a panel whose claude left fullscreen', async () => {
   } finally {
     if (app) await app.close().catch(() => {});
     stub.kill();
+    await removeHome(HOME);
   }
 });

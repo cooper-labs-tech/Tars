@@ -3,7 +3,7 @@ import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
 import { execFileSync } from 'child_process';
-import { launchSandboxed, recordValues, writeNodeCli } from './fixture.mjs';
+import { launchSandboxed, recordValues, removeHome, writeNodeCli } from './fixture.mjs';
 import { DEV_URL, apiPort } from './ports.mjs';
 
 /**
@@ -201,5 +201,6 @@ test('an agent waiting on its own timer or background agent is not put to sleep;
     expect.soft(verdict.delegator.slept, 'an agent whose background Agent is still running (no caffeinate: Linux) is not put to sleep').toBe(false);
   } finally {
     await app.close().catch(() => { /* gone */ });
+    await removeHome(home);
   }
 });

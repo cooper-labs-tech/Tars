@@ -895,8 +895,40 @@ function landing(p) {
  * path lands through its links and its `..`, and refuses anything else, a root
  * included, before touching it: a wrong path fails its spec instead of
  * deleting (the Audit's L1 on #385). Tests: __tests__/e2e-remove-home.test.ts.
+ *
+ * Inside a Playwright test it removes nothing at once: it hands the sandbox to
+ * settleSandboxes with its test, which removes it once the test is over and
+ * passed, and keeps it once it failed, with `sandbox-kept.txt` in the test's
+ * output folder naming it (the Audit's L2 on #628): a red run keeps the fake
+ * CLIs' logs and the app's own ~/.tars. So nothing is thrown from the `finally`
+ * that calls it, over the error the test is failing with (the Audit's I-2): a
+ * refused folder is a soft failure of the test, and a removal that gives up
+ * after its tries is said on the run's output. Outside a test (the unit tests),
+ * it removes at once and throws, as before.
+ *
+ * What copyFromRealHome put in the sandbox, it deletes first, at once and
+ * whatever the outcome: a kept red home holds no copy of the owner's
+ * credentials or transcripts (the Audit's M1 on #628).
  */
 export async function removeHome(dir, roots = sandboxRoots()) {
+  const refused = refusal(dir, roots);
+  if (!refused) deleteRealHomeCopies(dir);
+  const info = runningTest();
+  if (!info) {
+    if (refused) throw new Error(refused);
+    removeSandbox(dir);
+    return;
+  }
+  if (refused) {
+    expect.soft(refused, 'removeHome refused the folder it was handed').toBeUndefined();
+    return;
+  }
+  settleSandboxes(info);
+  sandboxesToSettle.push({ dir, info });
+}
+
+/** Why `dir` may not be removed, or undefined when it lies strictly under one of `roots`. */
+function refusal(dir, roots) {
   const where = landing(dir);
   const real = roots.flatMap((root) => {
     try {
@@ -905,9 +937,21 @@ export async function removeHome(dir, roots = sandboxRoots()) {
       return [];
     }
   });
-  if (!real.some((root) => where.startsWith(root + path.sep))) {
-    throw new Error(`removeHome: ${dir} is not inside a folder the specs make their sandboxes in (${real.join(', ')}): nothing was removed`);
+  if (real.some((root) => where.startsWith(root + path.sep))) return undefined;
+  return `removeHome: ${dir} is not inside a folder the specs make their sandboxes in (${real.join(', ')}): nothing was removed`;
+}
+
+/** The test running in this worker, or undefined outside one (the unit tests import this file too). */
+function runningTest() {
+  try {
+    return test.info();
+  } catch {
+    return undefined;
   }
+}
+
+/** Removes a sandbox, again from a fresh listing for up to 5 s while something still writes in it. Synchronous, for the worker's exit. */
+function removeSandbox(dir) {
   for (let attempt = 1; ; attempt++) {
     try {
       fs.rmSync(dir, { recursive: true, force: true });
@@ -915,9 +959,135 @@ export async function removeHome(dir, roots = sandboxRoots()) {
       return;
     } catch (error) {
       if ((error.code !== 'ENOTEMPTY' && error.code !== 'EBUSY') || attempt === 20) throw error;
-      await new Promise((resolve) => setTimeout(resolve, 250));
+      Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 250);
     }
   }
+}
+
+/** The sandboxes removeHome was handed in a test, each with that test, until the test is over. */
+const sandboxesToSettle = [];
+
+/**
+ * Removes the sandbox of every test that is over and passed (or was skipped,
+ * or failed as it was expected to), and keeps the sandbox of every test that is
+ * over and failed. A test is over once another runs in this worker (`current`),
+ * or once the worker exits (`current` undefined): its status is then final.
+ */
+function settleSandboxes(current) {
+  for (const entry of [...sandboxesToSettle]) {
+    if (entry.info === current) continue;
+    sandboxesToSettle.splice(sandboxesToSettle.indexOf(entry), 1);
+    const { dir, info } = entry;
+    if (info.status === info.expectedStatus || info.status === 'skipped') {
+      try {
+        removeSandbox(dir);
+      } catch (error) {
+        console.warn(`[removeHome] ${dir} could not be removed after its test: ${error.message}`);
+      }
+      continue;
+    }
+    try {
+      fs.writeFileSync(info.outputPath('sandbox-kept.txt'), `${dir}\n`);
+    } catch { /* the output folder is gone: the warning below still says where it is */ }
+    try {
+      fs.writeFileSync(path.join(dir, KEPT_MARK), `${JSON.stringify({ test: info.title, status: info.status, at: new Date().toISOString() })}\n`);
+    } catch { /* the sandbox is gone: nothing to prune */ }
+    console.warn(`[removeHome] kept ${dir}: "${info.title}" ended ${info.status}`);
+  }
+}
+
+process.on('exit', () => {
+  deleteRealHomeCopies(undefined);
+  settleSandboxes(undefined);
+});
+
+/** The file removeHome writes in a sandbox it keeps; pruneKeptSandboxes removes only sandboxes that hold it. */
+const KEPT_MARK = '.tars-e2e-kept';
+
+/** The copies copyFromRealHome made in this worker, until removeHome or the worker's exit deletes them. */
+const realHomeCopies = new Set();
+
+/**
+ * Copies `from`, a file or a folder of the real home (a CLI's credentials or
+ * settings, the owner's transcripts), to `to` in a sandbox, and records the
+ * copy: removeHome deletes it whatever the test's outcome, before it keeps a
+ * red home (the Audit's M1 on #628), and the worker's exit deletes any copy
+ * still there. A folder is cloned on macOS (`cp -c`, no space taken), copied
+ * elsewhere; `clone` chooses, for the tests of both ways on one machine. Returns
+ * false, copying nothing, when `from` does not exist. The guard
+ * (__tests__/e2e-sandboxes-removed.test.ts) fails a spec that copies the real
+ * home any other way. Tests: __tests__/e2e-copy-from-real-home.test.ts.
+ */
+export function copyFromRealHome(from, to, { clone = process.platform === 'darwin' } = {}) {
+  if (!fs.existsSync(from)) return false;
+  // Recorded before it is made: a copy that throws halfway (a full disk) is deleted too (the Audit's I-4 on #628).
+  realHomeCopies.add(to);
+  fs.mkdirSync(path.dirname(to), { recursive: true });
+  if (!fs.statSync(from).isDirectory()) fs.copyFileSync(from, to);
+  else if (clone) execFileSync('/bin/cp', ['-c', '-R', from, to]);
+  // A link as written, as cp -R keeps it: resolved, a relative one would point into the real tree (I-3).
+  else fs.cpSync(from, to, { recursive: true, verbatimSymlinks: true });
+  return true;
+}
+
+/** Deletes the copies of the real home made under `dir` (every one, `dir` undefined), each only inside a sandbox root. */
+function deleteRealHomeCopies(dir) {
+  const under = dir === undefined ? undefined : landing(dir) + path.sep;
+  for (const copy of [...realHomeCopies]) {
+    if (under && !landing(copy).startsWith(under)) continue;
+    realHomeCopies.delete(copy);
+    if (refusal(copy, sandboxRoots())) {
+      console.warn(`[removeHome] a copy of the real home outside every sandbox root was not deleted: ${copy}`);
+      continue;
+    }
+    try {
+      removeSandbox(copy);
+    } catch (error) {
+      console.warn(`[removeHome] a copy of the real home could not be deleted: ${copy}: ${error.message}`);
+    }
+  }
+}
+
+/**
+ * Removes the sandboxes red runs kept (removeHome marks each with
+ * KEPT_MARK) once their mark is older than `maxAgeMs`, a day unless given: the
+ * e2e global setup runs it before every run (the Audit's L1 on #628). Only a
+ * folder directly in one of `roots`, not a link, holding the mark as a regular
+ * file, and lying strictly under its root: never a folder without the mark,
+ * whoever made it, never what a link points at. Returns what it removed.
+ * Tests: __tests__/e2e-kept-sandboxes-pruned.test.ts.
+ */
+export function pruneKeptSandboxes({ roots = sandboxRoots(), maxAgeMs = 24 * 3600 * 1000, now = Date.now() } = {}) {
+  const removed = [];
+  const seen = new Set();
+  for (const root of roots) {
+    let real;
+    try {
+      real = fs.realpathSync.native(root);
+    } catch {
+      continue;
+    }
+    if (seen.has(real)) continue;
+    seen.add(real);
+    for (const entry of fs.readdirSync(real, { withFileTypes: true })) {
+      if (!entry.isDirectory()) continue;
+      const dir = path.join(real, entry.name);
+      let mark;
+      try {
+        mark = fs.lstatSync(path.join(dir, KEPT_MARK));
+      } catch {
+        continue;
+      }
+      if (!mark.isFile() || now - mark.mtimeMs < maxAgeMs || refusal(dir, [real])) continue;
+      try {
+        removeSandbox(dir);
+        removed.push(path.join(root, entry.name));
+      } catch (error) {
+        console.warn(`[e2e] a kept sandbox could not be removed: ${dir}: ${error.message}`);
+      }
+    }
+  }
+  return removed;
 }
 
 /**

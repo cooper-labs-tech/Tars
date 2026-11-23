@@ -26,7 +26,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { spawn, execFileSync } from 'node:child_process';
-import { launchSandboxed, recordValues, markWhatsNewSeen, stepShot } from './fixture.mjs';
+import { launchSandboxed, recordValues, markWhatsNewSeen, removeHome, stepShot } from './fixture.mjs';
 import { DEV_URL, PORT_OFFSET, apiPort } from './ports.mjs';
 import { LATEST_RELEASE, WHATS_NEW_STORAGE_KEY } from '@/data/changelog';
 
@@ -326,6 +326,7 @@ for (const newInterface of [false, true]) {
         await app.close().catch(() => undefined);
       }
       stub.kill();
+      await removeHome(home);
     }
   });
 }

@@ -3,7 +3,7 @@ import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
 import { spawn, type ChildProcessWithoutNullStreams } from 'child_process';
-import { launchSandboxed, recordValues, removeHome } from './fixture.mjs';
+import { copyFromRealHome, launchSandboxed, recordValues, removeHome } from './fixture.mjs';
 import { DEV_URL, apiPort } from './ports.mjs';
 
 /**
@@ -11,7 +11,8 @@ import { DEV_URL, apiPort } from './ports.mjs';
  * Measured with qwen 0.25.2 on deepseek-v4-flash.
  *
  * The real app on a sandbox HOME, whose ~/.qwen/settings.json is a copy of the user's (its model providers and the
- * key its env holds: the file is made 0600 and removed with the sandbox; nothing of it is printed or recorded). lead,
+ * key its env holds: the file is made 0600 and deleted by removeHome whatever the outcome, a red run's kept home
+ * included (copyFromRealHome); nothing of it is printed or recorded). lead,
  * the orchestrator, is a claude agent whose terminal records what it receives, spoken for through the real
  * orchestrator MCP server. Asserted:
  * 1. lead's create_agent makes a qwen-code agent on deepseek-v4-flash;
@@ -69,7 +70,7 @@ test('the real qwen code: created by an orchestrator, it answers a delegated tas
   const project = path.join(home, 'projects', 'demo');
   const dir = path.join(home, '.tars');
   for (const d of [project, dir, path.join(home, '.qwen')]) fs.mkdirSync(d, { recursive: true });
-  fs.copyFileSync(USER_QWEN_SETTINGS, path.join(home, '.qwen', 'settings.json'));
+  copyFromRealHome(USER_QWEN_SETTINGS, path.join(home, '.qwen', 'settings.json'));
   fs.chmodSync(path.join(home, '.qwen', 'settings.json'), 0o600);
   const leadReceived = path.join(home, 'lead.received');
   const leadCli = path.join(home, 'lead-cli.cjs');
