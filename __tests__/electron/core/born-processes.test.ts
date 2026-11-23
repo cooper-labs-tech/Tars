@@ -59,6 +59,17 @@ import {
  * And from the Audit's train audit (M1, AUDIT-train-2-0-5-2.md):
  * 12. A stop's record (`stopProcesses`, its answer) keeps a secret after a flag (`--token <v>`, mysql's `-p<v>`): the
  *     log rule misses it. A line follows the window's rule (redact-command-line.ts), then is cut.
+ * And from QA's gate of #629 (22/11), written before the fix: the processes these cases start are orphans by design,
+ * reparented to launchd or init and tagged as an agent's, so whatever outlives its case is counted by every later one.
+ * 13. A case leaves a process of its own alive, whether it passes, fails or times out: case 8's ssh, whose pid is
+ *     only known once its run has written it, was not ended when the case failed or timed out before reading it.
+ *     And a run whose worker dies before its afterEach (stopped from outside, as a gate stops a run on a full disk)
+ *     leaves every fake of its cases alive for good. Two of 20/11 (an ansible-playbook and its ssh, 2 days old)
+ *     turned case 8 red on main and in every gate since: it counted 4 processes of its agent, not 2.
+ * 14. A case's count takes in what another run left, or what a run on another bench starts at the same moment: their
+ *     fakes carry the same agent ids and the same address.
+ * 15. Over-correction: a run's processes are ended by a pattern (a name, a word of a command), which ends another
+ *     run's, another bench's, or another agent's; or a fake ends before its case is done with it.
  */
 
 const ADDRESS = 'http://127.0.0.1:31415';
