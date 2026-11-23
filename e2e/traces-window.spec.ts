@@ -36,9 +36,12 @@ import { DEV_URL, apiPort } from './ports.mjs';
  *    5d. (QA, the Audit's L3 and L5 on #599, 23/11) the deletion's states, with a back-office stand-in that registers
  *    this install and refuses its DELETE (404): the refusal is not said, or the deletion is not kept owed ("Delete
  *    again", "Give up this deletion"); a deletion, a give-up or an acknowledgment that main fails (a full disk: its own
- *    handler wrapped to throw ENOSPC, then put back) is not said in its box ("not deleted: ...", "not given up: ...",
- *    "not acknowledged: ... OK tries again."), or the view does not read main again after it, so what main recorded
- *    (a give-up that removed the install, then failed) does not come back as the deletion cleared by itself.
+ *    handler wrapped to throw ENOSPC, then put back) is not said in its box in main's own reason ("not deleted: no
+ *    space left on device. Nothing was forgotten; try again.", "not acknowledged: no space left on device. OK tries
+ *    again."), or says Electron's or the system's words around it (the channel's name, "ENOSPC"), or ends a sentence
+ *    twice ("404 not_found.."); or the view does not read main again after it, so a give-up that removed the install,
+ *    then failed, is not said as given up ("given up, though Tars could not finish: no space left on device") and
+ *    does not come back as the deletion cleared by itself.
  * 6. Never record closed models is not on in a Tars that never set it, or it says nothing of the providers' terms.
  * 7. An uncaught error in the page.
  * Red on #596's head (caefc8874), which has no window: 6 and 1 find no Inference endpoints in Settings.
@@ -330,6 +333,7 @@ test('the traces window: an endpoint added with its key never shown back, plain 
     await deletion.getByRole('button', { name: 'Delete everything this Tars sent', exact: true }).click();
     await confirmDeletion();
     await expect(deletion, 'the refusal said').toContainText('not deleted: The back-office answered 404 not_found', { timeout: 30_000 });
+    await expect.soft(deletion, 'the refusal, its sentence ended once').toContainText('not deleted: The back-office answered 404 not_found. Nothing was forgotten; try again.');
     await expect(deletion.getByRole('button', { name: 'Give up this deletion', exact: true }), 'the deletion kept owed').toBeVisible({ timeout: 15_000 });
     const refused = { box: await deletion.innerText(), state: await api<UploadState>('traces', 'uploadState'), settings: await api<UploadSettings>('traces', 'settings'), asked: lines(backOfficeLog) };
     await stepShot(page, '6c-deletion-refused-owed');
@@ -368,7 +372,7 @@ test('the traces window: an endpoint added with its key never shown back, plain 
     let before = await reads();
     await deletion.getByRole('button', { name: 'Delete again', exact: true }).click();
     await confirmDeletion();
-    await expect.soft(deletion, 'a deletion main fails, said').toContainText(/not deleted: [^\n]*ENOSPC: no space left on device, write\. Nothing was forgotten; try again\./, { timeout: 15_000 });
+    await expect.soft(deletion, 'a deletion main fails, said').toContainText('not deleted: no space left on device. Nothing was forgotten; try again.', { timeout: 15_000 });
     const deleteFailed = { readsAfter: await readAgain(before), box: '' };
     await handler('traces:deleteEverywhere', 'put back');
     await expect.soft(deletion.getByRole('button', { name: 'Give up this deletion', exact: true }), 'still owed, as main has it').toBeVisible();
@@ -379,10 +383,11 @@ test('the traces window: an endpoint added with its key never shown back, plain 
     before = await reads();
     await deletion.getByRole('button', { name: 'Give up this deletion', exact: true }).click();
     await page.getByRole('dialog').filter({ hasText: 'Give up this deletion?' }).getByRole('button', { name: 'Give up the deletion', exact: true }).click({ timeout: 15_000 });
-    await expect.soft(deletion, 'a give-up main fails, said').toContainText(/not given up: [^\n]*ENOSPC: no space left on device, write/, { timeout: 15_000 });
+    await expect.soft(deletion, 'a give-up main fails once the install is gone, said as given up').toContainText('given up, though Tars could not finish: no space left on device', { timeout: 15_000 });
     const giveUpFailed = { readsAfter: await readAgain(before), box: '' };
     await handler('traces:abandonDeletion', 'put back');
-    // What main recorded comes back: the install gone, the owed mark goes with it, the deletion cleared by itself.
+    // What main recorded comes back: the install gone, the owed mark gone with it, so the deletion is given up (said
+    // with the reason it could not finish) and said cleared by itself.
     await expect(cleared, 'the deletion cleared, read from main').toBeVisible({ timeout: 30_000 });
     giveUpFailed.box = await deletion.innerText();
     await stepShot(page, '6e-give-up-failed-cleared');
@@ -390,12 +395,14 @@ test('the traces window: an endpoint added with its key never shown back, plain 
     await handler('traces:ackDeletionCleared', 'fail');
     before = await reads();
     await cleared.getByRole('button', { name: 'OK', exact: true }).click();
-    await expect.soft(cleared, 'an acknowledgment main fails, said').toContainText(/not acknowledged: [^\n]*ENOSPC: no space left on device, write\. OK tries again\./, { timeout: 15_000 });
+    await expect.soft(cleared, 'an acknowledgment main fails, said').toContainText('not acknowledged: no space left on device. OK tries again.', { timeout: 15_000 });
     const ackFailed = { readsAfter: await readAgain(before), box: await cleared.innerText(), state: await api<UploadState>('traces', 'uploadState') };
     await handler('traces:ackDeletionCleared', 'put back');
     await handler('traces:settings', 'put back');
     await stepShot(page, '6f-ack-failed');
     keep({ deleteFailed, giveUpFailed, ackFailed });
+    expect.soft(`${refused.box}\n${deleteFailed.box}\n${giveUpFailed.box}\n${ackFailed.box}`, "Electron's or the system's words, or a sentence ended twice")
+      .not.toMatch(/Error invoking remote method|ENOSPC|\.\./);
     expect.soft(deleteFailed.readsAfter, 'main read again after the failed deletion').toBeGreaterThan(0);
     expect.soft(giveUpFailed.readsAfter, 'main read again after the failed give-up').toBeGreaterThan(0);
     expect.soft(ackFailed.readsAfter, 'main read again after the failed acknowledgment').toBeGreaterThan(0);
