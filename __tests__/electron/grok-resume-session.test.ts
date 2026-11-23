@@ -28,6 +28,8 @@ const SESSION = '01a209b5-4b52-7662-8587-8afff0fb0bd0';
 afterAll(() => { fs.rmSync(home, { recursive: true, force: true }); });
 
 function grokSession(folder: string, id: string) {
+  // The folder the agent ran in exists, as an agent's folder does: its real path is read from it.
+  fs.mkdirSync(folder, { recursive: true });
   const dir = path.join(home, '.grok', 'sessions', encodeURIComponent(folder), id);
   fs.mkdirSync(dir, { recursive: true });
   fs.writeFileSync(path.join(dir, 'chat_history.jsonl'), '{}\n');
