@@ -1020,11 +1020,13 @@ const realHomeCopies = new Set();
  */
 export function copyFromRealHome(from, to, { clone = process.platform === 'darwin' } = {}) {
   if (!fs.existsSync(from)) return false;
+  // Recorded before it is made: a copy that throws halfway (a full disk) is deleted too (the Audit's I-4 on #628).
+  realHomeCopies.add(to);
   fs.mkdirSync(path.dirname(to), { recursive: true });
   if (!fs.statSync(from).isDirectory()) fs.copyFileSync(from, to);
   else if (clone) execFileSync('/bin/cp', ['-c', '-R', from, to]);
-  else fs.cpSync(from, to, { recursive: true });
-  realHomeCopies.add(to);
+  // A link as written, as cp -R keeps it: resolved, a relative one would point into the real tree (I-3).
+  else fs.cpSync(from, to, { recursive: true, verbatimSymlinks: true });
   return true;
 }
 
