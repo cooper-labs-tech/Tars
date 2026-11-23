@@ -402,7 +402,15 @@ again and the agent's first start continues its session, then answers a second t
 npx tsc -p electron/tsconfig.json && (cd mcp-orchestrator && npm run build)
 TARS_HARNESS_KIMI_CODE=/path/to/kimi npx playwright test e2e/harness-conformance.spec.ts -g kimi-code
 TARS_HARNESS_CODEX=/path/to/codex TARS_HARNESS_PI=/path/to/pi npx playwright test e2e/harness-conformance.spec.ts
+TARS_HARNESS_GEMINI=/path/to/gemini TARS_HARNESS_GROK=/path/to/grok npx playwright test e2e/harness-conformance.spec.ts -g 'gemini|grok'
 ```
+
+gemini and grok take no endpoint of Tars's: gemini runs on the stand-in of Gemini's API (`e2e/stand-in-gemini-endpoint.mjs`,
+through `GOOGLE_GEMINI_BASE_URL`, its key set from the window), grok on the OpenAI stand-in as a custom model of its own
+`config.toml`, both written into the sandbox as a user leaves them. Their tool round is a call to Tars's own `whoami`,
+answered only when it reached Tars with the agent's own identity, and they pass three steps more: no question of their
+own at start (folder trust, sign-in), the agent at rest once its task is answered, and, for grok, each hook fired once.
+`TARS_HARNESS_GEMINI` names gemini's own `bundle/gemini.js` (its npm package, unpacked, `#!/usr/bin/env node`).
 
 Opt-in: a harness whose `TARS_HARNESS_<ID>` names no binary is skipped and says so. Install each binary pinned, from
 its own registry or release, into a folder of its own, never over the user's own CLI. Each run leaves `values.json`,
