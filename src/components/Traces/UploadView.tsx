@@ -29,6 +29,21 @@ function Bullets({ caption, items, tone }: { caption: string; items: string[]; t
   );
 }
 
+/**
+ * Main's own reason for a failure, in words a line of the view can carry: without Electron's "Error invoking remote
+ * method '<channel>': Error: " in front, without a system error's code and the call it failed in ("ENOSPC: no space
+ * left on device, write" says "no space left on device"), and without the final period, which the line's own sentence
+ * puts (QA's re-check of #599: "404 not_found.. Nothing was forgotten", and the channel's name shown to the user).
+ */
+function reasonOf(e: unknown): string {
+  let s = (e instanceof Error ? e.message : String(e)).trim();
+  s = s.replace(/^Error invoking remote method '[^']*':\s*/, '');
+  while (/^[A-Za-z]*Error:\s*/.test(s)) s = s.replace(/^[A-Za-z]*Error:\s*/, '');
+  const system = s.match(/^E[A-Z]+:\s*([^,]+)(?:,.*)?$/);
+  if (system) s = system[1];
+  return s.replace(/[.\s]+$/, '');
+}
+
 /** The upload's state in words: queued, sent, failed with the back-office's reason, offline. */
 function stateWord(s: UploadState): { word: string; tone: 'running' | 'waiting' | 'error' | 'idle' } {
   const next = s.nextTryAt ? ` · next try ${clockOf(s.nextTryAt)}` : '';
@@ -74,6 +89,8 @@ export function UploadView() {
   /** Giving up an owed deletion: asked first in its plain words, then main's refusal if none is owed. */
   const [givingUp, setGivingUp] = useState(false);
   const [giveUpError, setGiveUpError] = useState<string | null>(null);
+  /** A give-up main could not finish after it forgot the install: given up, with the reason it could not finish. */
+  const [giveUpUnfinished, setGiveUpUnfinished] = useState<string | null>(null);
   /** The acknowledgment of a cleared deletion that main could not write: said in its box, OK tries again. */
   const [ackError, setAckError] = useState<string | null>(null);
 
@@ -89,7 +106,7 @@ export function UploadView() {
       }
       setState(await api.uploadState());
       setError(null);
-    } catch (e) { setError(e instanceof Error ? e.message : String(e)); }
+    } catch (e) { setError(reasonOf(e)); }
   }, []);
 
   useEffect(() => {
@@ -112,7 +129,7 @@ export function UploadView() {
     try {
       r = await api.setSettings({ uploadUrl: url.trim(), uploadAllowPlainHttp: leave });
     } catch (e) {
-      setSaveError(`not saved: ${e instanceof Error ? e.message : String(e)}. Enter tries again, Escape goes back.`);
+      setSaveError(`not saved: ${reasonOf(e)}. Enter tries again, Escape goes back.`);
       return;
     }
     // Main's refusal says why in its own words (a public address over plain http); the address stays as typed.
@@ -161,13 +178,14 @@ export function UploadView() {
       r = await api.deleteEverywhere();
     } catch (e) {
       // Main can throw before the back-office is asked (a full disk): said, never an unhandled rejection.
-      r = { ok: false, error: e instanceof Error ? e.message : String(e) };
+      r = { ok: false, error: reasonOf(e) };
     } finally {
       setInProgress(false);
     }
+    // The back-office's reason may end with its own period: the sentence ends once.
     setDeleted(r.ok
       ? { word: `the back-office deleted ${r.deleted ?? 'every'} session${r.deleted === 1 ? '' : 's'} · this install is forgotten, your consent withdrawn`, tone: 'running' }
-      : { word: `not deleted: ${r.error}. Nothing was forgotten; try again.`, tone: 'error' });
+      : { word: `not deleted: ${reasonOf(r.error)}. Nothing was forgotten; try again.`, tone: 'error' });
     void read();
   };
 
@@ -175,11 +193,17 @@ export function UploadView() {
     const api = tracesApi();
     if (!api) return;
     setGivingUp(false);
+    setGiveUpError(null);
+    setGiveUpUnfinished(null);
     try {
       const r = await api.abandonDeletion();
-      if (r.ok) { setState(r.state); setGiveUpError(null); } else setGiveUpError(r.error);
+      if (r.ok) setState(r.state); else setGiveUpError(reasonOf(r.error));
     } catch (e) {
-      setGiveUpError(e instanceof Error ? e.message : String(e));
+      // Main forgets the install first, then resets what was sent: a failure after the first step leaves the deletion
+      // given up. What is true is read from main, never assumed (QA's re-check of #599).
+      const reason = reasonOf(e);
+      const after = await api.uploadState().catch(() => null);
+      if (after && !after.deletionOwed) { setState(after); setGiveUpUnfinished(reason); } else setGiveUpError(reason);
     }
     void read();
   };
@@ -190,7 +214,7 @@ export function UploadView() {
       await tracesApi()?.ackDeletionCleared();
       setAckError(null);
     } catch (e) {
-      setAckError(e instanceof Error ? e.message : String(e));
+      setAckError(reasonOf(e));
     }
     void read();
   };
@@ -221,8 +245,9 @@ export function UploadView() {
           {state?.deletionCleared && (
             <Box name="Deletion cleared" caption="DELETION CLEARED">
               <div className="px-4 pb-3 space-y-2" data-deletion-cleared>
-                <StateLine word="the deletion that waited for confirmation was cleared: this install's record is gone on the back-office" tone="waiting" />
-                <p className="text-[11.5px] leading-relaxed text-text-secondary">Sharing may start again; what was recorded before the deletion is still never sent.</p>
+                {/* Said when Tars no longer holds the install a deletion waited on: the back-office never confirmed it. */}
+                <StateLine word="Tars forgot this install; the back-office never confirmed the deletion it waited for" tone="waiting" />
+                <p className="text-[11.5px] leading-relaxed text-text-secondary">What this install sent may still be on the back-office: ask whoever runs it to delete it. Sharing may start again, as a new install; what was recorded before the deletion is still never sent.</p>
                 {ackError && <StateLine word={`not acknowledged: ${ackError}. OK tries again.`} tone="error" />}
                 <Button size="sm" onClick={() => { void ackCleared(); }}>OK</Button>
               </div>
@@ -318,9 +343,10 @@ export function UploadView() {
               {deleted && !inProgress && <StateLine word={deleted.word} tone={deleted.tone} />}
               {owed && !inProgress && <StateLine word={`not confirmed yet${state?.lastError ? `: ${state.lastError}` : ''}. Nothing new is sent meanwhile.`} tone="waiting" />}
               {giveUpError && <StateLine word={`not given up: ${giveUpError}`} tone="error" />}
+              {giveUpUnfinished && <StateLine word={`given up, though Tars could not finish: ${giveUpUnfinished}`} tone="waiting" />}
               <div className="flex items-center gap-2">
                 <Button size="sm" variant="danger" disabled={!address || inProgress} onClick={() => setDeleting(true)}>{inProgress ? 'deleting' : owed ? 'Delete again' : 'Delete everything this Tars sent'}</Button>
-                {owed && !inProgress && <Button size="sm" variant="ghost" onClick={() => { setGiveUpError(null); setGivingUp(true); }}>Give up this deletion</Button>}
+                {owed && !inProgress && <Button size="sm" variant="ghost" onClick={() => { setGiveUpError(null); setGiveUpUnfinished(null); setGivingUp(true); }}>Give up this deletion</Button>}
               </div>
             </div>
           </Box>
