@@ -171,7 +171,11 @@ for (const newInterface of [false, true]) {
       };
       const recordOf = (id: string) => records().find((a) => a.id === id) ?? {};
       const card = (id: string) => page.locator(`[data-agent-card="${id}"]`);
-      const taskIdOf = (said: Said) => /\bt-[0-9a-f]{8}\b/.exec(said.text)?.[0];
+      // A task waiting its turn is named by its ref (t-xxxxxxxx); one under way or ended by the ledger's id, which
+      // task_status and get_agent_output read as well: `Task <uuid> on agent ... is still working`, or the answer's
+      // last line, `... | task <uuid>`.
+      const taskIdOf = (said: Said) => /\bt-[0-9a-f]{8}\b/.exec(said.text)?.[0]
+        ?? /\btask ([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})\b/i.exec(said.text)?.[1];
 
       // ── 1. Read-back: another project's agents, their inference settings and status, no task content ──
       const listed = await other('list_agents', { project: B });
@@ -216,7 +220,10 @@ for (const newInterface of [false, true]) {
       expect(retuned.text).toMatch(/\bapplied\b/);
       expect(recordOf('b-c')).toMatchObject({ provider: 'codex', model: 'gpt-5.5', effort: 'high' });
       expect(retunedLead.isError).toBe(false);
-      expect(recordOf('b-o')).toMatchObject({ model: 'opus', effort: 'max', role: 'orchestrator' });
+      // B's orchestrator may still be in a turn (its task's end, or the note Tars types it about its worker's change):
+      // the change to it goes in at once or as that turn ends, never cutting it.
+      expect(retunedLead.text).toMatch(/\bapplied\b|once its turn ends/);
+      await expect.poll(() => recordOf('b-o'), { timeout: 30_000 }).toMatchObject({ model: 'opus', effort: 'max', role: 'orchestrator' });
       // On the agent's card, and in the window's notice, with who did it.
       await page.goto(`${DEV_URL}/agents`, { waitUntil: 'domcontentloaded' });
       await expect(card('b-c')).toContainText('gpt-5.5', { timeout: 30_000 });
@@ -266,6 +273,7 @@ for (const newInterface of [false, true]) {
 
       // ── 6. A change to an agent mid-turn is queued, then applied once its turn ends ──
       const held = await named('delegate_task', { id: 'b-qwen', prompt: 'HOLD q1', timeoutSeconds: 3 });
+      keep({ held });
       const heldTask = taskIdOf(held);
       expect(heldTask).toBeTruthy();
       await expect.poll(() => recordOf('b-qwen').status, { timeout: 30_000 }).toBe('running');

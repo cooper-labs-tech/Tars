@@ -20,16 +20,17 @@ import { DEV_URL, apiPort } from './ports.mjs';
  *
  * Asserted, in order:
  * 1. create_agent makes a codex agent (model-a, effort low), and start_agent starts codex on model-a;
- * 2. update_agent sets model-b and effort high while codex works: taken, said to apply at its next start on a new
- *    conversation, and codex is not touched (same process, no second launch);
- * 3. a move to claude while codex works is queued (2.0.7: never refused, never cutting the turn), and nothing is
- *    written; reverted while still queued, it is dropped, and codex is left alone;
- * 4. stopped and started again, codex runs on model-b;
+ * 2. update_agent sets model-b and effort high while codex works on the task start_agent gave it: queued behind that
+ *    run (2.0.7: a change of what the CLI runs waits until the agent is free), nothing written, and codex is not
+ *    touched (same process, no second launch);
+ * 3. a move to claude while codex works is queued behind that change (2.0.7: never refused, never cutting the turn),
+ *    and nothing is written; reverted while still queued, it is dropped, and codex is left alone;
+ * 4. stopped, the queued model and effort go in; started again, codex runs on model-b;
  * 5. stopped, the agent moves to claude (model opus, effort max, the stand-in as its CLI path): taken, said to apply
  *    at its next start on a new conversation; agents.json has it;
  * 6. started, claude runs with --model opus and --effort max, on a new session (no --resume);
- * 7. its effort changed to low once its turn has ended: taken, its conversation kept, and claude is restarted with
- *    --effort low, --resume <its session> and --fork-session;
+ * 7. its effort changed to low once its task is over: taken (or queued for the moment its run is released), its
+ *    conversation kept, and claude is restarted with --effort low, --resume <its session> and --fork-session;
  * 8. refused, and nothing written, for a setting outside the inference ones (2.0.7: those any agent changes): the
  *    worker changing it (worker_may_not_update), the orchestrator changing an agent of another project
  *    (other_project), and the orchestrator changing itself (orchestrator_settings).
@@ -218,22 +219,23 @@ setInterval(() => {}, 1 << 30);
       const first = launchesOf(id, 'codex')[0];
       expect(first.argv.join(' ')).toContain('--model model-a');
 
-      // ── 2. Model and effort changed while codex works: at its next start, codex untouched ──
+      // ── 2. Model and effort changed while codex works on its task: queued behind the run, nothing written, codex untouched ──
       const tuned = await lead('update_agent', { id, model: 'model-b', effort: 'high' });
       keep({ tuned, afterTuned: recordOf(id) });
       expect(tuned.isError, tuned.text).toBe(false);
-      expect(tuned.text).toMatch(/next start/);
-      expect(tuned.text).toMatch(/new conversation/);
-      await expect.poll(() => recordOf(id), { timeout: 10_000 }).toMatchObject({ provider: 'codex', model: 'model-b', effort: 'high' });
+      expect(tuned.text).toMatch(/\bqueued\b/);
+      expect(tuned.text).toMatch(/the delegated run it holds ends/);
+      expect(recordOf(id)).toMatchObject({ provider: 'codex', model: 'model-a', effort: 'low' });
       expect(alive(first.pid)).toBe(true);
       expect(launchesOf(id, 'codex')).toHaveLength(1);
 
-      // ── 3. A move to claude while codex works: queued, nothing written; reverted while queued, dropped ──
+      // ── 3. A move to claude while codex works: queued behind that change, nothing written; reverted while queued, dropped ──
       const tooSoon = await lead('update_agent', { id, provider: 'claude' });
       keep({ tooSoon, afterTooSoon: recordOf(id) });
       expect(tooSoon.isError).toBe(false);
       expect(tooSoon.text).toMatch(/\bqueued\b/);
-      expect(recordOf(id)).toMatchObject({ provider: 'codex', model: 'model-b' });
+      expect(tooSoon.text).toMatch(/the change queued before it/);
+      expect(recordOf(id)).toMatchObject({ provider: 'codex', model: 'model-a' });
       expect(alive(first.pid)).toBe(true);
       const queuedChange = /\bchg-[0-9a-f]{8}\b/.exec(tooSoon.text)?.[0];
       expect(queuedChange).toBeTruthy();
@@ -241,12 +243,13 @@ setInterval(() => {}, 1 << 30);
       keep({ dropped });
       expect(dropped.isError).toBe(false);
       expect(dropped.text).toContain('cancelled');
-      expect(recordOf(id)).toMatchObject({ provider: 'codex', model: 'model-b' });
+      expect(recordOf(id)).toMatchObject({ provider: 'codex', model: 'model-a' });
       expect(alive(first.pid)).toBe(true);
 
-      // ── 4. Stopped and started again: codex runs on model-b ──
+      // ── 4. Stopped: the queued model and effort go in; started again, codex runs on model-b ──
       expect((await lead('stop_agent', { id, reason: 'restart it on its new model' })).isError).toBe(false);
       await expect.poll(() => alive(first.pid), { timeout: 30_000 }).toBe(false);
+      await expect.poll(() => recordOf(id), { timeout: 15_000 }).toMatchObject({ provider: 'codex', model: 'model-b', effort: 'high' });
       expect((await lead('start_agent', { id, prompt: 'CODEX>> second task' })).isError).toBe(false);
       await expect.poll(() => launchesOf(id, 'codex').length, { timeout: 30_000 }).toBe(2);
       const second = launchesOf(id, 'codex')[1];
@@ -264,18 +267,25 @@ setInterval(() => {}, 1 << 30);
       await expect.poll(() => recordOf(id), { timeout: 10_000 }).toMatchObject({ provider: 'claude', model: 'opus', effort: 'max', cliPath: claudeCli });
 
       // ── 6. Started: claude on opus at max, a new session ──
-      expect((await lead('start_agent', { id, prompt: 'CLAUDE>> third task' })).isError).toBe(false);
+      const third = await lead('start_agent', { id, prompt: 'CLAUDE>> third task' });
+      expect(third.isError).toBe(false);
+      const thirdTask = /\bt-[0-9a-f]{8}\b/.exec(third.text)?.[0];
+      expect(thirdTask, third.text).toBeTruthy();
       await expect.poll(() => launchesOf(id, 'claude').length, { timeout: 60_000 }).toBe(1);
       const onClaude = launchesOf(id, 'claude')[0];
       expect(onClaude).toMatchObject({ model: 'opus', effort: 'max', resume: null });
       await expect.poll(async () => (await agentNow(id))?.currentSessionId ?? null, { timeout: 60_000 }).toBe(onClaude.sid);
       await expect.poll(async () => (await agentNow(id))?.status, { timeout: 60_000 }).toMatch(/^(idle|completed|waiting)$/);
+      // Its task over, as the ledger closes it once its turn's end is read (a moment after the status, under load more).
+      await expect.poll(async () => (await lead('task_status', { taskId: thirdTask })).text, { timeout: 60_000 }).toMatch(/: completed\b/);
 
       // ── 7. Its effort changed at rest: restarted on low, on its conversation ──
+      // Applied at once; or, in the moment between its task's close and the release of the run (its answer being read),
+      // queued behind that run and applied as it ends. Either way, the same restart.
       const lowered = await lead('update_agent', { id, effort: 'low' });
       keep({ lowered });
       expect(lowered.isError, lowered.text).toBe(false);
-      expect(lowered.text).toMatch(/same conversation/);
+      expect(lowered.text).toMatch(/same conversation|the delegated run it holds ends/);
       await expect.poll(() => launchesOf(id, 'claude').length, { timeout: 60_000 }).toBe(2);
       const restarted = launchesOf(id, 'claude')[1];
       keep({ claudeLaunches: launchesOf(id, 'claude') });

@@ -51,7 +51,8 @@ vi.mock('electron', () => ({
 // spawns through it.
 vi.mock('../../../electron/utils/broadcast', () => ({ broadcastToAllWindows: vi.fn() }));
 vi.mock('../../../electron/utils/agents-tick', () => ({ scheduleTick: vi.fn() }));
-vi.mock('../../../electron/services/agent-events', () => ({ emitAgentStatus: vi.fn() }));
+// agentStatusEmitter too: agent-routes reaches chat-runners (restartRunnersOf, 2.0.7), whose kanban routes listen on it.
+vi.mock('../../../electron/services/agent-events', () => ({ emitAgentStatus: vi.fn(), agentStatusEmitter: new EventEmitter() }));
 vi.mock('../../../electron/services/tasmania-client', () => ({
   getTasmaniaStatus: vi.fn(async () => ({ status: 'stopped' })),
 }));
