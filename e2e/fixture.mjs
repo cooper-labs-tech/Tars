@@ -924,6 +924,14 @@ export async function removeHome(dir, roots = sandboxRoots()) {
  * Waits until every agent to be shown running has its CLI in its terminal,
  * which is when autostart has done writing its status, then sets the
  * statuses on the app's own agent map and pushes a tick, as a hook would.
+ *
+ * And announces each as a hook's status post does (emitAgentStatus:
+ * `status:<id>` and `fleet-change`), so what watches the fleet sees it now:
+ * keep-awake syncs on that event, else on its 30 s timer. Unannounced, a page
+ * photographed in the first 30 s of a worker (settings-general alone, or after
+ * a failure restarted the worker) read "sleeps as usual · no agent is
+ * working", where the reference reads "awake now · 4 agents working" (QA,
+ * 23/11).
  */
 export async function settleFleet(app, { cwd = process.cwd(), statuses = SWEEP_STATUSES, timeout = 90_000 } = {}) {
   const dist = path.resolve(cwd, 'electron', 'dist');
@@ -947,9 +955,12 @@ export async function settleFleet(app, { cwd = process.cwd(), statuses = SWEEP_S
   await app.evaluate((_electron, { dist, statuses }) => {
     const req = process.mainModule.require;
     const { agents } = req(`${dist}/core/agent-manager.js`);
+    const { emitAgentStatus } = req(`${dist}/services/agent-events.js`);
     for (const [id, status] of Object.entries(statuses)) {
       const agent = agents.get(id);
-      if (agent) agent.status = status;
+      if (!agent) continue;
+      agent.status = status;
+      emitAgentStatus(id);
     }
     req(`${dist}/utils/agents-tick.js`).scheduleTick();
   }, { dist, statuses });
