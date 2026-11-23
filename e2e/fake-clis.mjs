@@ -500,7 +500,8 @@ export async function run() {
     out(`\n● ${answer.split('\n')[0]}\n\n> `);
     if (kind === 'gemini') hook('AfterAgent', { prompt: text, prompt_response: answer, stop_hook_active: false });
     else hook('Stop', { stop_hook_active: false, last_assistant_message: answer, permission_mode: permissionMode });
-    if (kind !== 'claude') hook('Notification', { notification_type: 'idle_prompt', message: 'waiting for your input' });
+    // grok's hooks are Claude Code's (1.0.92): no idle prompt right after a turn, as claude, and none in its probe's records.
+    if (kind !== 'claude' && kind !== 'grok') hook('Notification', { notification_type: 'idle_prompt', message: 'waiting for your input' });
   }
 
   hook('SessionStart', { source: opts.resume ? 'resume' : 'startup', model: opts.model, permission_mode: permissionMode });
