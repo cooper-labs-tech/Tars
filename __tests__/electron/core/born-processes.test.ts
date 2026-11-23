@@ -73,6 +73,18 @@ import {
  */
 
 const ADDRESS = 'http://127.0.0.1:31415';
+/**
+ * The agent id of a case that starts processes, this test process's own (14): what another run left, or starts on
+ * another bench at the same moment, carries another id and is never counted. The containers' cases keep theirs: they
+ * start no process.
+ */
+const agent = (n: number) => `agent-born-${n}-${process.pid}`;
+/**
+ * What keeps a fake of this file running (13): a timer that ends it once the test process that started it is gone,
+ * checked by that process's pid, never by a pattern (15). The fakes are orphans by design, reparented to launchd or
+ * init, so a run whose worker died before its afterEach left them running for good, tagged as an agent's.
+ */
+const OWNED = `setInterval(() => { try { process.kill(${process.pid}, 0); } catch { process.exit(0); } }, 500)`;
 const started: Array<{ pid?: number }> = [];
 afterEach(() => {
   for (const c of started.splice(0)) { try { process.kill(c.pid!, 'SIGKILL'); } catch { /* gone */ } }
@@ -92,7 +104,7 @@ function detached(env: Record<string, string>, opts: { deafToTerm?: boolean; fil
   const flag = path.join(process.env.TMPDIR || os.tmpdir(), `tars-born-ready-${process.pid}-${Math.random().toString(36).slice(2)}`);
   const deaf = opts.deafToTerm ? `process.on('SIGTERM', () => {}); require('fs').writeFileSync(${JSON.stringify(flag)}, '1');` : '';
   const file = opts.file ?? process.execPath;
-  const args = opts.args ?? ['-e', `${deaf} setInterval(() => {}, 1 << 30);`];
+  const args = opts.args ?? ['-e', `${deaf} ${OWNED};`];
   const launcher = `const c = require('child_process').spawn(${JSON.stringify(file)}, ${JSON.stringify(args)}, { detached: true, stdio: 'ignore', env: ${JSON.stringify({ PATH: process.env.PATH ?? '', ...env })} }); c.unref(); process.stdout.write(String(c.pid));`;
   const child: Born = { pid: Number(execFileSync(process.execPath, ['-e', launcher], { env: { PATH: process.env.PATH ?? '' } }).toString()) };
   started.push(child);
@@ -163,12 +175,12 @@ const posix = describe.skipIf(process.platform === 'win32');
 
 posix('the birth tag, on this machine', () => {
   it('1, 2. finds a detached process of the agent and of this Tars, and nothing of another Tars or untagged', async () => {
-    const mine = detached({ CLAUDE_AGENT_ID: 'agent-born-1', CLAUDE_MGR_API_URL: ADDRESS });
-    const sandbox = detached({ CLAUDE_AGENT_ID: 'agent-born-1', CLAUDE_MGR_API_URL: 'http://127.0.0.1:31499' });
-    const untagged = detached({ NOTE: 'agent-born-1' });
+    const mine = detached({ CLAUDE_AGENT_ID: agent(1), CLAUDE_MGR_API_URL: ADDRESS });
+    const sandbox = detached({ CLAUDE_AGENT_ID: agent(1), CLAUDE_MGR_API_URL: 'http://127.0.0.1:31499' });
+    const untagged = detached({ NOTE: agent(1) });
     let found: BornProcess[] | undefined;
     await until(async () => { found = await readBornProcesses({ address: ADDRESS }); return !!found?.some(p => p.pid === mine.pid); });
-    const ofAgent = found!.filter(p => p.agentId === 'agent-born-1').map(p => p.pid);
+    const ofAgent = found!.filter(p => p.agentId === agent(1)).map(p => p.pid);
     expect(ofAgent).toContain(mine.pid);
     expect(ofAgent).not.toContain(sandbox.pid);
     expect(ofAgent).not.toContain(untagged.pid);
@@ -176,13 +188,13 @@ posix('the birth tag, on this machine', () => {
   });
 
   it('5. ends them by pid, SIGKILL after the grace for one deaf to SIGTERM, and keeps another agent\'s', async () => {
-    const polite = detached({ CLAUDE_AGENT_ID: 'agent-born-2', CLAUDE_MGR_API_URL: ADDRESS });
-    const deaf = detached({ CLAUDE_AGENT_ID: 'agent-born-2', CLAUDE_MGR_API_URL: ADDRESS }, { deafToTerm: true });
-    const other = detached({ CLAUDE_AGENT_ID: 'agent-born-3', CLAUDE_MGR_API_URL: ADDRESS });
-    await until(async () => ((await readBornProcesses({ address: ADDRESS })) ?? []).filter(p => p.agentId === 'agent-born-2').length === 2);
+    const polite = detached({ CLAUDE_AGENT_ID: agent(2), CLAUDE_MGR_API_URL: ADDRESS });
+    const deaf = detached({ CLAUDE_AGENT_ID: agent(2), CLAUDE_MGR_API_URL: ADDRESS }, { deafToTerm: true });
+    const other = detached({ CLAUDE_AGENT_ID: agent(3), CLAUDE_MGR_API_URL: ADDRESS });
+    await until(async () => ((await readBornProcesses({ address: ADDRESS })) ?? []).filter(p => p.agentId === agent(2)).length === 2);
     await deafReady(deaf);
     const began = Date.now();
-    const result = await endBornProcesses('agent-born-2', { address: ADDRESS, graceMs: 600 });
+    const result = await endBornProcesses(agent(2), { address: ADDRESS, graceMs: 600 });
     expect(result.unknown).toBe(false);
     expect(result.ended.sort()).toEqual([polite.pid, deaf.pid].sort());
     expect(await until(() => !alive(polite.pid!) && !alive(deaf.pid!))).toBe(true);
@@ -191,13 +203,13 @@ posix('the birth tag, on this machine', () => {
   });
 
   it('5. does not kill a pid that is no longer the agent\'s by the time of the SIGKILL', async () => {
-    const deaf = detached({ CLAUDE_AGENT_ID: 'agent-born-4', CLAUDE_MGR_API_URL: ADDRESS }, { deafToTerm: true });
+    const deaf = detached({ CLAUDE_AGENT_ID: agent(4), CLAUDE_MGR_API_URL: ADDRESS }, { deafToTerm: true });
     await until(async () => !!((await readBornProcesses({ address: ADDRESS })) ?? []).some(p => p.pid === deaf.pid));
     await deafReady(deaf);
     let reads = 0;
     // The second read (before the SIGKILL) says the pid is another process's now.
     const read = async () => (++reads === 1 ? readBornProcesses({ address: ADDRESS }) : []);
-    const result = await endBornProcesses('agent-born-4', { address: ADDRESS, graceMs: 300, read });
+    const result = await endBornProcesses(agent(4), { address: ADDRESS, graceMs: 300, read });
     expect(result.ended).toEqual([]);
     // A SIGKILL takes a moment to land, and the orphan is reaped as soon as it does.
     expect(await until(() => !alive(deaf.pid!), 500)).toBe(false);
@@ -206,10 +218,10 @@ posix('the birth tag, on this machine', () => {
   it('4. keeps an ansible run of the agent alive, and says it', async () => {
     const dir = fs.mkdtempSync(path.join(process.env.TMPDIR || os.tmpdir(), 'tars-born-'));
     const fake = path.join(dir, 'ansible-playbook');
-    fs.writeFileSync(fake, `#!${process.execPath}\nsetInterval(() => {}, 1 << 30);\n`, { mode: 0o755 });
-    const run = detached({ CLAUDE_AGENT_ID: 'agent-born-5', CLAUDE_MGR_API_URL: ADDRESS }, { file: fake, args: ['site.yml'] });
+    fs.writeFileSync(fake, `#!${process.execPath}\n${OWNED};\n`, { mode: 0o755 });
+    const run = detached({ CLAUDE_AGENT_ID: agent(5), CLAUDE_MGR_API_URL: ADDRESS }, { file: fake, args: ['site.yml'] });
     await until(async () => !!((await readBornProcesses({ address: ADDRESS })) ?? []).some(p => p.pid === run.pid));
-    const result = await endBornProcesses('agent-born-5', { address: ADDRESS, graceMs: 300 });
+    const result = await endBornProcesses(agent(5), { address: ADDRESS, graceMs: 300 });
     expect(result.ended).toEqual([]);
     expect(result.spared.map(p => p.pid)).toEqual([run.pid]);
     expect(alive(run.pid!)).toBe(true);
@@ -219,23 +231,30 @@ posix('the birth tag, on this machine', () => {
   it('8. keeps what a kept ansible run works through: its ssh child, as the Audit\'s probe ran it', async () => {
     const dir = fs.mkdtempSync(path.join(process.env.TMPDIR || os.tmpdir(), 'tars-born-'));
     const ssh = path.join(dir, 'ssh');
-    fs.writeFileSync(ssh, `#!${process.execPath}\nsetInterval(() => {}, 1 << 30);\n`, { mode: 0o755 });
+    fs.writeFileSync(ssh, `#!${process.execPath}\n${OWNED};\n`, { mode: 0o755 });
     const childPid = path.join(dir, 'child.pid');
     const fake = path.join(dir, 'ansible-playbook');
     fs.writeFileSync(fake, `#!${process.execPath}
 const c = require('child_process').spawn(${JSON.stringify(ssh)}, ['-o', 'ControlMaster=auto', 'host'], { stdio: 'ignore' });
 require('fs').writeFileSync(${JSON.stringify(childPid)}, String(c.pid));
-setInterval(() => {}, 1 << 30);
+${OWNED};
 `, { mode: 0o755 });
-    const run = detached({ CLAUDE_AGENT_ID: 'agent-born-10', CLAUDE_MGR_API_URL: ADDRESS }, { file: fake, args: ['site.yml'] });
-    expect(await until(() => fs.existsSync(childPid) && fs.readFileSync(childPid, 'utf8').length > 0)).toBe(true);
-    const child = { pid: Number(fs.readFileSync(childPid, 'utf8')) };
+    const run = detached({ CLAUDE_AGENT_ID: agent(10), CLAUDE_MGR_API_URL: ADDRESS }, { file: fake, args: ['site.yml'] });
+    // Registered before its pid is known (13): a case that fails or times out before reading it ends the ssh too.
+    let sshPid: number | undefined;
+    const child = {
+      get pid() {
+        if (!sshPid) { try { sshPid = Number(fs.readFileSync(childPid, 'utf8')) || undefined; } catch { /* not written yet */ } }
+        return sshPid;
+      },
+    };
     started.push(child);
-    await until(async () => ((await readBornProcesses({ address: ADDRESS })) ?? []).filter(p => p.agentId === 'agent-born-10').length === 2);
-    const result = await endBornProcesses('agent-born-10', { address: ADDRESS, graceMs: 300 });
+    expect(await until(() => !!child.pid)).toBe(true);
+    await until(async () => ((await readBornProcesses({ address: ADDRESS })) ?? []).filter(p => p.agentId === agent(10)).length === 2);
+    const result = await endBornProcesses(agent(10), { address: ADDRESS, graceMs: 300 });
     expect(result.ended).toEqual([]);
-    expect(result.spared.map(p => p.pid).sort()).toEqual([run.pid, child.pid].sort());
-    expect(alive(run.pid) && alive(child.pid)).toBe(true);
+    expect(result.spared.map(p => p.pid).sort()).toEqual([run.pid, child.pid!].sort());
+    expect(alive(run.pid) && alive(child.pid!)).toBe(true);
     fs.rmSync(dir, { recursive: true, force: true });
   });
 
@@ -243,18 +262,18 @@ setInterval(() => {}, 1 << 30);
     const dir = fs.mkdtempSync(path.join(process.env.TMPDIR || os.tmpdir(), 'tars-born-'));
     const grandPid = path.join(dir, 'grand.pid');
     // The task: a tagged node process (as a Homebrew or uv python is), under a shell macOS shows no environment of.
-    const task = `"${process.execPath}" -e "require('fs').writeFileSync(process.argv[1], String(process.pid)); setInterval(() => {}, 1 << 30)" "${grandPid}"; true`;
+    const task = `"${process.execPath}" -e "require('fs').writeFileSync(process.argv[1], String(process.pid)); ${OWNED}" "${grandPid}"; true`;
     const fake = path.join(dir, 'ansible-playbook');
     fs.writeFileSync(fake, `#!${process.execPath}
 require('child_process').spawn('/bin/sh', ['-c', ${JSON.stringify(task)}], { stdio: 'ignore' });
-setInterval(() => {}, 1 << 30);
+${OWNED};
 `, { mode: 0o755 });
-    const run = detached({ CLAUDE_AGENT_ID: 'agent-born-13', CLAUDE_MGR_API_URL: ADDRESS }, { file: fake, args: ['site.yml'] });
+    const run = detached({ CLAUDE_AGENT_ID: agent(13), CLAUDE_MGR_API_URL: ADDRESS }, { file: fake, args: ['site.yml'] });
     expect(await until(() => fs.existsSync(grandPid) && fs.readFileSync(grandPid, 'utf8').length > 0)).toBe(true);
     const grand = { pid: Number(fs.readFileSync(grandPid, 'utf8')) };
     started.push(grand);
     await until(async () => !!((await readBornProcesses({ address: ADDRESS })) ?? []).some(p => p.pid === grand.pid));
-    const result = await endBornProcesses('agent-born-13', { address: ADDRESS, graceMs: 300 });
+    const result = await endBornProcesses(agent(13), { address: ADDRESS, graceMs: 300 });
     expect(result.ended).toEqual([]);
     expect(result.spared.map(p => p.pid)).toContain(grand.pid);
     expect(await until(() => !alive(grand.pid), 500)).toBe(false);
@@ -263,21 +282,21 @@ setInterval(() => {}, 1 << 30);
   });
 
   it('9. leaves out a terminal the agent got again while the stop ran, and still ends the rest', async () => {
-    const tag = { CLAUDE_AGENT_ID: 'agent-born-11', CLAUDE_MGR_API_URL: ADDRESS };
+    const tag = { CLAUDE_AGENT_ID: agent(11), CLAUDE_MGR_API_URL: ADDRESS };
     // The new terminal: a shell whose child is its CLI, both tagged as agent-pty.ts tags them; node for both, since
     // macOS shows no environment of a platform binary (/bin/sh, sleep).
-    const cliScript = `require('child_process').spawn(process.execPath, ['-e', 'setInterval(() => {}, 1 << 30)'], { stdio: 'ignore' }).pid`;
-    const shell = detached(tag, { args: ['-e', `require('fs').writeFileSync(process.argv[1], String(${cliScript})); setInterval(() => {}, 1 << 30);`, path.join(process.env.TMPDIR || os.tmpdir(), `tars-born-cli-${process.pid}`)] });
+    const cliScript = `require('child_process').spawn(process.execPath, ['-e', '${OWNED}'], { stdio: 'ignore' }).pid`;
+    const shell = detached(tag, { args: ['-e', `require('fs').writeFileSync(process.argv[1], String(${cliScript})); ${OWNED};`, path.join(process.env.TMPDIR || os.tmpdir(), `tars-born-cli-${process.pid}`)] });
     const cliFile = path.join(process.env.TMPDIR || os.tmpdir(), `tars-born-cli-${process.pid}`);
     expect(await until(() => fs.existsSync(cliFile) && fs.readFileSync(cliFile, 'utf8').trim().length > 0)).toBe(true);
     const cli = { pid: Number(fs.readFileSync(cliFile, 'utf8').trim()) };
     started.push(cli);
     fs.rmSync(cliFile, { force: true });
     const old = detached(tag);
-    await until(async () => ((await readBornProcesses({ address: ADDRESS })) ?? []).filter(p => p.agentId === 'agent-born-11').length === 3);
+    await until(async () => ((await readBornProcesses({ address: ADDRESS })) ?? []).filter(p => p.agentId === agent(11)).length === 3);
     let asked = 0;
     // Asked after the read, as the stop asks for the agent's terminal at that moment.
-    const result = await endBornProcesses('agent-born-11', { address: ADDRESS, graceMs: 300, terminal: () => { asked++; return shell.pid; } });
+    const result = await endBornProcesses(agent(11), { address: ADDRESS, graceMs: 300, terminal: () => { asked++; return shell.pid; } });
     expect(asked).toBeGreaterThan(0);
     expect(result.ended).toEqual([old.pid]);
     expect(await until(() => !alive(old.pid))).toBe(true);
@@ -285,7 +304,7 @@ setInterval(() => {}, 1 << 30);
   });
 
   it('10. keeps a shared daemon by its exact executable path, and ends the same program elsewhere', async () => {
-    const tag = { CLAUDE_AGENT_ID: 'agent-born-12', CLAUDE_MGR_API_URL: ADDRESS };
+    const tag = { CLAUDE_AGENT_ID: agent(12), CLAUDE_MGR_API_URL: ADDRESS };
     // node stands for the daemon: the list names its executable, as SHARED_DAEMONS names colima's (a link to it
     // resolved: the next describe). Not sleep: macOS shows no environment of a platform binary, so no tag.
     const dir = fs.mkdtempSync(path.join(process.env.TMPDIR || os.tmpdir(), 'tars-born-'));
@@ -295,9 +314,9 @@ setInterval(() => {}, 1 << 30);
     fs.copyFileSync(process.execPath, copy, fs.constants.COPYFILE_FICLONE);
     fs.chmodSync(copy, 0o755);
     const daemon = detached(tag);
-    const sameNameElsewhere = detached(tag, { file: copy, args: ['-e', 'setInterval(() => {}, 1 << 30);'] });
-    await until(async () => ((await readBornProcesses({ address: ADDRESS })) ?? []).filter(p => p.agentId === 'agent-born-12').length === 2);
-    const result = await endBornProcesses('agent-born-12', { address: ADDRESS, graceMs: 300, shared });
+    const sameNameElsewhere = detached(tag, { file: copy, args: ['-e', `${OWNED};`] });
+    await until(async () => ((await readBornProcesses({ address: ADDRESS })) ?? []).filter(p => p.agentId === agent(12)).length === 2);
+    const result = await endBornProcesses(agent(12), { address: ADDRESS, graceMs: 300, shared });
     expect(result.spared.map(p => [p.pid, p.why])).toEqual([[daemon.pid, 'a shared daemon (a test daemon)']]);
     expect(result.ended).toEqual([sameNameElsewhere.pid]);
     expect(alive(daemon.pid)).toBe(true);
@@ -307,11 +326,11 @@ setInterval(() => {}, 1 << 30);
 
 describe.skipIf(process.platform !== 'darwin')('10. lsof failing, on macOS', () => {
   it('keeps, and says, a process whose executable could not be read, rather than ending a shared daemon', async () => {
-    const daemon = detached({ CLAUDE_AGENT_ID: 'agent-born-14', CLAUDE_MGR_API_URL: ADDRESS });
+    const daemon = detached({ CLAUDE_AGENT_ID: agent(14), CLAUDE_MGR_API_URL: ADDRESS });
     await until(async () => !!((await readBornProcesses({ address: ADDRESS })) ?? []).some(p => p.pid === daemon.pid));
     // The daemon is a shared one by its executable, but the lsof that would say so cannot run.
     const shared = sharedDaemonPaths([{ name: 'a test daemon', paths: [process.execPath] }]);
-    const result = await endBornProcesses('agent-born-14', { address: ADDRESS, graceMs: 300, shared, lsof: '/nonexistent/lsof' });
+    const result = await endBornProcesses(agent(14), { address: ADDRESS, graceMs: 300, shared, lsof: '/nonexistent/lsof' });
     expect(result.ended).toEqual([]);
     expect(result.spared.map(p => [p.pid, p.why])).toEqual([[daemon.pid, 'its executable could not be read (it may be a shared daemon)']]);
     expect(alive(daemon.pid)).toBe(true);
