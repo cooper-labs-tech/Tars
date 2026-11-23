@@ -1,5 +1,7 @@
 import { test, expect, _electron as electron, type ElectronApplication, type Page } from '@playwright/test';
 import * as fs from 'fs';
+import * as http from 'http';
+import type { AddressInfo } from 'net';
 import * as path from 'path';
 import { randomBytes } from 'crypto';
 import { execFileSync, spawn, type ChildProcessWithoutNullStreams } from 'child_process';
@@ -29,10 +31,20 @@ import { DEV_URL, apiPort } from './ports.mjs';
  *    5b. (QA's M7, 20/11) the address typed while the view still reads its settings is lost: the field took typing
  *    before them, its Enter was dropped, and the read that came in then wiped it. The spec slows that read by 3 s, as a
  *    loaded machine does, and types only once the field is enabled.
+ *    5c. (QA, the Audit's L4 on #599, 23/11) the upload view's plain http switch saves nothing when it is moved: a
+ *    public http address main refused stays refused while the switch says it is allowed.
+ *    5d. (QA, the Audit's L3 and L5 on #599, 23/11) the deletion's states, with a back-office stand-in that registers
+ *    this install and refuses its DELETE (404): the refusal is not said, or the deletion is not kept owed ("Delete
+ *    again", "Give up this deletion"); a deletion, a give-up or an acknowledgment that main fails (a full disk: its own
+ *    handler wrapped to throw ENOSPC, then put back) is not said in its box ("not deleted: ...", "not given up: ...",
+ *    "not acknowledged: ... OK tries again."), or the view does not read main again after it, so what main recorded
+ *    (a give-up that removed the install, then failed) does not come back as the deletion cleared by itself.
  * 6. Never record closed models is not on in a Tars that never set it, or it says nothing of the providers' terms.
  * 7. An uncaught error in the page.
  * Red on #596's head (caefc8874), which has no window: 6 and 1 find no Inference endpoints in Settings.
  * Red on #599 at edd6070bb (the view before M7's fix): 5b, every run (its field is never off, the address is wiped).
+ * Red on #599 at 704038b2d (before 03b29c61f), both runs: 5c (nothing saved, the refusal still said) and 5d's three
+ * failures (none said, main not read again after the deletion or the acknowledgment, three uncaught rejections).
  * The artefact: values.json (each step's views, the stand-ins' request logs as seen), step screenshots, the app's log.
  */
 
@@ -61,6 +73,24 @@ test('the traces window: an endpoint added with its key never shown back, plain 
   const secret = `Zq9${randomBytes(5).toString('hex')}Wv7`;
   const standin = await startStandIn({ key, log: endpointLog });
   const moved = await startStandIn({ log: movedLog });
+  // The back-office (5d): registers this install, takes what is sent, and refuses the deletion (404).
+  const backOfficeLog = test.info().outputPath('back-office-requests.jsonl');
+  const backOffice = http.createServer((req, res) => {
+    const chunks: Buffer[] = [];
+    req.on('data', (c: Buffer) => chunks.push(c));
+    req.on('end', () => {
+      const route = (req.url ?? '').replace(/^\/traces/, '');
+      const [status, body]: [number, unknown] = req.method === 'POST' && route === '/v1/installs'
+        ? [201, { installId: 'e2e-install', token: `e2e-install-token-${randomBytes(6).toString('hex')}` }]
+        : req.method === 'DELETE' && route === '/v1/installs/me' ? [404, { error: 'not_found' }]
+          : req.method === 'POST' && route === '/v1/blobs/missing' ? [200, { missing: [] }]
+            : [200, {}];
+      fs.appendFileSync(backOfficeLog, `${JSON.stringify({ method: req.method, url: req.url, auth: req.headers.authorization ? 'present' : 'none', bytes: Buffer.concat(chunks).length, status })}\n`);
+      res.writeHead(status, { 'content-type': 'application/json' }).end(JSON.stringify(body));
+    });
+  });
+  await new Promise<void>(resolve => backOffice.listen(0, '127.0.0.1', () => resolve()));
+  const backOfficeUrl = `http://127.0.0.1:${(backOffice.address() as AddressInfo).port}/traces`;
 
   const agent = (id: string, name: string, extra: Record<string, unknown>) => ({
     id, name, character: 'robot', status: 'idle', permissionMode: 'bypass', projectPath: project, skills: [],
@@ -255,6 +285,125 @@ test('the traces window: an endpoint added with its key never shown back, plain 
     expect.soft(afterNewAddress.uploadConsentAt, 'the consent kept for a new address').toBeUndefined();
     await notice.getByRole('button', { name: 'Not now', exact: true }).click();
 
+    // 5c. The plain http switch saves when it is moved: a public http address main refused is taken with the leave.
+    type UploadSettings = { uploadUrl?: string; uploadAllowPlainHttp?: boolean; uploadConsentAt?: string; uploadDeletionOwed?: boolean };
+    type UploadState = { registered?: boolean; deletionOwed?: boolean; deletionCleared?: boolean };
+    const until = async <T>(read: () => Promise<T>, ok: (v: T) => boolean, ms: number): Promise<T> => {
+      const end = Date.now() + ms;
+      let v = await read();
+      while (!ok(v) && Date.now() < end) { await sleep(250); v = await read(); }
+      return v;
+    };
+    await address.fill('http://203.0.113.10/traces');
+    await address.press('Enter');
+    await expect(page.getByText('A public back-office address takes https.', { exact: false })).toBeVisible({ timeout: 15_000 });
+    const refusedPublic = await api<UploadSettings>('traces', 'settings');
+    await page.getByRole('switch', { name: 'Allow plain http to the back-office', exact: true }).click();
+    const leaveSaved = await until(() => api<UploadSettings>('traces', 'settings'), s => s.uploadAllowPlainHttp === true, 15_000);
+    await expect.soft(page.getByText('allowed by you: unencrypted', { exact: true }), 'the leave said once saved').toBeVisible({ timeout: 10_000 });
+    // The click blurs the field, whose own save (without the leave) is refused first: that refusal must not stay said.
+    await expect.soft(page.getByText('A public back-office address takes https.', { exact: false }), 'the refusal once saved').toHaveCount(0, { timeout: 10_000 });
+    await stepShot(page, '6b-plain-http-saved');
+    keep({ refusedPublic, leaveSaved });
+    expect.soft(refusedPublic.uploadUrl, 'the public http address saved without the leave').toBe('http://127.0.0.1:9/elsewhere');
+    expect.soft(leaveSaved, 'the switch moved: the address and its leave saved').toMatchObject({ uploadUrl: 'http://203.0.113.10/traces', uploadAllowPlainHttp: true });
+    // Saved, it is a new address, whose consent is asked (not given here); a view that saved nothing asks nothing.
+    if (await notice.waitFor({ state: 'visible', timeout: 10_000 }).then(() => true, () => false)) await notice.getByRole('button', { name: 'Not now', exact: true }).click();
+
+    // 5d. The deletion, with the back-office stand-in: consent to it, a pass registers this install, the DELETE is refused.
+    await address.fill(backOfficeUrl);
+    await address.press('Enter');
+    await expect(notice, 'the back-office address saved, its consent asked').toBeVisible({ timeout: 15_000 });
+    await notice.getByRole('button', { name: 'Upload what I opt in', exact: true }).click();
+    await expect(page.getByText(/^consent given /)).toBeVisible({ timeout: 15_000 });
+    // The pass main runs every 5 minutes, run now.
+    const pass = await app.evaluate((_e, dist) => process.mainModule!.require(`${dist}/services/traces-runtime.js`).traceUploader().runOnce(), dist);
+    const registered = await until(() => api<UploadState>('traces', 'uploadState'), s => s.registered === true, 15_000);
+    keep({ pass, registered });
+    expect(registered.registered, `this install registered with the back-office stand-in (the pass: ${JSON.stringify(pass)})`).toBe(true);
+    const deletion = page.getByRole('region', { name: 'Delete everything this Tars sent', exact: true });
+    const cleared = page.getByRole('region', { name: 'Deletion cleared', exact: true });
+    const confirmDeletion = async () => {
+      const dialog = page.getByRole('dialog').filter({ hasText: 'Delete everything this Tars sent?' });
+      await dialog.getByRole('button', { name: 'Delete everything', exact: true }).click({ timeout: 15_000 });
+    };
+    await deletion.getByRole('button', { name: 'Delete everything this Tars sent', exact: true }).click();
+    await confirmDeletion();
+    await expect(deletion, 'the refusal said').toContainText('not deleted: The back-office answered 404 not_found', { timeout: 30_000 });
+    await expect(deletion.getByRole('button', { name: 'Give up this deletion', exact: true }), 'the deletion kept owed').toBeVisible({ timeout: 15_000 });
+    const refused = { box: await deletion.innerText(), state: await api<UploadState>('traces', 'uploadState'), settings: await api<UploadSettings>('traces', 'settings'), asked: lines(backOfficeLog) };
+    await stepShot(page, '6c-deletion-refused-owed');
+    keep({ refused });
+    expect.soft(refused.box, 'the owed deletion asked again').toContain('Delete again');
+    expect.soft(refused.state, 'main keeps the deletion owed').toMatchObject({ deletionOwed: true });
+    expect.soft(refused.settings.uploadConsentAt, 'the consent withdrawn').toBeUndefined();
+    expect.soft(refused.asked.filter(r => r.method === 'DELETE').length, 'the DELETE asked of the back-office').toBe(1);
+
+    // Main's own handlers wrapped in place (as 5b), then put back: `traces:settings` counted, to see the view read main
+    // again after each failure, and a call main fails as on a full disk.
+    const handler = (channel: string, how: 'count' | 'fail' | 'fail-once-the-install-is-removed' | 'put back') => app!.evaluate(({ ipcMain }, { channel, how, dist }) => {
+      const handlers = (ipcMain as unknown as { _invokeHandlers: Map<string, (...args: unknown[]) => unknown> })._invokeHandlers;
+      const g = globalThis as Record<string, unknown>;
+      const kept = (g.__tarsQaHandlers ??= {}) as Record<string, (...args: unknown[]) => unknown>;
+      if (how === 'put back') { if (kept[channel]) handlers.set(channel, kept[channel]); delete kept[channel]; return; }
+      const real = kept[channel] ?? handlers.get(channel);
+      if (!real) throw new Error(`no ${channel} handler to wrap`);
+      kept[channel] = real;
+      if (how === 'count') {
+        g.__tarsQaReads = 0;
+        handlers.set(channel, (...args: unknown[]) => { g.__tarsQaReads = (g.__tarsQaReads as number) + 1; return real(...args); });
+        return;
+      }
+      const full = () => Object.assign(new Error('ENOSPC: no space left on device, write'), { code: 'ENOSPC' });
+      if (how === 'fail') { handlers.set(channel, () => { throw full(); }); return; }
+      // Main's give-up removes the install file first, then resets what was sent and the settings: the disk fills there.
+      const installFile = process.mainModule!.require(`${dist}/services/traces-runtime.js`).TRACES_INSTALL_FILE as string;
+      handlers.set(channel, () => { (process.mainModule!.require('fs') as typeof fs).rmSync(installFile, { force: true }); throw full(); });
+    }, { channel, how, dist });
+    const reads = () => app!.evaluate(() => (globalThis as Record<string, unknown>).__tarsQaReads as number);
+    const readAgain = async (before: number) => (await until(reads, n => n > before, 5_000)) - before;
+    await handler('traces:settings', 'count');
+
+    await handler('traces:deleteEverywhere', 'fail');
+    let before = await reads();
+    await deletion.getByRole('button', { name: 'Delete again', exact: true }).click();
+    await confirmDeletion();
+    await expect.soft(deletion, 'a deletion main fails, said').toContainText(/not deleted: [^\n]*ENOSPC: no space left on device, write\. Nothing was forgotten; try again\./, { timeout: 15_000 });
+    const deleteFailed = { readsAfter: await readAgain(before), box: '' };
+    await handler('traces:deleteEverywhere', 'put back');
+    await expect.soft(deletion.getByRole('button', { name: 'Give up this deletion', exact: true }), 'still owed, as main has it').toBeVisible();
+    deleteFailed.box = await deletion.innerText();
+    await stepShot(page, '6d-deletion-failed');
+
+    await handler('traces:abandonDeletion', 'fail-once-the-install-is-removed');
+    before = await reads();
+    await deletion.getByRole('button', { name: 'Give up this deletion', exact: true }).click();
+    await page.getByRole('dialog').filter({ hasText: 'Give up this deletion?' }).getByRole('button', { name: 'Give up the deletion', exact: true }).click({ timeout: 15_000 });
+    await expect.soft(deletion, 'a give-up main fails, said').toContainText(/not given up: [^\n]*ENOSPC: no space left on device, write/, { timeout: 15_000 });
+    const giveUpFailed = { readsAfter: await readAgain(before), box: '' };
+    await handler('traces:abandonDeletion', 'put back');
+    // What main recorded comes back: the install gone, the owed mark goes with it, the deletion cleared by itself.
+    await expect(cleared, 'the deletion cleared, read from main').toBeVisible({ timeout: 30_000 });
+    giveUpFailed.box = await deletion.innerText();
+    await stepShot(page, '6e-give-up-failed-cleared');
+
+    await handler('traces:ackDeletionCleared', 'fail');
+    before = await reads();
+    await cleared.getByRole('button', { name: 'OK', exact: true }).click();
+    await expect.soft(cleared, 'an acknowledgment main fails, said').toContainText(/not acknowledged: [^\n]*ENOSPC: no space left on device, write\. OK tries again\./, { timeout: 15_000 });
+    const ackFailed = { readsAfter: await readAgain(before), box: await cleared.innerText(), state: await api<UploadState>('traces', 'uploadState') };
+    await handler('traces:ackDeletionCleared', 'put back');
+    await handler('traces:settings', 'put back');
+    await stepShot(page, '6f-ack-failed');
+    keep({ deleteFailed, giveUpFailed, ackFailed });
+    expect.soft(deleteFailed.readsAfter, 'main read again after the failed deletion').toBeGreaterThan(0);
+    expect.soft(giveUpFailed.readsAfter, 'main read again after the failed give-up').toBeGreaterThan(0);
+    expect.soft(ackFailed.readsAfter, 'main read again after the failed acknowledgment').toBeGreaterThan(0);
+    expect.soft(ackFailed.state, 'main still has the cleared deletion to say').toMatchObject({ deletionCleared: true, deletionOwed: false });
+    // OK again, main taking it: the box goes.
+    await cleared.getByRole('button', { name: 'OK', exact: true }).click();
+    await expect(cleared, 'acknowledged').toHaveCount(0, { timeout: 15_000 });
+
     // 4. Lead moves the endpoint's address: the key goes, the owner approves the new one in the window, sets a key again.
     const repointed = await lead('endpoint_update', { id: added.id, base_url: moved.baseUrl });
     await openEndpoints();
@@ -290,6 +439,8 @@ test('the traces window: an endpoint added with its key never shown back, plain 
     await app?.close().catch(() => {});
     await standin.close();
     await moved.close();
+    backOffice.closeAllConnections();
+    backOffice.close();
     await removeHome(home);
   }
 });
