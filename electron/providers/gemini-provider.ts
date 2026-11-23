@@ -22,9 +22,11 @@ import { writeSharedJsonSync } from '../utils/shared-file';
 /** A session of gemini's own, as its hooks report it: a uuid. */
 const GEMINI_SESSION_ID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
-/** A permission mode onto gemini's --approval-mode (0.70.0 --help: default, auto_edit, yolo, plan); normal: none. */
-export function geminiApprovalMode(mode: AgentPermissionMode | undefined): 'plan' | 'auto_edit' | 'yolo' | null {
-  if (mode === 'plan') return 'plan';
+/**
+ * A permission mode onto gemini's --approval-mode (0.70.0 --help: default, auto_edit, yolo, plan); normal: none.
+ * No plan: Tars has no plan mode for gemini (plan-mode.ts), so a gemini agent in plan is refused before its line.
+ */
+export function geminiApprovalMode(mode: AgentPermissionMode | undefined): 'auto_edit' | 'yolo' | null {
   if (mode === 'auto') return 'auto_edit';
   if (mode === 'bypass') return 'yolo';
   return null;
