@@ -2,7 +2,7 @@ import * as os from 'os';
 import * as path from 'path';
 import * as fs from 'fs';
 import { execCliSync, cliFailureText, CliNotRunnableError } from './cli-exec';
-import type { AppSettings } from '../types';
+import type { AgentPermissionMode, AppSettings } from '../types';
 import { keyEnvFor } from '../services/cli-keys';
 import { DATA_DIR } from '../constants';
 import { handedSecondaryFolder } from '../utils/handed-folder';
@@ -18,6 +18,14 @@ import type {
 import { servedPathMatches, shellQuote } from './cli-provider';
 import { geminiRoleArgs } from '../services/mcp-roles';
 import { writeSharedJsonSync } from '../utils/shared-file';
+
+/** A permission mode onto gemini's --approval-mode (0.70.0 --help: default, auto_edit, yolo, plan); normal: none. */
+export function geminiApprovalMode(mode: AgentPermissionMode | undefined): 'plan' | 'auto_edit' | 'yolo' | null {
+  if (mode === 'plan') return 'plan';
+  if (mode === 'auto') return 'auto_edit';
+  if (mode === 'bypass') return 'yolo';
+  return null;
+}
 
 export class GeminiProvider implements CLIProvider {
   readonly id = 'gemini' as const;
@@ -59,7 +67,15 @@ export class GeminiProvider implements CLIProvider {
     const [allowFlag, ...allowed] = geminiRoleArgs(params.orchestratorMode === true, path.join(this.configDir, 'settings.json'));
     if (allowFlag) command += ` ${allowFlag} ${allowed.map(shellQuote).join(' ')}`;
 
-    // Gemini has no documented skip-permissions flag
+    // The agent's folder trusted for the session, written nowhere (gemini 0.70.0, measured 23/11): its folder trust is
+    // on by default, and in a folder never trusted it opened on its trust question, which took the first task typed.
+    command += ' --skip-trust';
+
+    // Its permission mode as gemini's approval mode (0.70.0, measured): in its default mode every tool call waited on
+    // a question, Tars's own MCP tools included, which nobody answers in an agent's terminal. Normal keeps gemini's
+    // default: it asks, as the user chose.
+    const approval = geminiApprovalMode(params.permissionMode);
+    if (approval) command += ` --approval-mode ${approval}`;
 
     // Secondary project (Gemini uses --include-directories), never ~/.tars-private (utils/handed-folder.ts)
     const secondary = handedSecondaryFolder(params.secondaryProjectPath);
