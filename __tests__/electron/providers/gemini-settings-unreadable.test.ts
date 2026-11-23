@@ -36,6 +36,9 @@ import { pinPlatform } from './win-fake-disk';
  * 9. Silence: the hooks not written and nothing said. The agent still starts, without Tars's hooks, so Tars hears
  *    neither its turns nor its answers: said in the log at Tars's start, and as a notice in the agent's output at each
  *    of its launches, which tries the hooks again first (a file fixed since needs no restart of Tars).
+ * 10. (Found by the mutation bench, after the code: its read-back check had no case.) A file Tars's edits cannot
+ *    express: a key written twice, which gemini reads as the last one while an edit lands in the first. Written all the
+ *    same, gemini would never see Tars's hooks or its allow-list there. Left as it is, and said.
  */
 
 let tmpDir: string;
@@ -156,6 +159,15 @@ describe("gemini's settings file and Tars's hooks", () => {
       });
     });
   }
+
+  it('10. a key written twice: the edit would land where gemini does not read, so the file is left as it is, and said', async () => {
+    const twice = '{\n  "security": { "auth": { "selectedType": "a" } },\n  "mcpServers": { "mine": { "command": "my-server" } },\n  "security": { "auth": { "selectedType": "oauth-personal" } }\n}\n';
+    seed(twice);
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    await (await provider()).configureHooks(hooksDir(), 'linux');
+    expect(read()).toBe(twice);
+    expect(warn.mock.calls.map((c) => c.join(' ')).join('\n')).toMatch(/read back differently/);
+  });
 
   it('6. a writer whose change lands while Tars writes: kept, and Tars\'s hooks made again on it', async () => {
     seed(USERS);

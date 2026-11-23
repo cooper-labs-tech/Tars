@@ -83,12 +83,16 @@ async function run(label: string, settings: string, port: number) {
     await page.evaluate(() => (window as unknown as Api).electronAPI.agent.start({ id: 'g1', prompt: '' }));
     const launches = path.join(home, 'gemini-launches.jsonl');
     await expect.poll(() => fs.existsSync(launches), { timeout: 30_000, message: 'the gemini agent never launched' }).toBe(true);
-    const output = ((await page.evaluate(() => (window as unknown as Api).electronAPI.agent.get('g1')))?.output ?? []).join('');
+    // The agent's kept output, where Tars's notices go (agentNotice): what /api/agents/:id/output and get_agent_output
+    // serve, and Logs once its terminal ends. While it runs, the window's pane shows its terminal's screen instead,
+    // which a notice of Tars's does not reach on main (the notices channel of #624 draws them there); recorded too.
+    const output = await app.evaluate((_e, { dist }) => ((process.mainModule!.require(`${dist}/core/agent-manager.js`).agents.get('g1')?.output ?? []) as string[]).join(''), { dist: path.resolve('electron', 'dist') });
+    const screen = ((await page.evaluate(() => (window as unknown as Api).electronAPI.agent.get('g1')))?.output ?? []).join('');
     await stepShot(page, `agents-${label}`);
     const after = fs.readFileSync(settingsFile, 'utf8');
     const notices = output.split(/\r?\n/).filter((l) => l.includes('[Tars]'));
     const logLines = log.join('').split('\n').filter((l) => /\[gemini\]/.test(l));
-    return { home, before: settings, after, notices, logLines, pageErrors };
+    return { home, before: settings, after, notices, noticesOnScreen: screen.split(/\r?\n/).filter((l) => l.includes('[Tars]')), logLines, pageErrors };
   } finally {
     await app.close().catch(() => { /* gone */ });
     await removeHome(home);
