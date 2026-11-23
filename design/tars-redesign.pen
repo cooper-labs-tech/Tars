@@ -913682,7 +913682,7 @@
                   "type": "text",
                   "id": "b0o535",
                   "fill": "$text-muted",
-                  "content": "giving up the deletion: its plain words, then its refusal when none is owed",
+                  "content": "giving up the deletion: its plain words, then its refusal when none is owed, or a give-up main could not finish",
                   "lineHeight": 1.4,
                   "fontFamily": "$font-mono",
                   "fontSize": 10,
@@ -913818,6 +913818,33 @@
                       "fontWeight": "normal"
                     }
                   ]
+                },
+                {
+                  "type": "frame",
+                  "id": "S9ri9U",
+                  "name": "state half",
+                  "gap": 6,
+                  "alignItems": "center",
+                  "children": [
+                    {
+                      "type": "rectangle",
+                      "id": "PVCsb",
+                      "name": "d",
+                      "fill": "$status-waiting",
+                      "width": 6,
+                      "height": 6
+                    },
+                    {
+                      "type": "text",
+                      "id": "L4hsfD",
+                      "fill": "$status-waiting",
+                      "content": "given up, though Tars could not finish: no space left on device",
+                      "lineHeight": 1.4,
+                      "fontFamily": "$font-mono",
+                      "fontSize": 10.5,
+                      "fontWeight": "normal"
+                    }
+                  ]
                 }
               ]
             },
@@ -913845,7 +913872,7 @@
                   "fill": "$text-secondary",
                   "textGrowth": "fixed-width",
                   "width": 400,
-                  "content": "When no deletion is owed, main refuses and says why; the window shows its reason under the box.",
+                  "content": "When no deletion is owed, main refuses and says why; the window shows its reason under the box. When main forgets the install and then fails, the window reads main again and says the deletion was given up, with the reason it could not finish.",
                   "lineHeight": 1.5,
                   "fontFamily": "$font-ui",
                   "fontSize": 12,
@@ -913924,7 +913951,7 @@
                           "type": "text",
                           "id": "tfX3U",
                           "fill": "$status-waiting",
-                          "content": "the deletion that waited for confirmation was cleared: this install's record is gone on the back-office",
+                          "content": "Tars forgot this install; the back-office never confirmed the deletion it waited for",
                           "lineHeight": 1.4,
                           "fontFamily": "$font-mono",
                           "fontSize": 10.5,
@@ -913938,7 +913965,7 @@
                       "fill": "$text-secondary",
                       "textGrowth": "fixed-width",
                       "width": 600,
-                      "content": "Sharing may start again; what was recorded before the deletion is still never sent.",
+                      "content": "What this install sent may still be on the back-office: ask whoever runs it to delete it. Sharing may start again, as a new install; what was recorded before the deletion is still never sent.",
                       "lineHeight": 1.4,
                       "fontFamily": "$font-ui",
                       "fontSize": 11.5,
@@ -914025,7 +914052,7 @@
                           "type": "text",
                           "id": "tjjYv",
                           "fill": "$status-waiting",
-                          "content": "the deletion that waited for confirmation was cleared: this install's record is gone on the back-office",
+                          "content": "Tars forgot this install; the back-office never confirmed the deletion it waited for",
                           "lineHeight": 1.4,
                           "fontFamily": "$font-mono",
                           "fontSize": 10.5,
@@ -914039,7 +914066,7 @@
                       "fill": "$text-secondary",
                       "textGrowth": "fixed-width",
                       "width": 600,
-                      "content": "Sharing may start again; what was recorded before the deletion is still never sent.",
+                      "content": "What this install sent may still be on the back-office: ask whoever runs it to delete it. Sharing may start again, as a new install; what was recorded before the deletion is still never sent.",
                       "lineHeight": 1.4,
                       "fontFamily": "$font-ui",
                       "fontSize": 11.5,
@@ -914135,7 +914162,7 @@
                   "fill": "$text-secondary",
                   "textGrowth": "fixed-width",
                   "width": 400,
-                  "content": "It stays on the view until you press OK (traces.ackDeletionCleared).",
+                  "content": "It comes when Tars no longer holds the install a deletion waited on: the back-office never confirmed that deletion. It stays on the view until you press OK (traces.ackDeletionCleared).",
                   "lineHeight": 1.5,
                   "fontFamily": "$font-ui",
                   "fontSize": 12,
@@ -915511,7 +915538,7 @@
                   "type": "text",
                   "id": "QWoWW",
                   "fill": "$text-muted",
-                  "content": "giving up the deletion: its plain words, then its refusal when none is owed",
+                  "content": "giving up the deletion: its plain words, then its refusal when none is owed, or a give-up main could not finish",
                   "lineHeight": 1.4,
                   "fontFamily": "$font-mono",
                   "fontSize": 10,
@@ -915647,6 +915674,33 @@
                       "fontWeight": "normal"
                     }
                   ]
+                },
+                {
+                  "type": "frame",
+                  "id": "TEdiX",
+                  "name": "state half",
+                  "gap": 6,
+                  "alignItems": "center",
+                  "children": [
+                    {
+                      "type": "rectangle",
+                      "id": "i2bwh",
+                      "name": "d",
+                      "fill": "$status-waiting",
+                      "width": 6,
+                      "height": 6
+                    },
+                    {
+                      "type": "text",
+                      "id": "K7Nh9V",
+                      "fill": "$status-waiting",
+                      "content": "given up, though Tars could not finish: no space left on device",
+                      "lineHeight": 1.4,
+                      "fontFamily": "$font-mono",
+                      "fontSize": 10.5,
+                      "fontWeight": "normal"
+                    }
+                  ]
                 }
               ]
             },
@@ -915674,7 +915728,7 @@
                   "fill": "$text-secondary",
                   "textGrowth": "fixed-width",
                   "width": 400,
-                  "content": "When no deletion is owed, main refuses and says why; the window shows its reason under the box.",
+                  "content": "When no deletion is owed, main refuses and says why; the window shows its reason under the box. When main forgets the install and then fails, the window reads main again and says the deletion was given up, with the reason it could not finish.",
                   "lineHeight": 1.5,
                   "fontFamily": "$font-ui",
                   "fontSize": 12,
@@ -915753,7 +915807,7 @@
                           "type": "text",
                           "id": "t02W4j",
                           "fill": "$status-waiting",
-                          "content": "the deletion that waited for confirmation was cleared: this install's record is gone on the back-office",
+                          "content": "Tars forgot this install; the back-office never confirmed the deletion it waited for",
                           "lineHeight": 1.4,
                           "fontFamily": "$font-mono",
                           "fontSize": 10.5,
@@ -915767,7 +915821,7 @@
                       "fill": "$text-secondary",
                       "textGrowth": "fixed-width",
                       "width": 600,
-                      "content": "Sharing may start again; what was recorded before the deletion is still never sent.",
+                      "content": "What this install sent may still be on the back-office: ask whoever runs it to delete it. Sharing may start again, as a new install; what was recorded before the deletion is still never sent.",
                       "lineHeight": 1.4,
                       "fontFamily": "$font-ui",
                       "fontSize": 11.5,
@@ -915854,7 +915908,7 @@
                           "type": "text",
                           "id": "QYhq2",
                           "fill": "$status-waiting",
-                          "content": "the deletion that waited for confirmation was cleared: this install's record is gone on the back-office",
+                          "content": "Tars forgot this install; the back-office never confirmed the deletion it waited for",
                           "lineHeight": 1.4,
                           "fontFamily": "$font-mono",
                           "fontSize": 10.5,
@@ -915868,7 +915922,7 @@
                       "fill": "$text-secondary",
                       "textGrowth": "fixed-width",
                       "width": 600,
-                      "content": "Sharing may start again; what was recorded before the deletion is still never sent.",
+                      "content": "What this install sent may still be on the back-office: ask whoever runs it to delete it. Sharing may start again, as a new install; what was recorded before the deletion is still never sent.",
                       "lineHeight": 1.4,
                       "fontFamily": "$font-ui",
                       "fontSize": 11.5,
@@ -915964,7 +916018,7 @@
                   "fill": "$text-secondary",
                   "textGrowth": "fixed-width",
                   "width": 400,
-                  "content": "It stays on the view until you press OK (traces.ackDeletionCleared).",
+                  "content": "It comes when Tars no longer holds the install a deletion waited on: the back-office never confirmed that deletion. It stays on the view until you press OK (traces.ackDeletionCleared).",
                   "lineHeight": 1.5,
                   "fontFamily": "$font-ui",
                   "fontSize": 12,
