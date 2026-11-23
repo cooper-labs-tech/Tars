@@ -78,9 +78,12 @@ export function resolveResumeSessionId(
   homeDir = os.homedir(),
 ): string | null {
   // Qwen Code's transcripts are its own (services/qwen-code.ts, which this cannot import: it is below the providers).
+  // grok's session is a folder of its own, ~/.grok/sessions/<the folder it ran in, URL-encoded>/<uuid> (1.0.92, 23/11).
   const fileOf = agent.provider === 'qwen-code'
     ? (root: string, id: string) => path.join(homeDir, '.qwen', 'projects', (process.platform === 'win32' ? root.toLowerCase() : root).replace(/[^a-zA-Z0-9]/g, '-'), 'chats', `${id}.jsonl`)
-    : (root: string, id: string) => transcriptPath(root, id, homeDir);
+    : agent.provider === 'grok'
+      ? (root: string, id: string) => path.join(homeDir, '.grok', 'sessions', encodeURIComponent(root), id)
+      : (root: string, id: string) => transcriptPath(root, id, homeDir);
   // The session itself, or, while a fork has no transcript of its own yet, the
   // session it continues: the conversation is that one's, untouched.
   for (const candidate of [agent.resumableSessionId, agent.forkedFromSessionId]) {
