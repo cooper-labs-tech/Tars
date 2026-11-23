@@ -95,8 +95,43 @@ export function responsesToolResult(input) {
   return results.length ? results.map((m) => textOf(m.output)).join('\n') : null;
 }
 
+/** The names of the tools the model called since the last user instruction, from either API's shape. */
+export function calledSince(body) {
+  const chat = sinceLastInstruction(asArr(body.messages).map(asObj))
+    .flatMap((m) => asArr(m.tool_calls).map((c) => String(asObj(asObj(c).function).name ?? '')));
+  const responses = typeof body.input === 'string' ? [] : sinceLastInstruction(asArr(body.input).map(asObj))
+    .filter((m) => m.type === 'function_call').map((m) => String(m.name ?? ''));
+  return [...chat, ...responses].filter(Boolean);
+}
+
+/**
+ * The MCP round (`mcp: { tool, expect }`): the harness calls an MCP tool of Tars's (`whoami`), directly when it
+ * declares it, or through its tool search when it declares MCP tools only on demand (grok 1.0.92: `search_tool`, then
+ * `use_tool` with the name found, measured 23/11). The final text is `PROBE-OK <marker>` when the tool's result holds
+ * `expect` (the agent's own id: the call reached Tars with the agent's own identity), `PROBE-NO-RESULT <what came
+ * back>` otherwise.
+ */
+export function decideMcp(body, toolResult, marker, mcp) {
+  const tools = toolsOf(body);
+  const called = calledSince(body);
+  if (toolResult !== null && toolResult.includes(mcp.expect)) return { text: `PROBE-OK ${marker}` };
+  const callOf = (name, args) => ({ call: { id: `call_${randomBytes(6).toString('hex')}`, name, arguments: JSON.stringify(args) } });
+  const direct = tools.find((t) => mcp.tool.test(t.name));
+  if (toolResult === null) {
+    if (direct) return callOf(direct.name, {});
+    if (tools.some((t) => t.name === 'search_tool')) return callOf('search_tool', { query: 'tars whoami' });
+    return { text: 'PROBE-NO-MCP-TOOL' };
+  }
+  if (called.at(-1) === 'search_tool' && tools.some((t) => t.name === 'use_tool')) {
+    const found = new RegExp(`[A-Za-z0-9_.:-]*${mcp.tool.source}[A-Za-z0-9_.:-]*`, 'i').exec(toolResult)?.[0];
+    if (found) return callOf('use_tool', { tool_name: found, tool_input: {} });
+  }
+  return { text: `PROBE-NO-RESULT ${toolResult.replace(/\s+/g, ' ').slice(0, 300)}` };
+}
+
 /** What the model "decides": a call to the shell tool, or the final text. */
-export function decide(body, toolResult, marker) {
+export function decide(body, toolResult, marker, mcp) {
+  if (mcp) return decideMcp(body, toolResult, marker, mcp);
   if (toolResult !== null) {
     const m = /TARS-PROBE-[0-9a-f]{8}/.exec(toolResult);
     return { text: m ? `PROBE-OK ${m[0]}` : 'PROBE-NO-RESULT' };
@@ -116,8 +151,8 @@ function sse(res, data, event) {
 
 const pause = (ms) => new Promise((r) => setTimeout(r, ms));
 
-async function answerChat(body, res, marker, chunkDelayMs = 0) {
-  const d = decide(body, chatToolResult(body.messages), marker);
+async function answerChat(body, res, marker, chunkDelayMs = 0, mcp = undefined) {
+  const d = decide(body, chatToolResult(body.messages), marker, mcp);
   const id = `chatcmpl-${randomBytes(6).toString('hex')}`;
   const finish = d.call ? 'tool_calls' : 'stop';
   if (!body.stream) {
@@ -149,8 +184,8 @@ async function answerChat(body, res, marker, chunkDelayMs = 0) {
   return { lastChunkAt: Date.now(), requestId: `standin-${id}` };
 }
 
-function answerResponses(body, res, marker) {
-  const d = decide(body, responsesToolResult(body.input), marker);
+function answerResponses(body, res, marker, mcp = undefined) {
+  const d = decide(body, responsesToolResult(body.input), marker, mcp);
   const id = `resp_${randomBytes(6).toString('hex')}`;
   const item = d.call
     ? { type: 'function_call', id: `fc_${randomBytes(6).toString('hex')}`, call_id: d.call.id, name: d.call.name, arguments: d.call.arguments, status: 'completed' }
@@ -178,9 +213,10 @@ function answerResponses(body, res, marker) {
  * Starts the stand-in. `key` set: any other Bearer gets a 401. `failFirst`: the statuses the first model calls get
  * (503 endpoint_busy, 429 rate_limited, 502), each with `Retry-After: 1`, before any is served, as a remote host
  * outside its window or at its cap answers. `chunkDelayMs`: the pause between a stream's first and next chunks.
+ * `mcp: { tool, expect }`: the MCP round of decideMcp instead of the shell tool's.
  * Resolves with its base URL and a close().
  */
-export function startStandIn({ port = 0, key = '', log = '', failFirst = [], chunkDelayMs = 0 } = {}) {
+export function startStandIn({ port = 0, key = '', log = '', failFirst = [], chunkDelayMs = 0, mcp = undefined } = {}) {
   const marker = `TARS-PROBE-${randomBytes(4).toString('hex')}`;
   const failing = [...failFirst];
   const note = (entry) => { if (log) fs.appendFileSync(log, `${JSON.stringify({ at: Date.now(), ...entry })}\n`); };
@@ -208,10 +244,10 @@ export function startStandIn({ port = 0, key = '', log = '', failFirst = [], chu
         res.end(JSON.stringify({ error: { type, message: `stand-in ${type}` } }));
         note({ answered: status });
       } else if (req.method === 'POST' && url === '/v1/chat/completions') {
-        const done = await answerChat(asObj(body), res, marker, chunkDelayMs);
+        const done = await answerChat(asObj(body), res, marker, chunkDelayMs, mcp);
         note({ answered: 200, ...(done ?? {}) });
       } else if (req.method === 'POST' && url === '/v1/responses') {
-        answerResponses(asObj(body), res, marker);
+        answerResponses(asObj(body), res, marker, mcp);
       } else {
         res.writeHead(404, { 'Content-Type': 'application/json' });
         res.end(JSON.stringify({ error: { message: `no route ${req.method} ${url}` } }));
@@ -233,6 +269,7 @@ if (path.basename(process.argv[1] || '') === 'stand-in-openai-endpoint.mjs') {
     const i = process.argv.indexOf(`--${name}`);
     return i > 0 ? process.argv[i + 1] : fallback;
   };
-  void startStandIn({ port: Number(arg('port', '0')), key: arg('key', process.env.STAND_IN_KEY || ''), log: arg('log', process.env.STAND_IN_LOG || '') })
-    .then((s) => console.log(`stand-in listening on ${s.baseUrl}`));
+  const expect = arg('mcp-expect', '');
+  void startStandIn({ port: Number(arg('port', '0')), key: arg('key', process.env.STAND_IN_KEY || ''), log: arg('log', process.env.STAND_IN_LOG || ''), mcp: expect ? { tool: /whoami/i, expect } : undefined })
+    .then((s) => console.log(`stand-in listening on ${s.baseUrl} marker ${s.marker}`));
 }
