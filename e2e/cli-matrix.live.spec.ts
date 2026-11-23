@@ -3,7 +3,7 @@ import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
 import { execFileSync } from 'child_process';
-import { launchSandboxed, recordValues, removeHome, stepShot } from './fixture.mjs';
+import { copyFromRealHome, launchSandboxed, recordValues, removeHome, stepShot } from './fixture.mjs';
 import { DEV_URL, apiPort } from './ports.mjs';
 
 /**
@@ -15,8 +15,8 @@ import { DEV_URL, apiPort } from './ports.mjs';
  * on its default. Logins: claude needs TARS_CLI_MATRIX_CLAUDE_TOKEN (a `claude setup-token` token, handed to the app as
  * CLAUDE_CODE_OAUTH_TOKEN): from a sandbox HOME it does not reach the keychain's sign-in, "Not logged in" (seen on
  * 2026-10-18, claude 2.1.302). codex's
- * auth.json and qwen's settings.json copied into the sandbox HOME for the run and removed with it; nothing of them is
- * printed or kept in the artefact. A ChatGPT login rotates its refresh token when codex refreshes it: an auth.json
+ * auth.json and qwen's settings.json copied into the sandbox HOME for the run (copyFromRealHome), and deleted by
+ * removeHome whatever the outcome, before it keeps a red run's home; nothing of them is printed or kept in the artefact. A ChatGPT login rotates its refresh token when codex refreshes it: an auth.json
  * the run refreshed (same account, still readable) is put back in ~/.codex, or the real codex would be signed out.
  *
  * One short delegation per ordered pair (A, B), in plain words, as a person would ask: A is told to give B, with
@@ -63,9 +63,7 @@ for (const newInterface of [false, true]) {
     const trusted = { hasTrustDialogAccepted: true, hasCompletedProjectOnboarding: true };
     fs.writeFileSync(path.join(home, '.claude.json'), JSON.stringify({ hasCompletedOnboarding: true, theme: 'dark', projects: { [project]: trusted, [fs.realpathSync(project)]: trusted } }, null, 2), { mode: 0o600 });
     fs.writeFileSync(path.join(home, '.claude', 'settings.json'), JSON.stringify({ theme: 'dark', skipDangerousModePermissionPrompt: true }, null, 2));
-    for (const [from, to] of [[path.join(real, '.codex', 'auth.json'), path.join(home, '.codex', 'auth.json')], [path.join(real, '.qwen', 'settings.json'), path.join(home, '.qwen', 'settings.json')]]) {
-      if (fs.existsSync(from)) fs.copyFileSync(from, to);
-    }
+    for (const [from, to] of [[path.join(real, '.codex', 'auth.json'), path.join(home, '.codex', 'auth.json')], [path.join(real, '.qwen', 'settings.json'), path.join(home, '.qwen', 'settings.json')]]) copyFromRealHome(from, to);
     const codexAuth = { real: path.join(real, '.codex', 'auth.json'), copy: path.join(home, '.codex', 'auth.json') };
     const authText = (f: string) => { try { return fs.readFileSync(f, 'utf8'); } catch { return ''; } };
     const accountOf = (text: string) => { try { const j = JSON.parse(text); return j?.tokens?.account_id ?? null; } catch { return undefined; } };

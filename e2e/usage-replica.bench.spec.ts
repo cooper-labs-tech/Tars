@@ -3,7 +3,7 @@ import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
 import { execFileSync } from 'child_process';
-import { launchSandboxed, recordValues } from './fixture.mjs';
+import { copyFromRealHome, launchSandboxed, recordValues } from './fixture.mjs';
 import { DEV_URL, apiPort } from './ports.mjs';
 
 /**
@@ -37,7 +37,7 @@ test('the Usage page with the machine\'s own transcripts and fleet, Agents and P
   const dist = path.resolve('electron', 'dist');
   try {
     fs.mkdirSync(path.join(home, '.claude'), { recursive: true });
-    execFileSync('/bin/cp', ['-c', '-R', path.join(REAL_HOME, '.claude', 'projects'), path.join(home, '.claude', 'projects')]);
+    copyFromRealHome(path.join(REAL_HOME, '.claude', 'projects'), path.join(home, '.claude', 'projects'));
     const dir = path.join(home, '.tars');
     fs.mkdirSync(dir, { recursive: true });
     const real = JSON.parse(fs.readFileSync(path.join(REAL_HOME, '.tars', 'agents.json'), 'utf8'));
@@ -48,14 +48,10 @@ test('the Usage page with the machine\'s own transcripts and fleet, Agents and P
     // What the page reads beside the transcripts: the usage ledger, the status line's stats, and the task ledger
     // (the cost of each task, #311) with its texts.
     for (const f of ['usage-ledger.json', 'token-stats.json', 'task-ledger.jsonl']) {
-      const from = path.join(REAL_HOME, '.tars', f);
-      if (fs.existsSync(from)) fs.copyFileSync(from, path.join(dir, f));
+      copyFromRealHome(path.join(REAL_HOME, '.tars', f), path.join(dir, f));
     }
-    const texts = path.join(REAL_HOME, '.tars-private', 'task-texts.jsonl');
-    if (fs.existsSync(texts)) {
-      fs.mkdirSync(path.join(home, '.tars-private'), { recursive: true, mode: 0o700 });
-      fs.copyFileSync(texts, path.join(home, '.tars-private', 'task-texts.jsonl'));
-    }
+    fs.mkdirSync(path.join(home, '.tars-private'), { recursive: true, mode: 0o700 });
+    copyFromRealHome(path.join(REAL_HOME, '.tars-private', 'task-texts.jsonl'), path.join(home, '.tars-private', 'task-texts.jsonl'));
     fs.writeFileSync(path.join(dir, 'hermes-connection.json'), JSON.stringify({ mode: 'local', localPort: 9, authMode: 'token' }));
     fs.writeFileSync(path.join(dir, 'app-settings.json'), JSON.stringify({ autoStartAgentsOnLaunch: false, ollamaBaseUrl: 'http://127.0.0.1:9' }));
     const transcripts = (execFileSync('/usr/bin/find', [path.join(home, '.claude', 'projects'), '-name', '*.jsonl', '-size', '+10M'], { encoding: 'utf8' }).trim().split('\n').filter(Boolean))
