@@ -11,7 +11,7 @@ import { DEV_URL, apiPort } from './ports.mjs';
  *
  * The CLI is a stand-in, faithful to what was measured on 22/10: claude 2.1.308 sends `OSC 7501 ; ?` then a DA1
  * query at start and reports only once the probe is answered (a real claude in a sandbox HOME is signed out and
- * stops at its onboarding, which reports nothing). It runs as a grok agent, a CLI with no hooks, so its reports
+ * stops at its onboarding, which reports nothing). It runs as an opencode agent, a CLI with no hooks, so its reports
  * are what moves the agent.
  *
  * Asserted, with the classic shell and with the new interface:
@@ -59,14 +59,14 @@ for (const newInterface of [false, true]) {
     const project = path.join(home, 'projects', 'demo');
     const dir = path.join(home, '.tars');
     for (const d of [project, dir]) fs.mkdirSync(d, { recursive: true });
-    const cli = path.join(home, 'bin', 'grok');
+    const cli = path.join(home, 'bin', 'opencode');
     const log = path.join(home, 'stand-in.log');
     fs.mkdirSync(path.dirname(cli), { recursive: true });
-    // The stand-in takes its log as its first argument, whatever grok's own flags follow.
+    // The stand-in takes its log as its first argument, whatever opencode's own flags follow.
     fs.writeFileSync(cli, STAND_IN.replace("process.argv[2]", JSON.stringify(log)), { mode: 0o755 });
-    fs.writeFileSync(path.join(dir, 'agents.json'), JSON.stringify([{ id: 'x-grok', name: 'Grok Agent', character: 'robot', provider: 'grok', status: 'idle', role: 'worker', projectPath: project, skills: [], permissionMode: 'bypass', cliPath: cli, createdAt: '2026-10-22T08:00:00.000Z', lastActivity: '2026-10-22T08:00:00.000Z' }]));
+    fs.writeFileSync(path.join(dir, 'agents.json'), JSON.stringify([{ id: 'x-opencode', name: 'OpenCode Agent', character: 'robot', provider: 'opencode', status: 'idle', role: 'worker', projectPath: project, skills: [], permissionMode: 'bypass', cliPath: cli, createdAt: '2026-10-22T08:00:00.000Z', lastActivity: '2026-10-22T08:00:00.000Z' }]));
     fs.writeFileSync(path.join(dir, 'projects.json'), JSON.stringify([project]));
-    fs.writeFileSync(path.join(dir, 'app-settings.json'), JSON.stringify({ autoStartAgentsOnLaunch: false, ollamaBaseUrl: 'http://127.0.0.1:9', newInterface, grokEnabled: true, cliPaths: { grok: cli } }));
+    fs.writeFileSync(path.join(dir, 'app-settings.json'), JSON.stringify({ autoStartAgentsOnLaunch: false, ollamaBaseUrl: 'http://127.0.0.1:9', newInterface, opencodeEnabled: true, cliPaths: { opencode: cli } }));
     const app = await launchSandboxed(electron, home, {
       env: { NODE_ENV: 'development', DOROTHY_DEV_URL: DEV_URL, DOROTHY_API_PORT: apiPort(31506 + (newInterface ? 1 : 0)), DOROTHY_E2E: '1' },
     });
@@ -81,11 +81,11 @@ for (const newInterface of [false, true]) {
       await page.evaluate(() => {
         const g = window as unknown as { __ticks: unknown[]; electronAPI: { agent: { onTick(cb: (list: Array<{ id: string; programStatus?: unknown }>) => void): void } } };
         g.__ticks = [];
-        g.electronAPI.agent.onTick((list) => { const a = list.find((x) => x.id === 'x-grok'); if (a?.programStatus) g.__ticks.push(a.programStatus); });
+        g.electronAPI.agent.onTick((list) => { const a = list.find((x) => x.id === 'x-opencode'); if (a?.programStatus) g.__ticks.push(a.programStatus); });
       });
       type Seen = { status: string; waitingReason?: string; programStatus?: { state: string; kind?: string; msg?: string } } | null;
-      const read = () => page.evaluate(() => (window as unknown as { electronAPI: { agent: { get(id: string): Promise<unknown> } } }).electronAPI.agent.get('x-grok')) as Promise<Seen>;
-      await page.evaluate(() => (window as unknown as { electronAPI: { agent: { start(p: { id: string; prompt: string }): Promise<unknown> } } }).electronAPI.agent.start({ id: 'x-grok', prompt: 'go' }));
+      const read = () => page.evaluate(() => (window as unknown as { electronAPI: { agent: { get(id: string): Promise<unknown> } } }).electronAPI.agent.get('x-opencode')) as Promise<Seen>;
+      await page.evaluate(() => (window as unknown as { electronAPI: { agent: { start(p: { id: string; prompt: string }): Promise<unknown> } } }).electronAPI.agent.start({ id: 'x-opencode', prompt: 'go' }));
 
       const seen: string[] = [];
       let blocked: Seen = null;

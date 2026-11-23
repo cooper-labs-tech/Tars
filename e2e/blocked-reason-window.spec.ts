@@ -9,7 +9,7 @@ import { DEV_URL, apiPort } from './ports.mjs';
  * An agent blocked on its CLI's word, with its reason and message, in the window (#510's OSC 7501 record on
  * agents:tick). Frame: `Blocked (2.0.5) · an agent blocked, its reason`.
  *
- * Three grok agents (a CLI with no hooks, so its reports are what Tars reads), each on a stand-in faithful to #510's:
+ * Three opencode agents (a CLI with no hooks, so its reports are what Tars reads), each on a stand-in faithful to #510's:
  * it probes OSC 7501, and once answered reports itself blocked, one on a permission, one on a question, one on a
  * sign-in, each with its message, and stays so. In the shell as it was and in the new interface:
  * 1. Each Dashboard panel says it under its header: the message (a question as "Asks: ..."), and open, or answer for
@@ -48,13 +48,13 @@ for (const newInterface of [false, true]) {
     const bin = path.join(home, 'bin');
     for (const d of [project, dir, bin]) fs.mkdirSync(d, { recursive: true });
     const agents = BLOCKS.map((b) => {
-      const cli = path.join(bin, `grok-${b.kind}`);
+      const cli = path.join(bin, `opencode-${b.kind}`);
       fs.writeFileSync(cli, standIn(b.kind, b.msg), { mode: 0o755 });
-      return { id: b.id, name: b.name, character: 'robot', provider: 'grok', status: 'idle', role: 'worker', projectPath: project, skills: [], permissionMode: 'bypass', cliPath: cli, createdAt: '2026-10-22T08:00:00.000Z', lastActivity: '2026-10-22T08:00:00.000Z' };
+      return { id: b.id, name: b.name, character: 'robot', provider: 'opencode', status: 'idle', role: 'worker', projectPath: project, skills: [], permissionMode: 'bypass', cliPath: cli, createdAt: '2026-10-22T08:00:00.000Z', lastActivity: '2026-10-22T08:00:00.000Z' };
     });
     fs.writeFileSync(path.join(dir, 'agents.json'), JSON.stringify(agents));
     fs.writeFileSync(path.join(dir, 'projects.json'), JSON.stringify([project]));
-    fs.writeFileSync(path.join(dir, 'app-settings.json'), JSON.stringify({ autoStartAgentsOnLaunch: false, ollamaBaseUrl: 'http://127.0.0.1:9', newInterface, grokEnabled: true }));
+    fs.writeFileSync(path.join(dir, 'app-settings.json'), JSON.stringify({ autoStartAgentsOnLaunch: false, ollamaBaseUrl: 'http://127.0.0.1:9', newInterface, opencodeEnabled: true }));
     const seen: Record<string, unknown> = { newInterface };
     const tag = newInterface ? 'new' : 'old';
     const app = await launchSandboxed(electron, home, {

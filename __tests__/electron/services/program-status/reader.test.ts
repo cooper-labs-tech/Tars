@@ -14,8 +14,8 @@ import type { AgentStatus } from '../../../../electron/types';
  *    across two chunks is missed.
  * 2. A report from a terminal that is no longer the agent's (an old ptyId after a restart) moves the agent, or is
  *    kept as its record: the session-ownership rule.
- * 3. A report overrules the status of an agent whose CLI Tars follows otherwise (claude's hooks, codex's log).
- * 4. An agent on a CLI Tars cannot follow (grok, amp, opencode) does not follow the reports: working is running,
+ * 3. A report overrules the status of an agent whose CLI Tars follows otherwise (claude's hooks, codex's log, grok's hooks).
+ * 4. An agent on a CLI Tars cannot follow (amp, opencode) does not follow the reports: working is running,
  *    blocked is waiting (reason permission, so nothing is typed into it), idle and done are idle, error is error.
  * 5. A blocked report's kind and message are not kept for the window, on any CLI.
  * 6. A report addressed to a sub-record (an id) moves the agent: only the root record is the agent's.
@@ -60,10 +60,10 @@ describe('the probe', () => {
 });
 
 describe('reports, by who follows the CLI', () => {
-  it('4. drives a grok agent: working, blocked with its kind and message, idle, done, error', () => {
-    const a = agent('grok');
+  it('4. drives an opencode agent: working, blocked with its kind and message, idle, done, error', () => {
+    const a = agent('opencode');
     const t = terminal();
-    expect(readProgramStatus(a, 'pty-1', t, osc('state=working:app=grok'))).toBe(true);
+    expect(readProgramStatus(a, 'pty-1', t, osc('state=working:app=opencode'))).toBe(true);
     expect(a.status).toBe('running');
     expect(readProgramStatus(a, 'pty-1', t, osc(`state=blocked:kind=question:msg=${b64('Which branch?')}`))).toBe(true);
     expect(a.status).toBe('waiting');
@@ -81,8 +81,8 @@ describe('reports, by who follows the CLI', () => {
     expect(a.status).toBe('idle');
   });
 
-  it('4. drives amp and opencode the same way', () => {
-    for (const p of ['amp', 'opencode']) {
+  it('4. drives amp the same way', () => {
+    for (const p of ['amp']) {
       const a = agent(p);
       readProgramStatus(a, 'pty-1', terminal(), osc('state=working'));
       expect(a.status, p).toBe('running');
@@ -90,8 +90,8 @@ describe('reports, by who follows the CLI', () => {
     }
   });
 
-  it('3 and 5. never moves a claude or a codex agent, and keeps the blocked reason for the window', () => {
-    for (const p of ['claude', 'codex']) {
+  it('3 and 5. never moves a claude, a codex or a grok agent, and keeps the blocked reason for the window', () => {
+    for (const p of ['claude', 'codex', 'grok']) {
       const a = agent(p, 'running');
       expect(readProgramStatus(a, 'pty-1', terminal(), osc(`state=blocked:kind=auth:msg=${b64('Sign in to continue')}`)), p).toBe(false);
       expect(a.status, p).toBe('running');
@@ -106,14 +106,14 @@ describe('reports, by who follows the CLI', () => {
 
 describe('what a report may not do', () => {
   it('2. a report from a terminal that is not the agent\'s moves nothing and is not kept', () => {
-    const a = agent('grok');
+    const a = agent('opencode');
     readProgramStatus(a, 'pty-old', terminal(), osc('state=working'));
     expect(a.status).toBe('idle');
     expect(a.programStatus).toBeUndefined();
   });
 
   it('6. a report addressed to a sub-record is not the agent\'s', () => {
-    const a = agent('grok');
+    const a = agent('opencode');
     expect(readProgramStatus(a, 'pty-1', terminal(), osc('state=working:id=build/test'))).toBe(false);
     expect(a.status).toBe('idle');
     expect(a.programStatus).toBeUndefined();
@@ -121,7 +121,7 @@ describe('what a report may not do', () => {
 
   it('8. never wakes a stopped or an asleep agent', () => {
     for (const s of ['stopped', 'asleep'] as const) {
-      const a = agent('grok', s);
+      const a = agent('opencode', s);
       expect(readProgramStatus(a, 'pty-1', terminal(), osc('state=working'))).toBe(false);
       expect(a.status).toBe(s);
       forgetProgramStatus('pty-1');
@@ -140,7 +140,7 @@ describe('what a report may not do', () => {
   });
 
   it('9. a terminal forgotten drops its half-read frame', () => {
-    const a = agent('grok');
+    const a = agent('opencode');
     readProgramStatus(a, 'pty-1', terminal(), '\x1b]7501;state=work');
     forgetProgramStatus('pty-1');
     readProgramStatus(a, 'pty-1', terminal(), 'ing\x07');

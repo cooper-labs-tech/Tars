@@ -253,7 +253,7 @@ describe('silence, which costs nothing', () => {
 describe('a provider with no end of turn', () => {
   it('is recorded not_sent with its reason, never queued in silence', () => {
     putAgent({ id: 'writer', status: 'running' });
-    putAgent({ id: 'cx', provider: 'grok' as AgentStatus['provider'], status: 'running' });
+    putAgent({ id: 'cx', provider: 'opencode' as AgentStatus['provider'], status: 'running' });
     const { message } = human('anyone there?', ['cx']);
 
     const deliveries = delivery.fanOutDeliveries(message, room());
@@ -681,7 +681,7 @@ describe('sending what was never sent', () => {
   /** Three messages held for a provider whose session never leaves `running`. */
   function heldForGrok(): FakeTerminal {
     const terminal = attachTerminal('pty-cx');
-    putAgent({ id: 'cx', provider: 'grok' as AgentStatus['provider'], status: 'running', ptyId: 'pty-cx' });
+    putAgent({ id: 'cx', provider: 'opencode' as AgentStatus['provider'], status: 'running', ptyId: 'pty-cx' });
     for (const text of HELD) {
       const { message } = human(text, ['cx']);
       delivery.fanOutDeliveries(message, room());
@@ -760,7 +760,7 @@ describe('sending what was never sent', () => {
     // them, not at a session id. Pinned because it is a decision, not an
     // oversight, and a future barrier added here would look like a fix.
     const relaunched = attachTerminal('pty-cx-2');
-    putAgent({ id: 'cx', provider: 'grok' as AgentStatus['provider'], status: 'running',
+    putAgent({ id: 'cx', provider: 'opencode' as AgentStatus['provider'], status: 'running',
                ptyId: 'pty-cx-2', currentSessionId: 'sess-cx-2' });
 
     const result = await delivery.releaseNotSent('cx');
@@ -796,7 +796,7 @@ describe('sending what was never sent', () => {
   }, 30_000);
 
   it('says why rather than pretending, when there is no terminal to write into', async () => {
-    putAgent({ id: 'cx', provider: 'grok' as AgentStatus['provider'], status: 'running', ptyId: 'pty-gone' });
+    putAgent({ id: 'cx', provider: 'opencode' as AgentStatus['provider'], status: 'running', ptyId: 'pty-gone' });
     const { message } = human('held with nowhere to go', ['cx']);
     delivery.fanOutDeliveries(message, room());
 
@@ -896,8 +896,8 @@ describe('the note on a room message', () => {
 
   it('says the user too on a message the user wrote that was held and then sent by hand', async () => {
     const terminal = attachTerminal('pty-cx');
-    putAgent({ id: 'cx', provider: 'grok' as AgentStatus['provider'], status: 'running', ptyId: 'pty-cx' });
-    const { message } = human('held for the grok agent', ['cx']);
+    putAgent({ id: 'cx', provider: 'opencode' as AgentStatus['provider'], status: 'running', ptyId: 'pty-cx' });
+    const { message } = human('held for the opencode agent', ['cx']);
     delivery.fanOutDeliveries(message, room());
     expect(terminal.written).toHaveLength(0);
 
@@ -905,7 +905,7 @@ describe('the note on a room message', () => {
 
     expect(result.released).toHaveLength(1);
     const typed = terminal.written.join('');
-    expect(typed).toContain('held for the grok agent');
+    expect(typed).toContain('held for the opencode agent');
     expect(typed).toContain(OWNER);
     expect(typed).not.toContain(TEAMMATE);
   }, 20_000);
@@ -1248,8 +1248,8 @@ describe('a message held behind a draft', () => {
 
   it('reads held, not not_sent, when released by hand into a field with a draft, and goes once', async () => {
     const terminal = attachTerminal('pty-cx');
-    putAgent({ id: 'cx', provider: 'grok' as AgentStatus['provider'], status: 'running', ptyId: 'pty-cx' });
-    const { message } = human('held for grok', ['cx']);
+    putAgent({ id: 'cx', provider: 'opencode' as AgentStatus['provider'], status: 'running', ptyId: 'pty-cx' });
+    const { message } = human('held for opencode', ['cx']);
     delivery.fanOutDeliveries(message, room());
     ptyManager.writeHumanInput(ptyManager.ptyProcesses.get('pty-cx')!, '\t');
 
@@ -1262,7 +1262,7 @@ describe('a message held behind a draft', () => {
 
     ptyManager.writeHumanInput(ptyManager.ptyProcesses.get('pty-cx')!, '\x03');
     await new Promise(resolve => setTimeout(resolve, ptyManager.TYPING_PAUSE_MS + 3000));
-    expect(terminal.written.join('').split('held for grok').length - 1).toBe(1);
+    expect(terminal.written.join('').split('held for opencode').length - 1).toBe(1);
     expect(store.deliveriesOf(message.id)[0].state).toBe('delivered');
     ptyManager.resetTerminalInput(ptyManager.ptyProcesses.get('pty-cx')!);
   }, 30_000);
@@ -1291,7 +1291,7 @@ describe('what is waiting in each room', () => {
     const other = 'project:/elsewhere';
     attachTerminal('pty-busy');
     putAgent({ id: 'busy', status: 'running', ptyId: 'pty-busy' });
-    putAgent({ id: 'cx', provider: 'grok' as AgentStatus['provider'], status: 'running', ptyId: 'pty-cx' });
+    putAgent({ id: 'cx', provider: 'opencode' as AgentStatus['provider'], status: 'running', ptyId: 'pty-cx' });
     attachTerminal('pty-typist');
     putAgent({ id: 'typist', status: 'idle', ptyId: 'pty-typist' });
     putAgent({ id: 'far', status: 'idle', projectPath: '/elsewhere', ptyId: 'pty-far' });
@@ -1326,7 +1326,7 @@ describe('what is waiting in each room', () => {
  *    anyway: it has to wait for the turn's end like any other, and say so.
  * 5. Send now to an agent at rest sends an Esc nobody needed, which clears
  *    whatever that person had typed.
- * 6. Send now to a CLI Tars cannot interrupt (grok) writes an Esc it has
+ * 6. Send now to a CLI Tars cannot interrupt (opencode) writes an Esc it has
  *    no reason to believe does anything.
  * 7. Send now to an agent outside the room records a message for nobody.
  * 8. The draft guard is skipped on the "now" path: the message is typed
@@ -1426,10 +1426,10 @@ describe('send now, and the member that can be interrupted', () => {
 
   it('sends no Esc to a CLI it cannot interrupt, and says who can be', async () => {
     const terminal = attachTerminal('pty-cx');
-    putAgent({ id: 'cx', provider: 'grok' as AgentStatus['provider'], status: 'running', ptyId: 'pty-cx' });
+    putAgent({ id: 'cx', provider: 'opencode' as AgentStatus['provider'], status: 'running', ptyId: 'pty-cx' });
     putAgent({ id: 'cl', status: 'running' });
 
-    const result = await sendNow({ agentId: 'cx', text: 'for grok' });
+    const result = await sendNow({ agentId: 'cx', text: 'for opencode' });
 
     expect(result.interrupted).toBe(false);
     expect(terminal.written).toEqual([]);
