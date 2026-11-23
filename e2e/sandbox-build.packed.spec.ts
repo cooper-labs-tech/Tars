@@ -19,6 +19,9 @@ import { apiPort } from './ports.mjs';
  *    refuses: it exits with 1, says why and how to start it, opens no window, and writes nothing in that home. The
  *    real home cannot be handed to a test, so the home the password database names is a stand-in here
  *    (DOROTHY_E2E_PASSWD_HOME, read under DOROTHY_E2E only), set to the temporary HOME it runs on.
+ * 4. (the Audit's I-1 on #632) the window's fonts, committed under public/fonts and served from the export over
+ *    app://, which no spec run under next dev reaches: in the packed window the three families load, and the main
+ *    process never says "File not found: .../fonts/". Red on a pack whose public/fonts was moved aside.
  *
  * Needs the packed app: TARS_PACKED_APP=<path to the .app> (npm run electron:pack writes
  * release/mac-arm64/Tars Sandbox.app). Skipped without it, as a live spec is. macOS only: electron:pack is --mac.
@@ -70,6 +73,28 @@ test('a test build is Tars Sandbox: its name, its bundle id, its icon, and what 
     recordValues(values);
     expect.soft(seen.name).toBe('Tars Sandbox');
     expect.soft(seen.trayMenu).toContain('Quit Tars Sandbox');
+
+    // 4. The fonts, as the packed window loads them: what the main process says from here on, the window loaded again
+    //    so that its font requests are among it, and each family asked for.
+    const said: string[] = [];
+    launched.process().stdout?.on('data', (d) => said.push(String(d)));
+    launched.process().stderr?.on('data', (d) => said.push(String(d)));
+    const page = await launched.firstWindow();
+    await page.reload({ waitUntil: 'load' });
+    const fonts = await page.evaluate(async () => {
+      for (const family of ['Roboto Condensed', 'Roboto Mono', 'Instrument Serif']) await document.fonts.load(`16px "${family}"`).catch(() => []);
+      await document.fonts.ready;
+      const faces = [...document.fonts];
+      return {
+        loaded: [...new Set(faces.filter((f) => f.status === 'loaded').map((f) => f.family.replace(/["']/g, '')))].sort(),
+        failed: faces.filter((f) => f.status === 'error').map((f) => `${f.family} ${f.weight} ${f.style}`),
+      };
+    });
+    const notFound = said.join('').split('\n').filter((line) => /File not found: .*[/\\]fonts[/\\]/.test(line));
+    Object.assign(values, { fonts, notFound });
+    recordValues(values);
+    expect.soft(fonts.loaded, 'the three families load in the packed window').toEqual(['Instrument Serif', 'Roboto Condensed', 'Roboto Mono']);
+    expect.soft(notFound, 'no font missing from the export').toEqual([]);
   } finally {
     await launched.close().catch(() => undefined);
     await removeHome(home);

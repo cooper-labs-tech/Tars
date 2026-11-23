@@ -288,9 +288,14 @@ The scale, in px: **9, 9.5, 10, 10.5, 11, 11.5, 12, 12.5, 13, 14, 15, 16, 18,
 | 10 | ui | Section labels (uppercase), dropdown hints |
 | 9 | ui | Smallest counters |
 
-`Roboto Condensed`, `Roboto Mono` and `Instrument Serif` are pulled through
-`next/font/google` in `src/app/layout.tsx` and self-hosted at build time, so
-there is no runtime request to Google and the app types correctly offline.
+`Roboto Condensed`, `Roboto Mono` and `Instrument Serif` are committed files
+under `public/fonts` (their README gives their origin, licences and hashes),
+declared in `src/app/fonts.css` with the rules `next/font/google` used to
+generate, and preloaded by `src/app/layout.tsx`. No build fetches them, so no
+build can draw them differently, and the app types correctly offline. They
+used to be downloaded from Google at each build: one build received six
+different files and moved 27 surfaces screenshots. Change a file only on
+purpose, with the surfaces references re-recorded.
 They bind to `--font-sans-loaded` / `--font-mono-loaded` / `--font-serif-loaded`,
 which `@theme inline` maps to `--font-sans` / `--font-mono` / `--font-serif`.
 

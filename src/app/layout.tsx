@@ -1,13 +1,17 @@
 import type { Metadata, Viewport } from "next";
-import { Roboto_Condensed, Roboto_Mono, Instrument_Serif } from "next/font/google";
+// The fonts, from files committed under public/fonts: no build depends on what Google serves that day, and nothing is
+// asked of Google at runtime either. fonts.css says why it is not next/font.
+import "./fonts.css";
 import "./globals.css";
-
-// Self-hosted at build time: no render-blocking request to Google at runtime,
-// and the type system still works offline.
-const sans = Roboto_Condensed({ subsets: ["latin"], weight: ["400", "500", "600", "700"], variable: "--font-sans-loaded", display: "swap" });
-const mono = Roboto_Mono({ subsets: ["latin"], weight: ["400", "500"], variable: "--font-mono-loaded", display: "swap" });
-const serif = Instrument_Serif({ subsets: ["latin"], weight: "400", style: ["normal", "italic"], variable: "--font-serif-loaded", display: "swap" });
 import ClientLayout from "@/components/ClientLayout";
+
+/** The latin file of each face the first paint uses, preloaded as next/font/google preloaded them. */
+const PRELOADED_FONTS = [
+  "/fonts/roboto-condensed-latin.woff2",
+  "/fonts/roboto-mono-latin.woff2",
+  "/fonts/instrument-serif-normal-latin.woff2",
+  "/fonts/instrument-serif-italic-latin.woff2",
+];
 
 export const metadata: Metadata = {
   title: "Tars | Agent Control Center",
@@ -53,7 +57,7 @@ export default function RootLayout({
     // error came from. Only this element's own attributes are excused.
     <html
       lang="en"
-      className={`dark ${sans.variable} ${mono.variable} ${serif.variable}`}
+      className="dark"
       style={{ colorScheme: 'dark' }}
       suppressHydrationWarning
     >
@@ -69,6 +73,9 @@ export default function RootLayout({
             __html: `(function(){try{var dark=localStorage.getItem('tars-theme')!=='light';var e=document.documentElement;e.classList.toggle('dark',dark);e.style.colorScheme=dark?'dark':'light';}catch(_){}})();`,
           }}
         />
+        {PRELOADED_FONTS.map(href => (
+          <link key={href} rel="preload" href={href} as="font" type="font/woff2" crossOrigin="" />
+        ))}
         <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
         <meta name="apple-mobile-web-app-capable" content="yes" />
         <meta name="mobile-web-app-capable" content="yes" />
