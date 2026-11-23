@@ -58,7 +58,11 @@ export class GrokProvider implements CLIProvider {
   }
 
   buildInteractiveCommand(params: InteractiveCommandParams): string {
-    let command = `'${params.binaryPath.replace(/'/g, "'\\''")}'`;
+    // Its Claude compatibility off on its line too, on macOS and Linux (the Audit's I-3 on #635): the line runs after the
+    // user's rc files, and one exporting GROK_CLAUDE_HOOKS_ENABLED=1 doubled every event again. As codex's CODEX_HOME;
+    // on Windows nothing is sourced and the environment carries it (getPtyEnvVars).
+    let command = process.platform === 'win32' ? '' : 'env GROK_CLAUDE_HOOKS_ENABLED=0 ';
+    command += `'${params.binaryPath.replace(/'/g, "'\\''")}'`;
 
     // The agent's folder trusted on its line (grok 1.0.92, measured): with a hook installed, Tars's among them, grok
     // asks in every folder whether to trust it, and the task typed at launch answered the question and was lost.
