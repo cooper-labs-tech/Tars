@@ -21,8 +21,10 @@ import { pinPlatform } from './win-fake-disk';
  * 1. A gemini agent's line without `--skip-trust`: its first task, typed or on its line, goes to the trust question.
  * 2. A bypass agent's line without `--approval-mode yolo`: its first tool call, a reply to Tars among them, waits on a
  *    question for ever, and the task never ends.
- * 3. An auto agent's line without `--approval-mode auto_edit`, a plan agent's without `--approval-mode plan`: it runs in
- *    a mode other than the one the window shows.
+ * 3. An auto agent's line without `--approval-mode auto_edit`: it runs in a mode other than the one the window shows.
+ * 3b. A plan for gemini let through: Tars has no plan mode for gemini (hasPlanMode is claude's and Qwen Code's), so a
+ *    gemini agent in plan is refused before any line is built (planModeRefusal, at creation, by the API and by an
+ *    update); a line that mapped plan would be a branch nothing reaches (the Audit's I-1 on #636).
  * 4. A normal agent's line with an approval mode: gemini no longer asks before a tool, as the user chose it would.
  * 5. The flags put after `-i <task>`, or between a flag and its value: gemini reads them as part of something else.
  *
@@ -79,16 +81,22 @@ describe('a gemini agent trusts its folder on its line (1, 5)', () => {
   });
 });
 
-describe('a gemini agent runs in its permission mode\'s approval mode (2, 3, 4, 5)', () => {
+describe('a gemini agent runs in its permission mode\'s approval mode (2, 3, 3b, 4, 5)', () => {
   it.each([
     ['bypass', 'yolo'],
     ['auto', 'auto_edit'],
-    ['plan', 'plan'],
   ])('%s: --approval-mode %s, before -i', async (permissionMode, mode) => {
     const w = words(await line({ permissionMode, prompt: 'go' }));
     expect(w[w.indexOf('--approval-mode') + 1]).toBe(mode);
     expect(w.indexOf('--approval-mode')).toBeGreaterThan(0);
     expect(w.indexOf('--approval-mode')).toBeLessThan(w.indexOf('-i'));
+  });
+
+  it('plan: refused for gemini before any line is built, and no line maps it', async () => {
+    const { planModeRefusal } = await import('../../../electron/providers/plan-mode');
+    expect(planModeRefusal('gemini', 'plan')).toMatch(/no plan mode/);
+    const { geminiApprovalMode } = await import('../../../electron/providers/gemini-provider');
+    expect(geminiApprovalMode('plan')).toBeNull();
   });
 
   it.each([['normal'], [undefined]])('%s: no approval mode, so gemini asks before a tool', async (permissionMode) => {
