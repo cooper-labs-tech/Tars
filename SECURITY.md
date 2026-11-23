@@ -629,6 +629,13 @@ there (`updateSharedJsonSync`). A key since replaced in Settings is masked in th
 question's masking, but not found in a rejected list, which holds the 20
 characters alone.
 
+A grok agent trusts its folder for good, as a claude agent's is pre-written trusted in `~/.claude.json`
+(`hasTrustDialogAccepted`, `ensureProjectTrusted`): its line carries `--trust` (grok 1.0.92, measured 23/11), which
+skips the question grok asks in every folder once a hook is installed and records the folder in grok's own store,
+`~/.grok/trusted_folders.toml`, as answering yes would. It stays there after the agent: the user's own grok in that
+folder no longer asks either, and loads what the folder holds for it (its hooks, MCP servers and commands) without a
+question. It is the agent's folder and no other, the one Tars already runs that agent in with its permission mode.
+
 Nor is the line every task Tars files carries since 2.0.4 ("Tars task: it belongs to Tars's
 agents, ..."): it is a label for whoever opens the task. Hermes's assistant, whose board listing does not
 show a task's description (0.21.5), can still finish, block, unblock or send to review a Tars task,
