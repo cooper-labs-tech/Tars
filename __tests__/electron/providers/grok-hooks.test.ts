@@ -5,6 +5,7 @@ import * as os from 'os';
 import { spawnSync } from 'child_process';
 
 import { pinPlatform } from './win-fake-disk';
+import { skipOnWindows } from '../../setup/platform-limits';
 
 /**
  * Grok's turns reach Tars through its own hooks (grok 1.0.92, measured on 23/11 in a PTY, isolated, against a local
@@ -86,7 +87,7 @@ describe('a grok agent (1, 4)', () => {
 });
 
 describe('its Claude compatibility stays off whatever the rc files set (7)', () => {
-  it('on macOS and Linux: an rc file that exports GROK_CLAUDE_HOOKS_ENABLED=1 is read, and grok still gets 0', async () => {
+  it.skipIf(skipOnWindows('it runs the line in a real /bin/sh after an rc file, the shell Tars runs it in on macOS and Linux'))('on macOS and Linux: an rc file that exports GROK_CLAUDE_HOOKS_ENABLED=1 is read, and grok still gets 0', async () => {
     const p = await grok();
     const seen = path.join(tmpDir, 'seen.txt');
     const bin = path.join(tmpDir, 'grok');
