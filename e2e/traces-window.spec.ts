@@ -42,6 +42,9 @@ import { DEV_URL, apiPort } from './ports.mjs';
  *    twice ("404 not_found.."); or the view does not read main again after it, so a give-up that removed the install,
  *    then failed, is not said as given up ("given up, though Tars could not finish: no space left on device") and
  *    does not come back as the deletion cleared by itself.
+ *    5e. (QA, the Audit's L1 on #599, 24/11) a consent main cannot save (its handler wrapped to throw ENOSPC) is not
+ *    said in the notice ("not saved: no space left on device. Upload what I opt in tries again."), the notice closes,
+ *    a consent is saved, or anything is asked of the back-office before the next click saves it.
  * 6. Never record closed models is not on in a Tars that never set it, or it says nothing of the providers' terms.
  * 7. An uncaught error in the page.
  * Red on #596's head (caefc8874), which has no window: 6 and 1 find no Inference endpoints in Settings.
@@ -317,6 +320,27 @@ test('the traces window: an endpoint added with its key never shown back, plain 
     await address.fill(backOfficeUrl);
     await address.press('Enter');
     await expect(notice, 'the back-office address saved, its consent asked').toBeVisible({ timeout: 15_000 });
+    // 5e. A consent main cannot save (a full disk: its handler wrapped to throw ENOSPC, then put back): said in the
+    // notice, which stays open, nothing saved and nothing sent; the next click saves it.
+    await app.evaluate(({ ipcMain }) => {
+      const handlers = (ipcMain as unknown as { _invokeHandlers: Map<string, (...args: unknown[]) => unknown> })._invokeHandlers;
+      const g = globalThis as Record<string, unknown>;
+      g.__tarsQaConsent = handlers.get('traces:giveUploadConsent');
+      handlers.set('traces:giveUploadConsent', () => { throw Object.assign(new Error('ENOSPC: no space left on device, write'), { code: 'ENOSPC' }); });
+    });
+    await notice.getByRole('button', { name: 'Upload what I opt in', exact: true }).click();
+    await expect.soft(notice, 'a consent main could not save, said in the notice').toContainText('not saved: no space left on device. Upload what I opt in tries again.', { timeout: 15_000 });
+    const consentFailed = { open: await notice.isVisible(), box: await notice.innerText().catch(() => ''), settings: await api<UploadSettings>('traces', 'settings'), asked: lines(backOfficeLog).length };
+    await app.evaluate(({ ipcMain }) => {
+      const handlers = (ipcMain as unknown as { _invokeHandlers: Map<string, unknown> })._invokeHandlers;
+      handlers.set('traces:giveUploadConsent', (globalThis as Record<string, unknown>).__tarsQaConsent);
+    });
+    keep({ consentFailed });
+    expect.soft(consentFailed.open, 'the notice stays open').toBe(true);
+    expect.soft(consentFailed.settings.uploadConsentAt, 'a consent saved').toBeUndefined();
+    expect.soft(consentFailed.asked, 'anything asked of the back-office').toBe(0);
+    expect.soft(consentFailed.box, "Electron's or the system's words in the notice").not.toMatch(/Error invoking remote method|ENOSPC|\.\./);
+    await stepShot(page, '6c0-consent-failed');
     await notice.getByRole('button', { name: 'Upload what I opt in', exact: true }).click();
     await expect(page.getByText(/^consent given /)).toBeVisible({ timeout: 15_000 });
     // The pass main runs every 5 minutes, run now.
