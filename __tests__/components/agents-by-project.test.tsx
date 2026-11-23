@@ -178,7 +178,8 @@ describe('the Agents page', () => {
 
   beforeEach(() => {
     storedOrder = null;
-    vi.stubGlobal('window', {});
+    // The page reads ?agent=<id> from the address once (2.0.7, a retune notice's "show"): opened with none here.
+    vi.stubGlobal('window', { location: { search: '' } });
     vi.stubGlobal('localStorage', { getItem: (key: string) => (key === 'terminals-project-tab-order' ? storedOrder : null) });
   });
 
