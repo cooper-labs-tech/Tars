@@ -9,9 +9,12 @@
 // `<cli> mcp list` (no model call): claude 2.1.302 and qwen 0.25.2 hand an MCP server their whole environment; amp
 // keeps its servers in ~/.config/amp/settings.json under amp.mcpServers (its `mcp doctor` needs a login, so what it
 // hands a server was not measured). qwen 0.25.2 refuses an option it does not have ("Unknown arguments: ...", exit 1).
-// Documented, not measured (not installed here): gemini (~/.gemini/settings.json mcpServers; its MCP servers get its
-// environment with every name matching TOKEN, SECRET, PASSWORD, KEY, AUTH or CREDENTIAL removed, unless the server's
-// own env names it, https://github.com/google-gemini/gemini-cli/blob/main/docs/tools/mcp-server.md), opencode
+// Measured on 2026-11-23, gemini 0.70.0 (npm pack, run isolated, three probe MCP servers recording what they got,
+// under `gemini -p` towards a dead local endpoint): ~/.gemini/settings.json mcpServers; an MCP server gets its
+// environment with every name matching TOKEN, SECRET, PASSWORD, PASSWD, KEY, AUTH, CREDENTIAL, CREDS, PRIVATE or CERT
+// removed, unless settings.json lists it in security.environmentVariableRedaction.allowed (Tars lists
+// CLAUDE_MGR_API_TOKEN there, utils/gemini-node-hooks.ts allowAgentToken) or it starts with GEMINI_CLI_; a server's
+// own env is expanded from the whole environment. Documented, not measured (not installed here): opencode
 // (~/.config/opencode/opencode.json, under `mcp`: type local, command as an array, environment,
 // https://opencode.ai/docs/mcp-servers/), pi (~/.pi/agent/mcp.json and .pi/mcp.json, mcpServers, from a third
 // party's notes), grok 0.2.64 (~/.grok/config.toml, [mcp_servers.<name>], as electron/providers/grok-provider.ts
@@ -106,7 +109,7 @@ function addTomlServer(file, name, command, args) {
   fs.writeFileSync(file, `${kept ? kept + '\n\n' : ''}[mcp_servers.${name}]\ncommand = ${JSON.stringify(command)}\nargs = ${JSON.stringify(args)}\n`);
 }
 
-const GEMINI_REDACTED = /TOKEN|SECRET|PASSWORD|KEY|AUTH|CREDENTIAL/i;
+const GEMINI_REDACTED = /TOKEN|SECRET|PASSWORD|PASSWD|KEY|AUTH|CREDENTIAL|CREDS|PRIVATE|CERT/i;
 
 export async function run() {
   const kind = process.env.FAKE_CLI_KIND;
@@ -295,9 +298,13 @@ export async function run() {
   function serverEnv(server) {
     const own = server.env ?? {};
     if (kind === 'gemini') {
-      const base = Object.fromEntries(Object.entries(process.env).filter(([k]) => !GEMINI_REDACTED.test(k)));
+      // Measured on 0.70.0 (header): redacted by name, unless the user's settings allow it or it is gemini's own.
+      const listed = readJson(path.join(HOME, '.gemini', 'settings.json'))?.security?.environmentVariableRedaction?.allowed;
+      const allowed = new Set((Array.isArray(listed) ? listed : []).map((k) => String(k).toUpperCase()));
+      const kept = (k) => k.toUpperCase().startsWith('GEMINI_CLI_') || allowed.has(k.toUpperCase()) || !GEMINI_REDACTED.test(k);
+      const base = Object.fromEntries(Object.entries(process.env).filter(([k]) => kept(k)));
       const expanded = Object.fromEntries(Object.entries(own).map(([k, v]) => [k, String(v).replace(/\$\{?([A-Z0-9_]+)\}?/g, (_, n) => process.env[n] ?? '')]));
-      return { policy: 'documented: redacted', env: { ...base, ...expanded } };
+      return { policy: 'measured (0.70.0): redacted unless allowed', env: { ...base, ...expanded } };
     }
     const measured = kind === 'claude' || kind === 'qwen-code';
     return { policy: measured ? 'measured: whole environment' : 'assumed: whole environment', env: { ...process.env, ...own } };
