@@ -17,13 +17,13 @@
 // party's notes), grok 0.2.64 (~/.grok/config.toml, [mcp_servers.<name>], as electron/providers/grok-provider.ts
 // says). Where nothing says what a CLI hands its MCP servers, it is its whole environment, and the log says
 // `assumed`.
-// Measured on 2026-11-23, gemini 0.70.0 (its TUI in a PTY, isolated, on a stand-in of Gemini's API): its folder trust
-// is on by default, so in a folder never trusted it opens on "Do you trust the files in this folder?" unless
-// --skip-trust is on its line, and a task typed then is taken by the question; in its default approval mode every tool
-// call, Tars's MCP tools included, waits on a question unless --approval-mode yolo (or --yolo).
 // claude reports 2.1.288, under the 2.1.289 that the state mod needs: its turns show through the shell hooks here,
 // the state mod having specs of its own (state-mod.live.spec.ts).
 // codex is e2e/fake-codex.mjs (fix/codex-works, measured on 0.163), not this file.
+// gemini's questions, measured on 2026-11-23, gemini 0.70.0 (its TUI in a PTY, isolated, on a stand-in of Gemini's
+// API): its folder trust is on by default, so in a folder never trusted it opens on "Do you trust the files in this
+// folder?" unless --skip-trust is on its line, and a task typed then is taken by the question; in its default approval
+// mode every tool call, Tars's MCP tools included, waits on a question unless --approval-mode yolo (or --yolo).
 //
 // A turn does what the text it was given asks, as a model would (the first of these in the text):
 //   DELEGATE <agent id> <prompt>   calls Tars's delegate_task, through Tars's MCP server as this CLI starts it;
@@ -439,13 +439,6 @@ export async function run() {
     else if (apiKey && !approved) question = 'api-key';
     if (process.env.ANTHROPIC_BASE_URL && !process.env.ANTHROPIC_AUTH_TOKEN && !approved) loggedIn = false;
   }
-  // ---- gemini's folder trust (0.70.0, measured): on by default, asked in a folder it was never told to trust, unless
-  // --skip-trust is on its line; a task typed then answers the question and is lost.
-  if (kind === 'gemini' && !opts.oneShot) {
-    const trusted = readJson(path.join(HOME, '.gemini', 'trustedFolders.json')) ?? {};
-    const off = settings.security?.folderTrust?.enabled === false;
-    if (!off && !opts.skipTrust && !trusted[cwd] && !trusted[fs.realpathSync(cwd)]) question = 'trust';
-  }
 
   const permissionMode = opts.bypass ? 'bypassPermissions' : 'default';
   log({ launch: true, argv, cwd, token: !!process.env.CLAUDE_MGR_API_TOKEN, instance: !!process.env.TARS_INSTANCE_ID, sid, prompt: opts.prompt, oneShot: opts.oneShot, question, loggedIn, servers: Object.keys(mcpServers()) });
@@ -497,6 +490,14 @@ export async function run() {
     if (kind === 'gemini') hook('AfterAgent', { prompt: text, prompt_response: answer, stop_hook_active: false });
     else hook('Stop', { stop_hook_active: false, last_assistant_message: answer, permission_mode: permissionMode });
     if (kind !== 'claude') hook('Notification', { notification_type: 'idle_prompt', message: 'waiting for your input' });
+  }
+
+  // ---- gemini's folder trust (0.70.0, measured): on by default, asked in a folder it was never told to trust, unless
+  // --skip-trust is on its line; a task typed then answers the question and is lost.
+  if (kind === 'gemini' && !opts.oneShot) {
+    const trusted = readJson(path.join(HOME, '.gemini', 'trustedFolders.json')) ?? {};
+    const off = settings.security?.folderTrust?.enabled === false;
+    if (!off && !opts.skipTrust && !trusted[cwd] && !trusted[fs.realpathSync(cwd)]) question = 'trust';
   }
 
   hook('SessionStart', { source: opts.resume ? 'resume' : 'startup', model: opts.model, permission_mode: permissionMode });
