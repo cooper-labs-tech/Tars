@@ -123,9 +123,10 @@ export async function startGeminiStandIn({ key, log, tool, expect } = {}) {
   return { baseUrl, marker, close: () => new Promise((resolve) => server.close(() => resolve())) };
 }
 
-// Run as a command: read by its file name, not import.meta, which Playwright's CommonJS transform does not have.
+// Run as a command: read by its file name, not import.meta, and with no top-level await, neither of which Playwright's
+// CommonJS transform can load (it refused this file at load with a top-level await).
 if ((process.argv[1] || '').endsWith('stand-in-gemini-endpoint.mjs')) {
   const arg = (name) => { const i = process.argv.indexOf(`--${name}`); return i > 0 ? process.argv[i + 1] : undefined; };
-  const s = await startGeminiStandIn({ key: arg('key'), log: arg('log') ?? process.env.STAND_IN_LOG, expect: arg('expect') });
-  console.log(`gemini stand-in listening on ${s.baseUrl} marker ${s.marker}`);
+  void startGeminiStandIn({ key: arg('key'), log: arg('log') ?? process.env.STAND_IN_LOG, expect: arg('expect') })
+    .then((s) => console.log(`gemini stand-in listening on ${s.baseUrl} marker ${s.marker}`));
 }
