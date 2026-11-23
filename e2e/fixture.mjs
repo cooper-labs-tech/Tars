@@ -1013,15 +1013,16 @@ const realHomeCopies = new Set();
  * copy: removeHome deletes it whatever the test's outcome, before it keeps a
  * red home (the Audit's M1 on #628), and the worker's exit deletes any copy
  * still there. A folder is cloned on macOS (`cp -c`, no space taken), copied
- * elsewhere. Returns false, copying nothing, when `from` does not exist. The
- * guard (__tests__/e2e-sandboxes-removed.test.ts) fails a spec that copies the
- * real home any other way.
+ * elsewhere; `clone` chooses, for the tests of both ways on one machine. Returns
+ * false, copying nothing, when `from` does not exist. The guard
+ * (__tests__/e2e-sandboxes-removed.test.ts) fails a spec that copies the real
+ * home any other way. Tests: __tests__/e2e-copy-from-real-home.test.ts.
  */
-export function copyFromRealHome(from, to) {
+export function copyFromRealHome(from, to, { clone = process.platform === 'darwin' } = {}) {
   if (!fs.existsSync(from)) return false;
   fs.mkdirSync(path.dirname(to), { recursive: true });
   if (!fs.statSync(from).isDirectory()) fs.copyFileSync(from, to);
-  else if (process.platform === 'darwin') execFileSync('/bin/cp', ['-c', '-R', from, to]);
+  else if (clone) execFileSync('/bin/cp', ['-c', '-R', from, to]);
   else fs.cpSync(from, to, { recursive: true });
   realHomeCopies.add(to);
   return true;
