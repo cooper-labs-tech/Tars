@@ -3,6 +3,7 @@ import * as os from 'os';
 import * as path from 'path';
 import type { CLIProvider } from '../providers/cli-provider';
 import { writeAtomicSync } from '../utils/secret-file';
+import { parseJsonc } from '../utils/shared-file';
 
 /**
  * The MCP servers each agent gets, by its role (2.0.5, the owner's lot 3 of 28/10: "un exécutant ne reçoit plus
@@ -101,7 +102,9 @@ export function geminiRoleArgs(orchestrator: boolean, settingsFile: string): str
   if (orchestrator) return [];
   let names: string[];
   try {
-    names = Object.keys(JSON.parse(fs.readFileSync(settingsFile, 'utf-8'))?.mcpServers ?? {});
+    // As gemini reads it, comments allowed (utils/shared-file.ts): read as plain JSON, a commented file gave the
+    // worker no allow-list at all, so the orchestrator's own servers reached it.
+    names = Object.keys((parseJsonc(fs.readFileSync(settingsFile, 'utf-8')) as { mcpServers?: object } | null)?.mcpServers ?? {});
   } catch {
     return [];
   }

@@ -3,7 +3,8 @@ import * as os from 'os';
 import * as path from 'path';
 import * as fs from 'fs';
 import { addMcpServerToJson, removeMcpServerFromJson } from '../utils/mcp-json';
-import { updateSharedTextSync, writeSharedJsonSync } from '../utils/shared-file';
+import { parseJsonc, updateSharedJsoncSync, updateSharedTextSync } from '../utils/shared-file';
+import { geminiSettingsLeft } from '../providers/gemini-provider';
 import { removeTomlTable } from '../utils/toml-tables';
 import { parse as parseToml } from 'smol-toml';
 
@@ -89,55 +90,61 @@ interface McpConfigFile {
   [key: string]: unknown;
 }
 
-// ── Gemini: JSON { mcpServers: { name: { command, args } }, ...other } ──
+// ── Gemini: JSON with comments { mcpServers: { name: { command, args } }, ...other } ──
+// Gemini's own settings file, which also holds the user's auth and Tars's hooks: read and edited as gemini reads it,
+// as the provider does (providers/gemini-provider.ts). It was read as plain JSON here, so a commented file listed no
+// server, and a save or a deletion replaced the file with `mcpServers` alone (the Audit's M1 on #634).
 
 function readGeminiMcp(): McpServer[] {
   const configPath = getConfigPath('gemini');
   if (!fs.existsSync(configPath)) return [];
+  const text = fs.readFileSync(configPath, 'utf-8');
+  if (!text.trim()) return [];
+  let data: unknown;
   try {
-    const data = JSON.parse(fs.readFileSync(configPath, 'utf-8'));
-    const servers = data.mcpServers || {};
-    return Object.entries(servers)
-      .filter(([name]) => !DOROTHY_MANAGED_MCPS.has(name))
-      .map(([name, raw]) => {
-        const cfg = (raw && typeof raw === 'object' ? raw : {}) as Record<string, unknown>;
-        return {
-          name,
-          command: typeof cfg.command === 'string' ? cfg.command : '',
-          args: Array.isArray(cfg.args) ? cfg.args : [],
-          env: (cfg.env && typeof cfg.env === 'object') ? cfg.env as Record<string, string> : {},
-        };
-      });
-  } catch (err) {
-    console.error('Failed to read Gemini MCP config:', err);
-    return [];
+    data = parseJsonc(text);
+  } catch {
+    data = undefined;
   }
+  if (!data || typeof data !== 'object' || Array.isArray(data)) {
+    throw new Error(`${geminiSettingsLeft('unreadable', configPath)}: its servers cannot be listed.`);
+  }
+  const servers = (data as McpConfigFile).mcpServers || {};
+  return Object.entries(servers)
+    .filter(([name]) => !DOROTHY_MANAGED_MCPS.has(name))
+    .map(([name, raw]) => {
+      const cfg = (raw && typeof raw === 'object' ? raw : {}) as Record<string, unknown>;
+      return {
+        name,
+        command: typeof cfg.command === 'string' ? cfg.command : '',
+        args: Array.isArray(cfg.args) ? cfg.args : [],
+        env: (cfg.env && typeof cfg.env === 'object') ? cfg.env as Record<string, string> : {},
+      };
+    });
 }
 
+/** `mcpServers.<name>` set or taken out, and nothing else: a file gemini could not read either is left, and the answer says why. */
 function writeGeminiMcp(action: 'update' | 'delete', server?: McpServer, deleteName?: string): void {
   const configPath = getConfigPath('gemini');
-  let data: McpConfigFile = {};
-  if (fs.existsSync(configPath)) {
-    try {
-      data = JSON.parse(fs.readFileSync(configPath, 'utf-8'));
-    } catch {
-      data = {};
+  const name = action === 'update' ? server!.name : deleteName!;
+  const outcome = updateSharedJsoncSync<McpConfigFile>(configPath, (current) => {
+    const held = current?.mcpServers;
+    const servers = held && typeof held === 'object' && !Array.isArray(held) ? held : undefined;
+    if (action === 'delete') {
+      if (!current || !servers || !Object.hasOwn(servers, name)) return undefined;
+      const { [name]: _removed, ...rest } = servers;
+      return { ...current, mcpServers: rest };
     }
-  }
-  const servers = (data.mcpServers ??= {});
-
-  if (action === 'update' && server) {
-    servers[server.name] = {
-      command: server.command,
-      args: server.args,
-      ...(Object.keys(server.env).length > 0 ? { env: server.env } : {}),
+    return {
+      ...current,
+      mcpServers: {
+        ...servers,
+        [name]: { command: server!.command, args: server!.args, ...(Object.keys(server!.env).length > 0 ? { env: server!.env } : {}) },
+      },
     };
-  } else if (action === 'delete' && deleteName) {
-    delete servers[deleteName];
-  }
-
-  // Written whole beside it, with its final newline, and parsed again (utils/shared-file.ts).
-  writeSharedJsonSync(configPath, data);
+  });
+  const left = geminiSettingsLeft(outcome, configPath);
+  if (left) throw new Error(`${left}: ${name} ${action === 'update' ? 'not saved' : 'not removed'}.`);
 }
 
 // ── Generic JSON MCP: { mcpServers: { name: { command, args, env } } }

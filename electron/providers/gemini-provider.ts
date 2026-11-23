@@ -27,15 +27,23 @@ type GeminiSettings = { hooks?: Record<string, HookEntry[]>; mcpServers?: Record
  * Why Tars's hooks are not in gemini's settings file, in the window's words, or null when they are. One sentence:
  * the log says it at Tars's start, and each launch of a gemini agent says it in that agent's output (agentNotice).
  */
-function hooksNotWritten(outcome: SharedJsonOutcome, settingsPath: string): string | null {
+/**
+ * Why Tars left gemini's settings file as it was, in the words the user reads (the hooks' notice here, and the
+ * window's MCP channels, handlers/mcp-config-handlers.ts), or null when it was written or needed nothing.
+ */
+export function geminiSettingsLeft(outcome: SharedJsonOutcome, settingsPath: string): string | null {
   const shown = settingsPath.startsWith(os.homedir()) ? `~${settingsPath.slice(os.homedir().length)}` : settingsPath;
   const why = outcome === 'unreadable'
     ? 'could not be read as gemini reads it (not valid JSON even without its comments, or not an object)'
     : outcome === 'busy' ? 'kept changing while Tars wrote to it'
       : outcome === 'refused' ? 'would have read back differently from what Tars meant to write'
         : null;
-  if (!why) return null;
-  return `Gemini's settings file ${shown} ${why}, so Tars left it exactly as it is and wrote none of its hooks there: `
+  return why ? `Gemini's settings file ${shown} ${why}, so Tars left it exactly as it is` : null;
+}
+
+function hooksNotWritten(outcome: SharedJsonOutcome, settingsPath: string): string | null {
+  const left = geminiSettingsLeft(outcome, settingsPath);
+  return left && `${left} and wrote none of its hooks there: `
     + 'this agent runs, but Tars does not hear its turns or its answers until the file is fixed, and its next start tries again.';
 }
 
