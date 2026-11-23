@@ -39,9 +39,20 @@ function reasonOf(e: unknown): string {
   let s = (e instanceof Error ? e.message : String(e)).trim();
   s = s.replace(/^Error invoking remote method '[^']*':\s*/, '');
   while (/^[A-Za-z]*Error:\s*/.test(s)) s = s.replace(/^[A-Za-z]*Error:\s*/, '');
-  const system = s.match(/^E[A-Z]+:\s*([^,]+)(?:,.*)?$/);
+  // A system error's code (ENOSPC, EACCES...), not a message that happens to start with ERROR.
+  const system = s.match(/^(?!ERROR:)E[A-Z]+:\s*([^,]+)(?:,.*)?$/);
   if (system) s = system[1];
   return s.replace(/[.\s]+$/, '');
+}
+
+/**
+ * A failure thrown on the way to main, said on its line in main's own words (reasonOf), and logged whole for whoever
+ * diagnoses it: the line drops a system error's path and Electron's channel, the console keeps them (the Audit's I-1
+ * on #599).
+ */
+function said(what: string, e: unknown): string {
+  console.warn(`[traces upload] ${what} failed:`, e);
+  return reasonOf(e);
 }
 
 /** The upload's state in words: queued, sent, failed with the back-office's reason, offline. */
@@ -93,6 +104,8 @@ export function UploadView() {
   const [giveUpUnfinished, setGiveUpUnfinished] = useState<string | null>(null);
   /** The acknowledgment of a cleared deletion that main could not write: said in its box, OK tries again. */
   const [ackError, setAckError] = useState<string | null>(null);
+  /** A consent main could not save: said in the notice, above its answers, which stays open. */
+  const [consentError, setConsentError] = useState<string | null>(null);
 
   const read = useCallback(async () => {
     const api = tracesApi();
@@ -106,7 +119,7 @@ export function UploadView() {
       }
       setState(await api.uploadState());
       setError(null);
-    } catch (e) { setError(reasonOf(e)); }
+    } catch (e) { setError(said('reading the settings', e)); }
   }, []);
 
   useEffect(() => {
@@ -129,7 +142,7 @@ export function UploadView() {
     try {
       r = await api.setSettings({ uploadUrl: url.trim(), uploadAllowPlainHttp: leave });
     } catch (e) {
-      setSaveError(`not saved: ${reasonOf(e)}. Enter tries again, Escape goes back.`);
+      setSaveError(`not saved: ${said('saving the address', e)}. Enter tries again, Escape goes back.`);
       return;
     }
     // Main's refusal says why in its own words (a public address over plain http); the address stays as typed.
@@ -143,11 +156,27 @@ export function UploadView() {
     void read();
   };
 
+  /** The notice closed: a consent it could not save is no longer said. */
+  const closeNotice = () => {
+    setShowNotice(false);
+    setConsentError(null);
+  };
+
   const consent = async () => {
     const api = tracesApi();
     if (!api) return;
-    const r = await api.giveUploadConsent();
-    setShowNotice(false);
+    setConsentError(null);
+    let r: Awaited<ReturnType<typeof api.giveUploadConsent>>;
+    try {
+      r = await api.giveUploadConsent();
+    } catch (e) {
+      // Main can throw before the consent is saved (a full disk): said in the notice, which stays open, never an
+      // unhandled rejection (the Audit's L1 on #599). Nothing is sent without a saved consent.
+      setConsentError(said('saving the consent', e));
+      void read();
+      return;
+    }
+    closeNotice();
     if (!r.ok) setSaveError(r.error);
     void read();
   };
@@ -178,7 +207,7 @@ export function UploadView() {
       r = await api.deleteEverywhere();
     } catch (e) {
       // Main can throw before the back-office is asked (a full disk): said, never an unhandled rejection.
-      r = { ok: false, error: reasonOf(e) };
+      r = { ok: false, error: said('deleting', e) };
     } finally {
       setInProgress(false);
     }
@@ -201,7 +230,7 @@ export function UploadView() {
     } catch (e) {
       // Main forgets the install first, then resets what was sent: a failure after the first step leaves the deletion
       // given up. What is true is read from main, never assumed (QA's re-check of #599).
-      const reason = reasonOf(e);
+      const reason = said('giving up the deletion', e);
       const after = await api.uploadState().catch(() => null);
       if (after && !after.deletionOwed) { setState(after); setGiveUpUnfinished(reason); } else setGiveUpError(reason);
     }
@@ -214,7 +243,7 @@ export function UploadView() {
       await tracesApi()?.ackDeletionCleared();
       setAckError(null);
     } catch (e) {
-      setAckError(reasonOf(e));
+      setAckError(said('acknowledging the cleared deletion', e));
     }
     void read();
   };
@@ -355,13 +384,13 @@ export function UploadView() {
 
       {showNotice && notice && (
         <DialogShell
-          onClose={() => setShowNotice(false)}
+          onClose={closeNotice}
           width={760}
           title="Before anything leaves this computer"
           subtitle={`Tars uploads${address ? ` to ${address}` : ''} the sessions you opt in, scrubbed by its own rules (scrub ${notice.scrubbing.version}). Read what leaves and what stays, and preview a session as it would be sent.`}
           footerLeft={<Button onClick={() => { void previewOne(); }}>Preview a session</Button>}
           footerRight={<>
-            <Button onClick={() => setShowNotice(false)}>Not now</Button>
+            <Button onClick={closeNotice}>Not now</Button>
             <Button variant="primary" disabled={!address || !!settings?.uploadConsentAt || owed} onClick={() => { void consent(); }}>Upload what I opt in</Button>
           </>}
         >
@@ -378,6 +407,7 @@ export function UploadView() {
               <Bullets caption="IT CANNOT CATCH" items={notice.scrubbing.cannot} tone="text-status-error" />
             </div>
             <p className="text-[11px] text-muted-foreground">You can delete everything this Tars sent at any time, from Traces, Upload.</p>
+            {consentError && <StateLine word={`not saved: ${consentError}. Upload what I opt in tries again.`} tone="error" />}
           </div>
         </DialogShell>
       )}
