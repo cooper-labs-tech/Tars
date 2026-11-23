@@ -6,6 +6,7 @@ import type { AppSettings } from '../types';
 import { keyEnvFor } from '../services/cli-keys';
 import { updateSharedTextSync } from '../utils/shared-file';
 import { removeTomlTable } from '../utils/toml-tables';
+import { nodeHookCommand, usesNodeHooks } from '../utils/hook-command';
 import { parse as parseToml } from 'smol-toml';
 import type {
   CLIProvider,
@@ -57,7 +58,16 @@ export class GrokProvider implements CLIProvider {
   }
 
   buildInteractiveCommand(params: InteractiveCommandParams): string {
-    let command = `'${params.binaryPath.replace(/'/g, "'\\''")}'`;
+    // Its Claude compatibility off on its line too, on macOS and Linux (the Audit's I-3 on #635): the line runs after the
+    // user's rc files, and one exporting GROK_CLAUDE_HOOKS_ENABLED=1 doubled every event again. As codex's CODEX_HOME;
+    // on Windows nothing is sourced and the environment carries it (getPtyEnvVars).
+    let command = process.platform === 'win32' ? '' : 'env GROK_CLAUDE_HOOKS_ENABLED=0 ';
+    command += `'${params.binaryPath.replace(/'/g, "'\\''")}'`;
+
+    // The agent's folder trusted on its line (grok 1.0.92, measured): with a hook installed, Tars's among them, grok
+    // asks in every folder whether to trust it, and the task typed at launch answered the question and was lost.
+    // `--trust` trusts it and records it in grok's own store (~/.grok/trusted_folders.toml), as its question does.
+    command += ' --trust';
 
     // Model
     if (params.model) {
@@ -128,6 +138,10 @@ export class GrokProvider implements CLIProvider {
       // back to every project's agents instead of its own.
       CLAUDE_AGENT_ID: agentId,
       CLAUDE_PROJECT_PATH: projectPath,
+      // grok runs Claude Code's hooks too (~/.claude/settings.json, where Tars's hooks for claude are): Tars's hooks
+      // run from grok's own folder (configureHooks), so that compatibility is off for its agents, or every event of
+      // theirs reached Tars twice (measured on 1.0.92: with it 0, the Claude file's hooks no longer ran).
+      GROK_CLAUDE_HOOKS_ENABLED: '0',
       // Its API key from Settings, under the variable it reads (services/cli-keys.ts).
       ...keyEnvFor('grok', appSettings),
     };
@@ -140,16 +154,55 @@ export class GrokProvider implements CLIProvider {
 
   getHookConfig(): HookConfig {
     return {
-      supportsNativeHooks: false,
+      supportsNativeHooks: true,
       configDir: this.configDir,
       settingsFile: path.join(this.configDir, 'config.toml'),
     };
   }
 
-  async configureHooks(_hooksDir: string): Promise<void> {
-    // Grok CLI hook payload format is not yet documented for the public beta.
-    // Fall back to exit-code based status detection, like the Codex provider.
-    console.log('Grok CLI: native hooks not wired yet, using exit-code based status detection');
+  /** Tars's own file among grok's hook files (configureHooks). */
+  private get tarsHooksFile(): string {
+    return path.join(this.configDir, 'hooks', 'tars.json');
+  }
+
+  /**
+   * Tars's hooks among grok's own, in a file of Tars's (~/.grok/hooks/tars.json), never in the user's other files there.
+   * Measured on grok 1.0.92 (23/11): it reads every ~/.grok/hooks/*.json, of Claude Code's settings shape, and fires
+   * Claude Code's events with Claude Code's fields (SessionStart at launch, UserPromptSubmit with the prompt, Stop with
+   * last_assistant_message, StopFailure, SessionEnd, each with session_id and the CLI's environment), so Tars's own
+   * hook scripts read them as they read Claude Code's: its turns, its end of turn, its answer. Written only when it
+   * changes. On Windows, Tars's Node runner instead of the `.sh` scripts, as for claude (utils/hook-command.ts).
+   */
+  async configureHooks(hooksDir: string, platform: NodeJS.Platform = process.platform): Promise<void> {
+    const events: Array<[string, string]> = [
+      ['SessionStart', 'session-start.sh'],
+      ['UserPromptSubmit', 'user-prompt-submit.sh'],
+      ['Stop', 'on-stop.sh'],
+      ['StopFailure', 'stop-failure.sh'],
+      ['SessionEnd', 'session-end.sh'],
+      ['Notification', 'notification.sh'],
+      ['PostToolUse', 'post-tool-use.sh'],
+    ];
+    const runner = path.join(hooksDir, 'tars-hook.mjs');
+    const node = usesNodeHooks(platform);
+    if (node && !fs.existsSync(runner)) return;
+    const hooks: Record<string, Array<{ hooks: Array<{ type: 'command'; command: string; timeout: number }> }>> = {};
+    for (const [event, file] of events) {
+      const script = path.join(hooksDir, file);
+      if (!fs.existsSync(script)) continue;
+      const command = node ? nodeHookCommand(runner, file.replace(/\.sh$/, '')) : script;
+      hooks[event] = [{ hooks: [{ type: 'command', command, timeout: 30 }] }];
+    }
+    const file = this.tarsHooksFile;
+    const content = `${JSON.stringify({ hooks }, null, 2)}\n`;
+    try {
+      if (fs.existsSync(file) && fs.readFileSync(file, 'utf8') === content) return;
+      fs.mkdirSync(path.dirname(file), { recursive: true });
+      fs.writeFileSync(file, content, { mode: 0o644 });
+      console.log('Grok hooks configured in', file);
+    } catch (err) {
+      console.warn(`Grok hooks not configured in ${file}:`, err);
+    }
   }
 
   getMcpConfigStrategy(): 'flag' | 'config-file' {

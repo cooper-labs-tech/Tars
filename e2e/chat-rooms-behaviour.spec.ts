@@ -136,8 +136,9 @@ test('a draft typed in one room is not sent from the next', async () => {
 
 test('an error on a CLI that never reports its turns still says why', async () => {
   const errorsBefore = pageErrors.length;
-  // a5 runs grok, one of the five CLIs with no end of turn.
-  await setAgents({ a5: { status: 'error', error: REASON } });
+  // a5 runs opencode here, one of the CLIs with no end of turn (the fixture's grok reports its turns through its
+  // hooks since 23/11).
+  await setAgents({ a5: { provider: 'opencode', status: 'error', error: REASON } });
   await page.goto(DEV_URL + '/chat', { waitUntil: 'domcontentloaded' });
   await openRoom('1212-capital', 'Nobody was stopped: every agent finished its turn');
   await page.waitForTimeout(900);

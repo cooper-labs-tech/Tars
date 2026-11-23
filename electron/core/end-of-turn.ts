@@ -4,9 +4,9 @@ import type { AgentStatus } from '../types';
 /**
  * Providers whose interactive session never leaves `running`.
  *
- * amp, grok, opencode and pi have no native hooks, so their status only
+ * amp, opencode and pi have no native hooks, so their status only
  * changes when the process exits (codex's turns are read from its session log
- * since 2.0.4, services/codex-sessions.ts): a queue that waits for them to be at rest
+ * since 2.0.4, services/codex-sessions.ts; grok's come from its own hooks): a queue that waits for them to be at rest
  * would never drain. Read from the provider's own hook configuration rather
  * than a list written out here, so a provider that gains hooks stops being an
  * exception on the day it gains them, not on the day someone remembers.

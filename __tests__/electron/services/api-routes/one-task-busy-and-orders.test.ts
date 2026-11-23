@@ -245,14 +245,14 @@ afterEach(() => {
 });
 
 describe('what holds an agent, for every CLI (H1)', () => {
-  it('1. a grok worker whose terminal took a task, its TUI open and running, still gets a delegated task: it goes in', async () => {
-    const { terminal } = withCli('gk', 'grok', 'running');
-    const a = call('POST', '/api/agents/gk/run-task', { task: 'TASK-A review', answer: 'started' }, 'orch');
+  it('1. an opencode worker whose terminal took a task, its TUI open and running, still gets a delegated task: it goes in', async () => {
+    const { terminal } = withCli('oc', 'opencode', 'running');
+    const a = call('POST', '/api/agents/oc/run-task', { task: 'TASK-A review', answer: 'started' }, 'orch');
     await later(1500);
     expect(a.answer()?.data, JSON.stringify(a.answer())).toMatchObject({ queued: false, outcome: 'delivered' });
     expect(typedInto(terminal)).toContain('TASK-A');
     // And the next one too: a task its CLI says nothing of does not hold it.
-    const b = call('POST', '/api/agents/gk/run-task', { task: 'TASK-B fix it', answer: 'started' }, 'orch');
+    const b = call('POST', '/api/agents/oc/run-task', { task: 'TASK-B fix it', answer: 'started' }, 'orch');
     await later(1500);
     expect(b.answer()?.data, JSON.stringify(b.answer())).toMatchObject({ queued: false, outcome: 'delivered' });
     expect(typedInto(terminal)).toContain('TASK-B');
@@ -289,10 +289,10 @@ describe('what holds an agent, for every CLI (H1)', () => {
     expect(runs, 'started once the turn ended').toHaveLength(1);
   });
 
-  it('4. a worker\'s note to a grok worker, its TUI open, is typed in: no turn end is waited for that never comes', async () => {
-    const { terminal } = withCli('gk', 'grok', 'running');
+  it('4. a worker\'s note to an opencode worker, its TUI open, is typed in: no turn end is waited for that never comes', async () => {
+    const { terminal } = withCli('oc', 'opencode', 'running');
     member('w1');
-    const n = call('POST', '/api/agents/gk/dispatch', { message: 'NOTE-ONE the notes are in' }, 'w1');
+    const n = call('POST', '/api/agents/oc/dispatch', { message: 'NOTE-ONE the notes are in' }, 'w1');
     await later(3000);
     await n.done;
     expect(n.answer()?.data, JSON.stringify(n.answer())).toMatchObject({ success: true, note: true });

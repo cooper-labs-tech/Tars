@@ -17,6 +17,12 @@
 // party's notes), grok 0.2.64 (~/.grok/config.toml, [mcp_servers.<name>], as electron/providers/grok-provider.ts
 // says). Where nothing says what a CLI hands its MCP servers, it is its whole environment, and the log says
 // `assumed`.
+// Measured on 2026-11-23, grok 1.0.92 (in a PTY, isolated, against a local stand-in model): its hooks are Claude Code's
+// on the wire (SessionStart at launch, UserPromptSubmit, Stop with last_assistant_message, StopFailure, SessionEnd),
+// read from ~/.grok/hooks/*.json and, through its Claude compatibility, ~/.claude/settings.json unless
+// GROK_CLAUDE_HOOKS_ENABLED=0; with any hook installed it asks whether to trust the folder unless --trust is on its
+// line or the folder is in ~/.grok/trusted_folders.toml, and a task typed then answers the question and is lost; an MCP
+// server gets its whole environment.
 // claude reports 2.1.288, under the 2.1.289 that the state mod needs: its turns show through the shell hooks here,
 // the state mod having specs of its own (state-mod.live.spec.ts).
 // codex is e2e/fake-codex.mjs (fix/codex-works, measured on 0.163), not this file.
@@ -259,8 +265,20 @@ export async function run() {
   const settings = kind === 'claude' ? (readJson(path.join(claudeDir, 'settings.json')) ?? {})
     : kind === 'gemini' ? (readJson(files.gemini) ?? {})
       : kind === 'qwen-code' ? { ...(readJson(files.qwen) ?? {}), ...(readJson(process.env.QWEN_CODE_SYSTEM_SETTINGS_PATH ?? '') ?? {}) }
-        : {};
-  const hookEvents = { claude: ['SessionStart', 'UserPromptSubmit', 'Stop', 'Notification', 'StopFailure'], 'qwen-code': ['SessionStart', 'UserPromptSubmit', 'Stop', 'Notification', 'PermissionRequest'], gemini: ['SessionStart', 'BeforeAgent', 'AfterAgent', 'Notification'] }[kind] ?? [];
+        : kind === 'grok' ? grokSettings()
+          : {};
+  /** grok's hooks (1.0.92, measured): every ~/.grok/hooks/*.json, then ~/.claude/settings.json's unless turned off. */
+  function grokSettings() {
+    const dir = path.join(HOME, '.grok', 'hooks');
+    const files = fs.existsSync(dir) ? fs.readdirSync(dir).filter((f) => f.endsWith('.json')).sort().map((f) => path.join(dir, f)) : [];
+    if (process.env.GROK_CLAUDE_HOOKS_ENABLED !== '0') files.push(path.join(HOME, '.claude', 'settings.json'));
+    const hooks = {};
+    for (const file of files) {
+      for (const [event, entries] of Object.entries(readJson(file)?.hooks ?? {})) hooks[event] = [...(hooks[event] ?? []), ...(Array.isArray(entries) ? entries : [])];
+    }
+    return { hooks };
+  }
+  const hookEvents = { claude: ['SessionStart', 'UserPromptSubmit', 'Stop', 'Notification', 'StopFailure'], 'qwen-code': ['SessionStart', 'UserPromptSubmit', 'Stop', 'Notification', 'PermissionRequest'], gemini: ['SessionStart', 'BeforeAgent', 'AfterAgent', 'Notification'], grok: ['SessionStart', 'UserPromptSubmit', 'Stop', 'StopFailure', 'Notification'] }[kind] ?? [];
 
   function mcpServers() {
     const found = {};
@@ -434,6 +452,12 @@ export async function run() {
     else if (apiKey && !approved) question = 'api-key';
     if (process.env.ANTHROPIC_BASE_URL && !process.env.ANTHROPIC_AUTH_TOKEN && !approved) loggedIn = false;
   }
+  // ---- grok's folder trust (1.0.92, measured): asked while any hook is installed, unless --trust or already trusted.
+  if (kind === 'grok' && !opts.oneShot) {
+    const store = fs.existsSync(path.join(HOME, '.grok', 'trusted_folders.toml')) ? fs.readFileSync(path.join(HOME, '.grok', 'trusted_folders.toml'), 'utf8') : '';
+    const trusted = argv.includes('--trust') || store.includes(`"${cwd}"`) || store.includes(`"${fs.realpathSync(cwd)}"`);
+    if (Object.keys(settings.hooks ?? {}).length > 0 && !trusted) question = 'trust';
+  }
 
   const permissionMode = opts.bypass ? 'bypassPermissions' : 'default';
   log({ launch: true, argv, cwd, token: !!process.env.CLAUDE_MGR_API_TOKEN, instance: !!process.env.TARS_INSTANCE_ID, sid, prompt: opts.prompt, oneShot: opts.oneShot, question, loggedIn, servers: Object.keys(mcpServers()) });
@@ -476,7 +500,8 @@ export async function run() {
     out(`\n● ${answer.split('\n')[0]}\n\n> `);
     if (kind === 'gemini') hook('AfterAgent', { prompt: text, prompt_response: answer, stop_hook_active: false });
     else hook('Stop', { stop_hook_active: false, last_assistant_message: answer, permission_mode: permissionMode });
-    if (kind !== 'claude') hook('Notification', { notification_type: 'idle_prompt', message: 'waiting for your input' });
+    // grok's hooks are Claude Code's (1.0.92): no idle prompt right after a turn, as claude, and none in its probe's records.
+    if (kind !== 'claude' && kind !== 'grok') hook('Notification', { notification_type: 'idle_prompt', message: 'waiting for your input' });
   }
 
   hook('SessionStart', { source: opts.resume ? 'resume' : 'startup', model: opts.model, permission_mode: permissionMode });
