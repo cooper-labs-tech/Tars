@@ -39,11 +39,26 @@ import { pinPlatform } from './win-fake-disk';
  * 10. (Found by the mutation bench, after the code: its read-back check had no case.) A file Tars's edits cannot
  *    express: a key written twice, which gemini reads as the last one while an edit lands in the first. Written all the
  *    same, gemini would never see Tars's hooks or its allow-list there. Left as it is, and said.
+ *
+ * Written before their code (the Audit's M1 on #634, 23/11):
+ * 11. The window's MCP channels for gemini (`mcp:list`, `mcp:update`, `mcp:delete`, handlers/mcp-config-handlers.ts)
+ *    read the file their own way, as plain JSON: a commented file, which gemini reads, lists no server, and saving or
+ *    deleting one replaces the file with `mcpServers` alone (the user's auth and other settings gone, and Tars's
+ *    hooks and the token's allow-list until its next start); a trailing comma does the same, and the window is told
+ *    the save worked. Expected: listed as gemini reads it; a save or a deletion changes `mcpServers.<name>` and
+ *    nothing else, the comments kept; a file gemini could not read either left byte for byte, and the answer the
+ *    window shows says the file could not be read and nothing was saved; a deletion with no file creates none.
+ * 12. A worker's allow-list (`--allowed-mcp-server-names`, services/mcp-roles.ts) read from the same file as plain
+ *    JSON: a commented file gives the worker no allow-list at all, so the orchestrator's own servers reach it.
  */
 
 let tmpDir: string;
 let unpin: () => void;
 let mockExecFileSync: ReturnType<typeof vi.fn>;
+
+type PageAnswer = { success?: boolean; error?: string; servers?: Array<{ name: string; command: string; args: string[] }> };
+const ipcHandlers = vi.hoisted(() => new Map<string, (event: unknown, params: Record<string, unknown>) => Promise<PageAnswer>>());
+vi.mock('electron', () => ({ ipcMain: { handle: (channel: string, h: never) => { ipcHandlers.set(channel, h); } } }));
 
 vi.mock('os', async (importOriginal) => {
   const mod = await importOriginal<typeof import('os')>();
@@ -261,5 +276,85 @@ describe('what the agent and the user are told (9)', () => {
     const p = await provider();
     await p.configureHooks(hooksDir(), 'linux');
     expect(await noticesOf(() => { launch(p, 'agent-g3'); })).toEqual([]);
+  });
+});
+
+describe("the window's MCP channels for gemini (11)", () => {
+  const DOCS = { name: 'docs', command: 'node', args: ['docs.js'], env: { DOCS_KEY: 'k' } };
+  async function page() {
+    ipcHandlers.clear();
+    const { registerMcpConfigHandlers } = await import('../../../electron/handlers/mcp-config-handlers');
+    registerMcpConfigHandlers();
+    const call = (channel: string, params: Record<string, unknown>) => ipcHandlers.get(channel)!({}, { provider: 'gemini', ...params });
+    return { list: () => call('mcp:list', {}), save: () => call('mcp:update', DOCS), remove: (name: string) => call('mcp:delete', { name }) };
+  }
+  const COMMENTS = ['// My gemini settings, kept by hand.', '/* the servers I use */', '// mine'];
+
+  it('a commented file lists its servers, as gemini reads it', async () => {
+    seed(COMMENTED);
+    const listed = await (await page()).list();
+    expect(listed.error).toBeUndefined();
+    expect(listed.servers?.map((s) => s.name)).toEqual(['mine']);
+  });
+
+  it('a save into a commented file adds the server and changes nothing else: comments, auth, Tars\'s hooks and allow-list kept', async () => {
+    seed(COMMENTED);
+    await (await provider()).configureHooks(hooksDir(), 'linux');
+    const before = asGeminiReads(read());
+    expect(await (await page()).save()).toEqual({ success: true });
+    for (const comment of COMMENTS) expect(read(), comment).toContain(comment);
+    const { name: _name, ...docs } = DOCS;
+    expect(asGeminiReads(read())).toEqual({ ...before, mcpServers: { ...(before.mcpServers as object), docs } });
+  });
+
+  it('a deletion from a commented file takes the server out and changes nothing else', async () => {
+    seed(COMMENTED);
+    await (await provider()).configureHooks(hooksDir(), 'linux');
+    const before = asGeminiReads(read());
+    const p = await page();
+    expect(await p.save()).toEqual({ success: true });
+    expect(await p.remove('docs')).toEqual({ success: true });
+    for (const comment of COMMENTS) expect(read(), comment).toContain(comment);
+    expect(asGeminiReads(read())).toEqual(before);
+  });
+
+  for (const [what, text] of [...UNPARSEABLE, ['JSON that is no object', '[]\n']] as const) {
+    it(`${what}: left byte for byte by the list, a save and a deletion, and each answer says why`, async () => {
+      seed(text);
+      vi.spyOn(console, 'error').mockImplementation(() => {});
+      const p = await page();
+      const listed = await p.list();
+      const saved = await p.save();
+      const removed = await p.remove('mine');
+      expect(read(), 'the user\'s settings file was replaced').toBe(text);
+      expect(listed.servers).toEqual([]);
+      expect(saved.success).toBe(false);
+      expect(removed.success).toBe(false);
+      for (const answer of [listed, saved, removed]) {
+        expect(answer.error, 'the window was not told why').toMatch(/settings\.json could not be read as gemini reads it/);
+        expect(answer.error).not.toMatch(/[–—]/);
+      }
+      expect(saved.error).toMatch(/docs not saved/);
+      expect(removed.error).toMatch(/mine not removed/);
+    });
+  }
+
+  it('no file: a deletion creates none, a save creates it with the server', async () => {
+    const p = await page();
+    expect(await p.remove('docs')).toEqual({ success: true });
+    expect(fs.existsSync(settingsPath()), 'a deletion created the file').toBe(false);
+    expect(await p.save()).toEqual({ success: true });
+    const { name: _name, ...docs } = DOCS;
+    expect(asGeminiReads(read()).mcpServers).toEqual({ docs });
+  });
+});
+
+describe("a gemini worker's allow-list, read from the same file (12)", () => {
+  it('a commented file: the worker allowed every server of it but the orchestrator\'s own', async () => {
+    seed(COMMENTED.replace('"mcpServers": { "mine": { "command": "my-server" } }',
+      '"mcpServers": { "mine": { "command": "my-server" }, "claude-mgr-orchestrator": { "command": "node" }, "dorothy-x": { "command": "node" } }'));
+    const { geminiRoleArgs } = await import('../../../electron/services/mcp-roles');
+    expect(geminiRoleArgs(false, settingsPath())).toEqual(['--allowed-mcp-server-names', 'mine', 'claude-mgr-orchestrator']);
+    expect(geminiRoleArgs(true, settingsPath())).toEqual([]);
   });
 });

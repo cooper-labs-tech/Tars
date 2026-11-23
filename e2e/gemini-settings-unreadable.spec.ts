@@ -17,6 +17,13 @@ import { DEV_URL, apiPort } from './ports.mjs';
  * Red on main 58f2863b4: Tars's start replaces the first file with its hooks and servers alone, and the second loses
  * its comments.
  *
+ * Then, in both, the window's MCP channels for gemini (the Audit's M1 on #634): the calls Settings > MCP makes
+ * (`electronAPI.mcp.list`, `update`, `delete`), from the window, for gemini; the page as drawn names claude only
+ * (McpSection's MCP_PROVIDER), so no click reaches gemini there. In 1, the list, a save and a deletion must leave the
+ * file byte for byte and each answer say why; in 2, the list must show the user's server, and a save then a deletion
+ * change that server and nothing else, comments, auth, hooks and allow-list kept. Red on 5702654a1: the list shows
+ * nothing and says nothing, and the save replaces either file with `mcpServers` alone.
+ *
  * No gemini on the sandbox's PATH, so Tars's start registers its servers through the settings file itself; the
  * agent's CLI is a stand-in under another name, its `cliPath`, which records its launch and waits.
  * The artefact: values.json (the files before and after, the agent's kept output, the log's lines), agents.png, and
@@ -24,7 +31,11 @@ import { DEV_URL, apiPort } from './ports.mjs';
  */
 
 type Agent = { id: string; status: string; output?: string[]; cliRunning?: boolean };
-type Api = { electronAPI: { agent: { start(p: { id: string; prompt: string }): Promise<unknown>; get(id: string): Promise<Agent | null>; list(): Promise<Agent[]> } } };
+type McpAnswer = { success?: boolean; error?: string; servers?: Array<{ name: string }> };
+type Api = { electronAPI: {
+  agent: { start(p: { id: string; prompt: string }): Promise<unknown>; get(id: string): Promise<Agent | null>; list(): Promise<Agent[]> };
+  mcp: Record<'list' | 'update' | 'delete', (p: Record<string, unknown>) => Promise<McpAnswer>>;
+} };
 
 const STAND_IN = String.raw`
 const fs = require('fs'), path = require('path');
@@ -90,9 +101,20 @@ async function run(label: string, settings: string, port: number) {
     const screen = ((await page.evaluate(() => (window as unknown as Api).electronAPI.agent.get('g1')))?.output ?? []).join('');
     await stepShot(page, `agents-${label}`);
     const after = fs.readFileSync(settingsFile, 'utf8');
+    // The window's MCP channels, for gemini: a list, a save of a server, its deletion.
+    const mcp = (op: 'list' | 'update' | 'delete', params: Record<string, unknown>) =>
+      page.evaluate(([o, p]) => (window as unknown as Api).electronAPI.mcp[o]({ provider: 'gemini', ...p }), [op, params] as const);
+    const listed = await mcp('list', {});
+    const saved = await mcp('update', { name: 'docs', command: 'node', args: ['docs.js'], env: {} });
+    const afterSave = fs.readFileSync(settingsFile, 'utf8');
+    const removed = await mcp('delete', { name: 'docs' });
+    const afterRemove = fs.readFileSync(settingsFile, 'utf8');
     const notices = output.split(/\r?\n/).filter((l) => l.includes('[Tars]'));
     const logLines = log.join('').split('\n').filter((l) => /\[gemini\]/.test(l));
-    return { home, before: settings, after, notices, noticesOnScreen: screen.split(/\r?\n/).filter((l) => l.includes('[Tars]')), logLines, pageErrors };
+    return {
+      home, before: settings, after, notices, noticesOnScreen: screen.split(/\r?\n/).filter((l) => l.includes('[Tars]')), logLines,
+      page: { listed, saved, afterSave, removed, afterRemove }, pageErrors,
+    };
   } finally {
     await app.close().catch(() => { /* gone */ });
     await removeHome(home);
@@ -109,6 +131,12 @@ test.describe("gemini's settings file", () => {
     expect(r.notices.join('\n'), 'the agent was not told it runs without Tars\'s hooks').toMatch(/settings\.json.*turns/);
     expect(r.notices.join('\n')).not.toMatch(/[\u2013\u2014]/);
     expect(r.logLines.join('\n'), 'the log said nothing').toMatch(/hooks not written/);
+    expect(r.page.afterSave, 'a save from the window replaced the user\'s settings file').toBe(UNREADABLE);
+    expect(r.page.afterRemove, 'a deletion from the window replaced the user\'s settings file').toBe(UNREADABLE);
+    expect(r.page.listed.error, 'the window\'s list said nothing').toMatch(/settings\.json could not be read as gemini reads it/);
+    expect(r.page.saved).toMatchObject({ success: false, error: expect.stringMatching(/could not be read as gemini reads it.*docs not saved/) });
+    expect(r.page.removed).toMatchObject({ success: false, error: expect.stringMatching(/could not be read as gemini reads it.*docs not removed/) });
+    for (const answer of [r.page.listed, r.page.saved, r.page.removed]) expect(answer.error).not.toMatch(/[–—]/);
     expect(r.pageErrors).toEqual([]);
   });
 
@@ -122,6 +150,17 @@ test.describe("gemini's settings file", () => {
     expect(JSON.stringify(settings.hooks ?? {})).toMatch(/session-start/);
     expect(settings.security.environmentVariableRedaction?.allowed).toContain('CLAUDE_MGR_API_TOKEN');
     expect(r.notices).toEqual([]);
+    expect(r.page.listed.error).toBeUndefined();
+    expect(r.page.listed.servers?.map((s) => s.name), 'the window\'s list did not show the user\'s server').toContain('mine');
+    expect(r.page.saved).toEqual({ success: true });
+    for (const comment of ['// My gemini settings, kept by hand.', '/* the servers I use */', '// mine']) {
+      expect(r.page.afterSave, `a save from the window lost ${comment}`).toContain(comment);
+      expect(r.page.afterRemove, `a deletion from the window lost ${comment}`).toContain(comment);
+    }
+    expect(asGeminiReads(r.page.afterSave), 'a save from the window changed more than its server')
+      .toEqual({ ...settings, mcpServers: { ...settings.mcpServers, docs: { command: 'node', args: ['docs.js'] } } });
+    expect(r.page.removed).toEqual({ success: true });
+    expect(asGeminiReads(r.page.afterRemove), 'a deletion from the window changed more than its server').toEqual(settings);
     expect(r.pageErrors).toEqual([]);
   });
 });
