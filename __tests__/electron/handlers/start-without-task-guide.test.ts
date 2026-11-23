@@ -143,7 +143,8 @@ afterAll(() => { Object.defineProperty(process, 'platform', hostPlatform); });
 const project = path.join(tmpHome, 'project');
 const SECTION = '## How Tars works';
 const MEMORY = 'NOTE-7731 the build runs on Node 22';
-// Every CLI whose config folder is not Claude's, so with no SessionStart hook.
+// Every CLI whose config folder is not Claude's, so with no SessionStart hook whose output it reads (grok runs one
+// and ignores what it prints, measured on 1.0.92).
 const NO_HOOK = ['opencode', 'amp', 'codex', 'gemini', 'grok', 'pi'] as const;
 
 function deps(): IpcHandlerDependencies {
