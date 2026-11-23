@@ -32,8 +32,9 @@ import { writeFakeClis } from './fake-clis.mjs';
  * A cell is green or red, with what was seen. KNOWN_RED says which cells are red on main today and why; the spec
  * fails when a cell outside it is red (a regression) and when a cell in it turns green or goes red for another
  * reason (the table is then out of date: the PR that fixed it removes its rule). On main (371d3c70), in short:
- *   - gemini cannot call Tars: its MCP servers get no TOKEN variable (documented by gemini, not measured on a real install);
  *   - Tars reads no answer and no turn from a CLI without hooks (opencode, amp, grok); pi's are read from its session file (#483);
+ * gemini calls Tars since its rule was measured (23/11, gemini 0.70.0): its MCP servers get Tars's token through the
+ * allow-list Tars writes into its settings (security.environmentVariableRedaction.allowed), which the stand-in once ignored;
  * OpenRouter starts since #458 and codex since #465; gemini's tasks close since #478, and opencode and pi reach Tars's
  * tools since #476: their rules went with them.
  * KNOWN_RED has the rules, each with what its cells must say. A project of its own since 19/10 (playwright.config.ts):
@@ -63,11 +64,8 @@ type Cell = { from: string; to: string; step: Step | 'starts'; result: 'green' |
 
 /** The cells red on main d96be134, by rule: which pairs and steps, why, and what their detail must say. */
 type Rule = { from?: string[]; to?: string[]; steps: Array<Step | 'starts'>; why: string; seen: RegExp };
-const ALL: Step[] = ['delegate.reaches', 'delegate.answer', 'turn', 'message', 'reply'];
 // First match wins: the CLIs that do not start, then what A cannot do, then what B cannot do.
 const KNOWN_RED: Rule[] = [
-  { from: ['gemini'], steps: ALL, why: 'gemini hands its MCP servers no variable named like TOKEN (documented by gemini, not measured on a real install): Tars\'s server has no token to present then, since #466 put the shared one out of its reach, and Tars answers Unauthorized', seen: /Unauthorized|B never got the message|no task reached B/ },
-  { to: ['gemini'], steps: ['reply'], why: 'gemini has no identity (above; documented, not measured)', seen: /Unauthorized/ },
   { to: ['opencode', 'amp', 'grok'], steps: ['delegate.answer'], why: 'a CLI without hooks: Tars reads no answer from it', seen: /gives Tars no hook/ },
   { to: ['opencode', 'amp', 'grok'], steps: ['turn'], why: 'a CLI without hooks: running once the task goes in, never at rest again', seen: /after running/ },
 ];
