@@ -14,7 +14,8 @@
 // environment with every name matching TOKEN, SECRET, PASSWORD, PASSWD, KEY, AUTH, CREDENTIAL, CREDS, PRIVATE or CERT
 // removed, unless settings.json lists it in security.environmentVariableRedaction.allowed (Tars lists
 // CLAUDE_MGR_API_TOKEN there, utils/gemini-node-hooks.ts allowAgentToken) or it starts with GEMINI_CLI_; a server's
-// own env is expanded from the whole environment. Documented, not measured (not installed here): opencode
+// own env is expanded from the whole environment. Its bundle's whole rule (values shaped like secrets withheld first,
+// names it always keeps or withholds, the settings' blocked list) is geminiInherited, below. Documented, not measured (not installed here): opencode
 // (~/.config/opencode/opencode.json, under `mcp`: type local, command as an array, environment,
 // https://opencode.ai/docs/mcp-servers/), pi (~/.pi/agent/mcp.json and .pi/mcp.json, mcpServers, from a third
 // party's notes), grok 0.2.64 (~/.grok/config.toml, [mcp_servers.<name>], as electron/providers/grok-provider.ts
@@ -109,7 +110,45 @@ function addTomlServer(file, name, command, args) {
   fs.writeFileSync(file, `${kept ? kept + '\n\n' : ''}[mcp_servers.${name}]\ncommand = ${JSON.stringify(command)}\nargs = ${JSON.stringify(args)}\n`);
 }
 
-const GEMINI_REDACTED = /TOKEN|SECRET|PASSWORD|PASSWD|KEY|AUTH|CREDENTIAL|CREDS|PRIVATE|CERT/i;
+// gemini 0.70.0's rule for what an MCP server inherits, copied from its bundle (environmentSanitization,
+// shouldRedactEnvironmentVariable, read 2026-11-23; the probe's records in the header agree), in its order. Its strict
+// mode under GitHub Actions (GITHUB_SHA, SURFACE=Github: every name not allowed withheld) is left out on purpose: nobody
+// runs Tars there, and the CI runs specs that use this stand-in. __tests__/e2e-fake-gemini-env.test.ts holds it to both.
+const GEMINI_SECRET_NAMES = [/TOKEN/i, /SECRET/i, /PASSWORD/i, /PASSWD/i, /KEY/i, /AUTH/i, /CREDENTIAL/i, /CREDS/i, /PRIVATE/i, /CERT/i];
+const GEMINI_SECRET_VALUES = [
+  /-----BEGIN (RSA|OPENSSH|EC|PGP) PRIVATE KEY-----/i,
+  /-----BEGIN CERTIFICATE-----/i,
+  /(https?|ftp|smtp):\/\/[^:\s]{1,1024}:[^@\s]{1,1024}@/i,
+  /(ghp|gho|ghu|ghs|ghr|github_pat)_[a-zA-Z0-9_]{36,}/i,
+  /AIzaSy[a-zA-Z0-9_\\-]{33}/i,
+  /AKIA[A-Z0-9]{16}/i,
+  /eyJ[a-zA-Z0-9_-]{0,10240}\.[a-zA-Z0-9_-]{0,10240}\.[a-zA-Z0-9_-]{0,10240}/i,
+  /(s|r)k_(live|test)_[0-9a-zA-Z]{24}/i,
+  /xox[abpr]-[a-zA-Z0-9-]+/i,
+];
+// Its list of names always kept (PATH, HOME, TMPDIR...) is left out with the strict mode: none matches a pattern
+// above, so outside that mode it decides nothing.
+const GEMINI_NEVER_KEPT = new Set(['CLIENT_ID', 'DB_URI', 'CONNECTION_STRING', 'AWS_DEFAULT_REGION', 'AZURE_CLIENT_ID', 'AZURE_TENANT_ID',
+  'SLACK_WEBHOOK_URL', 'TWILIO_ACCOUNT_SID', 'DATABASE_URL', 'GOOGLE_CLOUD_PROJECT', 'GOOGLE_CLOUD_ACCOUNT', 'FIREBASE_PROJECT_ID']);
+
+/** What gemini 0.70.0 lets an MCP server inherit of `env`, under its settings.json `settings`. */
+export function geminiInherited(env, settings) {
+  const redaction = settings?.security?.environmentVariableRedaction ?? {};
+  const names = (list) => new Set((Array.isArray(list) ? list : []).map((k) => String(k).toUpperCase()));
+  const allowed = names(redaction.allowed);
+  const blocked = names(redaction.blocked);
+  const withheld = (name, value) => {
+    const k = name.toUpperCase();
+    if (k.startsWith('GEMINI_CLI_')) return false;
+    if (value && GEMINI_SECRET_VALUES.some((p) => p.test(value.toUpperCase()))) return true;
+    if (k.startsWith('GIT_CONFIG_')) return false;
+    if (allowed.has(k)) return false;
+    if (blocked.has(k)) return true;
+    if (GEMINI_NEVER_KEPT.has(k)) return true;
+    return GEMINI_SECRET_NAMES.some((p) => p.test(k));
+  };
+  return Object.fromEntries(Object.entries(env).filter(([k, v]) => v !== undefined && !withheld(k, v)));
+}
 
 export async function run() {
   const kind = process.env.FAKE_CLI_KIND;
@@ -298,11 +337,8 @@ export async function run() {
   function serverEnv(server) {
     const own = server.env ?? {};
     if (kind === 'gemini') {
-      // Measured on 0.70.0 (header): redacted by name, unless the user's settings allow it or it is gemini's own.
-      const listed = readJson(path.join(HOME, '.gemini', 'settings.json'))?.security?.environmentVariableRedaction?.allowed;
-      const allowed = new Set((Array.isArray(listed) ? listed : []).map((k) => String(k).toUpperCase()));
-      const kept = (k) => k.toUpperCase().startsWith('GEMINI_CLI_') || allowed.has(k.toUpperCase()) || !GEMINI_REDACTED.test(k);
-      const base = Object.fromEntries(Object.entries(process.env).filter(([k]) => kept(k)));
+      // Measured on 0.70.0 (header), its rule as its bundle has it (geminiInherited).
+      const base = geminiInherited(process.env, readJson(path.join(HOME, '.gemini', 'settings.json')));
       const expanded = Object.fromEntries(Object.entries(own).map(([k, v]) => [k, String(v).replace(/\$\{?([A-Z0-9_]+)\}?/g, (_, n) => process.env[n] ?? '')]));
       return { policy: 'measured (0.70.0): redacted unless allowed', env: { ...base, ...expanded } };
     }
