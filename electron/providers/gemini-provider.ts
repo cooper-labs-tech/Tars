@@ -19,6 +19,9 @@ import { servedPathMatches, shellQuote } from './cli-provider';
 import { geminiRoleArgs } from '../services/mcp-roles';
 import { writeSharedJsonSync } from '../utils/shared-file';
 
+/** A session of gemini's own, as its hooks report it: a uuid. */
+const GEMINI_SESSION_ID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
 /** A permission mode onto gemini's --approval-mode (0.70.0 --help: default, auto_edit, yolo, plan); normal: none. */
 export function geminiApprovalMode(mode: AgentPermissionMode | undefined): 'plan' | 'auto_edit' | 'yolo' | null {
   if (mode === 'plan') return 'plan';
@@ -76,6 +79,12 @@ export class GeminiProvider implements CLIProvider {
     // default: it asks, as the user chose.
     const approval = geminiApprovalMode(params.permissionMode);
     if (approval) command += ` --approval-mode ${approval}`;
+
+    // Its own session continued (0.70.0, measured): the uuid its hooks report, and only a uuid, since gemini also
+    // takes `latest` or an index there, another session. Gemini has no fork: a launch asked to fork starts a new one.
+    if (params.resumeSessionId && !params.forkSession && GEMINI_SESSION_ID.test(params.resumeSessionId)) {
+      command += ` --resume ${shellQuote(params.resumeSessionId)}`;
+    }
 
     // Secondary project (Gemini uses --include-directories), never ~/.tars-private (utils/handed-folder.ts)
     const secondary = handedSecondaryFolder(params.secondaryProjectPath);
