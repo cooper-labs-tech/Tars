@@ -901370,7 +901370,7 @@
                   "type": "text",
                   "id": "Q4kjq",
                   "fill": "$text-muted",
-                  "content": "the notice, the first time, and on every new address",
+                  "content": "the notice, the first time, and on every new address; a consent main could not save, said above its answers",
                   "lineHeight": 1.4,
                   "fontFamily": "$font-mono",
                   "fontSize": 10,
@@ -902123,6 +902123,33 @@
                     },
                     {
                       "type": "frame",
+                      "id": "ERGgu",
+                      "name": "state consent not saved",
+                      "gap": 6,
+                      "alignItems": "center",
+                      "children": [
+                        {
+                          "type": "rectangle",
+                          "id": "Pou8i",
+                          "name": "d",
+                          "fill": "$status-error",
+                          "width": 6,
+                          "height": 6
+                        },
+                        {
+                          "type": "text",
+                          "id": "wzWHc",
+                          "fill": "$status-error",
+                          "content": "not saved: no space left on device. Upload what I opt in tries again.",
+                          "lineHeight": 1.4,
+                          "fontFamily": "$font-mono",
+                          "fontSize": 10.5,
+                          "fontWeight": "normal"
+                        }
+                      ]
+                    },
+                    {
+                      "type": "frame",
                       "id": "GCb9u",
                       "name": "answers",
                       "width": "fill_container",
@@ -902248,7 +902275,7 @@
                   "fill": "$text-secondary",
                   "textGrowth": "fixed-width",
                   "width": 440,
-                  "content": "Upload what I opt in records the consent (traces.giveUploadConsent). Not now keeps the address and sends nothing. The notice is main's own list (traces.uploadNotice).",
+                  "content": "Upload what I opt in records the consent (traces.giveUploadConsent). Not now keeps the address and sends nothing. The notice is main's own list (traces.uploadNotice). When main cannot save the consent (a full disk), the notice stays open and says why; nothing is sent.",
                   "lineHeight": 1.5,
                   "fontFamily": "$font-ui",
                   "fontSize": 12,
@@ -904709,7 +904736,7 @@
                   "type": "text",
                   "id": "D4PyGh",
                   "fill": "$text-muted",
-                  "content": "the notice, the first time, and on every new address",
+                  "content": "the notice, the first time, and on every new address; a consent main could not save, said above its answers",
                   "lineHeight": 1.4,
                   "fontFamily": "$font-mono",
                   "fontSize": 10,
@@ -905462,6 +905489,33 @@
                     },
                     {
                       "type": "frame",
+                      "id": "b5ufH",
+                      "name": "state consent not saved",
+                      "gap": 6,
+                      "alignItems": "center",
+                      "children": [
+                        {
+                          "type": "rectangle",
+                          "id": "UQUy5",
+                          "name": "d",
+                          "fill": "$status-error",
+                          "width": 6,
+                          "height": 6
+                        },
+                        {
+                          "type": "text",
+                          "id": "mVWnm",
+                          "fill": "$status-error",
+                          "content": "not saved: no space left on device. Upload what I opt in tries again.",
+                          "lineHeight": 1.4,
+                          "fontFamily": "$font-mono",
+                          "fontSize": 10.5,
+                          "fontWeight": "normal"
+                        }
+                      ]
+                    },
+                    {
+                      "type": "frame",
                       "id": "W28v3",
                       "name": "answers",
                       "width": "fill_container",
@@ -905587,7 +905641,7 @@
                   "fill": "$text-secondary",
                   "textGrowth": "fixed-width",
                   "width": 440,
-                  "content": "Upload what I opt in records the consent (traces.giveUploadConsent). Not now keeps the address and sends nothing. The notice is main's own list (traces.uploadNotice).",
+                  "content": "Upload what I opt in records the consent (traces.giveUploadConsent). Not now keeps the address and sends nothing. The notice is main's own list (traces.uploadNotice). When main cannot save the consent (a full disk), the notice stays open and says why; nothing is sent.",
                   "lineHeight": 1.5,
                   "fontFamily": "$font-ui",
                   "fontSize": 12,
