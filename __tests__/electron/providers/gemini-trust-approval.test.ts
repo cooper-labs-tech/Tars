@@ -25,6 +25,16 @@ import { pinPlatform } from './win-fake-disk';
  *    a mode other than the one the window shows.
  * 4. A normal agent's line with an approval mode: gemini no longer asks before a tool, as the user chose it would.
  * 5. The flags put after `-i <task>`, or between a flag and its value: gemini reads them as part of something else.
+ *
+ * Resume (measured the same day): gemini's hooks report its session's UUID (`session_id`, SessionStart `source:
+ * "startup"`), and `--resume <that uuid>` continues it (SessionStart `source: "resume"`, the same id, the first task's
+ * turns in its next request); gemini also takes `latest` or an index there.
+ * 6. A gemini agent started again (Tars restarted, a durable restart) without `--resume <its session>`: a new session,
+ *    the agent's conversation gone.
+ * 7. A session id that is not a UUID put on its line: `latest`, an index or a crafted word would resume another
+ *    session, or reach the shell.
+ * 8. A fork resumed in place: gemini has no fork, so a launch asked to fork starts a new session rather than writing
+ *    into the one it forks from.
  */
 
 let tmpDir: string;
@@ -86,5 +96,32 @@ describe('a gemini agent runs in its permission mode\'s approval mode (2, 3, 4, 
     expect(w).not.toContain('--approval-mode');
     expect(w).not.toContain('--yolo');
     expect(w).not.toContain('-y');
+  });
+});
+
+describe('a gemini agent resumes its own session (6, 7, 8)', () => {
+  const SESSION = '707f5907-38d6-47f7-b7ac-e6f16d78c1b2';
+
+  it('passes --resume <its session> before -i', async () => {
+    const w = words(await line({ resumeSessionId: SESSION, prompt: 'go on' }));
+    expect(w[w.indexOf('--resume') + 1]).toBe(SESSION);
+    expect(w.indexOf('--resume')).toBeLessThan(w.indexOf('-i'));
+  });
+
+  it('passes --resume with no task', async () => {
+    const w = words(await line({ resumeSessionId: SESSION }));
+    expect(w[w.indexOf('--resume') + 1]).toBe(SESSION);
+  });
+
+  it.each([['latest'], ['5'], ["x'; touch /tmp/owned; '"], ['']])('never resumes %j, which is no session of its own', async (id) => {
+    const command = await line({ resumeSessionId: id, prompt: 'go' });
+    expect(words(command)).not.toContain('--resume');
+    expect(command).not.toContain('owned');
+  });
+
+  it('starts a new session when asked to fork, gemini having no fork', async () => {
+    const w = words(await line({ resumeSessionId: SESSION, forkSession: true, prompt: 'go' }));
+    expect(w).not.toContain('--resume');
+    expect(w).not.toContain(SESSION);
   });
 });
