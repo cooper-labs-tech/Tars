@@ -137,7 +137,7 @@ beforeEach(() => {
     skills: [], output: [], lastActivity: new Date().toISOString(),
   } as AgentStatus);
   agents.set('worker', {
-    id: 'worker', name: '1212-Backend', status: 'running', projectPath: project, ptyCwd: project,
+    id: 'worker', name: 'Acme-Backend', status: 'running', projectPath: project, ptyCwd: project,
     skills: [], output: [], ptyId: 'pty-worker', currentSessionId: 'sess-w',
     lastActivity: new Date().toISOString(),
   } as AgentStatus);
@@ -237,7 +237,7 @@ describe('a message still held a few minutes on', () => {
     expect(told()).toBe('');
     vi.advanceTimersByTime(2000 + PROGRAMMATIC_SUBMIT_DELAY_MS);
 
-    expect(told()).toMatch(/1212-Backend/);
+    expect(told()).toMatch(/Acme-Backend/);
     expect(told(), 'its time in both zones (2.0.6, option d)').toMatch(/of \d\d:\d\d UTC/);
     expect(told()).toMatch(/still not/);
     expect(told()).toMatch(/typing|field/);

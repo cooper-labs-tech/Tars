@@ -10,7 +10,7 @@ import { DEV_URL, apiPort } from './ports.mjs';
  * decision of 28/10), in the real app, once with the classic shell and once with the new interface.
  *
  * The night of 27/10: agents in bypass stopped until morning on Claude Code's dialog, each on a heredoc into its own
- * scratchpad; a worker's report to an orchestrator at a dialog was refused (1212 counted 17); an ask that expired
+ * scratchpad; a worker's report to an orchestrator at a dialog was refused (another project counted 17); an ask that expired
  * left the native dialog open.
  *
  * Three agents of one project, each a stand-in for claude with the state mod, asking Tars the way the mod's

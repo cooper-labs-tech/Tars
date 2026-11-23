@@ -11,7 +11,7 @@ vi.mock('react', async (importOriginal) => ({
 
 /**
  * A room's head with a long project path (QA's recon of #165: the name cut to
- * "t...", "ori...", "1212-c..." and "how it runs" on two lines, out of its 26 px
+ * "t...", "ori...", "acme-c..." and "how it runs" on two lines, out of its 26 px
  * box). The frame is `Chat · A · Room head · states` in
  * design/chat-redesign-a.pen: the name keeps its width, the path gives way and
  * is cut at its end, and only when the path is gone is the name cut; the state

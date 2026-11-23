@@ -7,8 +7,8 @@ import { execFileSync } from 'node:child_process';
 /**
  * Review, every repository of a project (2.0.4, the frames "Review · projects
  * and their repositories" of #457, the Audit's requirements for 2.0.4, section
- * 2): a project is one repository, holds repositories at any depth (1212's
- * holds 29), has no git, or is gone; the search covers every repository's
+ * 2): a project is one repository, holds repositories at any depth (another
+ * project holds 29), has no git, or is gone; the search covers every repository's
  * name and path and every changed file, in every project, with no limit.
  *
  * Every way it can fail, written before the code (2026-10-19):

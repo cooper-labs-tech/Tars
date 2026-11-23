@@ -11,8 +11,8 @@ import { redactCommandLine } from '../utils/redact-command-line';
  *
  * A stop ends the terminal's tree (pty-manager.ts, endTerminalTree), read from ps by parentage, and on Linux by
  * session (#520). A process started detached escapes both: nohup and a group of its own, then its parent gone, it
- * is init's or launchd's; with setsid it is in a session of its own too. Measured: after stop_agent, 1212-Capital's
- * Playwright run and Next servers kept running; kotsna's 5 dev servers (14 processes) ran 10 days with no session;
+ * is init's or launchd's; with setsid it is in a session of its own too. Measured: after stop_agent, one project's
+ * Playwright run and Next servers kept running; another project's 5 dev servers (14 processes) ran 10 days with no session;
  * Tars's own e2e left 20 `my-cli` orphans since 19/10.
  *
  * What every one of them keeps is its environment, inherited from the agent's terminal (agent-pty.ts):
@@ -92,7 +92,7 @@ export function tarsAndItsParents(table: Array<{ pid: number; ppid: number }>, s
 
 /**
  * Programs that serve every project, whoever started them, kept by a stop (the owner, 28/10): colima, the Docker VM
- * kotsna's Supabase and another project's tests run in, its limactl and the Virtualization process; docker; VS Code
+ * one project's Supabase and another project's tests run in, its limactl and the Virtualization process; docker; VS Code
  * opened with `code .`. Named by their exact executable paths, resolved where they are links (Homebrew's bin/
  * into its Cellar): never by a name or a word of the command, which any script can take. This list only keeps:
  * what a stop ends is decided by the birth tag alone.

@@ -268,7 +268,7 @@ describe('the role on load', () => {
     // What 1.7.9 wrote: the role stored from the name, the toggle beside it.
     fs.writeFileSync(AGENTS_FILE, JSON.stringify({ version: 2, agents: [
       agent('named', { name: 'Tars-Orchestrator', role: 'orchestrator', orchestratorMode: true, projectPath: '/p/tars' }),
-      agent('toggle-off', { name: '1212-Orchestrator', role: 'orchestrator', orchestratorMode: false, projectPath: '/p/1212' }),
+      agent('toggle-off', { name: 'Acme-Orchestrator', role: 'orchestrator', orchestratorMode: false, projectPath: '/p/acme' }),
       agent('no-role', { name: 'Super Agent', projectPath: '/p/sak' }),
       agent('toggled-worker', { name: 'Reviewer', role: 'worker', orchestratorMode: true, projectPath: '/p/drone' }),
       agent('worker', { name: 'Tars-Backend', role: 'worker', orchestratorMode: false, projectPath: '/p/tars' }),

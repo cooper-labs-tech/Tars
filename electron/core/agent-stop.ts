@@ -29,7 +29,7 @@ import { oneTaskQueue } from './one-task';
  * Then what the agent started outside that tree (2.0.5): nohup'd or setsid'd,
  * reparented to launchd or init, found by its birth tag and ended by its PID,
  * and its Docker containers by their label (core/born-processes.ts). After
- * 28/10's evidence: 1212-Capital's Playwright run and Next servers outlived
+ * 28/10's evidence: another project's Playwright run and Next servers outlived
  * stop_agent. An ansible run, a `fly ssh` session and a shared daemon (colima,
  * docker, VS Code...) are kept with all they started (the owner's limits), and
  * the watch says it (services/born-watch.ts). A terminal the agent got again
@@ -53,7 +53,7 @@ export function stopReasonOf(raw: unknown): string | undefined {
 /**
  * What a stop did to the agent's queue (2.0.5, lot 2): kept, paused, and said so in its answer, or dropped when asked
  * (`dropQueue`), each requester told it never ran. A stop used to empty it, and each item had to be sent again by
- * hand (Kotsna's item 16, 27/10).
+ * hand (another project's item 16, 27/10).
  */
 export interface StopQueueOutcome { kept: number; dropped: number }
 

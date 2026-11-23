@@ -504,7 +504,7 @@ describe('agent-routes', () => {
     });
 
     // A message to an agent whose CLI shows a dialog was refused (409) until 2.0.5: a worker's report to its
-    // orchestrator was lost each time (1212 counted 17 on the night of 27/10). It goes to the terminal's writer
+    // orchestrator was lost each time (another project counted 17 on the night of 27/10). It goes to the terminal's writer
     // now, which holds it while the dialog is open and types it once the dialog closes (pty-manager.ts pump), never
     // into the dialog (fix-permission-dialogs-2810.md, item 4).
     it('hands a message to an agent in a permission dialog to the writer, which holds it, and says why it waits', async () => {

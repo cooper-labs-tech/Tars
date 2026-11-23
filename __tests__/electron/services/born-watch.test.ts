@@ -5,7 +5,7 @@ import type { BornProcess } from '../../../electron/core/born-processes';
 
 /**
  * What an agent started that outlives its session, reported and never ended (2.0.5, the owner's lot 2 of 28/10):
- * kotsna's dev servers ran 10 days with no session, and nobody knew. The owner's limits: never end such a process
+ * one project's dev servers ran 10 days with no session, and nobody knew. The owner's limits: never end such a process
  * automatically (an ansible run, a `fly ssh`, a build talking to a remote inference host may be among them); say it.
  *
  * How it fails, written before the code:
@@ -93,9 +93,9 @@ describe('what outlives an agent\'s session', () => {
 
   it('6. counts labelled containers too, and claims no process where none can be read', async () => {
     const a = agent('a1');
-    const { d } = deps([a], undefined, { containers: [{ id: 'c1', agentId: 'a1', name: 'kotsna-db' }, { id: 'c2', agentId: 'b2', name: 'other' }] });
+    const { d } = deps([a], undefined, { containers: [{ id: 'c1', agentId: 'a1', name: 'delta-db' }, { id: 'c2', agentId: 'b2', name: 'other' }] });
     await bornWatchPass(T0, d);
-    expect(a.leftRunning).toMatchObject({ pids: [], containers: ['kotsna-db (c1)'] });
+    expect(a.leftRunning).toMatchObject({ pids: [], containers: ['delta-db (c1)'] });
   });
 
   it('7. a secret after a flag is masked in the record and in the note, by the window\'s rule', async () => {

@@ -5,7 +5,7 @@ import { getSlotScriptPath } from '../utils';
 
 /**
  * `tars-slot`, the heavy-run slot's command line (electron/resources/tars-slot.cjs), in every agent's terminal: for
- * git hooks and scripts, which cannot call an MCP tool (kotsna's heaviest run is the pre-push hook inside `git push`).
+ * git hooks and scripts, which cannot call an MCP tool (one project's heaviest run is the pre-push hook inside `git push`).
  *
  * Two shims in ~/.tars/bin, `tars-slot` (POSIX sh) and `tars-slot.cmd` (Windows), named by TARS_SLOT in every agent's
  * terminal and found last on its PATH: last, because every agent can write in ~/.tars, and a file put there first

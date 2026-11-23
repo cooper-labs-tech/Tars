@@ -10,7 +10,7 @@ import { DEV_URL, apiPort } from './ports.mjs';
  * resources plan), in the real app.
  *
  * Measured on 28/10 with Tars 2.0.4 and 19 live agents (reports/db-status-and-sleep-2810.md):
- * - Kotsna-QA's Stop reached Tars at 19:23:30.659Z, Tars typed the next queued task in the same millisecond and
+ * - Delta-QA's Stop reached Tars at 19:23:30.659Z, Tars typed the next queued task in the same millisecond and
  *   read it `running`; the CLI never took it (no UserPromptSubmit, nothing in its transcript). Tars showed it
  *   running at its prompt for 42 minutes and its six queued tasks waited for an end of turn that had come.
  * - another project's Frontend agent's claude exited mid-turn on 25/10 23:24:26Z (no Stop; SessionEnd's post never landed) and

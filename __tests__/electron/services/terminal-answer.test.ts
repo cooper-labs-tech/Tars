@@ -41,7 +41,7 @@ import { encodeProjectDirName, transcriptPath } from '../../../electron/utils/re
  * report, the longest message of its turn, and what the agent wrote after it.
  * 13. a memory note, or a short closing line ("Done."), written after the
  *     report replaces it: the asker reads "Saving the durable lessons to
- *     memory" where the report was (1212's t-acc9dc33, t-0bc5637d);
+ *     memory" where the report was (another project's t-acc9dc33, t-0bc5637d);
  * 14. the narration written before the report ("Let me read the notes") is
  *     taken into the answer;
  * 15. an answer past what is kept is cut without saying so;

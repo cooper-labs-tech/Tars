@@ -7,8 +7,8 @@ import {
 /**
  * One heavy-run slot for the whole machine (2.0.5, lot 2 item A of ressources-agents-proposition-2810.md, the
  * owner's go of 28/10): test suites, builds, dev servers, Docker and simulators of every project's agents take it in
- * turn. Each project's orchestrator had built its own lock (kotsna's mkdir, another project's lock file, 1212's rule
- * 198): nothing coordinated the projects, a dead agent left its lock taken, and 1212 read the free space at the start
+ * turn. Each project's orchestrator had built its own lock (one project's mkdir, another project's lock file, a third's rule
+ * 198): nothing coordinated the projects, a dead agent left its lock taken, and that third project read the free space at the start
  * only, while the swap grew during the run (a `next dev` takes 6 to 7 GB of it).
  *
  * Every way it can fail, written before the code (2026-10-28):

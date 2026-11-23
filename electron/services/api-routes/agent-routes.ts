@@ -1563,7 +1563,7 @@ async function performDispatchLocked(
   // terminal's writer keeps it while the dialog is open, never typing into it,
   // and types it once the dialog closes (pty-manager.ts pump). It was refused
   // (409) until 2.0.5, and a worker's report to an orchestrator at a dialog was
-  // lost (1212 counted 17 on the night of 27/10).
+  // lost (another project counted 17 on the night of 27/10).
   // Typed into the session only where a CLI runs, read from the terminal and
   // never from the status. Every turn ends on `idle` (the Stop hook posts it)
   // and a failed one on `error`, both with the CLI at its prompt: /dispatch

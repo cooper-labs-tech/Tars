@@ -3,7 +3,7 @@ import { buildFleetResources, type FleetInput } from '../../../electron/services
 
 /**
  * What each agent and each project costs, readable (2.0.5, lot 3 item D; brief lot3-agent-resources-2810.md, moved to
- * the Backend; the Frontend's contract on #539, `FleetResources`). 1212's orchestrator could not tell which agents held
+ * the Backend; the Frontend's contract on #539, `FleetResources`). Another project's orchestrator could not tell which agents held
  * the memory (its tars-feedback-2810.md, item 8).
  *
  * How it fails, written before the code (28/10):
