@@ -2,7 +2,7 @@ import { test, expect, _electron as electron, type Locator } from '@playwright/t
 import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
-import { launchSandboxed, recordValues, stepShot } from './fixture.mjs';
+import { launchSandboxed, recordValues, stepShot, writeNodeCli } from './fixture.mjs';
 import { DEV_URL, apiPort } from './ports.mjs';
 
 /**
@@ -47,22 +47,18 @@ test('plan, a permission mode: chosen for Claude Code in New agent and passed to
   fs.mkdirSync(dir, { recursive: true });
   const argsFile = path.join(real, 'stand-in-args.jsonl');
   // In Node, not bash: a bash stand-in is named like the shell in the pty's
-  // foreground, and the app would never see a CLI running.
-  const standIn = (name: string) => {
-    const file = path.join(real, name);
-    fs.writeFileSync(file, [
-      `#!${process.execPath}`,
-      `require('fs').appendFileSync(${JSON.stringify(argsFile)}, JSON.stringify(process.argv.slice(2)) + '\\n');`,
-      // Started as an agent: its launches on a file of its own, and its terminal's token beside them.
-      'const id = process.env.CLAUDE_AGENT_ID;',
-      `if (id) require('fs').appendFileSync(${JSON.stringify(argsFile)} + '.' + id, JSON.stringify(process.argv.slice(2)) + '\\n');`,
-      `if (id && process.env.CLAUDE_MGR_API_TOKEN) require('fs').writeFileSync(${JSON.stringify(argsFile)} + '.' + id + '.token', process.env.CLAUDE_MGR_API_TOKEN);`,
-      "process.stdout.write('stand-in ready\\n');",
-      'process.stdin.resume();',
-      '',
-    ].join('\n'), { mode: 0o755 });
-    return file;
-  };
+  // foreground, and the app would never see a CLI running. A node CLI on every
+  // system: npm's cmd-shim beside it on Windows (writeNodeCli).
+  const standIn = (name: string) => writeNodeCli(path.join(real, name), [
+    `require('fs').appendFileSync(${JSON.stringify(argsFile)}, JSON.stringify(process.argv.slice(2)) + '\\n');`,
+    // Started as an agent: its launches on a file of its own, and its terminal's token beside them.
+    'const id = process.env.CLAUDE_AGENT_ID;',
+    `if (id) require('fs').appendFileSync(${JSON.stringify(argsFile)} + '.' + id, JSON.stringify(process.argv.slice(2)) + '\\n');`,
+    `if (id && process.env.CLAUDE_MGR_API_TOKEN) require('fs').writeFileSync(${JSON.stringify(argsFile)} + '.' + id + '.token', process.env.CLAUDE_MGR_API_TOKEN);`,
+    "process.stdout.write('stand-in ready\\n');",
+    'process.stdin.resume();',
+    '',
+  ].join('\n'));
   const claude = standIn('claude-stand-in.cjs');
   const codex = standIn('codex-stand-in.cjs');
   const agent = (o: Record<string, unknown>) => ({

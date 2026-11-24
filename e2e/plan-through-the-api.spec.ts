@@ -2,7 +2,7 @@ import { test, expect, _electron as electron } from '@playwright/test';
 import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
-import { launchSandboxed, recordValues } from './fixture.mjs';
+import { launchSandboxed, recordValues, writeNodeCli } from './fixture.mjs';
 import { DEV_URL, apiPort } from './ports.mjs';
 
 /**
@@ -28,19 +28,15 @@ test('plan asked through the API is taken for Claude Code and Qwen Code, refused
   const dir = path.join(home, '.tars');
   fs.mkdirSync(dir, { recursive: true });
   const argsFile = path.join(real, 'stand-in-args.jsonl');
-  const standIn = (name: string) => {
-    const file = path.join(real, name);
-    fs.writeFileSync(file, [
-      `#!${process.execPath}`,
-      'const id = process.env.CLAUDE_AGENT_ID;',
-      `if (id) require('fs').appendFileSync(${JSON.stringify(argsFile)} + '.' + id, JSON.stringify(process.argv.slice(2)) + '\\n');`,
-      `if (id && process.env.CLAUDE_MGR_API_TOKEN) require('fs').writeFileSync(${JSON.stringify(argsFile)} + '.' + id + '.token', process.env.CLAUDE_MGR_API_TOKEN);`,
-      "process.stdout.write('stand-in ready\\n');",
-      'process.stdin.resume();',
-      '',
-    ].join('\n'), { mode: 0o755 });
-    return file;
-  };
+  // A node CLI on every system: a #!node script on macOS and Linux, npm's cmd-shim beside it on Windows (writeNodeCli).
+  const standIn = (name: string) => writeNodeCli(path.join(real, name), [
+    'const id = process.env.CLAUDE_AGENT_ID;',
+    `if (id) require('fs').appendFileSync(${JSON.stringify(argsFile)} + '.' + id, JSON.stringify(process.argv.slice(2)) + '\\n');`,
+    `if (id && process.env.CLAUDE_MGR_API_TOKEN) require('fs').writeFileSync(${JSON.stringify(argsFile)} + '.' + id + '.token', process.env.CLAUDE_MGR_API_TOKEN);`,
+    "process.stdout.write('stand-in ready\\n');",
+    'process.stdin.resume();',
+    '',
+  ].join('\n'));
   const claude = standIn('claude-stand-in.cjs');
   const qwen = standIn('qwen-stand-in.cjs');
   const agent = (o: Record<string, unknown>) => ({
@@ -90,8 +86,13 @@ test('plan asked through the API is taken for Claude Code and Qwen Code, refused
       });
       seen[w.id] = { status: response.status, answer: await response.json() };
     }
-    // Long enough for every launch to have written its arguments.
-    await page.waitForTimeout(5_000);
+    // Every worker /start took has written its arguments, however loaded the machine (the Audit's Info on #640). One it
+    // refused answered before any launch, so no launch of its can come later; one an old build took (Router worker, 200
+    // before #640) is waited for too, and its launch then turns the spec red.
+    const taken = WORKERS.filter((w) => (seen[w.id] as { status: number }).status === 200).map((w) => w.id);
+    await expect.poll(() => taken.filter((id) => launches(id).length === 0), {
+      timeout: 60_000, message: 'every worker /start took was launched',
+    }).toEqual([]);
     for (const w of WORKERS) seen[w.id] = { ...(seen[w.id] as object), launches: launches(w.id) };
     recordValues(seen);
 
