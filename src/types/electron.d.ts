@@ -2936,8 +2936,12 @@ export interface ElectronAPI {
     remove: (sel: { traceIds: string[] } | { filter: TraceFilter }) => Promise<{ deleted: number; bytesFreed: number }>;
     readerToken: () => Promise<{ exists: boolean; createdAt?: string; lastUsedAt?: string; route: string; listen: 'loopback' }>;
     /** Shown once: the one before opens nothing from now on. */
-    rotateReaderToken: () => Promise<{ token: string }>;
-    revokeReaderToken: () => Promise<{ ok: true }>;
+    /** A new reader token, shown once; the old one opens nothing from now on. ok:false with the reason when it could
+     *  not be saved: the old one then opens nothing either, and there is no token. */
+    rotateReaderToken: () => Promise<{ token: string } | { ok: false; error: string }>;
+    /** ok once the token opens nothing and its file says no token; else the reason (it still opens nothing until
+     *  Tars quits). */
+    revokeReaderToken: () => Promise<{ ok: true } | { ok: false; error: string }>;
     /** Throttled to once a second. */
     onChanged: (cb: () => void) => () => void;
   };

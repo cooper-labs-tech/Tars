@@ -88,21 +88,30 @@ export function recordConsent(at: string): void {
   fs.writeFileSync(TRACES_CONSENT_FILE, at, { mode: 0o600 });
 }
 
+/**
+ * A file of the private folder gone, or emptied, which reads as nothing: a full volume takes the unlink, and a folder
+ * that may not be written takes the truncate. Null once one holds, else the reason, which the log says too.
+ */
+function dropPrivateFile(file: string, what: string): string | null {
+  try {
+    fs.unlinkSync(file);
+    return null;
+  } catch (err) {
+    if ((err as NodeJS.ErrnoException).code === 'ENOENT') return null;
+  }
+  try {
+    fs.truncateSync(file, 0);
+    return null;
+  } catch (err) {
+    const reason = describeSecretFileError(err);
+    console.error(`[traces] ${what} could be neither removed nor emptied: ${reason}`);
+    return reason;
+  }
+}
+
 /** The consent's file gone or emptied: true when it no longer says any consent. */
 export function dropConsentFile(): boolean {
-  try {
-    fs.unlinkSync(TRACES_CONSENT_FILE);
-    return true;
-  } catch (err) {
-    if ((err as NodeJS.ErrnoException).code === 'ENOENT') return true;
-  }
-  try {
-    fs.truncateSync(TRACES_CONSENT_FILE, 0);
-    return true;
-  } catch (err) {
-    console.error(`[traces] the consent's file could be neither removed nor emptied: ${describeSecretFileError(err)}`);
-    return false;
-  }
+  return dropPrivateFile(TRACES_CONSENT_FILE, "the consent's file") === null;
 }
 
 /** Whether the settings' consent stands: its file holds the very same time. */
@@ -574,26 +583,50 @@ function readReaderToken(): string {
 export function readerTokenStatus(): { exists: boolean; createdAt?: string; lastUsedAt?: string; route: string; listen: 'loopback' } {
   let createdAt: string | undefined;
   try { createdAt = fs.statSync(TRACES_READER_TOKEN_FILE).mtime.toISOString(); } catch { /* none */ }
-  return { exists: !!readReaderToken(), createdAt, lastUsedAt: readerLastUsedAt, route: '/api/traces/', listen: 'loopback' };
+  const held = readReaderToken();
+  return { exists: !!held && !revokedReaderTokens.has(held), createdAt, lastUsedAt: readerLastUsedAt, route: '/api/traces/', listen: 'loopback' };
 }
 
-/** A new reader token, shown once: the one before opens nothing from now on. */
-export function rotateReaderToken(): string {
-  const token = `trd_${randomBytes(32).toString('hex')}`;
-  writeSecretFileSync(TRACES_READER_TOKEN_FILE, token);
+/**
+ * Reader tokens revoked in this run: refused at once, whatever their file still says (the Audit's L1 at 1e9571eab).
+ * A revoke applies first, then the file goes, unlinked or else emptied, which reads as no token at the next start.
+ */
+const revokedReaderTokens = new Set<string>();
+
+/** The reader token refused now and off the disk: null once the file says no token, else the reason. */
+function dropReaderToken(): string | null {
+  const held = readReaderToken();
+  if (held) revokedReaderTokens.add(held);
   readerLastUsedAt = undefined;
+  return dropPrivateFile(TRACES_READER_TOKEN_FILE, 'the reader token');
+}
+
+/**
+ * A new reader token, shown once: the one before opens nothing from now on. The old one goes first, so a new write
+ * that fails (a full disk) leaves no token rather than the old one. Throws the reason when either step fails.
+ */
+export function rotateReaderToken(): string {
+  const kept = dropReaderToken();
+  if (kept) throw new Error(`Tars could not remove the reader token (${kept}): it opens nothing until Tars quits, and no new one was made.`);
+  const token = `trd_${randomBytes(32).toString('hex')}`;
+  try {
+    writeSecretFileSync(TRACES_READER_TOKEN_FILE, token);
+  } catch (err) {
+    throw new Error(`Tars could not save a new reader token (${describeSecretFileError(err)}): the old one opens nothing, and there is none now.`);
+  }
   return token;
 }
 
+/** The reader token revoked: refused at once, and off the disk. Throws the reason when its file stays. */
 export function revokeReaderToken(): void {
-  fs.rmSync(TRACES_READER_TOKEN_FILE, { force: true });
-  readerLastUsedAt = undefined;
+  const kept = dropReaderToken();
+  if (kept) throw new Error(`Tars could not remove the reader token (${kept}): it opens nothing until Tars quits, but would again after a restart.`);
 }
 
 /** Whether this is the reader token, compared whole and in constant time. */
 export function isReaderToken(presented: string): boolean {
   const held = readReaderToken();
-  if (!presented || !held) return false;
+  if (!presented || !held || revokedReaderTokens.has(held)) return false;
   const a = Buffer.from(presented);
   const b = Buffer.from(held);
   const same = a.length === b.length && timingSafeEqual(a, b);
