@@ -86,9 +86,9 @@ describe("a gemini agent's added folders are trusted in gemini's store (1, 6)", 
 describe("the user's own trust is kept (2, 4, 5)", () => {
   it('keeps the entries already there', async () => {
     fs.mkdirSync(path.dirname(store()), { recursive: true });
-    fs.writeFileSync(store(), JSON.stringify({ '/Users/me/code': 'TRUST_PARENT', '/Users/me/untrusted': 'DO_NOT_TRUST' }));
+    fs.writeFileSync(store(), JSON.stringify({ '/home/me/code': 'TRUST_PARENT', '/home/me/untrusted': 'DO_NOT_TRUST' }));
     await line();
-    expect(read()).toMatchObject({ '/Users/me/code': 'TRUST_PARENT', '/Users/me/untrusted': 'DO_NOT_TRUST', [path.join(tmpDir, '.tars')]: 'TRUST_FOLDER' });
+    expect(read()).toMatchObject({ '/home/me/code': 'TRUST_PARENT', '/home/me/untrusted': 'DO_NOT_TRUST', [path.join(tmpDir, '.tars')]: 'TRUST_FOLDER' });
   });
 
   it('leaves a file that is not JSON as it was', async () => {
@@ -138,7 +138,7 @@ describe("the file is the user's: read and written as gemini does (7 to 12)", ()
   });
 
   it("10. keeps an existing file's mode", async () => {
-    seed(JSON.stringify({ '/Users/me/code': 'TRUST_FOLDER' }), 0o640);
+    seed(JSON.stringify({ '/home/me/code': 'TRUST_FOLDER' }), 0o640);
     await line();
     expect(read()[tars()]).toBe('TRUST_FOLDER');
     expect(fs.statSync(store()).mode & 0o777).toBe(0o640);
@@ -146,7 +146,7 @@ describe("the file is the user's: read and written as gemini does (7 to 12)", ()
 
   it('11. leaves a commented file exactly as it was, says so, and the line is still built', async () => {
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
-    const content = '{\n  // the user\'s own note\n  "/Users/me/code": "TRUST_FOLDER"\n}\n';
+    const content = '{\n  // the user\'s own note\n  "/home/me/code": "TRUST_FOLDER"\n}\n';
     seed(content);
     const command = await line();
     expect(command).toContain('--include-directories');
@@ -156,9 +156,9 @@ describe("the file is the user's: read and written as gemini does (7 to 12)", ()
 
   it('12. leaves a file that is JSON but not an object, and says so', async () => {
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
-    seed('["/Users/me/code"]\n');
+    seed('["/home/me/code"]\n');
     await line();
-    expect(fs.readFileSync(store(), 'utf8')).toBe('["/Users/me/code"]\n');
+    expect(fs.readFileSync(store(), 'utf8')).toBe('["/home/me/code"]\n');
     expect(warn.mock.calls.flat().join(' ')).toContain(store());
   });
 });
