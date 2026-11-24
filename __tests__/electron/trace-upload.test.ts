@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
@@ -63,6 +63,15 @@ import { hasPosixModes } from '../setup/platform-limits';
  *     unhandled rejection in main) instead of saying the back-office forgot this Tars.
  * 29. A DELETE that went through then: the unlink throws after it, and the window is told nothing was deleted.
  * 30. Giving up an owed deletion then: the unlink throws out of abandonDeletion.
+ * Added before their code after the Audit's re-read at 965cfced0 (its L2, 24/11). Forgetting the progress after a
+ * DELETE that went through is a database write, which a full disk refuses:
+ * 31. A DELETE answered 200, then that write throws: the window is told nothing was deleted, and the deletion stays
+ *     owed until it clears by itself.
+ * 32. A DELETE answered 401 (the token already gone), then that write throws: the deletion throws out of its catch.
+ * 33. (Added before its code, 24/11.) Giving up an owed deletion makes the same write: it throws out of
+ *     abandonDeletion, the deletion still owed, and the window gets no answer.
+ * 34. (Added before its code, 24/11.) A trace store whose read throws: "delete everything" reads the newest session
+ *     before it withdraws, so it throws first, and the user cannot revoke on a broken store.
  */
 
 type Seen = { method: string; url: string; headers: http.IncomingHttpHeaders; body: Buffer };
@@ -171,7 +180,8 @@ function uploader(over: Partial<UploaderDeps> = {}) {
     eligible: (s) => settings.projects.includes(s.projectPath) && settings.agentsTraced.has(s.agentId),
     scrubContext: () => ({ homeDirs: [HOME], knownSecrets: [SECRET], envValues: [] }),
     client: { name: 'tars', version: '0.0.0-test', platform: process.platform },
-    withdrawConsent: () => { withdrawn++; settings.consentAt = undefined; },
+    // A deletion's bookkeeping may come with the withdrawal, in the same write (the Audit's I-1 at 965cfced0).
+    withdrawConsent: (d?: { owed: boolean; since?: number }) => { withdrawn++; settings.consentAt = undefined; if (d) deletion = d; },
     now: () => clock,
     ...over,
   });
@@ -600,5 +610,82 @@ describe('the install file in a private folder that may not be written (the Audi
     expect(r).toEqual({ ok: true });
     expect(deletion).toEqual({ owed: false, since: 5000 });
     expect(u.state()).toMatchObject({ deletionOwed: false, registered: false });
+  });
+});
+
+describe('forgetting the progress after a DELETE that went through, on a full disk (the Audit\'s L2 at 965cfced0)', () => {
+  const full = () => { throw Object.assign(new Error('database or disk is full'), { code: 'SQLITE_FULL' }); };
+
+  it('31: a DELETE answered 200 is said so, and the deletion is no longer owed, whatever the database says', async () => {
+    seed('t1', 'first');
+    const u = uploader();
+    await u.runOnce();
+    const log = vi.spyOn(console, 'error').mockImplementation(() => {});
+    vi.spyOn(store, 'resetUploads').mockImplementation(full);
+    try {
+      const d = await u.deleteEverywhere();
+      expect(d).toMatchObject({ ok: true, deleted: 1 });
+      expect(deletion.owed).toBe(false);
+      expect(log.mock.calls.map(c => c.join(' ')).join('\n')).toMatch(/SQLITE_FULL|database or disk is full/);
+      expect(u.state()).toMatchObject({ registered: false, deletionOwed: false });
+    } finally {
+      vi.restoreAllMocks();
+    }
+  });
+
+  it('32: a DELETE answered 401 (nothing left there) resolves ok, and the deletion is no longer owed', async () => {
+    seed('t1', 'first');
+    const u = uploader();
+    await u.runOnce();
+    bo.installs.clear();
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+    vi.spyOn(store, 'resetUploads').mockImplementation(full);
+    try {
+      await expect(u.deleteEverywhere()).resolves.toMatchObject({ ok: true });
+      expect(deletion.owed).toBe(false);
+    } finally {
+      vi.restoreAllMocks();
+    }
+  });
+
+  it('34: a store whose read throws: "delete everything" still withdraws, the deletion owed from no earlier than the click', async () => {
+    seed('t1', 'first');
+    const u = uploader();
+    await u.runOnce();
+    const log = vi.spyOn(console, 'error').mockImplementation(() => {});
+    vi.spyOn(store, 'newestStartedAt').mockImplementation(() => { throw Object.assign(new Error('database disk image is malformed'), { code: 'SQLITE_CORRUPT' }); });
+    // The back-office does not answer the DELETE, so the deletion stays owed.
+    bo.failNext.push({ status: 503, code: 'unavailable' });
+    const clicked = clock;
+    try {
+      const d = await u.deleteEverywhere();
+      expect(d.ok).toBe(false);
+      expect(withdrawn).toBe(1);
+      expect(settings.consentAt).toBeUndefined();
+      expect(deletion.owed).toBe(true);
+      expect(deletion.since).toBeGreaterThanOrEqual(clicked);
+      expect(log.mock.calls.map(c => c.join(' ')).join('\n')).toMatch(/SQLITE_CORRUPT|malformed/);
+    } finally {
+      vi.restoreAllMocks();
+    }
+  });
+
+  it('33: giving up an owed deletion holds, is answered ok, and the reason is logged', async () => {
+    seed('t1', 'first');
+    const u = uploader();
+    await u.runOnce();
+    deletion = { owed: true, since: 5000 };
+    const log = vi.spyOn(console, 'error').mockImplementation(() => {});
+    vi.spyOn(store, 'resetUploads').mockImplementation(full);
+    try {
+      let r: ReturnType<TraceUploader['abandonDeletion']> | undefined;
+      expect(() => { r = u.abandonDeletion(); }).not.toThrow();
+      expect(r).toEqual({ ok: true });
+      expect(deletion).toEqual({ owed: false, since: 5000 });
+      expect(log.mock.calls.map(c => c.join(' ')).join('\n')).toMatch(/SQLITE_FULL|database or disk is full/);
+      expect(u.state()).toMatchObject({ deletionOwed: false, registered: false });
+    } finally {
+      vi.restoreAllMocks();
+    }
   });
 });

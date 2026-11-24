@@ -2,6 +2,11 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import * as fs from 'fs';
 import * as path from 'path';
 import type { AppSettings } from '../../../electron/types';
+import { DATA_DIR, PRIVATE_DIR } from '../../../electron/constants';
+import { assertThrowaway } from '../../setup/throwaway-dirs';
+
+// The hooks below remove the trace store and the install file: only in a throwaway home.
+assertThrowaway({ DATA_DIR, PRIVATE_DIR });
 
 /**
  * Every answer of main's that carries the upload state carries what the window warns with, `unsaved` (the Audit's

@@ -29,6 +29,11 @@ import { configureTraces } from '../../../../electron/services/traces-runtime';
 import { ENDPOINT_KEYS_DIR, ensureDropFolder } from '../../../../electron/services/inference-endpoints';
 import type { RouteApp, RouteContext, RouteRequest } from '../../../../electron/services/api-routes/types';
 import type { AppSettings } from '../../../../electron/types';
+import { DATA_DIR, PRIVATE_DIR } from '../../../../electron/constants';
+import { assertThrowaway } from '../../../setup/throwaway-dirs';
+
+// The hooks below write and remove a drop file under the data folder, and the settings' keys: only in a throwaway home.
+assertThrowaway({ DATA_DIR, PRIVATE_DIR });
 
 /** Made up here, for this test only: no real key, and not the sandbox key file's value. */
 const KEY = 'sk-made-up-in-this-test-7f3a9c2e1b';

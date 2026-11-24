@@ -4,8 +4,13 @@ import * as path from 'path';
 import type { AppSettings } from '../../../electron/types';
 import {
   TRACES_CONSENT_FILE, TRACES_DB_FILE, TRACES_INSTALL_FILE, configureTraces, consentStands, recordConsent, reconcileConsent,
-  saveSettingsFromApi, stopTracesRuntime, traceStore, uploadConsentAt, uploadPersistence, withdrawUploadConsent,
+  saveSettingsFromApi, stopTracesRuntime, traceStore, traceUploader, uploadConsentAt, uploadPersistence, withdrawUploadConsent,
 } from '../../../electron/services/traces-runtime';
+import { DATA_DIR, PRIVATE_DIR } from '../../../electron/constants';
+import { assertThrowaway } from '../../setup/throwaway-dirs';
+
+// The hooks below remove the trace store, the install file and the consent's file: only in a throwaway home.
+assertThrowaway({ DATA_DIR, PRIVATE_DIR });
 
 /**
  * A withdrawal of the consent to upload traces never comes back (the orchestrator's follow-up to the Audit's L2 on
@@ -38,6 +43,13 @@ import {
  * W10. A start whose settings say no consent invents a deletion.
  * A consent the settings name and its file does not hold is a withdrawal Tars could not record; whether it came with
  * a deletion is not known then, so the start takes it for one (it fails closed).
+ * Added before their code after the Audit's re-read at 965cfced0 (24/11):
+ * W11. (Its I-1.) "Delete everything" writes the settings twice, the deletion's marks, then the withdrawal: a stop
+ *      between the two leaves settings that say the consent with a deletion owed, the consent's file still there.
+ *      Swapped, a stop would leave no consent and no deletion. Every state written must be safe: never the consent
+ *      with a deletion owed, and never no consent with no moment of the deletion.
+ * W12. (Its I-3.) A start whose trace store cannot be opened throws out of reconcileConsent, and so out of the start,
+ *      instead of withdrawing the consent it found without its file.
  */
 
 const AT = '2026-11-24T10:00:00.000Z';
@@ -113,6 +125,43 @@ describe('a deletion whose bookkeeping could not be written, then a restart (the
     memory = { traces: { ...withConsent().traces, uploadDeletedAt: kept } } as unknown as AppSettings;
     reconcileConsent();
     expect(deletionIn(memory)?.uploadDeletedAt).toBe(kept);
+  });
+
+  it('W11. "delete everything" writes no state a stop could leave unsafe: never consent with a deletion owed, never neither', async () => {
+    // An install whose back-office does not answer (nothing listens on port 9): the DELETE fails, the deletion owed.
+    fs.writeFileSync(TRACES_INSTALL_FILE, JSON.stringify({ url: 'http://127.0.0.1:9', installId: 'i', token: 'tok', secret: 's'.repeat(64), registeredAt: 1 }), { mode: 0o600 });
+    const writes: AppSettings[] = [];
+    configureTraces({
+      getSettings: () => memory,
+      setSettings: (s) => { memory = s; },
+      writeSettings: (s) => { writes.push(structuredClone(s)); disk = structuredClone(s); },
+      getAgent: () => undefined,
+      emit: () => {},
+    });
+    const r = await traceUploader().deleteEverywhere();
+    expect(r.ok).toBe(false);
+    expect(writes.length).toBeGreaterThan(0);
+    for (const w of writes) {
+      expect(!!consentIn(w) && deletionIn(w)?.uploadDeletionOwed === true, `consent with a deletion owed: ${JSON.stringify(w)}`).toBe(false);
+      expect(!!consentIn(w) || deletionIn(w)?.uploadDeletedAt !== undefined, `no consent and no deletion: ${JSON.stringify(w)}`).toBe(true);
+    }
+    expect(deletionIn(disk)?.uploadDeletionOwed).toBe(true);
+    expect(consentIn(disk)).toBeUndefined();
+  });
+
+  it('W12. a start whose trace store cannot be opened throws nothing, and withdraws the consent with a moment of its own', () => {
+    // A folder where the store's database goes: it cannot be opened.
+    fs.mkdirSync(TRACES_DB_FILE, { recursive: true });
+    deletedThenRestarted();
+    const before = Date.now();
+    const log = vi.spyOn(console, 'error').mockImplementation(() => {});
+    try {
+      expect(() => reconcileConsent()).not.toThrow();
+    } finally {
+      log.mockRestore();
+    }
+    expect(consentIn(memory)).toBeUndefined();
+    expect(deletionIn(memory)?.uploadDeletedAt).toBeGreaterThanOrEqual(before);
   });
 
   it('W10. a start whose settings say no consent leaves the deletion marks as they are', () => {

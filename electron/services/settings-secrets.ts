@@ -186,28 +186,58 @@ export function setSecret(current: AppSettings, field: string, value: string | n
  * without its keys, and a save would otherwise lose them for good. A save that
  * throws changed nothing: when app-settings.json cannot be written, the private
  * file is put back as it was, or removed if there was none (the Audit's I-3 on
- * #596), and only a failure of that too, said in the log, leaves the new keys.
+ * #596). A failure of that too leaves the new keys: it is said in the log, and
+ * the error is marked so the window is told so (keysKeptAfter).
  */
 export function saveSettingsSplit(settings: AppSettings): void {
-  if (readSecretsFile() === null) setAside(SECRETS_FILE);
+  const held = readSecretsFile();
+  if (held === null) setAside(SECRETS_FILE);
   let before: string | null;
   try {
     before = fs.readFileSync(SECRETS_FILE, 'utf-8');
   } catch {
     before = null;
   }
-  writeSecrets(secretsOf(settings as unknown as Record<string, unknown>));
+  const next = secretsOf(settings as unknown as Record<string, unknown>);
+  writeSecrets(next);
   try {
     writeSecretFileSync(APP_SETTINGS_FILE, JSON.stringify(withoutSecrets(settings), null, 2));
   } catch (err) {
+    // A save that set no key (a withdrawal's write, a consent, an endpoint saved without its key) wrote back what the
+    // file held: there is nothing to put back, and nothing to say about the keys (the Audit's I-1 at ae56b8d6e).
+    if (JSON.stringify(next) === JSON.stringify(held ?? {})) throw err;
     try {
       if (before === null) fs.rmSync(SECRETS_FILE, { force: true });
       else writeSecretFileSync(SECRETS_FILE, before);
     } catch (undo) {
       console.error(`[secrets] app-settings.json was not written, and ${path.basename(SECRETS_FILE)} could not be put back as it was: ${describeSecretFileError(undo)}`);
+      // The keys that stayed, for the window's words and for the settings in memory (withKeptKeys).
+      if (err && typeof err === 'object') (err as { keptKeys?: Secrets }).keptKeys = next;
     }
     throw err;
   }
+}
+
+/** The keys a save that threw left in the private file (its put-back failed too), or null. */
+function keptKeysOf(err: unknown): Secrets | null {
+  const kept = err && typeof err === 'object' ? (err as { keptKeys?: unknown }).keptKeys : undefined;
+  return kept && typeof kept === 'object' ? kept as Secrets : null;
+}
+
+/** Whether a save that threw left a key it set in the private file. */
+export function keysKeptAfter(err: unknown): boolean {
+  return keptKeysOf(err) !== null;
+}
+
+/**
+ * The settings in memory after a save that threw, as the disk holds them: their own, with the keys that save left
+ * in the private file, or null when it left none. Kept otherwise, the next save that holds would write the old keys
+ * back over the kept one, and the key the window was told loads at the next start would not (the Audit's I-2a at
+ * ae56b8d6e). Only the keys: the rest of that save was not written.
+ */
+export function withKeptKeys(settings: AppSettings, err: unknown): AppSettings | null {
+  const kept = keptKeysOf(err);
+  return kept ? { ...withoutSecrets(settings), ...kept } as AppSettings : null;
 }
 
 function setAside(file: string): void {

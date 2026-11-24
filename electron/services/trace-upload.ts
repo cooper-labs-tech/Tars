@@ -44,8 +44,11 @@ export interface UploaderDeps {
   /**
    * Takes the user's consent back. Called once everything sent was deleted: without it, the next pass would register
    * again and send it all back, undoing the deletion. Sharing starts again only when the user consents again.
+   * With a deletion, its bookkeeping is kept with the withdrawal, in the same write: two writes would leave, between
+   * them, either the consent standing with a deletion owed or no consent and no moment of the deletion (the Audit's
+   * I-1 at 965cfced0).
    */
-  withdrawConsent(): void;
+  withdrawConsent(deletion?: { owed: boolean; since?: number }): void;
   /** A batch's body, compressed, at most (4 MiB: half the back-office's 8 MiB, the margin it advises). */
   maxBatchBytes?: number;
   fetch?: typeof fetch;
@@ -168,7 +171,7 @@ export class TraceUploader {
     if (!this.owed()) return { ok: false, error: 'No deletion is waiting for confirmation: there is nothing to give up.' };
     const kept = this.dropInstall();
     if (kept) return { ok: false, error: `Tars could not forget this install (${kept}): the deletion is still waiting.` };
-    this.deps.store.resetUploads();
+    this.forgetSent('the deletion was given up');
     this.deps.setDeletion({ owed: false, since: this.deps.settings().since });
     return { ok: true };
   }
@@ -488,13 +491,21 @@ export class TraceUploader {
   async deleteEverywhere(): Promise<{ ok: true; deleted?: number } | { ok: false; error: string }> {
     this.halts++;
     try {
-      // The consent first: sending stops at once, and stays off if the DELETE fails or never goes, the deletion
-      // kept as owed (the re-audit at 36690e547). Only sessions started after this moment may ever go again.
+      // The consent first, with the deletion owed in the same write (the Audit's I-1 at 965cfced0): sending stops at
+      // once, and stays off if the DELETE fails or never goes (the re-audit at 36690e547). Only sessions started
+      // after this moment may ever go again.
       // The moment of the deletion, never earlier than the newest session it covers: a clock moved backward since
       // those sessions must not let them through on re-consent (the re-read's L2 at ee4d55975).
-      const since = Math.max(this.now(), this.deps.store.newestStartedAt() ?? 0);
-      if (this.readInstall()) this.deps.setDeletion({ owed: true, since });
-      this.deps.withdrawConsent();
+      // A store that cannot be read must not stop the withdrawal: the moment is then the click, the latest one Tars
+      // can stand behind, as at a start (reconcileConsent).
+      let newest: number | undefined;
+      try {
+        newest = this.deps.store.newestStartedAt();
+      } catch (err) {
+        console.error(`[traces] the trace store could not be read at the deletion (${describeSecretFileError(err)}): its moment is now`);
+      }
+      const since = Math.max(this.now(), newest ?? 0);
+      this.deps.withdrawConsent(this.readInstall() ? { owed: true, since } : undefined);
       this.abort?.abort();
       await this.pass?.catch(() => undefined);
       return await this.deleteNow();
@@ -506,28 +517,45 @@ export class TraceUploader {
   private async deleteNow(): Promise<{ ok: true; deleted?: number } | { ok: false; error: string }> {
     const install = this.readInstall();
     if (!install) return { ok: false, error: 'This install has sent nothing: there is nothing to delete.' };
+    let answer: { ok: true; deleted?: number };
     try {
       const r = await this.call(install, install.url, 'DELETE', '/v1/installs/me') as { deleted?: { sessions?: number } };
-      this.forget();
-      this.deps.setDeletion({ owed: false, since: this.deps.settings().since });
-      return { ok: true, deleted: r.deleted?.sessions };
+      answer = { ok: true, deleted: r.deleted?.sessions };
     } catch (err) {
       // The token already gone (a deletion that went through before its answer was lost): nothing is left there.
-      if (err instanceof HttpError && err.status === 401) {
-        this.forget();
-        this.deps.setDeletion({ owed: false, since: this.deps.settings().since });
-        return { ok: true };
+      if (!(err instanceof HttpError && err.status === 401)) {
+        return { ok: false, error: err instanceof HttpError ? `The back-office answered ${err.status} ${err.code}.` : (err as Error).message };
       }
-      return { ok: false, error: err instanceof HttpError ? `The back-office answered ${err.status} ${err.code}.` : (err as Error).message };
+      answer = { ok: true };
     }
+    this.forget();
+    this.deps.setDeletion({ owed: false, since: this.deps.settings().since });
+    return answer;
   }
 
-  /** After a DELETE that went through: what is said is that it did, even when the install file will not go. */
+  /**
+   * After a DELETE that went through: what is said is that it did, even when the install file will not go, or the
+   * progress cannot be forgotten (a database write, which a full disk refuses; the Audit's L2 at 965cfced0). The
+   * sessions sent then stay marked sent here, so none goes again, which is the safe side.
+   */
   private forget(): void {
     this.dropInstall();
-    this.deps.store.resetUploads();
     this.failures = 0;
     this.nextTryAt = undefined;
     this.lastError = undefined;
+    this.forgetSent('the deletion went through');
+  }
+
+  /**
+   * What was sent forgotten, after a deletion that went through or was given up. A full disk refuses that database
+   * write: the sessions sent then stay marked sent here, so none goes again, which is the safe side (every one
+   * started before the deletion's moment, which holds anyway), and the reason is logged; nothing is thrown.
+   */
+  private forgetSent(after: string): void {
+    try {
+      this.deps.store.resetUploads();
+    } catch (err) {
+      console.error(`[traces] ${after}, and what was sent stays marked sent here: ${describeSecretFileError(err)}`);
+    }
   }
 }
