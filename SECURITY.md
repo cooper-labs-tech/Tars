@@ -615,6 +615,14 @@ Automations and Scheduled Tasks before 1.8.0 (the Schedules page drives Hermes's
 crons), and they went in 2.0.4 with the key reading they carried (the QA's gate of
 #458).
 
+A gemini agent's added folders are trusted for good in gemini's own store, as a claude agent's folder is pre-written
+trusted in `~/.claude.json`: the folders its line adds with `--include-directories` (`~/.tars`, and the agent's
+secondary folder or a template's vault when it has one) are written into `~/.gemini/trustedFolders.json` as
+`TRUST_FOLDER` (gemini 0.70.0, measured 24/11), since gemini asks about an added folder it does not trust, its
+`--skip-trust` covering the workspace only, and the first task typed into the terminal answered that question. The
+entries stay after the agent: the user's own gemini then asks nothing about those folders either. Each is the folder
+alone, never its parent, and never the home folder or the root (`trustsTooMuch`).
+
 What Tars before 2.0.4 left of those keys is cleaned once, at the first load of
 an `agents.json` from before it (`core/key-fragments.ts`): the question showed
 the key's last 20 characters (`sk-ant-...` then those 20), which the agents'

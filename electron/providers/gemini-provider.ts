@@ -17,7 +17,40 @@ import type {
 } from './cli-provider';
 import { servedPathMatches, shellQuote } from './cli-provider';
 import { geminiRoleArgs } from '../services/mcp-roles';
-import { writeSharedJsonSync } from '../utils/shared-file';
+import { updateSharedJsonSync, writeSharedJsonSync } from '../utils/shared-file';
+import { trustsTooMuch } from '../utils/trust-too-much';
+
+/**
+ * The folders given trusted in gemini's own store, `<configDir>/trustedFolders.json` (`{ "<folder>": "TRUST_FOLDER" }`,
+ * gemini 0.70.0's format, measured 24/11), each by its own path and by its real one: the folder alone, never its
+ * parent, and never a folder that trusts too much (the home folder, the root: utils/trust-too-much.ts). The user's own
+ * entries are kept; a file that is not JSON is left as it was, and gemini then asks; nothing is written when every
+ * folder is already there.
+ */
+export function trustGeminiFolders(folders: string[], configDir: string): void {
+  const wanted = [...new Set(folders.filter((f) => f && !trustsTooMuch(f)).flatMap((f) => {
+    try {
+      const real = fs.realpathSync(f);
+      return trustsTooMuch(real) ? [] : [f, real];
+    } catch {
+      return [];
+    }
+  }))];
+  if (!wanted.length) return;
+  const file = path.join(configDir, 'trustedFolders.json');
+  try {
+    const outcome = updateSharedJsonSync<Record<string, unknown>>(file, (current) => {
+      if (current !== undefined && (typeof current !== 'object' || current === null || Array.isArray(current))) return undefined;
+      const missing = wanted.filter((f) => current?.[f] !== 'TRUST_FOLDER');
+      if (!missing.length) return undefined;
+      return { ...(current ?? {}), ...Object.fromEntries(missing.map((f) => [f, 'TRUST_FOLDER'])) };
+    }, { createMode: 0o644 });
+    if (outcome === 'unreadable') console.warn(`[gemini] ${file} is not JSON: the folders a gemini agent adds are not trusted there, and gemini will ask`);
+    else if (outcome === 'busy') console.warn(`[gemini] ${file} kept changing: the folders a gemini agent adds are not trusted there`);
+  } catch (err) {
+    console.warn(`[gemini] ${file} could not be read or written: the folders a gemini agent adds are not trusted there`, err instanceof Error ? err.message : err);
+  }
+}
 
 /** A session of gemini's own, as its hooks report it: a uuid. */
 const GEMINI_SESSION_ID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -91,25 +124,22 @@ export class GeminiProvider implements CLIProvider {
       command += ` --resume ${shellQuote(params.resumeSessionId)}`;
     }
 
-    // Secondary project (Gemini uses --include-directories), never ~/.tars-private (utils/handed-folder.ts)
+    // The folders the line adds (--include-directories): the secondary project, never ~/.tars-private
+    // (utils/handed-folder.ts); the template's folders, with whatever the agent's permission mode allows there,
+    // reading and writing alike; and Tars's own directory.
+    const added: string[] = [];
     const secondary = handedSecondaryFolder(params.secondaryProjectPath);
-    if (secondary) {
-      command += ` --include-directories ${shellQuote(secondary)}`;
+    if (secondary) added.push(secondary);
+    for (const vp of params.obsidianVaultPaths ?? []) {
+      // Read back from agents.json or templates.json, which any agent can write: never ~/.tars-private.
+      if (handedSecondaryFolder(vp) && fs.existsSync(vp)) added.push(vp);
     }
-
-    // The template's folders: added to what the CLI may reach, with whatever
-    // the agent's permission mode allows there, reading and writing alike.
-    if (params.obsidianVaultPaths) {
-      for (const vp of params.obsidianVaultPaths) {
-        // Read back from agents.json or templates.json, which any agent can write: never ~/.tars-private.
-        if (handedSecondaryFolder(vp) && fs.existsSync(vp)) {
-          command += ` --include-directories ${shellQuote(vp)}`;
-        }
-      }
-    }
-
-    // Include Tars directory
-    command += ` --include-directories ${shellQuote(DATA_DIR)}`;
+    added.push(DATA_DIR);
+    for (const folder of added) command += ` --include-directories ${shellQuote(folder)}`;
+    // Each trusted in gemini's own store as the line is built (0.70.0, measured 24/11): an added folder it does not
+    // trust opens "Do you trust the following folders being added to this workspace?", which --skip-trust does not
+    // cover, and the first task typed into the terminal answered it and was lost.
+    trustGeminiFolders(added, this.configDir);
 
     // Prompt with skills directive
     // No task, no prompt: the skills line alone was a turn nobody asked for.
