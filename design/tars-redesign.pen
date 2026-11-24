@@ -885757,6 +885757,268 @@
                       ]
                     }
                   ]
+                },
+                {
+                  "type": "frame",
+                  "id": "A6OHY",
+                  "name": "dialog Rotate the reader token? · not rotated",
+                  "width": 560,
+                  "fill": "$surface-elevated",
+                  "stroke": "$border-strong",
+                  "strokeWidth": 1,
+                  "layout": "vertical",
+                  "gap": 12,
+                  "padding": [
+                    16,
+                    18
+                  ],
+                  "children": [
+                    {
+                      "type": "text",
+                      "id": "W7TjD",
+                      "fill": "$text-primary",
+                      "content": "Rotate the reader token?",
+                      "lineHeight": 1.4,
+                      "fontFamily": "$font-ui",
+                      "fontSize": 15,
+                      "fontWeight": "normal"
+                    },
+                    {
+                      "type": "text",
+                      "id": "MdxrS",
+                      "fill": "$text-secondary",
+                      "textGrowth": "fixed-width",
+                      "width": 520,
+                      "content": "The one the reader holds stops working at once. You will see the new one once, to give it to the reader.",
+                      "lineHeight": 1.4,
+                      "fontFamily": "$font-ui",
+                      "fontSize": 12,
+                      "fontWeight": "normal"
+                    },
+                    {
+                      "type": "frame",
+                      "id": "WvtCX",
+                      "name": "state not done",
+                      "gap": 6,
+                      "alignItems": "center",
+                      "children": [
+                        {
+                          "type": "rectangle",
+                          "id": "yKRoC",
+                          "name": "d",
+                          "fill": "$status-error",
+                          "width": 6,
+                          "height": 6
+                        },
+                        {
+                          "type": "text",
+                          "id": "eSRCY",
+                          "fill": "$status-error",
+                          "content": "not rotated: no space left on device. Rotate tries again.",
+                          "lineHeight": 1.4,
+                          "fontFamily": "$font-mono",
+                          "fontSize": 10.5,
+                          "fontWeight": "normal"
+                        }
+                      ]
+                    },
+                    {
+                      "type": "frame",
+                      "id": "kkZBm",
+                      "name": "answers",
+                      "width": "fill_container",
+                      "gap": 8,
+                      "justifyContent": "end",
+                      "alignItems": "center",
+                      "children": [
+                        {
+                          "type": "frame",
+                          "id": "tEnL3",
+                          "name": "b Cancel",
+                          "height": 32,
+                          "fill": "$surface",
+                          "stroke": "$border",
+                          "strokeWidth": 1,
+                          "padding": [
+                            0,
+                            14
+                          ],
+                          "justifyContent": "center",
+                          "alignItems": "center",
+                          "children": [
+                            {
+                              "type": "text",
+                              "id": "DbAZJ",
+                              "fill": "$text-primary",
+                              "content": "Cancel",
+                              "lineHeight": 1.4,
+                              "fontFamily": "$font-ui",
+                              "fontSize": 12.5,
+                              "fontWeight": "normal"
+                            }
+                          ]
+                        },
+                        {
+                          "type": "frame",
+                          "id": "AU8y2",
+                          "name": "b Rotate",
+                          "height": 32,
+                          "fill": "$accent",
+                          "stroke": "$accent",
+                          "strokeWidth": 1,
+                          "padding": [
+                            0,
+                            14
+                          ],
+                          "justifyContent": "center",
+                          "alignItems": "center",
+                          "children": [
+                            {
+                              "type": "text",
+                              "id": "MkMJc",
+                              "fill": "$on-accent",
+                              "content": "Rotate",
+                              "lineHeight": 1.4,
+                              "fontFamily": "$font-ui",
+                              "fontSize": 12.5,
+                              "fontWeight": "normal"
+                            }
+                          ]
+                        }
+                      ]
+                    }
+                  ]
+                },
+                {
+                  "type": "frame",
+                  "id": "m2Kq0",
+                  "name": "dialog Revoke the reader token? · not revoked",
+                  "width": 560,
+                  "fill": "$surface-elevated",
+                  "stroke": "$border-strong",
+                  "strokeWidth": 1,
+                  "layout": "vertical",
+                  "gap": 12,
+                  "padding": [
+                    16,
+                    18
+                  ],
+                  "children": [
+                    {
+                      "type": "text",
+                      "id": "iGBJA",
+                      "fill": "$text-primary",
+                      "content": "Revoke the reader token?",
+                      "lineHeight": 1.4,
+                      "fontFamily": "$font-ui",
+                      "fontSize": 15,
+                      "fontWeight": "normal"
+                    },
+                    {
+                      "type": "text",
+                      "id": "b50GOT",
+                      "fill": "$text-secondary",
+                      "textGrowth": "fixed-width",
+                      "width": 520,
+                      "content": "/api/traces/ refuses every read from now on. Create another to give access again.",
+                      "lineHeight": 1.4,
+                      "fontFamily": "$font-ui",
+                      "fontSize": 12,
+                      "fontWeight": "normal"
+                    },
+                    {
+                      "type": "frame",
+                      "id": "XisKv",
+                      "name": "state not done",
+                      "gap": 6,
+                      "alignItems": "center",
+                      "children": [
+                        {
+                          "type": "rectangle",
+                          "id": "NptA1",
+                          "name": "d",
+                          "fill": "$status-error",
+                          "width": 6,
+                          "height": 6
+                        },
+                        {
+                          "type": "text",
+                          "id": "zNNju",
+                          "fill": "$status-error",
+                          "content": "not revoked: operation not permitted. Revoke tries again.",
+                          "lineHeight": 1.4,
+                          "fontFamily": "$font-mono",
+                          "fontSize": 10.5,
+                          "fontWeight": "normal"
+                        }
+                      ]
+                    },
+                    {
+                      "type": "frame",
+                      "id": "LKKt3",
+                      "name": "answers",
+                      "width": "fill_container",
+                      "gap": 8,
+                      "justifyContent": "end",
+                      "alignItems": "center",
+                      "children": [
+                        {
+                          "type": "frame",
+                          "id": "XQQEY",
+                          "name": "b Keep it",
+                          "height": 32,
+                          "fill": "$surface",
+                          "stroke": "$border",
+                          "strokeWidth": 1,
+                          "padding": [
+                            0,
+                            14
+                          ],
+                          "justifyContent": "center",
+                          "alignItems": "center",
+                          "children": [
+                            {
+                              "type": "text",
+                              "id": "Yl6Vb",
+                              "fill": "$text-primary",
+                              "content": "Keep it",
+                              "lineHeight": 1.4,
+                              "fontFamily": "$font-ui",
+                              "fontSize": 12.5,
+                              "fontWeight": "normal"
+                            }
+                          ]
+                        },
+                        {
+                          "type": "frame",
+                          "id": "u2GR5X",
+                          "name": "b Revoke",
+                          "height": 32,
+                          "fill": "$surface",
+                          "stroke": "$status-error-40",
+                          "strokeWidth": 1,
+                          "padding": [
+                            0,
+                            14
+                          ],
+                          "justifyContent": "center",
+                          "alignItems": "center",
+                          "children": [
+                            {
+                              "type": "text",
+                              "id": "zMPIV",
+                              "fill": "$status-error",
+                              "content": "Revoke",
+                              "lineHeight": 1.4,
+                              "fontFamily": "$font-ui",
+                              "fontSize": 12.5,
+                              "fontWeight": "normal"
+                            }
+                          ]
+                        }
+                      ]
+                    }
+                  ]
                 }
               ]
             },
@@ -889209,6 +889471,268 @@
                             {
                               "type": "text",
                               "id": "o0obVg",
+                              "fill": "$status-error",
+                              "content": "Revoke",
+                              "lineHeight": 1.4,
+                              "fontFamily": "$font-ui",
+                              "fontSize": 12.5,
+                              "fontWeight": "normal"
+                            }
+                          ]
+                        }
+                      ]
+                    }
+                  ]
+                },
+                {
+                  "type": "frame",
+                  "id": "euC2V",
+                  "name": "dialog Rotate the reader token? · not rotated",
+                  "width": 560,
+                  "fill": "$surface-elevated",
+                  "stroke": "$border-strong",
+                  "strokeWidth": 1,
+                  "layout": "vertical",
+                  "gap": 12,
+                  "padding": [
+                    16,
+                    18
+                  ],
+                  "children": [
+                    {
+                      "type": "text",
+                      "id": "i4Rxl",
+                      "fill": "$text-primary",
+                      "content": "Rotate the reader token?",
+                      "lineHeight": 1.4,
+                      "fontFamily": "$font-ui",
+                      "fontSize": 15,
+                      "fontWeight": "normal"
+                    },
+                    {
+                      "type": "text",
+                      "id": "yMZyr",
+                      "fill": "$text-secondary",
+                      "textGrowth": "fixed-width",
+                      "width": 520,
+                      "content": "The one the reader holds stops working at once. You will see the new one once, to give it to the reader.",
+                      "lineHeight": 1.4,
+                      "fontFamily": "$font-ui",
+                      "fontSize": 12,
+                      "fontWeight": "normal"
+                    },
+                    {
+                      "type": "frame",
+                      "id": "eXRsh",
+                      "name": "state not done",
+                      "gap": 6,
+                      "alignItems": "center",
+                      "children": [
+                        {
+                          "type": "rectangle",
+                          "id": "ubYg0",
+                          "name": "d",
+                          "fill": "$status-error",
+                          "width": 6,
+                          "height": 6
+                        },
+                        {
+                          "type": "text",
+                          "id": "x1Lmxj",
+                          "fill": "$status-error",
+                          "content": "not rotated: no space left on device. Rotate tries again.",
+                          "lineHeight": 1.4,
+                          "fontFamily": "$font-mono",
+                          "fontSize": 10.5,
+                          "fontWeight": "normal"
+                        }
+                      ]
+                    },
+                    {
+                      "type": "frame",
+                      "id": "Sq1dw",
+                      "name": "answers",
+                      "width": "fill_container",
+                      "gap": 8,
+                      "justifyContent": "end",
+                      "alignItems": "center",
+                      "children": [
+                        {
+                          "type": "frame",
+                          "id": "JbLoi",
+                          "name": "b Cancel",
+                          "height": 32,
+                          "fill": "$surface",
+                          "stroke": "$border",
+                          "strokeWidth": 1,
+                          "padding": [
+                            0,
+                            14
+                          ],
+                          "justifyContent": "center",
+                          "alignItems": "center",
+                          "children": [
+                            {
+                              "type": "text",
+                              "id": "IUdYY",
+                              "fill": "$text-primary",
+                              "content": "Cancel",
+                              "lineHeight": 1.4,
+                              "fontFamily": "$font-ui",
+                              "fontSize": 12.5,
+                              "fontWeight": "normal"
+                            }
+                          ]
+                        },
+                        {
+                          "type": "frame",
+                          "id": "NZB5H",
+                          "name": "b Rotate",
+                          "height": 32,
+                          "fill": "$accent",
+                          "stroke": "$accent",
+                          "strokeWidth": 1,
+                          "padding": [
+                            0,
+                            14
+                          ],
+                          "justifyContent": "center",
+                          "alignItems": "center",
+                          "children": [
+                            {
+                              "type": "text",
+                              "id": "zBoQu",
+                              "fill": "$on-accent",
+                              "content": "Rotate",
+                              "lineHeight": 1.4,
+                              "fontFamily": "$font-ui",
+                              "fontSize": 12.5,
+                              "fontWeight": "normal"
+                            }
+                          ]
+                        }
+                      ]
+                    }
+                  ]
+                },
+                {
+                  "type": "frame",
+                  "id": "we41n",
+                  "name": "dialog Revoke the reader token? · not revoked",
+                  "width": 560,
+                  "fill": "$surface-elevated",
+                  "stroke": "$border-strong",
+                  "strokeWidth": 1,
+                  "layout": "vertical",
+                  "gap": 12,
+                  "padding": [
+                    16,
+                    18
+                  ],
+                  "children": [
+                    {
+                      "type": "text",
+                      "id": "zLffJ",
+                      "fill": "$text-primary",
+                      "content": "Revoke the reader token?",
+                      "lineHeight": 1.4,
+                      "fontFamily": "$font-ui",
+                      "fontSize": 15,
+                      "fontWeight": "normal"
+                    },
+                    {
+                      "type": "text",
+                      "id": "n9o9C",
+                      "fill": "$text-secondary",
+                      "textGrowth": "fixed-width",
+                      "width": 520,
+                      "content": "/api/traces/ refuses every read from now on. Create another to give access again.",
+                      "lineHeight": 1.4,
+                      "fontFamily": "$font-ui",
+                      "fontSize": 12,
+                      "fontWeight": "normal"
+                    },
+                    {
+                      "type": "frame",
+                      "id": "VmUlJ",
+                      "name": "state not done",
+                      "gap": 6,
+                      "alignItems": "center",
+                      "children": [
+                        {
+                          "type": "rectangle",
+                          "id": "QNmXP",
+                          "name": "d",
+                          "fill": "$status-error",
+                          "width": 6,
+                          "height": 6
+                        },
+                        {
+                          "type": "text",
+                          "id": "igaLr",
+                          "fill": "$status-error",
+                          "content": "not revoked: operation not permitted. Revoke tries again.",
+                          "lineHeight": 1.4,
+                          "fontFamily": "$font-mono",
+                          "fontSize": 10.5,
+                          "fontWeight": "normal"
+                        }
+                      ]
+                    },
+                    {
+                      "type": "frame",
+                      "id": "sBZdh",
+                      "name": "answers",
+                      "width": "fill_container",
+                      "gap": 8,
+                      "justifyContent": "end",
+                      "alignItems": "center",
+                      "children": [
+                        {
+                          "type": "frame",
+                          "id": "m3GaCD",
+                          "name": "b Keep it",
+                          "height": 32,
+                          "fill": "$surface",
+                          "stroke": "$border",
+                          "strokeWidth": 1,
+                          "padding": [
+                            0,
+                            14
+                          ],
+                          "justifyContent": "center",
+                          "alignItems": "center",
+                          "children": [
+                            {
+                              "type": "text",
+                              "id": "LMkOE",
+                              "fill": "$text-primary",
+                              "content": "Keep it",
+                              "lineHeight": 1.4,
+                              "fontFamily": "$font-ui",
+                              "fontSize": 12.5,
+                              "fontWeight": "normal"
+                            }
+                          ]
+                        },
+                        {
+                          "type": "frame",
+                          "id": "uQmLh",
+                          "name": "b Revoke",
+                          "height": 32,
+                          "fill": "$surface",
+                          "stroke": "$status-error-40",
+                          "strokeWidth": 1,
+                          "padding": [
+                            0,
+                            14
+                          ],
+                          "justifyContent": "center",
+                          "alignItems": "center",
+                          "children": [
+                            {
+                              "type": "text",
+                              "id": "BuJiC",
                               "fill": "$status-error",
                               "content": "Revoke",
                               "lineHeight": 1.4,
@@ -916559,6 +917083,189 @@
                 },
                 {
                   "type": "frame",
+                  "id": "soupm",
+                  "name": "upload, a deletion owed",
+                  "width": "fill_container",
+                  "fill": "$surface",
+                  "stroke": "$border",
+                  "strokeWidth": 1,
+                  "layout": "vertical",
+                  "gap": 10,
+                  "padding": [
+                    14,
+                    16
+                  ],
+                  "children": [
+                    {
+                      "type": "text",
+                      "id": "EzMoh",
+                      "fill": "$text-muted",
+                      "content": "UPLOAD",
+                      "lineHeight": 1.4,
+                      "fontFamily": "$font-mono",
+                      "fontSize": 10,
+                      "fontWeight": "normal"
+                    },
+                    {
+                      "type": "frame",
+                      "id": "V5Id75",
+                      "name": "state",
+                      "gap": 6,
+                      "alignItems": "center",
+                      "children": [
+                        {
+                          "type": "rectangle",
+                          "id": "O7B0sR",
+                          "name": "d",
+                          "fill": "$status-waiting",
+                          "width": 6,
+                          "height": 6
+                        },
+                        {
+                          "type": "text",
+                          "id": "Ee9XR",
+                          "fill": "$status-waiting",
+                          "content": "deletion not confirmed yet · nothing is sent meanwhile",
+                          "lineHeight": 1.4,
+                          "fontFamily": "$font-mono",
+                          "fontSize": 10.5,
+                          "fontWeight": "normal"
+                        }
+                      ]
+                    },
+                    {
+                      "type": "frame",
+                      "id": "hdkDh",
+                      "name": "figs",
+                      "width": "fill_container",
+                      "gap": 16,
+                      "children": [
+                        {
+                          "type": "frame",
+                          "id": "z8nnt2",
+                          "name": "fig QUEUED",
+                          "width": "fill_container",
+                          "layout": "vertical",
+                          "gap": 3,
+                          "children": [
+                            {
+                              "type": "text",
+                              "id": "a9Q8V",
+                              "fill": "$text-muted",
+                              "content": "QUEUED",
+                              "lineHeight": 1.4,
+                              "fontFamily": "$font-mono",
+                              "fontSize": 10,
+                              "fontWeight": "normal"
+                            },
+                            {
+                              "type": "text",
+                              "id": "avJDs",
+                              "fill": "$text-primary",
+                              "content": "0",
+                              "lineHeight": 1.15,
+                              "fontFamily": "$font-display",
+                              "fontSize": 20,
+                              "fontWeight": "normal"
+                            },
+                            {
+                              "type": "text",
+                              "id": "R3oxH",
+                              "fill": "$text-muted",
+                              "content": "sessions to send",
+                              "lineHeight": 1.4,
+                              "fontFamily": "$font-mono",
+                              "fontSize": 10.5,
+                              "fontWeight": "normal"
+                            }
+                          ]
+                        },
+                        {
+                          "type": "frame",
+                          "id": "SCoBB",
+                          "name": "fig SENT",
+                          "width": "fill_container",
+                          "layout": "vertical",
+                          "gap": 3,
+                          "children": [
+                            {
+                              "type": "text",
+                              "id": "pNHxP",
+                              "fill": "$text-muted",
+                              "content": "SENT",
+                              "lineHeight": 1.4,
+                              "fontFamily": "$font-mono",
+                              "fontSize": 10,
+                              "fontWeight": "normal"
+                            },
+                            {
+                              "type": "text",
+                              "id": "aZ2GC",
+                              "fill": "$text-primary",
+                              "content": "0",
+                              "lineHeight": 1.15,
+                              "fontFamily": "$font-display",
+                              "fontSize": 20,
+                              "fontWeight": "normal"
+                            },
+                            {
+                              "type": "text",
+                              "id": "k7Y48",
+                              "fill": "$text-muted",
+                              "content": "since the deletion",
+                              "lineHeight": 1.4,
+                              "fontFamily": "$font-mono",
+                              "fontSize": 10.5,
+                              "fontWeight": "normal"
+                            }
+                          ]
+                        },
+                        {
+                          "type": "frame",
+                          "id": "MGERR",
+                          "name": "fig LAST UPLOAD",
+                          "width": "fill_container",
+                          "layout": "vertical",
+                          "gap": 3,
+                          "children": [
+                            {
+                              "type": "text",
+                              "id": "mxEAX",
+                              "fill": "$text-muted",
+                              "content": "LAST UPLOAD",
+                              "lineHeight": 1.4,
+                              "fontFamily": "$font-mono",
+                              "fontSize": 10,
+                              "fontWeight": "normal"
+                            },
+                            {
+                              "type": "text",
+                              "id": "EAbOS",
+                              "fill": "$text-primary",
+                              "content": "15:02",
+                              "lineHeight": 1.15,
+                              "fontFamily": "$font-display",
+                              "fontSize": 20,
+                              "fontWeight": "normal"
+                            },
+                            {
+                              "type": "text",
+                              "id": "y2WUF",
+                              "fill": "$text-muted",
+                              "content": "19/11",
+                              "lineHeight": 1.4,
+                              "fontFamily": "$font-mono",
+                              "fontSize": 10.5,
+                              "fontWeight": "normal"
+                            }
+                          ]
+                        }
+                      ]
+                    }
+                  ]
+                },
+                {
+                  "type": "frame",
                   "id": "q0Hfd",
                   "name": "delete everywhere",
                   "width": "fill_container",
@@ -916628,7 +917335,7 @@
                       "fill": "$text-muted",
                       "textGrowth": "fixed-width",
                       "width": 540,
-                      "content": "Asked by you, or by Tars at a start that found your consent without its own file: a withdrawal it could not write down before it closed.",
+                      "content": "Asked by you, or by Tars when it started: it found your consent still in its settings but not in the file that confirms it, and takes that for a withdrawal it could not finish saving, so for a deletion, to be safe.",
                       "lineHeight": 1.4,
                       "fontFamily": "$font-ui",
                       "fontSize": 11,
@@ -918428,6 +919135,189 @@
                 },
                 {
                   "type": "frame",
+                  "id": "zX3GB",
+                  "name": "upload, a deletion owed",
+                  "width": "fill_container",
+                  "fill": "$surface",
+                  "stroke": "$border",
+                  "strokeWidth": 1,
+                  "layout": "vertical",
+                  "gap": 10,
+                  "padding": [
+                    14,
+                    16
+                  ],
+                  "children": [
+                    {
+                      "type": "text",
+                      "id": "JHvPl",
+                      "fill": "$text-muted",
+                      "content": "UPLOAD",
+                      "lineHeight": 1.4,
+                      "fontFamily": "$font-mono",
+                      "fontSize": 10,
+                      "fontWeight": "normal"
+                    },
+                    {
+                      "type": "frame",
+                      "id": "o3hTp8",
+                      "name": "state",
+                      "gap": 6,
+                      "alignItems": "center",
+                      "children": [
+                        {
+                          "type": "rectangle",
+                          "id": "Jb2oS",
+                          "name": "d",
+                          "fill": "$status-waiting",
+                          "width": 6,
+                          "height": 6
+                        },
+                        {
+                          "type": "text",
+                          "id": "Z1Uoe",
+                          "fill": "$status-waiting",
+                          "content": "deletion not confirmed yet · nothing is sent meanwhile",
+                          "lineHeight": 1.4,
+                          "fontFamily": "$font-mono",
+                          "fontSize": 10.5,
+                          "fontWeight": "normal"
+                        }
+                      ]
+                    },
+                    {
+                      "type": "frame",
+                      "id": "OXew5",
+                      "name": "figs",
+                      "width": "fill_container",
+                      "gap": 16,
+                      "children": [
+                        {
+                          "type": "frame",
+                          "id": "NsPwR",
+                          "name": "fig QUEUED",
+                          "width": "fill_container",
+                          "layout": "vertical",
+                          "gap": 3,
+                          "children": [
+                            {
+                              "type": "text",
+                              "id": "q0o0uX",
+                              "fill": "$text-muted",
+                              "content": "QUEUED",
+                              "lineHeight": 1.4,
+                              "fontFamily": "$font-mono",
+                              "fontSize": 10,
+                              "fontWeight": "normal"
+                            },
+                            {
+                              "type": "text",
+                              "id": "U7aHIq",
+                              "fill": "$text-primary",
+                              "content": "0",
+                              "lineHeight": 1.15,
+                              "fontFamily": "$font-display",
+                              "fontSize": 20,
+                              "fontWeight": "normal"
+                            },
+                            {
+                              "type": "text",
+                              "id": "q3PUM",
+                              "fill": "$text-muted",
+                              "content": "sessions to send",
+                              "lineHeight": 1.4,
+                              "fontFamily": "$font-mono",
+                              "fontSize": 10.5,
+                              "fontWeight": "normal"
+                            }
+                          ]
+                        },
+                        {
+                          "type": "frame",
+                          "id": "mZx7P",
+                          "name": "fig SENT",
+                          "width": "fill_container",
+                          "layout": "vertical",
+                          "gap": 3,
+                          "children": [
+                            {
+                              "type": "text",
+                              "id": "phhmp",
+                              "fill": "$text-muted",
+                              "content": "SENT",
+                              "lineHeight": 1.4,
+                              "fontFamily": "$font-mono",
+                              "fontSize": 10,
+                              "fontWeight": "normal"
+                            },
+                            {
+                              "type": "text",
+                              "id": "LZ5Vt",
+                              "fill": "$text-primary",
+                              "content": "0",
+                              "lineHeight": 1.15,
+                              "fontFamily": "$font-display",
+                              "fontSize": 20,
+                              "fontWeight": "normal"
+                            },
+                            {
+                              "type": "text",
+                              "id": "DM1jN",
+                              "fill": "$text-muted",
+                              "content": "since the deletion",
+                              "lineHeight": 1.4,
+                              "fontFamily": "$font-mono",
+                              "fontSize": 10.5,
+                              "fontWeight": "normal"
+                            }
+                          ]
+                        },
+                        {
+                          "type": "frame",
+                          "id": "v5oAg",
+                          "name": "fig LAST UPLOAD",
+                          "width": "fill_container",
+                          "layout": "vertical",
+                          "gap": 3,
+                          "children": [
+                            {
+                              "type": "text",
+                              "id": "Kev9J",
+                              "fill": "$text-muted",
+                              "content": "LAST UPLOAD",
+                              "lineHeight": 1.4,
+                              "fontFamily": "$font-mono",
+                              "fontSize": 10,
+                              "fontWeight": "normal"
+                            },
+                            {
+                              "type": "text",
+                              "id": "e6Yfo",
+                              "fill": "$text-primary",
+                              "content": "15:02",
+                              "lineHeight": 1.15,
+                              "fontFamily": "$font-display",
+                              "fontSize": 20,
+                              "fontWeight": "normal"
+                            },
+                            {
+                              "type": "text",
+                              "id": "Thkvz",
+                              "fill": "$text-muted",
+                              "content": "19/11",
+                              "lineHeight": 1.4,
+                              "fontFamily": "$font-mono",
+                              "fontSize": 10.5,
+                              "fontWeight": "normal"
+                            }
+                          ]
+                        }
+                      ]
+                    }
+                  ]
+                },
+                {
+                  "type": "frame",
                   "id": "yuuL3",
                   "name": "delete everywhere",
                   "width": "fill_container",
@@ -918497,7 +919387,7 @@
                       "fill": "$text-muted",
                       "textGrowth": "fixed-width",
                       "width": 540,
-                      "content": "Asked by you, or by Tars at a start that found your consent without its own file: a withdrawal it could not write down before it closed.",
+                      "content": "Asked by you, or by Tars when it started: it found your consent still in its settings but not in the file that confirms it, and takes that for a withdrawal it could not finish saving, so for a deletion, to be safe.",
                       "lineHeight": 1.4,
                       "fontFamily": "$font-ui",
                       "fontSize": 11,
