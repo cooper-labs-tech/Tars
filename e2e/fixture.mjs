@@ -615,13 +615,15 @@ const RENDERING_ARGS = ['--lang=fr-FR', ...(onWindows ? ['--disable-lcd-text'] :
  * DOROTHY_TAILSCALE_BIN names the sandbox's own `tailscale` (writeFakeTailscale),
  * unless the spec's env names another, or none with ''. PATH is the sandbox's
  * own (sandboxPath): its four stand-in CLIs, and nothing of the account's home,
- * unless the spec's env names another.
+ * unless the spec's env names another. git has an identity of the sandbox's
+ * own (writeSandboxGitIdentity), unless the spec wrote one.
  *
  * `profile` names the profile folder in the sandbox, `electron-profile` unless
  * given: Tars is one instance per profile (core/desktop-lifecycle.ts), so a
  * spec that runs two Tars on one home gives the second a profile of its own.
  */
 export async function launchSandboxed(electron, sandboxHome, { env = {}, profile = 'electron-profile', ...options } = {}) {
+  writeSandboxGitIdentity(sandboxHome);
   const app = await electron.launch({
     ...options,
     // A packed app (executablePath, e2e/sandbox-build.packed.spec.ts) runs its own code: no '.' to name it.
@@ -805,6 +807,22 @@ export function writeNodeCli(file, source) {
     `endLocal & goto #_undefined_# 2>NUL || title %COMSPEC% & "%_prog%"  "%dp0%\\${path.basename(file)}" %*`, '',
   ].join('\r\n'));
   return shim;
+}
+
+/**
+ * git's identity in the sandbox, unless the spec wrote a .gitconfig of its own.
+ * The app commits by itself: before it removes an agent's or a chat's worktree,
+ * it saves the uncommitted work on a wip/ branch. git takes the author from its
+ * config under HOME, as utils/safe-git.ts passes HOME and no GIT_AUTHOR_*.
+ * With none, git guesses user@hostname, and refuses
+ * on a machine whose hostname has no domain. Measured on 2026-11-24, when
+ * `hostname` answered `Mac`: new-interface-chat-send.spec.ts's delete read
+ * "git commit-tree failed: Author identity unknown" instead of what it kept.
+ */
+function writeSandboxGitIdentity(home) {
+  fs.mkdirSync(home, { recursive: true });
+  const file = path.join(home, '.gitconfig');
+  if (!fs.existsSync(file)) fs.writeFileSync(file, '[user]\n\tname = Tars e2e\n\temail = e2e@tars.invalid\n');
 }
 
 /** The tailnet the sandbox's `tailscale` reports: a name no machine has, and the first address of the tailnet range. */
