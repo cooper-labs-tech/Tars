@@ -52,7 +52,7 @@ export const FAKE_KINDS = {
  * Writes the stand-ins into <home>/bin: one executable per kind (and codex's, which runs e2e/fake-codex.mjs).
  * Returns the path of each, by kind. Logs go to <home>/fake-cli.jsonl and <home>/fake-codex.jsonl.
  */
-export function writeFakeClis(home, kinds = [...Object.keys(FAKE_KINDS), 'codex'], { delegateTimeoutS } = {}) {
+export function writeFakeClis(home, kinds = [...Object.keys(FAKE_KINDS), 'codex'], { delegateTimeoutS, geminiFieldAfterMs } = {}) {
   const bin = path.join(home, 'bin');
   fs.mkdirSync(bin, { recursive: true });
   const paths = {};
@@ -70,6 +70,7 @@ export function writeFakeClis(home, kinds = [...Object.keys(FAKE_KINDS), 'codex'
       `process.env.FAKE_CLI_KIND = ${JSON.stringify(kind)};`,
       `process.env.FAKE_CLI_LOG = ${JSON.stringify(path.join(home, 'fake-cli.jsonl'))};`,
       ...(delegateTimeoutS ? [`process.env.FAKE_DELEGATE_TIMEOUT_S = '${delegateTimeoutS}';`] : []),
+      ...(kind === 'gemini' && geminiFieldAfterMs ? [`process.env.FAKE_GEMINI_FIELD_AFTER_MS = '${Number(geminiFieldAfterMs)}';`] : []),
       `import(${JSON.stringify(path.join(HERE, 'fake-clis.mjs'))}).then((m) => m.run());`,
       '',
     ].join('\n'), { mode: 0o755 });
@@ -424,6 +425,7 @@ export async function run() {
   // ---- Claude Code's own questions before it takes anything (claude 2.1.302, #458's measure, ensureProjectTrusted).
   let loggedIn = true;
   let question = null; // what the next typed line answers instead of being a turn
+  let fieldDrawn = true; // gemini's: whether its field takes what is typed yet (below)
   if (kind === 'claude' && !opts.oneShot) {
     const cfg = readJson(claudeJson) ?? {};
     const real = fs.realpathSync(cwd);
@@ -549,7 +551,17 @@ export async function run() {
   }
   if (question === 'trust') out('\nDo you trust the files in this folder?\n> 1. Yes, proceed\n  2. No, exit\n');
   else if (question === 'api-key') out('\nDetected a custom API key in your environment\nDo you want to use this API key?\n  1. Yes\n> 2. No (recommended)\n');
-  else out(`${kind} stand-in ready\n> `);
+  else if (kind === 'gemini') {
+    // gemini 0.70.0's field, as Tars's terminal mirror reads it (GeminiProvider.upOnScreen, #641): what is typed into
+    // its terminal is taken once it is drawn. With FAKE_GEMINI_FIELD_AFTER_MS, drawn that late, and what is typed before
+    // it is lost, as on the real gemini (the harness conformance of 24/11: a resumed gemini typed into 300 ms after its
+    // exec lost its task). Without it, drawn at once.
+    out(`${kind} stand-in ready\n`);
+    const after = Number(process.env.FAKE_GEMINI_FIELD_AFTER_MS) || 0;
+    const draw = () => { fieldDrawn = true; log({ field: 'drawn' }); out(' >   Type your message or @path/to/file\n'); };
+    fieldDrawn = false;
+    if (after > 0) setTimeout(draw, after); else draw();
+  } else out(`${kind} stand-in ready\n> `);
   if (opts.prompt && !question) queue(opts.prompt);
   else if (opts.prompt) log({ lost: 'the first prompt went to the question', question });
 
@@ -580,6 +592,7 @@ export async function run() {
   if (process.stdin.isTTY) process.stdin.setRawMode(true);
   process.stdin.on('data', (chunk) => {
     let data = chunk.toString('utf8');
+    if (!fieldDrawn) { log({ lost: data.slice(-600), before: 'the field was drawn' }); return; }
     if (dialog) {
       if (/[1y\r]/.test(data)) { const d = dialog; dialog = null; d(true); }
       else if (/[2n\x1b]/.test(data)) { const d = dialog; dialog = null; d(false); }
