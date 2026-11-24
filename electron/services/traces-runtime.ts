@@ -15,7 +15,7 @@ import { TraceStore } from './trace-store';
 import { defaultTracePairs, traceDecision } from './trace-gate';
 import { projectEnvValues, type ScrubContext } from './trace-scrub';
 import { TraceUploader } from './trace-upload';
-import { SECRET_FIELDS } from './settings-secrets';
+import { SECRET_FIELDS, keysKeptAfter } from './settings-secrets';
 
 /**
  * The running side of inference endpoints and native traces: wires the proxy, the per-terminal
@@ -70,9 +70,16 @@ export const TRACES_INSTALL_FILE = privatePath('traces-install.json');
  */
 export const TRACES_CONSENT_FILE = privatePath('traces-upload-consent');
 
-/** The window's words for settings main could not write: the reason, and that nothing changed. */
-export function settingsNotWritten(err: unknown): string {
-  return `Tars could not save the settings (${describeSecretFileError(err)}): nothing was changed.`;
+/**
+ * The window's words for settings main could not write: the reason, and what that left (`then`, else that nothing
+ * changed). A save whose keys could not be put back as they were says so, since they load at the next start (the
+ * Audit's I-2 at 965cfced0).
+ */
+export function settingsNotWritten(err: unknown, then?: string): string {
+  const left = keysKeptAfter(err)
+    ? `the keys you set were kept and load at the next start, and the rest was not saved${then ? `; ${then}` : ''}`
+    : then ?? 'nothing was changed';
+  return `Tars could not save the settings (${describeSecretFileError(err)}): ${left}.`;
 }
 
 /** Writes the consent's file, before the settings say it. Throws when it cannot. */
@@ -134,7 +141,7 @@ function persistSettings(): boolean {
   try {
     deps.writeSettings(deps.getSettings());
   } catch (err) {
-    const reason = settingsNotWritten(err).replace('nothing was changed', 'Tars tries again every minute');
+    const reason = settingsNotWritten(err, 'Tars tries again every minute');
     console.error(`[traces] ${reason}`);
     if (unsaved !== reason) { unsaved = reason; deps.emit('traces:changed'); }
     if (!persistRetry) {
@@ -152,10 +159,15 @@ function persistSettings(): boolean {
  * so nothing uploads from now, then off the disk, its file first, which needs no free space, then the settings.
  * `persisted` when a restart cannot bring it back: the file is gone or empty, or the settings say no consent.
  */
-export function withdrawUploadConsent(): { persisted: boolean } {
+export function withdrawUploadConsent(deletion?: { owed: boolean; since?: number }): { persisted: boolean } {
   if (!deps) return { persisted: false };
   const t = traceSettingsOf(deps.getSettings());
-  const { uploadConsentAt: _gone, ...rest } = t;
+  const { uploadConsentAt: _gone, ...kept } = t;
+  // A deletion's moment and owed mark go in with the withdrawal, in the same write (the Audit's I-1 at 965cfced0).
+  const { uploadDeletedAt: _at, uploadDeletionOwed: _owed, ...unmarked } = kept;
+  const rest = deletion
+    ? { ...unmarked, ...(deletion.since !== undefined ? { uploadDeletedAt: deletion.since } : {}), ...(deletion.owed ? { uploadDeletionOwed: true } : {}) }
+    : kept;
   deps.setSettings({ ...deps.getSettings(), traces: rest });
   const dropped = dropConsentFile();
   const written = persistSettings();
@@ -188,11 +200,16 @@ export function reconcileConsent(): void {
   const t = traceSettingsOf(settings);
   if (!t.uploadConsentAt || consentStands(settings)) return;
   console.error('[traces] the settings say consent and its file does not: no consent, and taken for a deletion');
-  const newest = store || fs.existsSync(TRACES_DB_FILE) ? traceStore().newestStartedAt() : undefined;
+  // A store that cannot be opened must not stop the start (the Audit's I-3 at 965cfced0): the consent still goes,
+  // with this start as the moment.
+  let newest: number | undefined;
+  try {
+    newest = store || fs.existsSync(TRACES_DB_FILE) ? traceStore().newestStartedAt() : undefined;
+  } catch (err) {
+    console.error(`[traces] the trace store could not be read at start (${describeSecretFileError(err)}): the deletion's moment is this start`);
+  }
   const since = Math.max(t.uploadDeletedAt ?? 0, Date.now(), newest ?? 0);
-  const owed = t.uploadDeletionOwed === true || installHeld();
-  deps.setSettings({ ...settings, traces: { ...t, uploadDeletedAt: since, ...(owed ? { uploadDeletionOwed: true } : {}) } });
-  withdrawUploadConsent();
+  withdrawUploadConsent({ owed: t.uploadDeletionOwed === true || installHeld(), since });
 }
 
 /** An agent being created, whose terminal is spawned before its record is in the fleet (agent:create). */
@@ -292,7 +309,7 @@ export function traceUploader(): TraceUploader {
       scrubContext: (projectPath) => scrubContextFor(projectPath),
       client: { name: 'tars', version: deps?.clientVersion ?? 'unknown', platform: process.platform },
       // After "delete everything sent": no upload again until the user consents again, a restart included.
-      withdrawConsent: () => { withdrawUploadConsent(); },
+      withdrawConsent: (deletion) => { withdrawUploadConsent(deletion); },
     });
   }
   return uploader;

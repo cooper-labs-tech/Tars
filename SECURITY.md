@@ -1187,10 +1187,13 @@ would be sent.
   That start also takes it for a deletion it could not write down, since a deletion's moment and its owed DELETE
   live in the settings alone: the moment becomes the latest of the one kept, the start and the newest session, and
   the DELETE is owed again while the install file is there. So a deletion on settings that cannot be written, then a
-  quit, still never lets what was recorded before it go. One case brings the consent back at the next start: its
-  file can be neither unlinked nor emptied (a volume remounted read-only, an immutable file, a full volume with a
-  folder that may not be written) and no write of the settings holds before Tars quits. The log says so, and the
-  window meanwhile. The install file goes the same way, unlinked or else emptied, so a 401, a deletion that went
+  quit, still never lets what was recorded before it go, unless its consent's file could be neither unlinked nor
+  emptied as well. That is the one case that brings the consent back at the next start: the file can be neither
+  unlinked nor emptied (a volume remounted read-only, an immutable file, a full volume with a folder that may not be
+  written) and no write of the settings holds before Tars quits. The old consent then stands, the deletion's moment
+  is lost with the settings that held it, and what was recorded before the deletion may go. The log says so, and the
+  window meanwhile. The deletion's moment and its owed mark are written with the withdrawal, in one write, so no stop
+  between two writes leaves the consent standing with a deletion owed, or neither. The install file goes the same way, unlinked or else emptied, so a 401, a deletion that went
   through or a deletion given up never throws on a folder that refuses the unlink, and a 401 withdraws the consent
   before it touches the file.
   Settings that could not be written after a withdrawal or a deletion are tried again every minute, the window told

@@ -186,7 +186,8 @@ export function setSecret(current: AppSettings, field: string, value: string | n
  * without its keys, and a save would otherwise lose them for good. A save that
  * throws changed nothing: when app-settings.json cannot be written, the private
  * file is put back as it was, or removed if there was none (the Audit's I-3 on
- * #596), and only a failure of that too, said in the log, leaves the new keys.
+ * #596). A failure of that too leaves the new keys: it is said in the log, and
+ * the error is marked so the window is told so (keysKeptAfter).
  */
 export function saveSettingsSplit(settings: AppSettings): void {
   if (readSecretsFile() === null) setAside(SECRETS_FILE);
@@ -205,9 +206,16 @@ export function saveSettingsSplit(settings: AppSettings): void {
       else writeSecretFileSync(SECRETS_FILE, before);
     } catch (undo) {
       console.error(`[secrets] app-settings.json was not written, and ${path.basename(SECRETS_FILE)} could not be put back as it was: ${describeSecretFileError(undo)}`);
+      // What the window is told must say the new keys stayed (keysKeptAfter, the Audit's I-2 at 965cfced0).
+      if (err && typeof err === 'object') (err as { keysKept?: boolean }).keysKept = true;
     }
     throw err;
   }
+}
+
+/** Whether a save that threw left the keys it was given in the private file (its put-back failed too). */
+export function keysKeptAfter(err: unknown): boolean {
+  return !!err && typeof err === 'object' && (err as { keysKept?: unknown }).keysKept === true;
 }
 
 function setAside(file: string): void {
