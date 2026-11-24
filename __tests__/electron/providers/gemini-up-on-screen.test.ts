@@ -38,7 +38,7 @@ const YOLO = FIELD.map((l) => l.replace(' > Type', ' * Type')).concat(' YOLO Ctr
 const QUESTION = [
   '╭──────────────────────────────────────────────────────────╮',
   '│ Do you trust the following folders being added to this workspace? │',
-  '│ - /Users/me/.tars                                          │',
+  '│ - /home/me/.tars                                            │',
   '│ ● 1. Yes                                                   │',
   '│   2. Yes, and remember the directories as trusted          │',
   '│   3. No                                                    │',
