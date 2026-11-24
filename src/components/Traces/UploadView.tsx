@@ -142,11 +142,20 @@ export function UploadView() {
   useEffect(() => {
     void read();
     void readNotice();
-    const off = tracesApi()?.onChanged(() => { void read(); });
+    // The notice changes with the settings (after a deletion it carries onlyAfter): read again with them.
+    const off = tracesApi()?.onChanged(() => { void read(); void readNotice(); });
     // The uploader works on its own: its state is read again every 10 s while the view is open.
     const tick = setInterval(() => { void tracesApi()?.uploadState().then(setState).catch(() => undefined); }, 10_000);
     return () => { off?.(); clearInterval(tick); };
   }, [read, readNotice]);
+
+  /**
+   * Opens the notice as main says it now, never the one read before a change (the Audit's L1 on PR 599: after a
+   * deletion, the date of the one before). A read main cannot answer is said under the consent's state instead.
+   */
+  const openNotice = async () => {
+    if (await readNotice()) setShowNotice(true);
+  };
 
   /** Saves the address and the plain http leave; `allow` is the switch's new value when the switch itself saves. */
   const saveUrl = async (allow: boolean = plainHttp) => {
@@ -169,7 +178,7 @@ export function UploadView() {
     setSettings(r.settings);
     setUrl(r.settings.uploadUrl);
     // A new address clears the consent: the notice comes before anything is sent.
-    if (r.settings.uploadUrl && r.settings.uploadUrl !== settings.uploadUrl) setShowNotice(true);
+    if (r.settings.uploadUrl && r.settings.uploadUrl !== settings.uploadUrl) void openNotice();
     void read();
   };
 
@@ -351,7 +360,7 @@ export function UploadView() {
               <StateLine word={consentWord.word} tone={consentWord.tone} />
               {noticeError && <StateLine word={`notice not read: ${noticeError}. What leaves this computer reads it again.`} tone="error" />}
               <div className="flex items-center gap-2">
-                <Button size="sm" onClick={() => { if (notice) setShowNotice(true); else void readNotice().then(n => { if (n) setShowNotice(true); }); }} disabled={!notice && !noticeError}>What leaves this computer</Button>
+                <Button size="sm" onClick={() => { void openNotice(); }} disabled={!notice && !noticeError}>What leaves this computer</Button>
                 <Button size="sm" onClick={() => { void previewOne(); }}>Preview a session</Button>
               </div>
             </Row>
@@ -387,7 +396,7 @@ export function UploadView() {
                 <p className="font-mono text-[10.5px] text-muted-foreground">
                   {`and ${Math.max(0, notice.scrubbing.catches.length - 3)} more; ${notice.scrubbing.cannot.length} things it cannot catch`}
                 </p>
-                <Button size="sm" onClick={() => setShowNotice(true)}>What leaves this computer</Button>
+                <Button size="sm" onClick={() => { void openNotice(); }}>What leaves this computer</Button>
               </div>
             </Box>
           )}
