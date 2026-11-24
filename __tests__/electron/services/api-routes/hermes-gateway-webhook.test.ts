@@ -26,6 +26,16 @@ import * as path from 'node:path';
  *    default's, a gateway's on a route of a gateway that does not exist (403), or on any other route (401).
  * 6. The same raise through /dispatch and /start, by an agent with a token of its own (R4.1: "the same holds for
  *    /dispatch and /start callers"): refused there too, before any session starts.
+ * 7. Plan asked for an agent whose CLI has no plan mode (codex, an API-key provider: the Audit's I-1 on #636). Plan
+ *    is the narrowest mode, so the ceiling of 1 and 6 lets it through, and the session ran as normal, with every write
+ *    tool, for an ask that meant read-only. How it fails:
+ *    a. /start, /dispatch or a gateway's message in plan for such an agent answers 200, a session is spawned or the
+ *       message is typed;
+ *    b. the refusal is silent or another mode is taken in its place: the answer is not a 400 with a sentence that
+ *       says the CLI has no plan mode and which modes to ask for (the window's reason, planModeRefusal);
+ *    c. a gateway's refusal names the agent, its project or its CLI (as 4);
+ *    d. plan is refused for an agent whose CLI has one (Claude Code), or a mode other than plan is refused for an
+ *       agent whose CLI has none.
  */
 
 const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'tars-gw-hook-'));
@@ -92,12 +102,18 @@ const TWINS = [
   { id: 'eeee5555-0000-4000-8000-0000000000e1', name: 'Twin', projectPath: ALPHA, permissionMode: 'normal' as const },
   { id: 'eeee5555-0000-4000-8000-0000000000e2', name: 'Twin', projectPath: ALPHA, permissionMode: 'normal' as const },
 ];
+/**
+ * Two agents whose CLI has no plan mode, in bypass so that plan is narrower than their own (7). Their CLI path is
+ * one that does not exist: a session spawned for them by the old build reads nothing from a real binary.
+ */
+const COLE = { id: 'ffff6666-0000-4000-8000-0000000000f1', name: 'Cole', projectPath: ALPHA, permissionMode: 'bypass' as const, provider: 'codex', cliPath: '/nonexistent/codex-stand-in' };
+const ROSA = { id: 'ffff6666-0000-4000-8000-0000000000f2', name: 'Rosa', projectPath: ALPHA, permissionMode: 'bypass' as const, provider: 'openrouter', cliPath: '/nonexistent/claude-stand-in' };
 /** What no refusal may name: every agent's id and name, every project, the modes they are in. */
-const NAMES = [WREN, BEA, OLGA, LEAD, ...TWINS].flatMap(a => [a.id, a.name, a.projectPath]);
+const NAMES = [WREN, BEA, OLGA, LEAD, ...TWINS, COLE, ROSA].flatMap(a => [a.id, a.name, a.projectPath]);
 
-function putAgent(a: { id: string; name: string; projectPath: string; permissionMode: string; role?: string }): AgentStatus {
+function putAgent(a: { id: string; name: string; projectPath: string; permissionMode: string; role?: string; provider?: string; cliPath?: string }): AgentStatus {
   const agent = {
-    ...a, status: 'idle', provider: 'claude', skills: [], output: [], lastActivity: new Date().toISOString(),
+    status: 'idle', provider: 'claude', skills: [], output: [], lastActivity: new Date().toISOString(), ...a,
   } as AgentStatus;
   agents.set(a.id, agent);
   return agent;
@@ -183,7 +199,7 @@ beforeEach(() => {
   vi.mocked(pty.spawn).mockReset();
   agents.clear();
   ptyProcesses.clear();
-  for (const a of [WREN, BEA, OLGA, LEAD, ...TWINS]) putAgent(a);
+  for (const a of [WREN, BEA, OLGA, LEAD, ...TWINS, COLE, ROSA]) putAgent(a);
   for (const f of fs.readdirSync(privateTmp)) fs.rmSync(path.join(privateTmp, f), { recursive: true, force: true });
   vps = gateways.addGateway('VPS').id;
   gateways.setGatewayProjects(vps, [ALPHA]);
@@ -315,5 +331,65 @@ describe('the same ceiling for an agent that starts or dispatches to another (R4
     const narrower = await call('POST', `/api/agents/${BEA.id}/start`, bearer(lead), { prompt: 'go', permissionMode: 'normal' });
     expect(narrower.status, JSON.stringify(narrower.body)).toBe(200);
     expect(spawned().join('\n')).toContain('--permission-mode default');
+  });
+});
+
+describe('plan for an agent whose CLI has no plan mode (7, the Audit\'s I-1 on #636)', () => {
+  const REASON = {
+    [COLE.id]: 'Codex CLI has no plan mode here: plan would run as manual. Ask for normal, auto or bypass.',
+    [ROSA.id]: 'OpenRouter has no plan mode here: plan would run as manual. Ask for normal, auto or bypass.',
+  };
+
+  it('7a, 7b. /start and /dispatch in plan are refused with the reason, and no session starts', async () => {
+    const lead = tokens.mintAgentToken(LEAD.id);
+    const { spawned } = nextSpawn();
+    for (const target of [COLE, ROSA]) {
+      const start = await call('POST', `/api/agents/${target.id}/start`, bearer(lead), { prompt: 'read only, please', permissionMode: 'plan' });
+      const dispatch = await call('POST', `/api/agents/${target.id}/dispatch`, bearer(lead), { message: 'read only, please', permissionMode: 'plan' });
+      for (const answer of [start, dispatch]) {
+        expect(answer.status, `${target.name}: ${JSON.stringify(answer.body)}`).toBe(400);
+        expect(answer.body.error).toBe(REASON[target.id]);
+      }
+    }
+    expect(spawned()).toEqual([]);
+  });
+
+  it('7a, 7b. into a live session: /dispatch in plan types nothing', async () => {
+    const lead = tokens.mintAgentToken(LEAD.id);
+    const cole = liveTerminal(agents.get(COLE.id)!);
+    const dispatch = await call('POST', `/api/agents/${COLE.id}/dispatch`, bearer(lead), { message: 'read only, please', permissionMode: 'plan' });
+    expect(dispatch.status, JSON.stringify(dispatch.body)).toBe(400);
+    expect(dispatch.body.error).toBe(REASON[COLE.id]);
+    expect(cole.written).toEqual([]);
+  });
+
+  it('7a, 7b, 7c. a gateway\'s message in plan is refused with a sentence that names nothing, and nothing is typed', async () => {
+    const cole = liveTerminal(agents.get(COLE.id)!);
+    const { status, body } = await hook(vpsSecret, { agent_id: COLE.id, message: 'read only, please', permission_mode: 'plan' });
+    expect(status, JSON.stringify(body)).toBe(400);
+    expect(String(body.error)).toMatch(/has no plan mode: plan would run as manual\. Ask for normal, auto or bypass\.$/);
+    expect(namesNothing(body)).toEqual([]);
+    expect(JSON.stringify(body)).not.toMatch(/codex|openrouter/i);
+    expect(cole.written).toEqual([]);
+    // Only the spawns from here: liveTerminal's own terminal above is one.
+    vi.mocked(pty.spawn).mockClear();
+    const { spawned } = nextSpawn();
+    const idle = await hook(vpsSecret, { agent_id: ROSA.id, message: 'read only, please', permission_mode: 'plan' });
+    expect(idle.status, JSON.stringify(idle.body)).toBe(400);
+    expect(spawned()).toEqual([]);
+  });
+
+  it('7d. Claude Code keeps plan, and the agents with none keep every other mode', async () => {
+    const lead = tokens.mintAgentToken(LEAD.id);
+    const { spawned } = nextSpawn();
+    const claude = await call('POST', `/api/agents/${WREN.id}/start`, bearer(lead), { prompt: 'look', permissionMode: 'plan' });
+    expect(claude.status, JSON.stringify(claude.body)).toBe(200);
+    expect(spawned().join('\n')).toContain('--permission-mode plan');
+    const cole = liveTerminal(agents.get(COLE.id)!);
+    for (const permissionMode of ['normal', 'auto', 'bypass']) {
+      const answer = await call('POST', `/api/agents/${COLE.id}/dispatch`, bearer(lead), { message: `in ${permissionMode}`, permissionMode });
+      expect(answer.status, `${permissionMode}: ${JSON.stringify(answer.body)}`).toBe(200);
+    }
+    expect(cole.written.join('')).toContain('in normal');
   });
 });

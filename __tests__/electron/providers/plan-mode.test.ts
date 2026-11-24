@@ -14,6 +14,12 @@ import { hasPlanMode as windowHasPlanMode } from '@/lib/plan-mode';
  * 3. Plan is refused for Claude Code (no provider named, claude, or local, Claude Code on a local server), or
  *    another mode is refused for any provider.
  * 4. The refusal does not say why: the window's reason, the provider named.
+ *
+ * And since the Audit's I-1 on #636 (2026-11-24), where a session asked in plan through the API ran as normal on
+ * a CLI with none:
+ * 5. Which CLI has plan is decided by a list of names kept apart from the providers, so a new provider is taken
+ *    as it was not written: it must be each provider's own declaration (`CLIProvider.planMode`), for every
+ *    registered provider, and Claude Code's and Qwen Code's alone say so today.
  */
 
 const ids = [...getAllProviders().map((p) => p.id), 'local'];
@@ -25,6 +31,12 @@ describe('which providers have plan mode', () => {
 
   it('3. Claude Code has it: no provider named, claude, local', () => {
     for (const id of [undefined, 'claude', 'local']) expect(hasPlanMode(id), String(id)).toBe(true);
+  });
+
+  it('5. each provider says it itself: hasPlanMode is its declaration, for every registered provider', () => {
+    const declared = (p: unknown) => (p as { planMode?: unknown }).planMode === true;
+    for (const p of getAllProviders()) expect(hasPlanMode(p.id), p.id).toBe(declared(p));
+    expect(getAllProviders().filter(declared).map(p => p.id).sort()).toEqual(['claude', 'qwen-code']);
   });
 });
 

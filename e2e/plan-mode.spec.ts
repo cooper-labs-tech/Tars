@@ -2,7 +2,7 @@ import { test, expect, _electron as electron, type Locator } from '@playwright/t
 import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
-import { launchSandboxed, recordValues, stepShot } from './fixture.mjs';
+import { launchSandboxed, recordValues, stepShot, writeNodeCli } from './fixture.mjs';
 import { DEV_URL, apiPort } from './ports.mjs';
 
 /**
@@ -21,6 +21,17 @@ import { DEV_URL, apiPort } from './ports.mjs';
  * chosen again and the agent is created and started. agents.json says plan,
  * and the stand-in was started with --permission-mode plan.
  *
+ * Plan asked through the API for a CLI that has none (the Audit's I-1 on #636):
+ * Lead, the project's orchestrator, is started from the window, and with its
+ * terminal's own token asks /start in plan for Codex worker. Until 2.0.7 that
+ * answered 200 and the codex stand-in was started without any plan, a session
+ * with every write tool for a read-only ask. Now it is a 400 whose error says
+ * Codex has no plan mode and which modes to ask for, and nothing is started.
+ *
+ * An agent stored in plan on codex (Old codex planner), which an API create took until 13/10 (the Audit's L1 on
+ * #640): its CLI ran it as normal on every start, while the window showed plan. It is read back in manual, the mode
+ * it runs in, agents.json says so, and its window shows manual chosen.
+ *
  * The artefact: a screenshot per state and values.json with what each read.
  */
 
@@ -36,18 +47,18 @@ test('plan, a permission mode: chosen for Claude Code in New agent and passed to
   fs.mkdirSync(dir, { recursive: true });
   const argsFile = path.join(real, 'stand-in-args.jsonl');
   // In Node, not bash: a bash stand-in is named like the shell in the pty's
-  // foreground, and the app would never see a CLI running.
-  const standIn = (name: string) => {
-    const file = path.join(real, name);
-    fs.writeFileSync(file, [
-      `#!${process.execPath}`,
-      `require('fs').appendFileSync(${JSON.stringify(argsFile)}, JSON.stringify(process.argv.slice(2)) + '\\n');`,
-      "process.stdout.write('stand-in ready\\n');",
-      'process.stdin.resume();',
-      '',
-    ].join('\n'), { mode: 0o755 });
-    return file;
-  };
+  // foreground, and the app would never see a CLI running. A node CLI on every
+  // system: npm's cmd-shim beside it on Windows (writeNodeCli).
+  const standIn = (name: string) => writeNodeCli(path.join(real, name), [
+    `require('fs').appendFileSync(${JSON.stringify(argsFile)}, JSON.stringify(process.argv.slice(2)) + '\\n');`,
+    // Started as an agent: its launches on a file of its own, and its terminal's token beside them.
+    'const id = process.env.CLAUDE_AGENT_ID;',
+    `if (id) require('fs').appendFileSync(${JSON.stringify(argsFile)} + '.' + id, JSON.stringify(process.argv.slice(2)) + '\\n');`,
+    `if (id && process.env.CLAUDE_MGR_API_TOKEN) require('fs').writeFileSync(${JSON.stringify(argsFile)} + '.' + id + '.token', process.env.CLAUDE_MGR_API_TOKEN);`,
+    "process.stdout.write('stand-in ready\\n');",
+    'process.stdin.resume();',
+    '',
+  ].join('\n'));
   const claude = standIn('claude-stand-in.cjs');
   const codex = standIn('codex-stand-in.cjs');
   const agent = (o: Record<string, unknown>) => ({
@@ -57,6 +68,9 @@ test('plan, a permission mode: chosen for Claude Code in New agent and passed to
   fs.writeFileSync(path.join(dir, 'agents.json'), JSON.stringify([
     agent({ id: 'p1', name: 'Planner', provider: 'claude', permissionMode: 'plan', cliPath: claude }),
     agent({ id: 'c1', name: 'Codex worker', provider: 'codex', permissionMode: 'normal', cliPath: codex }),
+    agent({ id: 'l1', name: 'Lead', provider: 'claude', permissionMode: 'normal', role: 'orchestrator', orchestratorMode: true, cliPath: claude }),
+    // Stored in plan by an API create before 13/10, which took plan for any CLI (the Audit's L1 on #640).
+    agent({ id: 'c2', name: 'Old codex planner', provider: 'codex', permissionMode: 'plan', cliPath: codex }),
   ], null, 2));
   fs.writeFileSync(path.join(dir, 'projects.json'), JSON.stringify([project]));
   fs.writeFileSync(path.join(dir, 'hermes-connection.json'), JSON.stringify({ mode: 'local', localPort: 9, authMode: 'token' }));
@@ -115,6 +129,40 @@ test('plan, a permission mode: chosen for Claude Code in New agent and passed to
       await expect(dialog).toHaveCount(0);
     }
 
+    // An agent stored in plan on codex: read back in manual, the mode its CLI runs it in, and written so.
+    {
+      seen.oldPlannerOnDisk = onDisk().find(a => a.id === 'c2')?.permissionMode;
+      expect(seen.oldPlannerOnDisk, 'agents.json says the mode it runs in').toBe('normal');
+      const { dialog, group } = await windowModes('Old codex planner');
+      await expect(group.getByRole('radio', { name: 'Manual', exact: true })).toHaveAttribute('aria-checked', 'true', { timeout: 30_000 });
+      seen.windowOldPlanner = await group.getByRole('radio').evaluateAll(els => els.map(e => `${e.textContent}${e.getAttribute('aria-checked') === 'true' ? '*' : ''}`));
+      await stepShot(page, '02b-window-old-planner');
+      await dialog.getByRole('button', { name: 'close', exact: true }).click();
+      await expect(dialog).toHaveCount(0);
+    }
+
+    // Plan asked through the API for Codex worker, by Lead with its terminal's own token: refused, with why.
+    {
+      const leadStarted = await page.evaluate(() => (window as unknown as { electronAPI: { agent: { start: (a: { id: string; prompt: string }) => Promise<unknown> } } })
+        .electronAPI.agent.start({ id: 'l1', prompt: 'lead' }));
+      expect(leadStarted, JSON.stringify(leadStarted)).toMatchObject({ success: true });
+      const tokenFile = `${argsFile}.l1.token`;
+      await expect.poll(() => fs.existsSync(tokenFile), { timeout: 60_000, message: 'Lead\'s CLI was started with a token of its own' }).toBe(true);
+      const response = await fetch(`http://127.0.0.1:${apiPort(31452)}/api/agents/c1/start`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${fs.readFileSync(tokenFile, 'utf8')}` },
+        body: JSON.stringify({ prompt: 'Read the project and say what you would change. Do not edit anything.', permissionMode: 'plan' }),
+      });
+      const answer = await response.json() as { error?: string };
+      // Long enough for a launch the old build would have made (its stand-in writes as soon as it runs).
+      await page.waitForTimeout(5_000);
+      const codexLaunches = fs.existsSync(`${argsFile}.c1`) ? fs.readFileSync(`${argsFile}.c1`, 'utf8').trim().split('\n').filter(Boolean) : [];
+      seen.planForCodexOverApi = { status: response.status, answer, codexLaunches };
+      expect(response.status, JSON.stringify(answer)).toBe(400);
+      expect(answer.error).toBe('Codex CLI has no plan mode here: plan would run as manual. Ask for normal, auto or bypass.');
+      expect(codexLaunches, 'no session was started for Codex worker').toEqual([]);
+    }
+
     // New agent: Options offers plan first.
     await page.getByRole('button', { name: '+ Agent', exact: true }).click();
     const modal = page.getByRole('dialog').filter({ has: page.getByRole('heading', { name: 'New agent', exact: true }) });
@@ -147,8 +195,8 @@ test('plan, a permission mode: chosen for Claude Code in New agent and passed to
     await modal.getByPlaceholder('Describe what you want done.').fill('Read the project and say what you would change.');
     const before = startedWith().length;
     await modal.getByRole('button', { name: 'Create and start', exact: true }).click();
-    await expect.poll(() => onDisk().length, { timeout: 30_000 }).toBe(3);
-    const created = onDisk().find(a => a.id !== 'p1' && a.id !== 'c1');
+    await expect.poll(() => onDisk().length, { timeout: 30_000 }).toBe(5);
+    const created = onDisk().find(a => !['p1', 'c1', 'l1', 'c2'].includes(a.id as string));
     seen.created = { provider: created?.provider, permissionMode: created?.permissionMode };
     expect(created).toMatchObject({ provider: 'claude', permissionMode: 'plan' });
     // The app also runs the CLI for its own probes (a version, and so on), which
@@ -166,6 +214,8 @@ test('plan, a permission mode: chosen for Claude Code in New agent and passed to
     await app.close().catch(() => {});
     // What the stand-ins were started with, kept beside the screenshots.
     if (fs.existsSync(argsFile)) fs.copyFileSync(argsFile, test.info().outputPath('stand-in-args.jsonl'));
+    // Codex worker's own launches, if any (none since 2.0.7); never the tokens beside them.
+    if (fs.existsSync(`${argsFile}.c1`)) fs.copyFileSync(`${argsFile}.c1`, test.info().outputPath('codex-worker-launches.jsonl'));
     fs.rmSync(home, { recursive: true, force: true });
   }
 });
