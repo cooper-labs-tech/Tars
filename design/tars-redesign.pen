@@ -32985,6 +32985,32 @@
                             },
                             {
                               "type": "frame",
+                              "id": "jGNEY",
+                              "name": "s Claude accounts",
+                              "width": "fill_container",
+                              "height": 26,
+                              "padding": [
+                                5,
+                                10,
+                                5,
+                                30
+                              ],
+                              "alignItems": "center",
+                              "children": [
+                                {
+                                  "type": "text",
+                                  "id": "YVnKo",
+                                  "fill": "$text-muted",
+                                  "content": "Claude accounts",
+                                  "lineHeight": 1.4,
+                                  "fontFamily": "$font-ui",
+                                  "fontSize": 11.5,
+                                  "fontWeight": "normal"
+                                }
+                              ]
+                            },
+                            {
+                              "type": "frame",
                               "id": "ojrld",
                               "name": "s CLI Paths",
                               "width": "fill_container",
@@ -34520,6 +34546,32 @@
                                   "name": "l",
                                   "fill": "$text-muted",
                                   "content": "Providers",
+                                  "lineHeight": 1.4,
+                                  "fontFamily": "$font-ui",
+                                  "fontSize": 11.5,
+                                  "fontWeight": "normal"
+                                }
+                              ]
+                            },
+                            {
+                              "type": "frame",
+                              "id": "mRU0I",
+                              "name": "s Claude accounts",
+                              "width": "fill_container",
+                              "height": 26,
+                              "padding": [
+                                5,
+                                10,
+                                5,
+                                30
+                              ],
+                              "alignItems": "center",
+                              "children": [
+                                {
+                                  "type": "text",
+                                  "id": "mMzfy",
+                                  "fill": "$text-muted",
+                                  "content": "Claude accounts",
                                   "lineHeight": 1.4,
                                   "fontFamily": "$font-ui",
                                   "fontSize": 11.5,
@@ -55868,6 +55920,32 @@
                                   "name": "l",
                                   "fill": "$text-primary",
                                   "content": "Providers",
+                                  "lineHeight": 1.4,
+                                  "fontFamily": "$font-ui",
+                                  "fontSize": 11.5,
+                                  "fontWeight": "normal"
+                                }
+                              ]
+                            },
+                            {
+                              "type": "frame",
+                              "id": "pfa3o",
+                              "name": "s Claude accounts",
+                              "width": "fill_container",
+                              "height": 26,
+                              "padding": [
+                                5,
+                                10,
+                                5,
+                                30
+                              ],
+                              "alignItems": "center",
+                              "children": [
+                                {
+                                  "type": "text",
+                                  "id": "DfXdC",
+                                  "fill": "$text-muted",
+                                  "content": "Claude accounts",
                                   "lineHeight": 1.4,
                                   "fontFamily": "$font-ui",
                                   "fontSize": 11.5,
@@ -78678,6 +78756,32 @@
                                   "name": "l",
                                   "fill": "$text-primary",
                                   "content": "Providers",
+                                  "lineHeight": 1.4,
+                                  "fontFamily": "$font-ui",
+                                  "fontSize": 11.5,
+                                  "fontWeight": "normal"
+                                }
+                              ]
+                            },
+                            {
+                              "type": "frame",
+                              "id": "x8QJu3",
+                              "name": "s Claude accounts",
+                              "width": "fill_container",
+                              "height": 26,
+                              "padding": [
+                                5,
+                                10,
+                                5,
+                                30
+                              ],
+                              "alignItems": "center",
+                              "children": [
+                                {
+                                  "type": "text",
+                                  "id": "qieG0",
+                                  "fill": "$text-muted",
+                                  "content": "Claude accounts",
                                   "lineHeight": 1.4,
                                   "fontFamily": "$font-ui",
                                   "fontSize": 11.5,
