@@ -87,6 +87,14 @@ export function usedByOf(agents: EndpointView['agents']): string {
   return `used by ${names.slice(0, -1).join(', ')} and ${names[names.length - 1]}`;
 }
 
+/**
+ * Main's reason as a clause, its closing stop taken off, so the window's own sentence follows it with one stop:
+ * "Tars could not save the settings (ENOSPC): nothing was changed." + ". The last list is kept." ended twice.
+ */
+export function clauseOf(reason: string): string {
+  return reason.trim().replace(/[.\s]+$/, '');
+}
+
 /** "qwen3-coder-480b · glm-4.6 · kimi-k2 · deepseek-v3.1 · and 8 more" */
 export function modelsLineOf(models: string[], shown = 4): string {
   if (models.length === 0) return 'no model read';

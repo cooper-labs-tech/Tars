@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import { Button, DialogShell, Dropdown, Input, PanelCaption } from '@/components/ui';
 import type { TracePair } from '@/types/electron';
 import { Notice, Unread } from '@/components/Resources/bits';
+import { clauseOf } from '@/lib/traces-format';
 import { StateLine } from './bits';
 import { tracesApi } from './hooks';
 
@@ -161,7 +162,7 @@ export function PairsView() {
 
       {importError && (
         <DialogShell onClose={() => setImportError(null)} width={620} title="The file was not imported"
-          subtitle={`${importError}. Nothing was imported; your list is unchanged.`}
+          subtitle={`${clauseOf(importError)}. Nothing was imported; your list is unchanged.`}
           footerRight={<Button onClick={() => setImportError(null)}>Close</Button>} />
       )}
     </div>

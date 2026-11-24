@@ -6,7 +6,7 @@ import { Button, FieldError, Input, PasswordInput, StatusSquare } from '@/compon
 import type { StatusTone } from '@/components/ui';
 import type { EndpointView, EndpointWait } from '@/types/electron';
 import { useEndpoints } from '@/hooks/useEndpoints';
-import { clockOf, clockSecondsOf, healthOf, modelsLineOf, usedByOf } from '@/lib/traces-format';
+import { clauseOf, clockOf, clockSecondsOf, healthOf, modelsLineOf, usedByOf } from '@/lib/traces-format';
 import { SettingsCard } from './SettingsCard';
 import { SettingsRow } from './SettingsRow';
 import { Toggle } from './Toggle';
@@ -47,7 +47,8 @@ export const InferenceEndpointsSection = () => {
   const { endpoints, waits, error, changedBy, reload, api } = useEndpoints();
   const [form, setForm] = useState<{ id?: string } | null>(null);
   const [checking, setChecking] = useState<Record<string, boolean>>({});
-  const [removing, setRemoving] = useState<{ id: string; refusedBy?: string[] } | null>(null);
+  /** The removal asked, refused while agents run on it, or refused by main for a reason of its own (settings not saved). */
+  const [removing, setRemoving] = useState<{ id: string; refusedBy?: string[]; error?: string } | null>(null);
   const [rowError, setRowError] = useState<Record<string, string>>({});
 
   const list = endpoints ?? [];
@@ -77,7 +78,9 @@ export const InferenceEndpointsSection = () => {
     if (!api) return;
     const r = await api.remove(id);
     if (r.ok) setRemoving(null);
-    else setRemoving({ id, refusedBy: r.agents ?? [] });
+    // No agent on it: main's own reason (a full disk, an endpoint already gone), never the plain question again.
+    else if (r.agents && r.agents.length > 0) setRemoving({ id, refusedBy: r.agents });
+    else setRemoving({ id, error: r.error });
     void reload();
   };
 
@@ -164,7 +167,7 @@ export const InferenceEndpointsSection = () => {
               </div>
             </div>
 
-            {rowError[e.id] && <p className="mt-2 font-mono text-[10.5px] text-status-error">{rowError[e.id]}</p>}
+            {rowError[e.id] && <p data-endpoint-row-error className="mt-2 font-mono text-[10.5px] text-status-error">{rowError[e.id]}</p>}
 
             {by && !e.allowTraces && (
               <p className="mt-2 font-mono text-[10.5px] text-status-waiting">
@@ -205,7 +208,9 @@ export const InferenceEndpointsSection = () => {
                 <Button size="sm" variant="danger" className="font-mono lowercase" onClick={() => { void remove(e.id); }}>remove</Button>
                 <Button size="sm" className="font-mono lowercase" onClick={() => setRemoving(null)}>keep it</Button>
               </>}>
-                <p>{`Remove ${e.name}? Its key goes with it. Sessions recorded on it stay in Traces until you delete them there.`}</p>
+                {removing.error
+                  ? <p data-endpoint-remove-refused>{`Not removed: ${clauseOf(removing.error)}.`}</p>
+                  : <p>{`Remove ${e.name}? Its key goes with it. Sessions recorded on it stay in Traces until you delete them there.`}</p>}
               </Notice>
             ))}
           </div>
@@ -217,7 +222,11 @@ export const InferenceEndpointsSection = () => {
           <EndpointForm
             key={form.id ?? 'new'}
             endpoint={editing}
-            onDone={() => { setForm(null); void reload(); }}
+            onDone={added => {
+              setForm(null);
+              if (added) setRowError(m => ({ ...m, [added.id]: added.error }));
+              void reload();
+            }}
           />
         </div>
       )}
@@ -229,7 +238,7 @@ export const InferenceEndpointsSection = () => {
  * Add an endpoint, or open one again. Adding saves it (approved by that act), stores the key, then reads its
  * models and checks it. Reopening shows only that a key is set: Replace writes a new one, Clear removes it.
  */
-function EndpointForm({ endpoint, onDone }: { endpoint?: EndpointView; onDone: () => void }) {
+function EndpointForm({ endpoint, onDone }: { endpoint?: EndpointView; onDone: (added?: { id: string; error: string }) => void }) {
   const api = window.electronAPI?.endpoints;
   const [name, setName] = useState(endpoint?.name ?? '');
   const [baseUrl, setBaseUrl] = useState(endpoint?.baseUrl ?? '');
@@ -264,8 +273,10 @@ function EndpointForm({ endpoint, onDone }: { endpoint?: EndpointView; onDone: (
         if (!k.ok) { setNote({ text: k.error, tone: 'error' }); return; }
       }
       if (!endpoint) {
-        await api.refreshModels(id);
+        const models = await api.refreshModels(id);
         await api.check(id);
+        // The endpoint is saved; its models are not (not read, or not saved): said under its row, in main's words.
+        if (!models.ok) { onDone({ id, error: `added without its models: ${clauseOf(models.error)}.` }); return; }
       }
       onDone();
     } finally {
@@ -284,7 +295,7 @@ function EndpointForm({ endpoint, onDone }: { endpoint?: EndpointView; onDone: (
     setReading(true);
     const r = await api.refreshModels(endpoint.id);
     setReading(false);
-    setNote(r.ok ? { text: `${r.models.length} models read`, tone: 'running' } : { text: `models not read: ${r.error}. The last list is kept.`, tone: 'waiting' });
+    setNote(r.ok ? { text: `${r.models.length} models read`, tone: 'running' } : { text: `list not updated: ${clauseOf(r.error)}. The last list is kept.`, tone: 'waiting' });
   };
 
   return (
@@ -398,7 +409,7 @@ function EndpointForm({ endpoint, onDone }: { endpoint?: EndpointView; onDone: (
           </span>
         )}
         <span className="flex-1" />
-        <Button onClick={onDone}>Cancel</Button>
+        <Button onClick={() => onDone()}>Cancel</Button>
         <Button variant="primary" disabled={!ready} onClick={() => { void submit(); }}>{endpoint ? 'Save' : 'Add the endpoint'}</Button>
       </div>
     </div>
