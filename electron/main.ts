@@ -339,12 +339,21 @@ function loadAppSettings(): AppSettings {
   return { ...defaults, ...sentryTokenOutOf({}), ...readSecrets() };
 }
 
+/**
+ * The settings written, or a throw saying why. For a caller that must not hold in memory what is not on disk (the
+ * traces' and endpoints' settings, traces-handlers.ts: a consent to upload set in memory and never written was
+ * answered ok, the Audit's L2 on #599).
+ */
+function writeAppSettingsFile(settings: AppSettings): void {
+  ensureDataDir();
+  // 0600 and atomic. The secrets go to ~/.tars-private (settings-secrets.json,
+  // and the Sentry token's own file), the rest to app-settings.json.
+  saveSettingsSplit(withoutRetiredSettings(settingsToSave(settings)) as AppSettings);
+}
+
 function saveAppSettingsToFile(settings: AppSettings) {
   try {
-    ensureDataDir();
-    // 0600 and atomic. The secrets go to ~/.tars-private (settings-secrets.json,
-    // and the Sentry token's own file), the rest to app-settings.json.
-    saveSettingsSplit(withoutRetiredSettings(settingsToSave(settings)) as AppSettings);
+    writeAppSettingsFile(settings);
   } catch (err) {
     console.error('Failed to save app settings:', err);
   }
@@ -377,6 +386,7 @@ function createIpcDependencies(): IpcHandlerDependencies {
     getAppSettings: () => appSettings,
     setAppSettings: (settings: AppSettings) => { appSettings = settings; void errorReports.sync(); keepAwake.sync(); },
     saveAppSettings: saveAppSettingsToFile,
+    writeAppSettings: writeAppSettingsFile,
     saveAgents,
     initAgentPty: (agent: AgentStatus) => initAgentPty(
       agent,

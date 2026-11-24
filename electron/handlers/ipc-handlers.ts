@@ -120,6 +120,8 @@ export interface IpcHandlerDependencies {
   getAppSettings: () => AppSettings;
   setAppSettings: (settings: AppSettings) => void;
   saveAppSettings: (settings: AppSettings) => void;
+  /** The settings written, or a throw saying why (main.ts writeAppSettingsFile). */
+  writeAppSettings: (settings: AppSettings) => void;
   saveAgents: () => void;
   initAgentPty: (agent: AgentStatus) => Promise<string>;
   handleStatusChangeNotification: (agent: AgentStatus, newStatus: string) => void;
@@ -227,7 +229,7 @@ export function registerIpcHandlers(deps: IpcHandlerDependencies): void {
   registerGwsHandlers({ getAppSettings: deps.getAppSettings, setAppSettings: deps.setAppSettings, saveAppSettings: deps.saveAppSettings });
   registerMcpConfigHandlers();
   registerTrayHandlers(deps);
-  registerTracesHandlers({ getAppSettings: deps.getAppSettings, setAppSettings: deps.setAppSettings, saveAppSettings: deps.saveAppSettings });
+  registerTracesHandlers({ getAppSettings: deps.getAppSettings, setAppSettings: deps.setAppSettings, writeAppSettings: deps.writeAppSettings });
 }
 
 // ============== Tray Panel IPC Handlers ==============
