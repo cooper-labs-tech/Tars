@@ -26,10 +26,34 @@ function Line({ word, tone }: { word: string; tone: StatusTone }) {
   return <span className={`flex items-center gap-1.5 min-w-0 font-mono text-[10.5px] ${ink}`}><StatusSquare tone={tone} /><span className="truncate">{word}</span></span>;
 }
 
+/**
+ * What a queued change waits for, in words, from main's key (core/agent-retune.ts busyReason and its own keys): never
+ * the raw key ("waits for task"). The same words as the restart notice's where the key is shared
+ * (TerminalsView/components/RestartPendingNotice.tsx). A key this window does not know yet still reads as a sentence.
+ */
+const WAITS_FOR: Record<string, string> = {
+  turn: 'its turn to end',
+  permission: 'its permission question to be answered',
+  task: 'the delegated task it runs to end',
+  note: 'a note owed to it to go in',
+  background: 'the work it left running to report back',
+  launch: 'its CLI to finish starting',
+  draft: 'what is typed in its field to be sent or cleared',
+  typing: 'five seconds with nothing typed in its field',
+  queued: 'the messages queued for its field to go in',
+  writing: 'the message Tars is typing into it to go in',
+  'its CLI ends': 'its CLI to end',
+  'next start': 'its next start',
+  'earlier change': 'the change queued before it',
+};
+function waitsFor(key?: string): string {
+  return `waits for ${key ? WAITS_FOR[key] ?? 'the agent to be free' : WAITS_FOR.turn}`;
+}
+
 /** The state of a change in words: applied at, waiting, cancelled, failed. */
 function stateWords(state: AgentRetuned['state'], effectiveAt?: string, waitingFor?: string): string {
   if (state === 'applied') return `applied ${clockOfIso(effectiveAt)}`;
-  if (state === 'queued') return waitingFor ? `waits for ${waitingFor}` : 'waits for its turn to end';
+  if (state === 'queued') return waitsFor(waitingFor);
   return state;
 }
 
@@ -144,7 +168,7 @@ export function RetuneNotices({ className = '' }: { className?: string }) {
         const project = n.projectPath.split(/[\\/]/).filter(Boolean).pop();
         const who = `${n.agentName}${project ? ` (${project})` : ''}`;
         const what = whatWords(askedOf(n), n.before, n.after);
-        const waits = n.waitingFor ? `waits for ${n.waitingFor}` : 'waits for its turn to end';
+        const waits = waitsFor(n.waitingFor);
         // An undo says its own state: undid only once applied (the Audit's M1 on #604); asked, failed or cancelled else.
         const text = u ? u.word
           : n.revertOf
