@@ -1184,6 +1184,15 @@ would be sent.
   empties it, then writes the settings. Measured on macOS 26 (APFS): a full volume refuses a write, a rename and a
   truncate but takes an unlink, and a folder that may not be written refuses an unlink but takes a truncate. A start
   whose settings still say consent with no such file, a partial one or another time has none (it fails closed).
+  That start also takes it for a deletion it could not write down, since a deletion's moment and its owed DELETE
+  live in the settings alone: the moment becomes the latest of the one kept, the start and the newest session, and
+  the DELETE is owed again while the install file is there. So a deletion on settings that cannot be written, then a
+  quit, still never lets what was recorded before it go. One case brings the consent back at the next start: its
+  file can be neither unlinked nor emptied (a volume remounted read-only, an immutable file, a full volume with a
+  folder that may not be written) and no write of the settings holds before Tars quits. The log says so, and the
+  window meanwhile. The install file goes the same way, unlinked or else emptied, so a 401, a deletion that went
+  through or a deletion given up never throws on a folder that refuses the unlink, and a 401 withdraws the consent
+  before it touches the file.
   Settings that could not be written after a withdrawal or a deletion are tried again every minute, the window told
   (`unsaved`), and nothing uploads meanwhile. Until this, both were held in memory and saved by a write that swallowed
   its error: a consent given on a full disk was answered as given, and a withdrawal came back at the next start.

@@ -2,7 +2,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 import * as zlib from 'zlib';
 import { createHash, createHmac, randomBytes } from 'crypto';
-import { writeSecretFileSync } from '../utils/secret-file';
+import { describeSecretFileError, writeSecretFileSync } from '../utils/secret-file';
 import { canonicalJson } from './trace-wire';
 import { sessionDocument } from './trace-export';
 import { partsOf, type TraceStore } from './trace-store';
@@ -122,6 +122,28 @@ export class TraceUploader {
   }
 
   /**
+   * The install file gone, or emptied, which reads as no install: a private folder that may not be written refuses
+   * its unlink and takes its truncate (measured on macOS 26, the Audit's L4 at a3c07fbfa). Null once it holds, else
+   * the reason, which the log says too.
+   */
+  private dropInstall(): string | null {
+    try {
+      fs.unlinkSync(this.deps.installFile);
+      return null;
+    } catch (err) {
+      if ((err as NodeJS.ErrnoException).code === 'ENOENT') return null;
+    }
+    try {
+      fs.truncateSync(this.deps.installFile, 0);
+      return null;
+    } catch (err) {
+      const reason = describeSecretFileError(err);
+      console.error(`[traces] the install file could be neither removed nor emptied: ${reason}`);
+      return reason;
+    }
+  }
+
+  /**
    * Whether a deletion is still owed: only while the install it was asked for is still here. With no install file
    * left there is nothing to delete with, and an owed mark would lock sharing out for good (the re-read's L1 at
    * ee4d55975): it is cleared, the moment of the deletion kept.
@@ -144,7 +166,8 @@ export class TraceUploader {
     // Only an owed deletion is given up: with sharing on, forgetting the install would send everything again under
     // a new one, and leave the old copy out of reach of "delete everything sent" (the re-read at e50e78564).
     if (!this.owed()) return { ok: false, error: 'No deletion is waiting for confirmation: there is nothing to give up.' };
-    fs.rmSync(this.deps.installFile, { force: true });
+    const kept = this.dropInstall();
+    if (kept) return { ok: false, error: `Tars could not forget this install (${kept}): the deletion is still waiting.` };
     this.deps.store.resetUploads();
     this.deps.setDeletion({ owed: false, since: this.deps.settings().since });
     return { ok: true };
@@ -268,11 +291,12 @@ export class TraceUploader {
       // The back-office no longer knows this install: never register again on our own, which would send back what
       // a deletion took away. The local data stays; the user's consent registers a new install.
       if (e instanceof HttpError && e.status === 401) {
-        fs.rmSync(this.deps.installFile, { force: true });
+        // The consent first: an install file that will not go must not leave sharing on.
+        this.deps.withdrawConsent();
+        this.dropInstall();
         this.notice = 'forgotten';
         this.lastError = 'This back-office no longer knows this Tars. Nothing is sent until you share again.';
         this.nextTryAt = undefined;
-        this.deps.withdrawConsent();
         return { sent, failed: 1 };
       }
       this.failures++;
@@ -498,8 +522,9 @@ export class TraceUploader {
     }
   }
 
+  /** After a DELETE that went through: what is said is that it did, even when the install file will not go. */
   private forget(): void {
-    fs.rmSync(this.deps.installFile, { force: true });
+    this.dropInstall();
     this.deps.store.resetUploads();
     this.failures = 0;
     this.nextTryAt = undefined;

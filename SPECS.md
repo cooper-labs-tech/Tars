@@ -274,9 +274,12 @@ consent, opted-in sessions are uploaded:
 `deleteEverywhere` asks the back-office to delete all of it.
 
 The consent is written before it is given, to its own file in the private folder and then to the settings, and a
-write that fails answers the window with the reason: nothing is given. A withdrawal holds in memory at once and never
-comes back at a restart, whatever the disk does (SECURITY.md, § 9). Every trace and endpoint setting the window or an
-agent changes is written first, then held in memory, or answered with the reason.
+write that fails answers the window with the reason: nothing is given. A withdrawal holds in memory at once. It does
+not come back at a restart on a full volume or in a private folder that may not be written, the two cases measured,
+and a start that finds it was not written down takes it for a deletion, so nothing recorded before it is sent. It
+does come back when its file can be neither removed nor emptied and no write of the settings holds before Tars quits
+(SECURITY.md, § 9). Every trace and endpoint setting the window or an agent changes is written first, then held in
+memory, or answered with the reason; a save that fails leaves the keys' file as it was.
 
 ### Alt-provider safety gate
 

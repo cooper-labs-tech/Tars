@@ -183,12 +183,31 @@ export function setSecret(current: AppSettings, field: string, value: string | n
  * then the rest to app-settings.json, so that a stop between the two leaves
  * every key where the next load finds it. A private file that cannot be read
  * is set aside in the private folder rather than written over: the app loaded
- * without its keys, and a save would otherwise lose them for good.
+ * without its keys, and a save would otherwise lose them for good. A save that
+ * throws changed nothing: when app-settings.json cannot be written, the private
+ * file is put back as it was, or removed if there was none (the Audit's I-3 on
+ * #596), and only a failure of that too, said in the log, leaves the new keys.
  */
 export function saveSettingsSplit(settings: AppSettings): void {
   if (readSecretsFile() === null) setAside(SECRETS_FILE);
+  let before: string | null;
+  try {
+    before = fs.readFileSync(SECRETS_FILE, 'utf-8');
+  } catch {
+    before = null;
+  }
   writeSecrets(secretsOf(settings as unknown as Record<string, unknown>));
-  writeSecretFileSync(APP_SETTINGS_FILE, JSON.stringify(withoutSecrets(settings), null, 2));
+  try {
+    writeSecretFileSync(APP_SETTINGS_FILE, JSON.stringify(withoutSecrets(settings), null, 2));
+  } catch (err) {
+    try {
+      if (before === null) fs.rmSync(SECRETS_FILE, { force: true });
+      else writeSecretFileSync(SECRETS_FILE, before);
+    } catch (undo) {
+      console.error(`[secrets] app-settings.json was not written, and ${path.basename(SECRETS_FILE)} could not be put back as it was: ${describeSecretFileError(undo)}`);
+    }
+    throw err;
+  }
 }
 
 function setAside(file: string): void {
