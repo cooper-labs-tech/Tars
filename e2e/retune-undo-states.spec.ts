@@ -60,6 +60,10 @@ const B_CODER = 'bbbb2222-0000-4000-8000-0000000000b1';
 const B_PI = 'bbbb2222-0000-4000-8000-0000000000b2';
 const CLOCK = '\\d\\d:\\d\\d';
 const BY = 'Worker One \\(project-a\\)';
+// What a change queued behind B Coder's held turn waits for, in words: B Lead's delegate_task holds that turn, so the
+// key is 'task' (core/agent-retune.ts busyReason), never said raw as "waits for task" (the Audit's Info on #604 at
+// 9c3ec465c, WAITS_FOR in RetuneParts.tsx).
+const WAITS_TASK = 'the delegated task it runs to end';
 type Said = { text: string; isError: boolean };
 type Reply = { result?: { content?: Array<{ text?: string }>; isError?: boolean }; error?: unknown };
 type Api = { electronAPI: Record<string, Record<string, (...a: unknown[]) => Promise<unknown>>> };
@@ -213,8 +217,8 @@ for (const newInterface of [false, true]) {
       await reached(B_CODER, u1.undo, 'queued');
       expect.soft((await listed(B_CODER))?.effort, 'the effort, while its undo waits').toBe('high');
       await told('1-undo-queued', B_CODER, 'B Coder', 'undo-queued',
-        new RegExp(`undo asked by ${BY} at ${CLOCK}`), /effort high to low · waits for \S/,
-        'undo-queued', new RegExp(`${BY} asked to undo a change to B Coder \\(project-b\\): effort high to low: it waits for \\S[^.]*\\.`));
+        new RegExp(`undo asked by ${BY} at ${CLOCK}`), new RegExp(`effort high to low · waits for ${WAITS_TASK}`),
+        'undo-queued', new RegExp(`${BY} asked to undo a change to B Coder \\(project-b\\): effort high to low: it waits for ${WAITS_TASK}\\.`));
 
       // ── 2. The turn ends: the undo applies ──
       release('u1');
@@ -310,8 +314,8 @@ for (const newInterface of [false, true]) {
       const c4 = await asked(B_CODER, { effort: 'medium' });
       keep({ held4, c4 });
       await told('7-retune-queued', B_CODER, 'B Coder', 'queued',
-        new RegExp(`retune asked by ${BY} at ${CLOCK}`), /effort high to medium · waits for \S/,
-        'queued', new RegExp(`${BY} asked to retune B Coder \\(project-b\\): effort high to medium: it waits for \\S[^.]*\\.`));
+        new RegExp(`retune asked by ${BY} at ${CLOCK}`), new RegExp(`effort high to medium · waits for ${WAITS_TASK}`),
+        'queued', new RegExp(`${BY} asked to retune B Coder \\(project-b\\): effort high to medium: it waits for ${WAITS_TASK}\\.`));
       const c4back = await revert(c4.changeId);
       keep({ c4back });
       expect.soft(c4back.state, `the queued retune taken back: ${c4back.said.text}`).toBe('cancelled');
