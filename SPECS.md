@@ -273,6 +273,11 @@ consent, opted-in sessions are uploaded:
 
 `deleteEverywhere` asks the back-office to delete all of it.
 
+The consent is written before it is given, to its own file in the private folder and then to the settings, and a
+write that fails answers the window with the reason: nothing is given. A withdrawal holds in memory at once and never
+comes back at a restart, whatever the disk does (SECURITY.md, § 9). Every trace and endpoint setting the window or an
+agent changes is written first, then held in memory, or answered with the reason.
+
 ### Alt-provider safety gate
 
 `spawnAgentSession` refuses to start a claude-binary alt provider that produced no `ANTHROPIC_BASE_URL`, which means no API key is configured, and the session would silently bill the user's Anthropic account:

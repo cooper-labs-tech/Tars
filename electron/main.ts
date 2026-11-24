@@ -451,7 +451,8 @@ function initApiServer() {
   // an inference endpoint. Traces are written only for the projects and agents the user opted in.
   startTracesRuntime({
     getSettings: () => appSettings,
-    saveSettings: (settings) => { appSettings = settings; saveAppSettingsToFile(settings); },
+    setSettings: (settings) => { appSettings = settings; },
+    writeSettings: writeAppSettingsFile,
     getAgent: (id) => agents.get(id),
     clientVersion: app.getVersion(),
     emit: (channel, payload) => { const w = getMainWindow(); if (w && !w.isDestroyed()) w.webContents.send(channel, payload); },

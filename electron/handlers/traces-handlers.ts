@@ -12,10 +12,11 @@ import {
 import type { TraceFilter } from '../services/trace-store';
 import { traceExportLines } from '../services/trace-export';
 import { CLOSED_MODELS_WARNING, traceDecision } from '../services/trace-gate';
-import { previewUpload, traceUploader } from '../services/traces-runtime';
+import {
+  dropConsentFile, previewUpload, recordConsent, settingsNotWritten, traceUploader, uploadPersistence,
+} from '../services/traces-runtime';
 import { cleanBaseUrl } from '../services/inference-endpoints';
 import { SCRUB_VERSION } from '../services/trace-scrub';
-import { describeSecretFileError } from '../utils/secret-file';
 
 /**
  * The window's side of inference endpoints and native traces: the IPC contract the back-office page
@@ -57,7 +58,7 @@ export function registerTracesHandlers(deps: TracesHandlerDeps): void {
       deps.writeAppSettings(settings);
     } catch (err) {
       console.error('[traces] settings not written:', err);
-      return `Tars could not save the settings (${describeSecretFileError(err)}): nothing was changed.`;
+      return settingsNotWritten(err);
     }
     deps.setAppSettings(settings);
     return null;
@@ -254,7 +255,8 @@ export function registerTracesHandlers(deps: TracesHandlerDeps): void {
     },
   }));
   ipcMain.handle('traces:preview', (_e, traceId: unknown) => previewUpload(String(traceId)));
-  ipcMain.handle('traces:uploadState', () => traceUploader().state());
+  // With `unsaved` while a change that already holds in memory (a withdrawal) waits for a write that holds.
+  ipcMain.handle('traces:uploadState', () => ({ ...traceUploader().state(), ...uploadPersistence() }));
   // The user gives up a deletion an old back-office never confirmed: its install is forgotten, and what was recorded
   // before the deletion is still never sent.
   ipcMain.handle('traces:ackDeletionCleared', () => { traceUploader().ackDeletionCleared(); return { ok: true }; });
@@ -274,9 +276,19 @@ export function registerTracesHandlers(deps: TracesHandlerDeps): void {
     if (!t.uploadUrl) return { ok: false, error: 'Set the back-office address first.' };
     if (traceUploader().isDeletionOwed()) return { ok: false, error: 'The deletion of what was shared is not confirmed yet: delete again, or give it up.' };
     const at = new Date().toISOString();
-    // Given once written, never only in memory, where the uploader reads it (the Audit's L2 on #599).
+    // Given once written, never only in memory, where the uploader reads it (the Audit's L2 on #599): its own file
+    // first, then the settings, and the file taken back when the settings cannot be written.
+    try {
+      recordConsent(at);
+    } catch (err) {
+      console.error('[traces] consent not written:', err);
+      return { ok: false, error: settingsNotWritten(err) };
+    }
     const unsaved = apply({ ...deps.getAppSettings(), traces: { ...t, uploadConsentAt: at } });
-    if (unsaved) return { ok: false, error: unsaved };
+    if (unsaved) {
+      dropConsentFile();
+      return { ok: false, error: unsaved };
+    }
     return { ok: true, at };
   });
 

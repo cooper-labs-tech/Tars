@@ -1175,6 +1175,15 @@ would be sent.
 - When the back-office no longer knows the install (a 401: the user's deletion, or its operator's), Tars never
   registers again on its own. Uploads stop, the local traces stay, the consent is withdrawn, and the window says so.
   Registering again is the user's own act.
+- A consent stands only while its own file, `~/.tars-private/traces-upload-consent` (0600, no agent is handed it),
+  holds the very time the settings say. Giving it writes that file, then the settings; either failing answers the
+  window with the reason, and nothing is given. A withdrawal holds in memory at once, then unlinks that file, or else
+  empties it, then writes the settings. Measured on macOS 26 (APFS): a full volume refuses a write, a rename and a
+  truncate but takes an unlink, and a folder that may not be written refuses an unlink but takes a truncate. A start
+  whose settings still say consent with no such file, a partial one or another time has none (it fails closed).
+  Settings that could not be written after a withdrawal or a deletion are tried again every minute, the window told
+  (`unsaved`), and nothing uploads meanwhile. Until this, both were held in memory and saved by a write that swallowed
+  its error: a consent given on a full disk was answered as given, and a withdrawal came back at the next start.
 - The scrubbing applies to what is uploaded only: the endpoint the agent talked to, and the local store, saw the
   session as it was.
 
