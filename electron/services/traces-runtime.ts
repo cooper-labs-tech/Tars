@@ -15,7 +15,7 @@ import { TraceStore } from './trace-store';
 import { defaultTracePairs, traceDecision } from './trace-gate';
 import { projectEnvValues, type ScrubContext } from './trace-scrub';
 import { TraceUploader } from './trace-upload';
-import { SECRET_FIELDS, keysKeptAfter } from './settings-secrets';
+import { SECRET_FIELDS, keysKeptAfter, withKeptKeys } from './settings-secrets';
 
 /**
  * The running side of inference endpoints and native traces: wires the proxy, the per-terminal
@@ -611,6 +611,9 @@ export function saveSettingsFromApi(settings: AppSettings): void {
     deps.writeSettings(settings);
   } catch (err) {
     console.error('[traces] settings not written:', err);
+    // A key the failed save left on disk is held in memory too, or the next save would write the old one back.
+    const kept = withKeptKeys(deps.getSettings(), err);
+    if (kept) deps.setSettings(kept);
     throw new Error(settingsNotWritten(err));
   }
   deps.setSettings(settings);

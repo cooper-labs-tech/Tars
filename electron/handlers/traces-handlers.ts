@@ -17,6 +17,7 @@ import {
 } from '../services/traces-runtime';
 import { cleanBaseUrl } from '../services/inference-endpoints';
 import { SCRUB_VERSION } from '../services/trace-scrub';
+import { withKeptKeys } from '../services/settings-secrets';
 
 /**
  * The window's side of inference endpoints and native traces: the IPC contract the back-office page
@@ -58,6 +59,9 @@ export function registerTracesHandlers(deps: TracesHandlerDeps): void {
       deps.writeAppSettings(settings);
     } catch (err) {
       console.error('[traces] settings not written:', err);
+      // A key the failed save left on disk is held in memory too, or the next save would write the old one back.
+      const kept = withKeptKeys(deps.getAppSettings(), err);
+      if (kept) deps.setAppSettings(kept);
       return settingsNotWritten(err);
     }
     deps.setAppSettings(settings);
