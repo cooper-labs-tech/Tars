@@ -30,6 +30,12 @@ import { DEV_URL, apiPort } from './ports.mjs';
  * Every harness's home is the sandbox's (CODEX_HOME, KIMI_CODE_HOME, PI_CODING_AGENT_DIR handed to Tars here): one
  * exported by the shell that runs the spec was inherited, and the sandboxed Tars wrote that home and its harness ran on
  * that login (the Audit's L2 on #608). The files Tars writes in such a home are checked to be left as they were.
+ * gemini's and grok's homes too, written before their isolation (the Audit's L4 on #638): gemini 0.70.0 takes its home
+ * from GEMINI_CLI_HOME before HOME (its paths.ts homedir()), grok 1.0.92 from GROK_HOME in place of ~/.grok (`grok mcp
+ * add` wrote $GROK_HOME/config.toml, measured isolated on 24/11), and reads an overlay GROK_CONFIG_PATH names. A runner
+ * that exports one sent the registration's `<cli> mcp add`, and the agent's own CLI, to the runner's own folder.
+ * And the registration itself: Tars's MCP servers registered through the binary under test (`via <cli> mcp add` in
+ * the app's log), never by Tars's own writer after a failed spawn, which falls back in silence (the Audit's I-2).
  *
  * gemini and grok take no endpoint of Tars's: each runs on its own model setting, as a user sets it, in the sandbox
  * (measured on 23/11, gemini 0.70.0 and grok 1.0.92). gemini on a stand-in of Gemini's API
@@ -92,7 +98,11 @@ function writeOpenShim(home: string): { dir: string; log: string } {
 const plain = (s: string) => s.replace(/\x1b\[[0-9;?]*[ -/]*[@-~]/g, '').replace(/\x1b\][^\x07]*\x07/g, '');
 const sleep = (ms: number) => new Promise(r => setTimeout(r, ms));
 /** The files Tars writes in a harness's home, for each home the runner may have exported: never Tars's to write here. */
-const RUNNER_HOME_FILES: Array<[string, string[]]> = [['CODEX_HOME', ['config.toml']], ['KIMI_CODE_HOME', ['mcp.json']], ['PI_CODING_AGENT_DIR', ['mcp.json', 'trust.json']]];
+const RUNNER_HOME_FILES: Array<[string, string[]]> = [
+  ['CODEX_HOME', ['config.toml']], ['KIMI_CODE_HOME', ['mcp.json']], ['PI_CODING_AGENT_DIR', ['mcp.json', 'trust.json']],
+  // gemini's home holds its .gemini; grok's is ~/.grok itself; GROK_CONFIG_PATH names a file ('' is that file).
+  ['GEMINI_CLI_HOME', [path.join('.gemini', 'settings.json'), path.join('.gemini', 'trustedFolders.json')]], ['GROK_HOME', ['config.toml']], ['GROK_CONFIG_PATH', ['']],
+];
 const runnerHomeFiles = () => Object.fromEntries(RUNNER_HOME_FILES.flatMap(([name, files]) => {
   const dir = process.env[name]?.trim();
   return dir ? files.map((f) => [path.join(dir, f), fs.existsSync(path.join(dir, f)) ? fs.readFileSync(path.join(dir, f), 'utf8') : null]) : [];
@@ -238,6 +248,11 @@ for (const h of HARNESSES) {
             }
           }, { resources, dist, pinned });
           keep({ mcpRegisteredWith: fs.readlinkSync(path.join(pinned, h.id)) });
+          if (process.platform !== 'win32') {
+            const said = () => (fs.existsSync(appLog) ? fs.readFileSync(appLog, 'utf8') : '');
+            await expect.poll(() => said().includes(`via ${h.id} mcp add`), { timeout: 15_000, message: `${label}: the servers registered via ${h.id} mcp add, the binary under test` }).toBe(true);
+            expect.soft(said(), `${label}: no ${h.id} mcp add failed, which falls back to Tars's own writer`).not.toContain(`${h.id} mcp add failed`);
+          }
         }
         mcp = spawn(process.execPath, [path.resolve('mcp-orchestrator', 'dist', 'bundle.js')], {
           env: { PATH: process.env.PATH ?? '', HOME: home, CLAUDE_MGR_API_URL: `http://127.0.0.1:${port}`, CLAUDE_MGR_API_TOKEN: identity.token, CLAUDE_AGENT_ID: LEAD, CLAUDE_PROJECT_PATH: project, TARS_INSTANCE_ID: identity.instance },
