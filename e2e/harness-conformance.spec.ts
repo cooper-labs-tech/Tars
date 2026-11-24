@@ -24,7 +24,9 @@ import { DEV_URL, apiPort } from './ports.mjs';
  * 3. task_status reads that task completed, with the same answer;
  * 4. get_agent_output with that taskId gives the same answer;
  * 5. resume: Tars quits and starts again, the agent's first start continues its session (the endpoint's first new
- *    request already carries the marker of step 2 in its history), and a second delegation is answered.
+ *    request already carries the marker of step 2 in its history), and a second delegation is answered; for gemini and
+ *    grok, under the session id the first run ended on, since grok's cross-session memory carries a past session's
+ *    words into a new one.
  * Every harness's home is the sandbox's (CODEX_HOME, KIMI_CODE_HOME, PI_CODING_AGENT_DIR handed to Tars here): one
  * exported by the shell that runs the spec was inherited, and the sandboxed Tars wrote that home and its harness ran on
  * that login (the Audit's L2 on #608). The files Tars writes in such a home are checked to be left as they were.
@@ -257,6 +259,9 @@ for (const h of HARNESSES) {
     };
 
     const runnerBefore = runnerHomeFiles();
+    // The session the first run of Tars ended on, which the second must continue (gemini and grok: a resumed session
+    // keeps its id, measured on 0.70.0 and 1.0.92; a fresh one gets a new id).
+    let firstSession: unknown;
     try {
       await withTars('first', async (lead, api) => {
         if (via === 'endpoint') {
@@ -289,6 +294,7 @@ for (const h of HARNESSES) {
         const view = (a: Record<string, unknown> | null) => a && Object.fromEntries(['status', 'currentSessionId', 'resumableSessionId', 'lastTurnStartedAt', 'sessionRegisteredAt', 'requestedBy', 'taskQueue', 'currentTask'].map((k) => [k, a[k]]));
         const ledger = async () => ((await api<{ tasks?: Array<Record<string, unknown>> }>('usage', 'tasks', { sinceDays: 1 }))?.tasks ?? []).filter((t) => t.agentId === WORKER);
         keep({ delegated, taskId, requests: short(), screenAfterTask: await screenOf(), workerAfterTask: view(await api('agent', 'get', WORKER)), ledgerAfterTask: await ledger() });
+        firstSession = (await api<{ currentSessionId?: string } | null>('agent', 'get', WORKER))?.currentSessionId;
         expect.soft(delegated.text, 'delegate_task returns the harness\'s final answer').toContain(`PROBE-OK ${standin.marker}`);
         // The shell round's proof: the marker came back in a tool result. The MCP round's is whoami's answer, below: the
         // marker never travels there (the first gemini run of 24/11 failed this line with its answer right).
@@ -336,6 +342,14 @@ for (const h of HARNESSES) {
         const firstOfTurn = via === 'endpoint' ? after[0] : after.find((r) => JSON.stringify(r.body ?? '').includes('"tools"')) ?? after[0];
         expect.soft(JSON.stringify(firstOfTurn?.body ?? ''), 'its first request carries the first task\'s history').toContain(standin.marker);
         expect.soft(again.text, 'the second delegation is answered').toContain('PROBE-OK');
+        if (via !== 'endpoint') {
+          // The session continued, not a new one beside it: grok carries a past session into a new one through its own
+          // cross-session memory, so its history alone does not tell a resume from a fresh start (measured 24/11).
+          const secondSession = (await api<{ currentSessionId?: string } | null>('agent', 'get', WORKER))?.currentSessionId;
+          keep({ firstSession, secondSession });
+          expect.soft(firstSession, 'the first run of Tars ended on a session of the CLI\'s').toBeTruthy();
+          expect.soft(secondSession, 'the second start continued that session, under its own id').toBe(firstSession);
+        }
         if (h.hooksOnce) keep({ sessionStartsSecond: sessionStarts() });
         if (h.hooksOnce) expect.soft(sessionStarts(), '8. one more SessionStart for the second start, not two').toBe(2);
       });
