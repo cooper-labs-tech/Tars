@@ -621,7 +621,10 @@ secondary folder or a template's vault when it has one) are written into `~/.gem
 `TRUST_FOLDER` (gemini 0.70.0, measured 24/11), since gemini asks about an added folder it does not trust, its
 `--skip-trust` covering the workspace only, and the first task typed into the terminal answered that question. The
 entries stay after the agent: the user's own gemini then asks nothing about those folders either. Each is the folder
-alone, never its parent, and never the home folder or the root (`trustsTooMuch`).
+alone, never its parent, and never the home folder or the root (`trustsTooMuch`). An entry is written only for a
+folder no rule of the file covers, decided as gemini decides (the longest matching rule, a parent's included, under any
+spelling gemini reads as the same), so a folder the user refused, or a folder under one, is never turned trusted. Tars
+never removes an entry: it cannot tell its own from the same entry the user wrote.
 
 What Tars before 2.0.4 left of those keys is cleaned once, at the first load of
 an `agents.json` from before it (`core/key-fragments.ts`): the question showed
