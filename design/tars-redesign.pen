@@ -902248,6 +902248,159 @@
                       ]
                     }
                   ]
+                },
+                {
+                  "type": "text",
+                  "id": "orDt1",
+                  "fill": "$text-muted",
+                  "content": "a notice main could not read: said under the consent, its button reads it again",
+                  "lineHeight": 1.4,
+                  "fontFamily": "$font-mono",
+                  "fontSize": 10,
+                  "fontWeight": "normal"
+                },
+                {
+                  "type": "frame",
+                  "id": "SzS1V",
+                  "name": "back-office notice not read",
+                  "width": 760,
+                  "fill": "$surface",
+                  "stroke": "$border",
+                  "strokeWidth": 1,
+                  "layout": "vertical",
+                  "gap": 8,
+                  "padding": [
+                    14,
+                    16
+                  ],
+                  "children": [
+                    {
+                      "type": "text",
+                      "id": "ROCIE",
+                      "fill": "$text-muted",
+                      "content": "BACK-OFFICE",
+                      "lineHeight": 1.4,
+                      "fontFamily": "$font-mono",
+                      "fontSize": 10,
+                      "fontWeight": "normal"
+                    },
+                    {
+                      "type": "frame",
+                      "id": "bwByi",
+                      "name": "state",
+                      "gap": 6,
+                      "alignItems": "center",
+                      "children": [
+                        {
+                          "type": "rectangle",
+                          "id": "XatCi",
+                          "name": "d",
+                          "fill": "$status-waiting",
+                          "width": 6,
+                          "height": 6
+                        },
+                        {
+                          "type": "text",
+                          "id": "aZfZj",
+                          "fill": "$status-waiting",
+                          "content": "nothing is sent until you read what leaves this computer",
+                          "lineHeight": 1.4,
+                          "fontFamily": "$font-mono",
+                          "fontSize": 10.5,
+                          "fontWeight": "normal"
+                        }
+                      ]
+                    },
+                    {
+                      "type": "frame",
+                      "id": "qPbuI",
+                      "name": "state notice not read",
+                      "gap": 6,
+                      "alignItems": "center",
+                      "children": [
+                        {
+                          "type": "rectangle",
+                          "id": "UZxoE",
+                          "name": "d",
+                          "fill": "$status-error",
+                          "width": 6,
+                          "height": 6
+                        },
+                        {
+                          "type": "text",
+                          "id": "Q3Psk",
+                          "fill": "$status-error",
+                          "content": "notice not read: permission denied. What leaves this computer reads it again.",
+                          "lineHeight": 1.4,
+                          "fontFamily": "$font-mono",
+                          "fontSize": 10.5,
+                          "fontWeight": "normal"
+                        }
+                      ]
+                    },
+                    {
+                      "type": "frame",
+                      "id": "U6jQ7r",
+                      "name": "g",
+                      "gap": 8,
+                      "children": [
+                        {
+                          "type": "frame",
+                          "id": "SxwOg",
+                          "name": "b What leaves this computer",
+                          "height": 26,
+                          "fill": "$surface",
+                          "stroke": "$border",
+                          "strokeWidth": 1,
+                          "padding": [
+                            0,
+                            11
+                          ],
+                          "justifyContent": "center",
+                          "alignItems": "center",
+                          "children": [
+                            {
+                              "type": "text",
+                              "id": "YGR7q",
+                              "fill": "$text-primary",
+                              "content": "What leaves this computer",
+                              "lineHeight": 1.4,
+                              "fontFamily": "$font-mono",
+                              "fontSize": 11,
+                              "fontWeight": "normal"
+                            }
+                          ]
+                        },
+                        {
+                          "type": "frame",
+                          "id": "qzzLc",
+                          "name": "b Preview a session",
+                          "height": 26,
+                          "fill": "$surface",
+                          "stroke": "$border",
+                          "strokeWidth": 1,
+                          "padding": [
+                            0,
+                            11
+                          ],
+                          "justifyContent": "center",
+                          "alignItems": "center",
+                          "children": [
+                            {
+                              "type": "text",
+                              "id": "MpSVd",
+                              "fill": "$text-primary",
+                              "content": "Preview a session",
+                              "lineHeight": 1.4,
+                              "fontFamily": "$font-mono",
+                              "fontSize": 11,
+                              "fontWeight": "normal"
+                            }
+                          ]
+                        }
+                      ]
+                    }
+                  ]
                 }
               ]
             },
@@ -902275,7 +902428,7 @@
                   "fill": "$text-secondary",
                   "textGrowth": "fixed-width",
                   "width": 440,
-                  "content": "Upload what I opt in records the consent (traces.giveUploadConsent). Not now keeps the address and sends nothing. The notice is main's own list (traces.uploadNotice). When main cannot save the consent (a full disk), the notice stays open and says why; nothing is sent.",
+                  "content": "Upload what I opt in records the consent (traces.giveUploadConsent). Not now keeps the address and sends nothing. The notice is main's own list (traces.uploadNotice). When main cannot save the consent (a full disk), the notice stays open and says why; nothing is sent. When main cannot read the notice, the card says why under the consent's state, and What leaves this computer reads it again.",
                   "lineHeight": 1.5,
                   "fontFamily": "$font-ui",
                   "fontSize": 12,
@@ -902502,6 +902655,135 @@
                       ]
                     }
                   ]
+                },
+                {
+                  "type": "text",
+                  "id": "ZZfxa",
+                  "fill": "$text-muted",
+                  "content": "a session main could not build (a full disk): said in its dialog, Try again builds it again",
+                  "lineHeight": 1.4,
+                  "fontFamily": "$font-mono",
+                  "fontSize": 10,
+                  "fontWeight": "normal"
+                },
+                {
+                  "type": "frame",
+                  "id": "vKviW",
+                  "name": "dialog No session previewed",
+                  "width": 760,
+                  "fill": "$surface-elevated",
+                  "stroke": "$border-strong",
+                  "strokeWidth": 1,
+                  "layout": "vertical",
+                  "gap": 12,
+                  "padding": [
+                    16,
+                    18
+                  ],
+                  "children": [
+                    {
+                      "type": "text",
+                      "id": "egaRb",
+                      "fill": "$text-primary",
+                      "content": "No session previewed",
+                      "lineHeight": 1.4,
+                      "fontFamily": "$font-ui",
+                      "fontSize": 15,
+                      "fontWeight": "normal"
+                    },
+                    {
+                      "type": "frame",
+                      "id": "X6fUn5",
+                      "name": "state preview not built",
+                      "gap": 6,
+                      "alignItems": "center",
+                      "children": [
+                        {
+                          "type": "rectangle",
+                          "id": "Tmk7n",
+                          "name": "d",
+                          "fill": "$status-error",
+                          "width": 6,
+                          "height": 6
+                        },
+                        {
+                          "type": "text",
+                          "id": "I3tIDF",
+                          "fill": "$status-error",
+                          "content": "not previewed: no space left on device. Try again builds it again.",
+                          "lineHeight": 1.4,
+                          "fontFamily": "$font-mono",
+                          "fontSize": 10.5,
+                          "fontWeight": "normal"
+                        }
+                      ]
+                    },
+                    {
+                      "type": "frame",
+                      "id": "yywfQ",
+                      "name": "answers",
+                      "width": "fill_container",
+                      "gap": 8,
+                      "justifyContent": "space_between",
+                      "alignItems": "center",
+                      "children": [
+                        {
+                          "type": "frame",
+                          "id": "f4IwSc",
+                          "name": "b Try again",
+                          "height": 32,
+                          "fill": "$surface",
+                          "stroke": "$border",
+                          "strokeWidth": 1,
+                          "padding": [
+                            0,
+                            14
+                          ],
+                          "justifyContent": "center",
+                          "alignItems": "center",
+                          "children": [
+                            {
+                              "type": "text",
+                              "id": "a2NOF",
+                              "fill": "$text-primary",
+                              "content": "Try again",
+                              "lineHeight": 1.4,
+                              "fontFamily": "$font-ui",
+                              "fontSize": 12.5,
+                              "fontWeight": "normal"
+                            }
+                          ]
+                        },
+                        {
+                          "type": "frame",
+                          "id": "v0alL",
+                          "name": "b Close",
+                          "height": 32,
+                          "fill": "$surface",
+                          "stroke": "$border",
+                          "strokeWidth": 1,
+                          "padding": [
+                            0,
+                            14
+                          ],
+                          "justifyContent": "center",
+                          "alignItems": "center",
+                          "children": [
+                            {
+                              "type": "text",
+                              "id": "dlqlW",
+                              "fill": "$text-primary",
+                              "content": "Close",
+                              "lineHeight": 1.4,
+                              "fontFamily": "$font-ui",
+                              "fontSize": 12.5,
+                              "fontWeight": "normal"
+                            }
+                          ]
+                        }
+                      ]
+                    }
+                  ]
                 }
               ]
             },
@@ -902529,7 +902811,7 @@
                   "fill": "$text-secondary",
                   "textGrowth": "fixed-width",
                   "width": 440,
-                  "content": "traces.preview gives the document and what was masked, by kind. A preview sends nothing.",
+                  "content": "traces.preview gives the document and what was masked, by kind. A preview sends nothing. When main cannot build it (on a fresh install it first writes the install's secret, which a full disk refuses), the dialog says why, and Try again builds it again.",
                   "lineHeight": 1.5,
                   "fontFamily": "$font-ui",
                   "fontSize": 12,
@@ -905614,6 +905896,159 @@
                       ]
                     }
                   ]
+                },
+                {
+                  "type": "text",
+                  "id": "m80FRa",
+                  "fill": "$text-muted",
+                  "content": "a notice main could not read: said under the consent, its button reads it again",
+                  "lineHeight": 1.4,
+                  "fontFamily": "$font-mono",
+                  "fontSize": 10,
+                  "fontWeight": "normal"
+                },
+                {
+                  "type": "frame",
+                  "id": "ExSXu",
+                  "name": "back-office notice not read",
+                  "width": 760,
+                  "fill": "$surface",
+                  "stroke": "$border",
+                  "strokeWidth": 1,
+                  "layout": "vertical",
+                  "gap": 8,
+                  "padding": [
+                    14,
+                    16
+                  ],
+                  "children": [
+                    {
+                      "type": "text",
+                      "id": "v4tDHd",
+                      "fill": "$text-muted",
+                      "content": "BACK-OFFICE",
+                      "lineHeight": 1.4,
+                      "fontFamily": "$font-mono",
+                      "fontSize": 10,
+                      "fontWeight": "normal"
+                    },
+                    {
+                      "type": "frame",
+                      "id": "DxYtg",
+                      "name": "state",
+                      "gap": 6,
+                      "alignItems": "center",
+                      "children": [
+                        {
+                          "type": "rectangle",
+                          "id": "kmX2z",
+                          "name": "d",
+                          "fill": "$status-waiting",
+                          "width": 6,
+                          "height": 6
+                        },
+                        {
+                          "type": "text",
+                          "id": "KOxH9",
+                          "fill": "$status-waiting",
+                          "content": "nothing is sent until you read what leaves this computer",
+                          "lineHeight": 1.4,
+                          "fontFamily": "$font-mono",
+                          "fontSize": 10.5,
+                          "fontWeight": "normal"
+                        }
+                      ]
+                    },
+                    {
+                      "type": "frame",
+                      "id": "IZZQX",
+                      "name": "state notice not read",
+                      "gap": 6,
+                      "alignItems": "center",
+                      "children": [
+                        {
+                          "type": "rectangle",
+                          "id": "v876Ra",
+                          "name": "d",
+                          "fill": "$status-error",
+                          "width": 6,
+                          "height": 6
+                        },
+                        {
+                          "type": "text",
+                          "id": "LG1PP",
+                          "fill": "$status-error",
+                          "content": "notice not read: permission denied. What leaves this computer reads it again.",
+                          "lineHeight": 1.4,
+                          "fontFamily": "$font-mono",
+                          "fontSize": 10.5,
+                          "fontWeight": "normal"
+                        }
+                      ]
+                    },
+                    {
+                      "type": "frame",
+                      "id": "X7Fg0u",
+                      "name": "g",
+                      "gap": 8,
+                      "children": [
+                        {
+                          "type": "frame",
+                          "id": "ZCt1D",
+                          "name": "b What leaves this computer",
+                          "height": 26,
+                          "fill": "$surface",
+                          "stroke": "$border",
+                          "strokeWidth": 1,
+                          "padding": [
+                            0,
+                            11
+                          ],
+                          "justifyContent": "center",
+                          "alignItems": "center",
+                          "children": [
+                            {
+                              "type": "text",
+                              "id": "u8tmb",
+                              "fill": "$text-primary",
+                              "content": "What leaves this computer",
+                              "lineHeight": 1.4,
+                              "fontFamily": "$font-mono",
+                              "fontSize": 11,
+                              "fontWeight": "normal"
+                            }
+                          ]
+                        },
+                        {
+                          "type": "frame",
+                          "id": "mn8xh",
+                          "name": "b Preview a session",
+                          "height": 26,
+                          "fill": "$surface",
+                          "stroke": "$border",
+                          "strokeWidth": 1,
+                          "padding": [
+                            0,
+                            11
+                          ],
+                          "justifyContent": "center",
+                          "alignItems": "center",
+                          "children": [
+                            {
+                              "type": "text",
+                              "id": "LVfTS",
+                              "fill": "$text-primary",
+                              "content": "Preview a session",
+                              "lineHeight": 1.4,
+                              "fontFamily": "$font-mono",
+                              "fontSize": 11,
+                              "fontWeight": "normal"
+                            }
+                          ]
+                        }
+                      ]
+                    }
+                  ]
                 }
               ]
             },
@@ -905641,7 +906076,7 @@
                   "fill": "$text-secondary",
                   "textGrowth": "fixed-width",
                   "width": 440,
-                  "content": "Upload what I opt in records the consent (traces.giveUploadConsent). Not now keeps the address and sends nothing. The notice is main's own list (traces.uploadNotice). When main cannot save the consent (a full disk), the notice stays open and says why; nothing is sent.",
+                  "content": "Upload what I opt in records the consent (traces.giveUploadConsent). Not now keeps the address and sends nothing. The notice is main's own list (traces.uploadNotice). When main cannot save the consent (a full disk), the notice stays open and says why; nothing is sent. When main cannot read the notice, the card says why under the consent's state, and What leaves this computer reads it again.",
                   "lineHeight": 1.5,
                   "fontFamily": "$font-ui",
                   "fontSize": 12,
@@ -905868,6 +906303,135 @@
                       ]
                     }
                   ]
+                },
+                {
+                  "type": "text",
+                  "id": "RBdGY",
+                  "fill": "$text-muted",
+                  "content": "a session main could not build (a full disk): said in its dialog, Try again builds it again",
+                  "lineHeight": 1.4,
+                  "fontFamily": "$font-mono",
+                  "fontSize": 10,
+                  "fontWeight": "normal"
+                },
+                {
+                  "type": "frame",
+                  "id": "wIzCB",
+                  "name": "dialog No session previewed",
+                  "width": 760,
+                  "fill": "$surface-elevated",
+                  "stroke": "$border-strong",
+                  "strokeWidth": 1,
+                  "layout": "vertical",
+                  "gap": 12,
+                  "padding": [
+                    16,
+                    18
+                  ],
+                  "children": [
+                    {
+                      "type": "text",
+                      "id": "KeYn4",
+                      "fill": "$text-primary",
+                      "content": "No session previewed",
+                      "lineHeight": 1.4,
+                      "fontFamily": "$font-ui",
+                      "fontSize": 15,
+                      "fontWeight": "normal"
+                    },
+                    {
+                      "type": "frame",
+                      "id": "IwwmI",
+                      "name": "state preview not built",
+                      "gap": 6,
+                      "alignItems": "center",
+                      "children": [
+                        {
+                          "type": "rectangle",
+                          "id": "tDrYH",
+                          "name": "d",
+                          "fill": "$status-error",
+                          "width": 6,
+                          "height": 6
+                        },
+                        {
+                          "type": "text",
+                          "id": "tpp6u",
+                          "fill": "$status-error",
+                          "content": "not previewed: no space left on device. Try again builds it again.",
+                          "lineHeight": 1.4,
+                          "fontFamily": "$font-mono",
+                          "fontSize": 10.5,
+                          "fontWeight": "normal"
+                        }
+                      ]
+                    },
+                    {
+                      "type": "frame",
+                      "id": "dFOVW",
+                      "name": "answers",
+                      "width": "fill_container",
+                      "gap": 8,
+                      "justifyContent": "space_between",
+                      "alignItems": "center",
+                      "children": [
+                        {
+                          "type": "frame",
+                          "id": "vU6g3",
+                          "name": "b Try again",
+                          "height": 32,
+                          "fill": "$surface",
+                          "stroke": "$border",
+                          "strokeWidth": 1,
+                          "padding": [
+                            0,
+                            14
+                          ],
+                          "justifyContent": "center",
+                          "alignItems": "center",
+                          "children": [
+                            {
+                              "type": "text",
+                              "id": "vkowd",
+                              "fill": "$text-primary",
+                              "content": "Try again",
+                              "lineHeight": 1.4,
+                              "fontFamily": "$font-ui",
+                              "fontSize": 12.5,
+                              "fontWeight": "normal"
+                            }
+                          ]
+                        },
+                        {
+                          "type": "frame",
+                          "id": "k4aK0e",
+                          "name": "b Close",
+                          "height": 32,
+                          "fill": "$surface",
+                          "stroke": "$border",
+                          "strokeWidth": 1,
+                          "padding": [
+                            0,
+                            14
+                          ],
+                          "justifyContent": "center",
+                          "alignItems": "center",
+                          "children": [
+                            {
+                              "type": "text",
+                              "id": "H03FoB",
+                              "fill": "$text-primary",
+                              "content": "Close",
+                              "lineHeight": 1.4,
+                              "fontFamily": "$font-ui",
+                              "fontSize": 12.5,
+                              "fontWeight": "normal"
+                            }
+                          ]
+                        }
+                      ]
+                    }
+                  ]
                 }
               ]
             },
@@ -905895,7 +906459,7 @@
                   "fill": "$text-secondary",
                   "textGrowth": "fixed-width",
                   "width": 440,
-                  "content": "traces.preview gives the document and what was masked, by kind. A preview sends nothing.",
+                  "content": "traces.preview gives the document and what was masked, by kind. A preview sends nothing. When main cannot build it (on a fresh install it first writes the install's secret, which a full disk refuses), the dialog says why, and Try again builds it again.",
                   "lineHeight": 1.5,
                   "fontFamily": "$font-ui",
                   "fontSize": 12,
