@@ -85,7 +85,19 @@ const isolatedEnv = (home: string, shim: string): NodeJS.ProcessEnv => ({
   XDG_CONFIG_HOME: path.join(home, '.config'), XDG_DATA_HOME: path.join(home, '.local', 'share'),
   XDG_STATE_HOME: path.join(home, '.local', 'state'), XDG_CACHE_HOME: path.join(home, '.cache'),
   npm_config_prefix: path.join(home, 'npm-sink'), npm_config_cache: path.join(home, 'npm-cache'),
+  ...harnessHomes(home),
 });
+/**
+ * gemini's and grok's own homes in the sandbox, whatever the runner exports (the Audit's L4 on #638): gemini's
+ * GEMINI_CLI_HOME is the sandbox's home (its .gemini under it), grok's GROK_HOME the sandbox's ~/.grok, and
+ * GROK_CONFIG_PATH an empty overlay there (grok 1.0.92 reads it and accepts it empty, measured isolated on 24/11).
+ */
+function harnessHomes(home: string): NodeJS.ProcessEnv {
+  const grok = path.join(home, '.grok');
+  fs.mkdirSync(grok, { recursive: true });
+  if (!fs.existsSync(path.join(grok, 'overlay.toml'))) fs.writeFileSync(path.join(grok, 'overlay.toml'), '');
+  return { GEMINI_CLI_HOME: home, GROK_HOME: grok, GROK_CONFIG_PATH: path.join(grok, 'overlay.toml') };
+}
 /** An `open` and an `xdg-open` that record what they were asked and open nothing. */
 function writeOpenShim(home: string): { dir: string; log: string } {
   const dir = path.join(home, 'shim');
@@ -203,6 +215,7 @@ for (const h of HARNESSES) {
           XDG_CONFIG_HOME: path.join(home, '.config'), XDG_DATA_HOME: path.join(home, '.local', 'share'),
           XDG_STATE_HOME: path.join(home, '.local', 'state'), XDG_CACHE_HOME: path.join(home, '.cache'),
           npm_config_prefix: path.join(home, 'npm-sink'), npm_config_cache: path.join(home, 'npm-cache'),
+          ...harnessHomes(home),
           ...(via === 'gemini-api' ? { GOOGLE_GEMINI_BASE_URL: standin.baseUrl } : {}),
         } });
         const appLog = test.info().outputPath(`app-${label}.log`);
@@ -232,14 +245,19 @@ for (const h of HARNESSES) {
           // under that name, first on the app's PATH while it does, so a gemini or a grok of the machine's never runs
           // (the Audit's I-2 on #638). gemini 0.70.0's `mcp add -s user` ends in a second and writes the sandbox's own
           // settings.json only, measured isolated on 24/11; grok 1.0.92's writes its config.toml (23/11).
-          const pinned = path.join(home, 'harness-bin');
-          fs.mkdirSync(pinned, { recursive: true });
-          if (!fs.existsSync(path.join(pinned, h.id))) fs.symlinkSync(bin, path.join(pinned, h.id));
+          // On macOS and Linux only (the Audit's I-1 and I-3): on Windows the resolver takes no extensionless link and
+          // symlinkSync needs a privilege, and a .cmd shim of gemini.js would be code no run has measured there, so
+          // there the registration still resolves the name from the app's PATH (OPERATIONS says so).
+          const pinned = process.platform === 'win32' ? undefined : path.join(home, 'harness-bin');
+          if (pinned) {
+            fs.mkdirSync(pinned, { recursive: true });
+            if (!fs.existsSync(path.join(pinned, h.id))) fs.symlinkSync(bin, path.join(pinned, h.id));
+          }
           await app.evaluate(async (_e, { resources, dist, pinned }) => {
             const was = process.resourcesPath;
             const pathWas = process.env.PATH;
             Object.defineProperty(process, 'resourcesPath', { value: resources, configurable: true, writable: true });
-            process.env.PATH = [pinned, pathWas].filter(Boolean).join(process.platform === 'win32' ? ';' : ':');
+            if (pinned) process.env.PATH = [pinned, pathWas].filter(Boolean).join(':');
             try {
               await process.mainModule!.require(`${dist}/services/mcp-orchestrator.js`).setupMcpOrchestrator({});
             } finally {
@@ -247,7 +265,7 @@ for (const h of HARNESSES) {
               process.env.PATH = pathWas;
             }
           }, { resources, dist, pinned });
-          keep({ mcpRegisteredWith: fs.readlinkSync(path.join(pinned, h.id)) });
+          keep({ mcpRegisteredWith: pinned ? fs.readlinkSync(path.join(pinned, h.id)) : 'resolved by name (Windows)' });
           if (process.platform !== 'win32') {
             const said = () => (fs.existsSync(appLog) ? fs.readFileSync(appLog, 'utf8') : '');
             await expect.poll(() => said().includes(`via ${h.id} mcp add`), { timeout: 15_000, message: `${label}: the servers registered via ${h.id} mcp add, the binary under test` }).toBe(true);

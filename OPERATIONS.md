@@ -414,7 +414,11 @@ own in `~/.claude/settings.json` never run in its session (its Claude compatibil
 Their restart step also expects the session the first run ended on, under its own id: grok carries a past session's
 words into a new one, so its history alone does not tell a resume from a fresh start. Tars's MCP servers are registered
 with the binary under test, first on the app's PATH while they are (`<cli> mcp add`), never a gemini or a grok of the
-machine's.
+machine's, and the app's log must say so; that holds on macOS and Linux only. On Windows the pin is not made (the
+resolver takes no extensionless link, a symlink needs a privilege, and a `.cmd` shim of `gemini.js` would be code no run
+has measured), so there the registration resolves the name from the app's PATH as Tars does. gemini's and grok's homes
+are the sandbox's whatever the runner exports: `GEMINI_CLI_HOME`, `GROK_HOME` and `GROK_CONFIG_PATH` (an empty overlay
+there) are set for the app and for every run of the binary, and the runner's own, when exported, are checked unchanged.
 `TARS_HARNESS_GEMINI` names gemini's own `bundle/gemini.js` (its npm package, unpacked, `#!/usr/bin/env node`).
 
 Opt-in: a harness whose `TARS_HARNESS_<ID>` names no binary is skipped and says so. Install each binary pinned, from
