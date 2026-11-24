@@ -359,8 +359,14 @@ export class TraceStore {
     this.db.prepare('DELETE FROM uploads').run();
   }
 
-  uploadCounts(): { sent: number; pending: number; lastAt?: number } {
-    const sent = this.db.prepare('SELECT COUNT(*) AS n, MAX(uploaded_at) AS at FROM uploads u JOIN traces t ON t.trace_id = u.trace_id').get() as { n: number; at: number | null };
+  /**
+   * `sent`: the sessions marked sent, only those started after `since` when a deletion set it, since the back-office
+   * deleted the ones before it (their marks may outlive a deletion on a full disk). `pending`: every session with a
+   * change not sent, opted in or not; the uploader counts what it would really send (TraceUploader.state).
+   */
+  uploadCounts(since?: number): { sent: number; pending: number; lastAt?: number } {
+    const sent = this.db.prepare('SELECT COUNT(*) AS n, MAX(uploaded_at) AS at FROM uploads u JOIN traces t ON t.trace_id = u.trace_id WHERE t.started_at > ?')
+      .get(since ?? Number.MIN_SAFE_INTEGER) as { n: number; at: number | null };
     const pending = this.db.prepare('SELECT COUNT(*) AS n FROM traces t LEFT JOIN uploads u ON u.trace_id = t.trace_id WHERE t.updated_seq > COALESCE(u.uploaded_seq, 0)').get() as { n: number };
     return { sent: sent.n, pending: pending.n, lastAt: sent.at ?? undefined };
   }

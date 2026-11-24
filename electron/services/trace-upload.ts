@@ -61,7 +61,14 @@ export interface UploadStateView {
   configured: boolean;
   consentAt?: string;
   registered: boolean;
+  /**
+   * The sessions a pass would send now, by its own rule: a change not sent yet, the project and the agent opted in
+   * at this moment, and started after the latest deletion's moment. No closed-model rule applies at sending: the gate
+   * decided that when the session was recorded (trace-gate.ts), and one it left out was never recorded. A session
+   * held back by the consent, the address or an owed deletion still counts here: those stop every session alike.
+   */
   pendingSessions: number;
+  /** The sessions sent and still on the back-office: those started after the latest deletion's moment. */
   sentSessions: number;
   lastUploadAt?: number;
   lastError?: string;
@@ -186,14 +193,21 @@ export class TraceUploader {
     this.clearedUnsaid = false;
   }
 
+  /** Whether a pass would send this session now: opted in now, and started after the latest deletion's moment. */
+  private sendable(q: { projectPath: string; agentId: string; startedAt: number }, since: number | undefined): boolean {
+    return this.deps.eligible(q) && (since === undefined || q.startedAt > since);
+  }
+
   state(): UploadStateView {
     const owed = this.owed();
     const s = this.deps.settings();
-    const counts = this.deps.store.uploadCounts();
+    const counts = this.deps.store.uploadCounts(s.since);
+    // What the pass would send, by the pass's own rule: every session with a change not sent, read in full.
+    const pending = this.deps.store.uploadQueue(Number.MAX_SAFE_INTEGER).filter(q => this.sendable(q, s.since)).length;
     const install = this.readInstall();
     return {
       configured: !!s.url, consentAt: s.consentAt, registered: !!install && install.url === s.url,
-      pendingSessions: counts.pending, sentSessions: counts.sent, lastUploadAt: counts.lastAt,
+      pendingSessions: pending, sentSessions: counts.sent, lastUploadAt: counts.lastAt,
       lastError: this.lastError, nextTryAt: this.nextTryAt, ...(this.notice ? { notice: this.notice } : {}),
       deletionCleared: this.clearedUnsaid,
       deletionOwed: owed,
@@ -271,7 +285,7 @@ export class TraceUploader {
       for (let round = 0; round < 40; round++) {
         const since = this.deps.settings().since;
         const queue = this.deps.store.uploadQueue(5000)
-          .filter(q => this.deps.eligible(q) && (since === undefined || q.startedAt > since))
+          .filter(q => this.sendable(q, since))
           .slice(0, BATCH_SESSIONS);
         if (!queue.length) break;
         for (const q of queue) {

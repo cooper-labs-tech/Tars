@@ -3044,7 +3044,11 @@ export interface UploadState {
   /** The install is registered with the back-office (its token is in the private folder). */
   registered: boolean;
   /** Opted-in sessions with something not yet sent. */
+  /** The sessions an upload pass would send now: a change not sent, the project and the agent opted in now, started
+   *  after the latest deletion's moment (no closed-model rule applies at sending). Still counted while the consent,
+   *  the address or an owed deletion stops every session. */
   pendingSessions: number;
+  /** The sessions sent and still on the back-office: those started after the latest deletion's moment. */
   sentSessions: number;
   lastUploadAt?: number;
   lastError?: string;
