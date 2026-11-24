@@ -280,7 +280,9 @@ for (const h of HARNESSES) {
         const ledger = async () => ((await api<{ tasks?: Array<Record<string, unknown>> }>('usage', 'tasks', { sinceDays: 1 }))?.tasks ?? []).filter((t) => t.agentId === WORKER);
         keep({ delegated, taskId, requests: short(), screenAfterTask: await screenOf(), workerAfterTask: view(await api('agent', 'get', WORKER)), ledgerAfterTask: await ledger() });
         expect.soft(delegated.text, 'delegate_task returns the harness\'s final answer').toContain(`PROBE-OK ${standin.marker}`);
-        expect.soft(posts().some((r, i) => i > 0 && JSON.stringify(r.body ?? '').includes(standin.marker)), 'the tool\'s result reached the endpoint').toBe(true);
+        // The shell round's proof: the marker came back in a tool result. The MCP round's is whoami's answer, below: the
+        // marker never travels there (the first gemini run of 24/11 failed this line with its answer right).
+        if (via === 'endpoint') expect.soft(posts().some((r, i) => i > 0 && JSON.stringify(r.body ?? '').includes(standin.marker)), 'the tool\'s result reached the endpoint').toBe(true);
 
         // 3 and 4. The ledger and the agent's output, by the task's id.
         expect(taskId, 'delegate_task names its task').toBeTruthy();
