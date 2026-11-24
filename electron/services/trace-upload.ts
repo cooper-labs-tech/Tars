@@ -171,7 +171,7 @@ export class TraceUploader {
     if (!this.owed()) return { ok: false, error: 'No deletion is waiting for confirmation: there is nothing to give up.' };
     const kept = this.dropInstall();
     if (kept) return { ok: false, error: `Tars could not forget this install (${kept}): the deletion is still waiting.` };
-    this.deps.store.resetUploads();
+    this.forgetSent('the deletion was given up');
     this.deps.setDeletion({ owed: false, since: this.deps.settings().since });
     return { ok: true };
   }
@@ -535,10 +535,19 @@ export class TraceUploader {
     this.failures = 0;
     this.nextTryAt = undefined;
     this.lastError = undefined;
+    this.forgetSent('the deletion went through');
+  }
+
+  /**
+   * What was sent forgotten, after a deletion that went through or was given up. A full disk refuses that database
+   * write: the sessions sent then stay marked sent here, so none goes again, which is the safe side (every one
+   * started before the deletion's moment, which holds anyway), and the reason is logged; nothing is thrown.
+   */
+  private forgetSent(after: string): void {
     try {
       this.deps.store.resetUploads();
     } catch (err) {
-      console.error(`[traces] the deletion went through, and what was sent stays marked sent here: ${describeSecretFileError(err)}`);
+      console.error(`[traces] ${after}, and what was sent stays marked sent here: ${describeSecretFileError(err)}`);
     }
   }
 }
