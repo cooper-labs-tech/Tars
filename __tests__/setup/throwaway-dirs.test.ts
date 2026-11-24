@@ -19,6 +19,9 @@ import { assertThrowaway } from './throwaway-dirs';
  * G3. A sibling whose name only begins like the temporary folder (`<tmp>-other`) is let through.
  * G4. A path that climbs out with `..` is let through.
  * G5. A link inside the temporary folder that points outside it is let through.
+ * Each case bites a guard of its own (the Audit's L1 at ae56b8d6e), run as mutants (reports/traces-lows/mutants/):
+ * G3 a prefix test without the separator, G4 a guard that compares the path as written (G4 is given the raw string,
+ * never path.join's, which would fold the `..` first), G5 a guard that does not follow links.
  */
 
 let base: string;
@@ -54,10 +57,16 @@ describe('the throwaway guard', () => {
     expect(() => assertThrowaway({ DATA_DIR: path.join(tmp, 'home', '.tars'), PRIVATE_DIR: path.join(tmp, 'home', '.tars-private') }, tmp)).not.toThrow();
   });
 
-  it('G3, G4. a sibling named like it, and a path that climbs out, are refused', () => {
+  it('G3. a sibling whose name only begins like it is refused', () => {
     fs.mkdirSync(`${tmp}-other`);
     expect(() => assertThrowaway({ DATA_DIR: path.join(`${tmp}-other`, '.tars') }, tmp)).toThrow(/DATA_DIR/);
-    expect(() => assertThrowaway({ PRIVATE_DIR: path.join(tmp, '..', 'not-tmp', '.tars-private') }, tmp)).toThrow(/PRIVATE_DIR/);
+  });
+
+  it('G4. a path that climbs out with .., as written, is refused', () => {
+    // The raw string: it begins with the temporary folder, and only resolving it shows where it goes.
+    const climbing = `${tmp}${path.sep}..${path.sep}not-tmp${path.sep}.tars-private`;
+    expect(climbing.startsWith(tmp)).toBe(true);
+    expect(() => assertThrowaway({ PRIVATE_DIR: climbing }, tmp)).toThrow(/PRIVATE_DIR/);
   });
 
   it.skipIf(process.platform === 'win32')('G5. a link inside it that points outside is refused', () => {

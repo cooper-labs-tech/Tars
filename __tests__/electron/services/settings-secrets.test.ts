@@ -57,6 +57,9 @@ import * as path from 'node:path';
  *      (the volume filled between the two writes): the window is still told
  *      "nothing was changed", while the new key stays and loads at the next
  *      start. Its words must say the keys were kept.
+ * P16. (The Audit's I-1 at ae56b8d6e.) A save that changes no key (a withdrawal's
+ *      write, a consent, an endpoint saved without its key), whose put-back
+ *      fails: it is still said that the keys were kept, though none was set.
  * (The Telegram bot's token, its switch and its authorized chats, which these
  * cases used as samples, went with Tars's own Telegram bot in 2.0.5: Discord's
  * token and Slack's switch stand in for them.)
@@ -304,5 +307,28 @@ describe('after the Audit\'s gate of 06a46bcb', () => {
     const words = settingsNotWritten(thrown);
     expect(words).not.toMatch(/nothing was changed/);
     expect(words).toMatch(/kept/);
+  });
+
+  it('P16. a save that changes no key, whose put-back would fail, is answered "nothing was changed"', () => {
+    saveSettingsSplit({ ...KEYS, slackEnabled: true } as unknown as AppSettings);
+    const held = fs.readFileSync(SECRETS_FILE, 'utf8');
+    fs.rmSync(APP_SETTINGS_FILE);
+    fs.mkdirSync(APP_SETTINGS_FILE);
+    putBack.fail = true;
+    putBack.writes = 0;
+    const log = vi.spyOn(console, 'error').mockImplementation(() => {});
+    let thrown: unknown;
+    try {
+      saveSettingsSplit({ ...KEYS, slackEnabled: false } as unknown as AppSettings);
+    } catch (err) {
+      thrown = err;
+    } finally {
+      putBack.fail = false;
+      log.mockRestore();
+      fs.rmSync(APP_SETTINGS_FILE, { recursive: true, force: true });
+    }
+    expect(thrown, 'the save throws').toBeDefined();
+    expect(fs.readFileSync(SECRETS_FILE, 'utf8')).toBe(held);
+    expect(settingsNotWritten(thrown)).toMatch(/nothing was changed/);
   });
 });
