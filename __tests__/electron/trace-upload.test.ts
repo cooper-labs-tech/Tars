@@ -70,6 +70,8 @@ import { hasPosixModes } from '../setup/platform-limits';
  * 32. A DELETE answered 401 (the token already gone), then that write throws: the deletion throws out of its catch.
  * 33. (Added before its code, 24/11.) Giving up an owed deletion makes the same write: it throws out of
  *     abandonDeletion, the deletion still owed, and the window gets no answer.
+ * 34. (Added before its code, 24/11.) A trace store whose read throws: "delete everything" reads the newest session
+ *     before it withdraws, so it throws first, and the user cannot revoke on a broken store.
  */
 
 type Seen = { method: string; url: string; headers: http.IncomingHttpHeaders; body: Buffer };
@@ -641,6 +643,28 @@ describe('forgetting the progress after a DELETE that went through, on a full di
     try {
       await expect(u.deleteEverywhere()).resolves.toMatchObject({ ok: true });
       expect(deletion.owed).toBe(false);
+    } finally {
+      vi.restoreAllMocks();
+    }
+  });
+
+  it('34: a store whose read throws: "delete everything" still withdraws, the deletion owed from no earlier than the click', async () => {
+    seed('t1', 'first');
+    const u = uploader();
+    await u.runOnce();
+    const log = vi.spyOn(console, 'error').mockImplementation(() => {});
+    vi.spyOn(store, 'newestStartedAt').mockImplementation(() => { throw Object.assign(new Error('database disk image is malformed'), { code: 'SQLITE_CORRUPT' }); });
+    // The back-office does not answer the DELETE, so the deletion stays owed.
+    bo.failNext.push({ status: 503, code: 'unavailable' });
+    const clicked = clock;
+    try {
+      const d = await u.deleteEverywhere();
+      expect(d.ok).toBe(false);
+      expect(withdrawn).toBe(1);
+      expect(settings.consentAt).toBeUndefined();
+      expect(deletion.owed).toBe(true);
+      expect(deletion.since).toBeGreaterThanOrEqual(clicked);
+      expect(log.mock.calls.map(c => c.join(' ')).join('\n')).toMatch(/SQLITE_CORRUPT|malformed/);
     } finally {
       vi.restoreAllMocks();
     }
