@@ -28,6 +28,7 @@ import { withPath, type DirectLaunch, type Launch } from '../platform';
 import { buildFullPath } from '../utils/path-builder';
 import { cliPathDirs } from '../utils/cli-path-dirs';
 import { getProvider } from '../providers';
+import { hasPlanMode } from '../providers/plan-mode';
 import { extractStatusLine } from '../utils/ansi';
 import { carriedByTrim } from '../utils/terminal-modes';
 import { updateSharedJsonSync } from '../utils/shared-file';
@@ -622,6 +623,7 @@ export function loadAgents() {
       return;
     }
     const agentsArray = file.agents;
+    let modesSetRight = 0;
 
     for (const agent of rolesOnLoad(agentsArray, file.version)) {
       console.warn(`[role] ${agent.name || agent.id} is a worker now: ${agent.projectPath} had another orchestrator, and a project has one`);
@@ -688,6 +690,13 @@ export function loadAgents() {
       if (!agent.permissionMode) {
         agent.permissionMode = agent.skipPermissions ? 'auto' : 'normal';
       }
+      // Plan on a CLI without one, which an API create took until 13/10: that CLI runs it as normal on every start.
+      // Stored as what it runs in, said, and saved below, so the window shows the truth (the Audit's L1 on #640).
+      if (agent.permissionMode === 'plan' && !hasPlanMode(agent.provider)) {
+        console.warn(`[agents] ${quoted(agent.name || agent.id)}: plan on ${getProvider(agent.provider).displayName}, which has no plan mode and ran it as normal: stored as normal`);
+        agent.permissionMode = 'normal';
+        modesSetRight++;
+      }
 
       // Backfill createdAt for legacy agents using lastActivity
       if (!agent.createdAt) {
@@ -700,6 +709,7 @@ export function loadAgents() {
     console.log(`Loaded ${agents.size} agents from disk`);
     agentsLoaded = true;
     if (file.version < KEY_FRAGMENTS_GONE_SINCE) cleanKeyFragments();
+    else if (modesSetRight) saveAgents();
   } catch (err) {
     console.error('Failed to load agents:', err);
     agentsLoaded = true;
