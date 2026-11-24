@@ -6,6 +6,11 @@ import {
   TRACES_CONSENT_FILE, TRACES_DB_FILE, TRACES_INSTALL_FILE, configureTraces, consentStands, recordConsent, reconcileConsent,
   saveSettingsFromApi, stopTracesRuntime, traceStore, traceUploader, uploadConsentAt, uploadPersistence, withdrawUploadConsent,
 } from '../../../electron/services/traces-runtime';
+import { DATA_DIR, PRIVATE_DIR } from '../../../electron/constants';
+import { assertThrowaway } from '../../setup/throwaway-dirs';
+
+// The hooks below remove the trace store, the install file and the consent's file: only in a throwaway home.
+assertThrowaway({ DATA_DIR, PRIVATE_DIR });
 
 /**
  * A withdrawal of the consent to upload traces never comes back (the orchestrator's follow-up to the Audit's L2 on

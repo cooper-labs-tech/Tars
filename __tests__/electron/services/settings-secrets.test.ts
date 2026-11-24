@@ -68,6 +68,10 @@ import {
 } from '../../../electron/services/settings-secrets';
 import { DATA_DIR, PRIVATE_DIR, APP_SETTINGS_FILE } from '../../../electron/constants';
 import { settingsNotWritten } from '../../../electron/services/traces-runtime';
+import { assertThrowaway } from '../../setup/throwaway-dirs';
+
+// Every test below starts by removing both folders whole: only in a throwaway home.
+assertThrowaway({ DATA_DIR, PRIVATE_DIR });
 
 // P15: the put-back of the private file, its second write in one save, can be made to land on a full volume.
 const putBack = vi.hoisted(() => ({ fail: false, writes: 0 }));
