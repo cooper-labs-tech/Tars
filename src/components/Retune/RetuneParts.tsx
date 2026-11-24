@@ -53,6 +53,19 @@ function undoHead(last: Pick<AgentRetuned, 'state' | 'by' | 'askedAt' | 'effecti
 }
 
 /**
+ * A plain retune's own line on the card, by its state: "retuned" only once it holds (the same as the undo's, the
+ * Audit's M1 on #604). Frame `Agents · retuned by an agent`, the cards `card Worker One · retuned / retune failed /
+ * retune cancelled`, and Worker Two's asked one.
+ */
+function retuneHead(last: Pick<AgentRetuned, 'state' | 'by' | 'askedAt'>): { word: string; tone: StatusTone } {
+  const by = byWords(last.by);
+  const asked = clockOfIso(last.askedAt);
+  if (last.state === 'queued') return { word: `retune asked by ${by} at ${asked}`, tone: 'waiting' };
+  if (last.state === 'applied') return { word: `retuned by ${by} at ${asked}`, tone: 'waiting' };
+  return { word: `retune ${last.state}: asked by ${by} at ${asked}`, tone: last.state === 'failed' ? 'error' : 'idle' };
+}
+
+/**
  * An agent's last retune on its card (frame `Agents · retuned by an agent`, the card): who, what, when, and undo.
  * Values before and after come from the event the window heard; after a restart of the window, the fields alone.
  */
@@ -62,12 +75,9 @@ export function RetuneLine({ agent }: { agent: AgentStatus }) {
   const known = latestRetune(agent, byAgent);
   if (!known) return null;
   const { last, heard } = known;
-  const asked = last.state === 'queued';
   // An undo (revertOf: the change it takes back) is no retune to undo: it says it undid, with no undo on it.
   const undoes = last.revertOf;
-  const head = undoes
-    ? undoHead(last)
-    : { word: `${asked ? 'retune asked' : 'retuned'} by ${byWords(last.by)} at ${clockOfIso(last.askedAt)}`, tone: 'waiting' as const };
+  const head = undoes ? undoHead(last) : retuneHead(last);
   // An undo: 'undone' once applied (as before), 'undo-queued', 'undo-failed' or 'undo-cancelled' until then.
   const marker = undoes ? (last.state === 'applied' ? 'undone' : `undo-${last.state}`) : last.state;
   return (
@@ -140,10 +150,12 @@ export function RetuneNotices({ className = '' }: { className?: string }) {
             ? n.state === 'applied' ? `${byWords(n.by)} undid a change to ${who}: ${what}, ${stateWords(n.state, n.effectiveAt)}.`
               : n.state === 'queued' ? `${byWords(n.by)} asked to undo a change to ${who}: ${what}: it ${waits}.`
               : `${byWords(n.by)} asked to undo a change to ${who}: ${what}, ${n.state}.`
-          : n.state === 'queued'
-            ? `${byWords(n.by)} asked ${who} to move to ${what}: it ${waits}.`
-            : `${byWords(n.by)} retuned ${who}: ${what}, ${stateWords(n.state, n.effectiveAt)}.`;
-        const tone: StatusTone = u ? u.tone : n.revertOf ? undoTone(n.state) : n.state === 'failed' ? 'error' : 'waiting';
+          // A plain retune the same way: retuned only once it holds.
+          : n.state === 'applied' ? `${byWords(n.by)} retuned ${who}: ${what}, ${stateWords(n.state, n.effectiveAt)}.`
+            : n.state === 'queued' ? `${byWords(n.by)} asked to retune ${who}: ${what}: it ${waits}.`
+            : `${byWords(n.by)} asked to retune ${who}: ${what}, ${n.state}.`;
+        const tone: StatusTone = u ? u.tone : n.revertOf ? undoTone(n.state)
+          : n.state === 'failed' ? 'error' : n.state === 'cancelled' ? 'idle' : 'waiting';
         return (
           <div key={n.changeId} role="status" data-retune-notice={n.revertOf ? `undo-${n.state}` : n.state} className="flex items-center gap-2.5 h-10 px-3 bg-secondary border border-border-accent">
             <StatusSquare tone={tone} />
