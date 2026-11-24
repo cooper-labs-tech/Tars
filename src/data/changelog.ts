@@ -7,6 +7,14 @@ export interface Release {
 
 export const CHANGELOG: Release[] = [
   {
+    id: 64,
+    version: '2.0.7',
+    date: '2026-11-24',
+    updates: [
+      'A Gemini agent no longer loses a task sent to it just after it starts or restarts: Tars types the task once Gemini has drawn its input field, not before.',
+    ],
+  },
+  {
     id: 63,
     version: '2.0.6',
     date: '2026-10-29',

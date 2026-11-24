@@ -383,6 +383,8 @@ export class GeminiProvider implements CLIProvider {
    * took seconds to draw the field, and a task typed 300 ms after its exec was lost; a task typed while a question shows
    * answers the question.
    */
+  readonly upOnScreenSign = "its field, a row reading 'Type your message' after '>', '*' or '!', with no question box";
+
   upOnScreen(lines: readonly string[]): boolean {
     if (lines.some((line) => /Do you trust|Allow execution of|Action Required/.test(line))) return false;
     return lines.some((line) => /^\s*[>*!]\s+Type your message/.test(line));

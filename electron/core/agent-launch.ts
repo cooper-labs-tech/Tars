@@ -207,9 +207,27 @@ export function sessionStarting(agent: StartingAgent): boolean {
   const booting = elapsed < CLI_BOOT_MS || (elapsed < CLI_UP_MS && !!terminal && cliRunningIn(terminal));
   if (!booting || sessionUp(agent, launch)) {
     launchesUnderWay.delete(agent.id);
+    if (!booting && terminal && cliRunningIn(terminal)) sayGivenUpOnScreen(agent, terminal);
     return false;
   }
   return true;
+}
+
+/**
+ * A launch given up at CLI_UP_MS while its CLI ran, for a CLI read up on its screen: the screen never showed what its
+ * provider looks for (a field renamed, another locale, a row wrapped by a narrow terminal, an overflowed launch log),
+ * and every start of it waits that long. Said once, with the rows' shape, never their text: a row can hold a path, a
+ * task or a key (the Audit's L3 on #641).
+ */
+function sayGivenUpOnScreen(agent: StartingAgent, terminal: Parameters<typeof rowsSinceLaunch>[0]): void {
+  if (hasClaudeHooks(agent)) return;
+  const provider = getProvider(agent.provider);
+  if (!provider.upOnScreen) return;
+  const rows = rowsSinceLaunch(terminal) ?? [];
+  const shape = rows.length
+    ? `${rows.length} rows, of ${rows.map((row) => row.length).join(', ')} characters`
+    : 'no rows (the launch log was empty or overflowed, or the terminal mirror could not render it)';
+  console.warn(`[launch] agent ${agent.id}: ${agent.provider ?? 'its CLI'}'s screen never showed ${provider.upOnScreenSign ?? 'its field'} in ${CLI_UP_MS / 1000} s, so Tars stopped waiting for it and types into it from now on; drawn since its launch: ${shape}`);
 }
 
 /**
