@@ -6,6 +6,7 @@ import type { AgentPermissionMode, AppSettings } from '../types';
 import { keyEnvFor } from '../services/cli-keys';
 import { DATA_DIR } from '../constants';
 import { handedSecondaryFolder } from '../utils/handed-folder';
+import { trustGeminiFolders } from '../utils/gemini-trust';
 import { legacyShCommand, usesNodeHooks } from '../utils/hook-command';
 import { allowAgentToken, configureGeminiNodeHooks } from '../utils/gemini-node-hooks';
 import type {
@@ -17,40 +18,7 @@ import type {
 } from './cli-provider';
 import { servedPathMatches, shellQuote } from './cli-provider';
 import { geminiRoleArgs } from '../services/mcp-roles';
-import { updateSharedJsonSync, writeSharedJsonSync } from '../utils/shared-file';
-import { trustsTooMuch } from '../utils/trust-too-much';
-
-/**
- * The folders given trusted in gemini's own store, `<configDir>/trustedFolders.json` (`{ "<folder>": "TRUST_FOLDER" }`,
- * gemini 0.70.0's format, measured 24/11), each by its own path and by its real one: the folder alone, never its
- * parent, and never a folder that trusts too much (the home folder, the root: utils/trust-too-much.ts). The user's own
- * entries are kept; a file that is not JSON is left as it was, and gemini then asks; nothing is written when every
- * folder is already there.
- */
-export function trustGeminiFolders(folders: string[], configDir: string): void {
-  const wanted = [...new Set(folders.filter((f) => f && !trustsTooMuch(f)).flatMap((f) => {
-    try {
-      const real = fs.realpathSync(f);
-      return trustsTooMuch(real) ? [] : [f, real];
-    } catch {
-      return [];
-    }
-  }))];
-  if (!wanted.length) return;
-  const file = path.join(configDir, 'trustedFolders.json');
-  try {
-    const outcome = updateSharedJsonSync<Record<string, unknown>>(file, (current) => {
-      if (current !== undefined && (typeof current !== 'object' || current === null || Array.isArray(current))) return undefined;
-      const missing = wanted.filter((f) => current?.[f] !== 'TRUST_FOLDER');
-      if (!missing.length) return undefined;
-      return { ...(current ?? {}), ...Object.fromEntries(missing.map((f) => [f, 'TRUST_FOLDER'])) };
-    }, { createMode: 0o644 });
-    if (outcome === 'unreadable') console.warn(`[gemini] ${file} is not JSON: the folders a gemini agent adds are not trusted there, and gemini will ask`);
-    else if (outcome === 'busy') console.warn(`[gemini] ${file} kept changing: the folders a gemini agent adds are not trusted there`);
-  } catch (err) {
-    console.warn(`[gemini] ${file} could not be read or written: the folders a gemini agent adds are not trusted there`, err instanceof Error ? err.message : err);
-  }
-}
+import { writeSharedJsonSync } from '../utils/shared-file';
 
 /** A session of gemini's own, as its hooks report it: a uuid. */
 const GEMINI_SESSION_ID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
