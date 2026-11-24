@@ -1113,7 +1113,10 @@ the health: the API's `/api/endpoints` and the `endpoint_*` tools of mcp-orchest
 - The folder must be a plain folder, not a link (lstat).
 - The file is opened with `O_NOFOLLOW` and checked by fstat against its lstat: a plain file with one link, 8 KiB at
   most, one printable line.
-- Then Tars takes the key into the private folder and deletes the file.
+- Then Tars takes the key into the private folder and deletes the file, only once the settings that hold the key
+  are written, and only that very file (the same inode). A save that fails leaves the drop file exactly as it was,
+  and the agent is answered the reason, which never holds the key: the drop file is how the owner hands Tars a
+  production key, and until this a failed save lost it.
 - A file that fails a check is left as it is, and only its name is reported.
 - Tars reads a key from no other path, so no argument can make it read `~/.tars-private`, `~/.ssh` or anything else
   and send it out as a Bearer.

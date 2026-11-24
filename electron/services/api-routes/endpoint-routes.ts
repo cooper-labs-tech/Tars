@@ -1,7 +1,7 @@
 import type { RouteApp, RouteContext, RouteRequest, SendJson } from './types';
 import { agents } from '../../core/agent-manager';
 import {
-  applyEndpointPatch, checkHealth, endpointViews, readModels, saveEndpoint, setEndpointKey, takeKeyFromDropFile, ENDPOINT_KEYS_DIR,
+  applyEndpointPatch, checkHealth, endpointViews, readKeyFromDropFile, readModels, saveEndpoint, setEndpointKey, ENDPOINT_KEYS_DIR,
 } from '../inference-endpoints';
 import { saveSettingsFromApi, tellEndpointChanged, traceStore } from '../traces-runtime';
 import { sessionDocument } from '../trace-export';
@@ -80,15 +80,18 @@ export function registerEndpointRoutes(app: RouteApp, ctx: RouteContext): void {
     if (!r.ok) { send({ error: r.error }, 400); return; }
     let settings = r.settings;
     let keyNote: string | undefined;
+    // The drop file is taken away only once the settings that hold its key are written: a failed save leaves it.
+    let consume: (() => void) | undefined;
     if (b.keyFile !== undefined) {
-      const key = takeKeyFromDropFile(b.keyFile);
+      const key = readKeyFromDropFile(b.keyFile);
       if (!key.ok) keyNote = key.error;
       else {
         const keyed = setEndpointKey(settings, r.endpoint.id, key.key);
-        if (keyed.ok) settings = keyed.settings;
+        if (keyed.ok) { settings = keyed.settings; consume = key.consume; }
       }
     }
     if (!saved(settings, send)) return;
+    consume?.();
     tellEndpointChanged({ id: r.endpoint.id, by: who, needsApproval: !r.endpoint.approved });
     send({ endpoint: viewOf(ctx, r.endpoint.id), needsApproval: !r.endpoint.approved, ...(keyNote ? { keyNotTaken: keyNote } : {}) }, 201);
   });
@@ -111,11 +114,13 @@ export function registerEndpointRoutes(app: RouteApp, ctx: RouteContext): void {
   app.post(ENDPOINT_KEY, async (req, send) => {
     const who = caller(req, send);
     if (!who) return;
-    const key = takeKeyFromDropFile(req.body.keyFile);
+    const key = readKeyFromDropFile(req.body.keyFile);
     if (!key.ok) { send({ error: key.error, keyDropFolder: ENDPOINT_KEYS_DIR }, 400); return; }
     const r = setEndpointKey(ctx.getAppSettings(), req.params.id, key.key);
     if (!r.ok) { send({ error: r.error }, 404); return; }
+    // Taken away only once written: a failed save leaves the drop file exactly as it was.
     if (!saved(r.settings, send)) return;
+    key.consume();
     tellEndpointChanged({ id: req.params.id, by: who, needsApproval: false });
     send({ ok: true, keySet: true });
   });

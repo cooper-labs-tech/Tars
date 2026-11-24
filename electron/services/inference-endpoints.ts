@@ -20,7 +20,7 @@ import type { ProxyTarget } from './endpoint-proxy';
  *   agent changes, is unusable until the owner approves it once in the window: it is where an agent's whole context
  *   would go, and an injected agent could otherwise point any agent at its own server in two calls. A key, the
  *   models, the name or the ceiling keep the approval. An agent may turn traces off for an endpoint, never on.
- * - **Keys from agents** come through a drop file only (takeKeyFromDropFile): never through a prompt or a tool
+ * - **Keys from agents** come through a drop file only (readKeyFromDropFile, taken away once saved): never through a prompt or a tool
  *   argument, and from no other path, so no argument can make Tars read ~/.tars-private, ~/.ssh or any other file
  *   and send it out as a Bearer. The macOS keychain is never read: the key path is the same on every system.
  */
@@ -248,11 +248,23 @@ export function validateEndpointChoice(
 }
 
 /**
- * The key an agent dropped for Tars: `<dir>/<name>`, a plain file of one printable line, 8 KiB at most, with one
- * link, in a drop folder that is a real folder. Taken, then deleted. A file that fails a check is left as it is,
- * and nothing of its content is said.
+ * The key an agent dropped for Tars, read and taken away at once. For a caller with nothing to write in between.
  */
 export function takeKeyFromDropFile(name: unknown, dir: string = ENDPOINT_KEYS_DIR): { ok: true; key: string } | { ok: false; error: string } {
+  const r = readKeyFromDropFile(name, dir);
+  if (!r.ok) return r;
+  r.consume();
+  return { ok: true, key: r.key };
+}
+
+/**
+ * The key an agent dropped for Tars: `<dir>/<name>`, a plain file of one printable line, 8 KiB at most, with one
+ * link, in a drop folder that is a real folder. Read, and left in place: `consume()` takes that very file away (the
+ * same inode, never a file put there since), to be called once the settings holding the key are written. The drop
+ * file is how the owner hands Tars a production key: a save that fails must leave it exactly as it was. A file that
+ * fails a check is left as it is, and nothing of its content is said.
+ */
+export function readKeyFromDropFile(name: unknown, dir: string = ENDPOINT_KEYS_DIR): { ok: true; key: string; consume(): void } | { ok: false; error: string } {
   if (typeof name !== 'string' || !DROP_NAME.test(name) || name.includes('..') || name === '.key') {
     return { ok: false, error: `A key file is named like <name>.key (letters, digits, . _ -), in ${ENDPOINT_KEYS_DIR}, and nowhere else.` };
   }
@@ -279,8 +291,19 @@ export function takeKeyFromDropFile(name: unknown, dir: string = ENDPOINT_KEYS_D
   }
   const key = raw.toString('utf8').replace(/\r?\n$/, '');
   if (!/^[\x21-\x7e]{1,8192}$/.test(key)) return { ok: false, error: `${name} is not one line of printable characters without spaces: it is left as it is.` };
-  fs.rmSync(file, { force: true });
-  return { ok: true, key };
+  const read = before;
+  const consume = () => {
+    try {
+      const now = fs.lstatSync(file);
+      if (now.ino !== read.ino || now.dev !== read.dev) return;
+      fs.rmSync(file, { force: true });
+    } catch (err) {
+      // Its name and the error's code only: never the key.
+      const code = (err as NodeJS.ErrnoException).code;
+      if (code !== 'ENOENT') console.error(`[endpoints] the drop file ${name} could not be removed after its key was saved (${code ?? 'error'})`);
+    }
+  };
+  return { ok: true, key, consume };
 }
 
 /** The drop folder, made private (0700) where the system has modes. */
