@@ -68,6 +68,8 @@ import { hasPosixModes } from '../setup/platform-limits';
  * 31. A DELETE answered 200, then that write throws: the window is told nothing was deleted, and the deletion stays
  *     owed until it clears by itself.
  * 32. A DELETE answered 401 (the token already gone), then that write throws: the deletion throws out of its catch.
+ * 33. (Added before its code, 24/11.) Giving up an owed deletion makes the same write: it throws out of
+ *     abandonDeletion, the deletion still owed, and the window gets no answer.
  */
 
 type Seen = { method: string; url: string; headers: http.IncomingHttpHeaders; body: Buffer };
@@ -639,6 +641,25 @@ describe('forgetting the progress after a DELETE that went through, on a full di
     try {
       await expect(u.deleteEverywhere()).resolves.toMatchObject({ ok: true });
       expect(deletion.owed).toBe(false);
+    } finally {
+      vi.restoreAllMocks();
+    }
+  });
+
+  it('33: giving up an owed deletion holds, is answered ok, and the reason is logged', async () => {
+    seed('t1', 'first');
+    const u = uploader();
+    await u.runOnce();
+    deletion = { owed: true, since: 5000 };
+    const log = vi.spyOn(console, 'error').mockImplementation(() => {});
+    vi.spyOn(store, 'resetUploads').mockImplementation(full);
+    try {
+      let r: ReturnType<TraceUploader['abandonDeletion']> | undefined;
+      expect(() => { r = u.abandonDeletion(); }).not.toThrow();
+      expect(r).toEqual({ ok: true });
+      expect(deletion).toEqual({ owed: false, since: 5000 });
+      expect(log.mock.calls.map(c => c.join(' ')).join('\n')).toMatch(/SQLITE_FULL|database or disk is full/);
+      expect(u.state()).toMatchObject({ deletionOwed: false, registered: false });
     } finally {
       vi.restoreAllMocks();
     }
