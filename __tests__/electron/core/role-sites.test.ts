@@ -178,6 +178,8 @@ const SITES: Site[] = [
   { file: 'electron/utils/index.ts', line: 'export function getSuperAgent(agents: Map<string, AgentStatus>, projectPath?: string): AgentStatus | undefined {', is: 'definition', why: 'an orchestrator, first found' },
   { file: 'electron/utils/index.ts', line: 'const orchestrators = Array.from(agents.values()).filter(a => isSuperAgent(a) && a.kind !== \'chat\');', is: 'definition', why: 'an orchestrator, never a chat\'s runner' },
   { file: 'electron/utils/index.ts', line: 'const isSuper = …;', is: 'team-list', why: 'the crown and the project line of Slack\'s lists' },
+  { file: 'electron/core/project-cap.ts', line: "return … && agent.kind !== 'chat';", is: 'identity', why: 'the project\'s own orchestrator, which a project\'s cap neither counts nor holds, as queueRight reads it: a chat\'s runner is counted and held like a worker (2.0.7)' },
+  { file: 'electron/services/fleet-runtime.ts', line: 'id: a.id, name: a.name || a.id, projectPath: a.projectPath, status: a.status, leads: …,', is: 'powers', why: 'the fleet\'s leads, which a project\'s hours never stop or pause: its orchestrator and its chats\' runners (2.0.7)' },
 ];
 
 // ── The scan ───────────────────────────────────────────────────────────────
