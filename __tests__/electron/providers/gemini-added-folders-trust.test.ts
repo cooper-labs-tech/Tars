@@ -37,6 +37,24 @@ import { pinPlatform } from './win-fake-disk';
  * 11. A commented file, which gemini reads, replaced or rewritten without its comments: until #634's JSONC writer is in,
  *     Tars writes nothing to it and says so, the line is still built, and gemini asks (holds).
  * 12. A file that is JSON but not an object left without a word (red).
+ *
+ * Written before the code that decides as gemini decides, on the Audit's M1 at bc4e083b6, and red there. gemini 0.70.0
+ * decides a folder's trust by every rule of the file, not by the folder's own key (`loadTrustedFolders` and
+ * `isPathTrusted`, read in its bundle on 24/11): it normalises each key as it loads the file (resolved, `\` made `/`,
+ * lower case on macOS and Windows; a later key that normalises the same replaces the earlier one), takes a TRUST_PARENT
+ * rule as its parent folder, resolves each rule's real path, and the longest key whose folder holds the added folder
+ * decides: DO_NOT_TRUST refuses the folder without a question, either trust adds it, no rule asks. So an entry Tars adds
+ * can outrank the user's own decision:
+ * 13. A parent the user does not trust (DO_NOT_TRUST on the home folder, which gemini writes when "Don't trust" is
+ *     answered there): Tars's longer key for ~/.tars wins, and ~/.tars is trusted, in Tars's sessions and in the user's
+ *     own from then on (red). Tars adds nothing there and says once that it left the folder untrusted, as the user said.
+ * 14. A folder a trusted parent already covers (TRUST_PARENT) written again: an entry gemini does not need, which
+ *     outranks the user's parent if they distrust it later (red).
+ * 15. The user's decision on a parent written under another spelling, a link to it, outranked by Tars's key (red).
+ * 16. The user's DO_NOT_TRUST for the folder itself written with a trailing separator: gemini reads both keys as one
+ *     folder, and the later one, Tars's, replaces the user's (red).
+ * 17. On Windows, the user's DO_NOT_TRUST on a parent written with the other separator (`\` against `/`), outranked
+ *     the same way (red).
  */
 
 let tmpDir: string;
@@ -160,6 +178,62 @@ describe("the file is the user's: read and written as gemini does (7 to 12)", ()
     await line();
     expect(fs.readFileSync(store(), 'utf8')).toBe('["/home/me/code"]\n');
     expect(warn.mock.calls.flat().join(' ')).toContain(store());
+  });
+});
+
+describe("a rule of the user's that covers the folder decides, as gemini decides (13 to 17)", () => {
+  const tars = () => path.join(tmpDir, '.tars');
+  const seed = (rules: Record<string, string>) => {
+    fs.mkdirSync(path.dirname(store()), { recursive: true });
+    const content = JSON.stringify(rules, null, 2);
+    fs.writeFileSync(store(), content, { mode: 0o600 });
+    return content;
+  };
+  const warned = () => vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+
+  it('13. adds nothing under a parent the user does not trust, and says once that it left the folder untrusted', async () => {
+    const warn = warned();
+    const content = seed({ [tmpDir]: 'DO_NOT_TRUST' });
+    const command = await line();
+    expect(command).toContain('--include-directories');
+    expect(fs.readFileSync(store(), 'utf8')).toBe(content);
+    const said = warn.mock.calls.map((c) => c.join(' ')).filter((l) => l.includes(tars()));
+    expect(said).toHaveLength(1);
+    expect(said[0]).toMatch(/untrusted/);
+  });
+
+  it('14. adds no entry for a folder a trusted parent already covers', async () => {
+    const secondary = path.join(tmpDir, 'work', 'other');
+    fs.mkdirSync(secondary, { recursive: true });
+    seed({ [path.join(tmpDir, 'work', 'x')]: 'TRUST_PARENT' });
+    await line({ secondaryProjectPath: secondary });
+    expect(read()[secondary]).toBeUndefined();
+    expect(read()[tars()]).toBe('TRUST_FOLDER');
+  });
+
+  it("15. reads the user's decision on a link to the parent as a decision on the parent", async () => {
+    const link = path.join(tmpDir, 'l');
+    fs.symlinkSync(tmpDir, link, 'junction');
+    const content = seed({ [link]: 'DO_NOT_TRUST' });
+    warned();
+    await line();
+    expect(fs.readFileSync(store(), 'utf8')).toBe(content);
+  });
+
+  it("16. reads the user's key with a trailing separator as the folder itself", async () => {
+    const content = seed({ [tars() + path.sep]: 'DO_NOT_TRUST' });
+    warned();
+    await line();
+    expect(fs.readFileSync(store(), 'utf8')).toBe(content);
+  });
+
+  it("17. on Windows, reads the user's key with the other separator as the same parent", async () => {
+    const other = tmpDir.includes('\\') ? tmpDir.replace(/\\/g, '/') : tmpDir.replace(/\//g, '\\');
+    const content = seed({ [other]: 'DO_NOT_TRUST' });
+    warned();
+    const { trustGeminiFolders } = await import('../../../electron/utils/gemini-trust');
+    trustGeminiFolders([tars()], path.join(tmpDir, '.gemini'), 'win32');
+    expect(fs.readFileSync(store(), 'utf8')).toBe(content);
   });
 });
 
