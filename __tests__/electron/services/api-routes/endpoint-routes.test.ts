@@ -74,7 +74,7 @@ beforeEach(async () => {
     inferenceEndpoints: [{ id: 'ep-0a0b0c', name: 'Local', baseUrl: base, approvedBaseUrl: base, approved: true, allowTraces: true, models: [], holdMaxSeconds: 120 }],
     traces: { projects: ['/p/project-a'], capBytes: 1e9, retentionDays: 30, pairs: [], excludeClosedModels: true, uploadUrl: 'https://backoffice.example.com' },
   } as unknown as AppSettings;
-  configureTraces({ getSettings: () => settings, saveSettings: (s) => { settings = s; }, getAgent: () => undefined, emit: () => {} });
+  configureTraces({ getSettings: () => settings, setSettings: (s) => { settings = s; }, writeSettings: () => {}, getAgent: () => undefined, emit: () => {} });
 });
 afterEach(async () => {
   release();

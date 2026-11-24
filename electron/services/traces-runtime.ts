@@ -4,7 +4,7 @@ import * as path from 'path';
 import { randomBytes, timingSafeEqual } from 'crypto';
 import { API_TOKEN_FILE, BRIDGE_TOKEN_FILE, DATA_DIR, ENDPOINT_PROXY_PORT, privatePath } from '../constants';
 import type { AgentStatus, AppSettings, TraceSettings } from '../types';
-import { writeSecretFileSync } from '../utils/secret-file';
+import { describeSecretFileError, writeSecretFileSync } from '../utils/secret-file';
 import { hasOrchestratorPowers } from '../core/agent-role';
 import { safeGit } from '../utils/safe-git';
 import { updateSharedJsonSync } from '../utils/shared-file';
@@ -39,8 +39,10 @@ const GIB = 1024 ** 3;
 
 export interface TracesDeps {
   getSettings(): AppSettings;
-  /** Holds and writes the settings, as the window's saves do: the API's endpoint routes change them. */
-  saveSettings(settings: AppSettings): void;
+  /** Holds the settings in memory, where the uploader, the proxy and the window read them. */
+  setSettings(settings: AppSettings): void;
+  /** Writes the settings to disk, or throws saying why (main.ts writeAppSettingsFile). */
+  writeSettings(settings: AppSettings): void;
   getAgent(id: string): AgentStatus | undefined;
   /** Tells the window: 'traces:changed', 'endpoints:waiting', 'endpoints:changed'. */
   emit(channel: string, payload?: unknown): void;
@@ -57,6 +59,120 @@ let uploader: TraceUploader | null = null;
 let uploadTimer: NodeJS.Timeout | null = null;
 let uploadSoon: NodeJS.Timeout | null = null;
 export const TRACES_INSTALL_FILE = privatePath('traces-install.json');
+
+/**
+ * The consent to upload, in a file of its own beside the install, in the private folder no agent is handed: it holds
+ * the time the consent was given, and the consent stands only while this file and the settings say the same time.
+ * A withdrawal must hold whatever the disk does, and measured on macOS 26 (APFS) a full volume refuses a write, a
+ * rename and even a truncate (ENOSPC) but takes an unlink, while a folder that may not be written refuses an unlink
+ * and a rename (EACCES) but takes a truncate. So a withdrawal unlinks this file, or else truncates it, and a start
+ * whose settings still say consent with no such file, a partial one or another time has none: it fails closed.
+ */
+export const TRACES_CONSENT_FILE = privatePath('traces-upload-consent');
+
+/** The window's words for settings main could not write: the reason, and that nothing changed. */
+export function settingsNotWritten(err: unknown): string {
+  return `Tars could not save the settings (${describeSecretFileError(err)}): nothing was changed.`;
+}
+
+/** Writes the consent's file, before the settings say it. Throws when it cannot. */
+export function recordConsent(at: string): void {
+  fs.mkdirSync(path.dirname(TRACES_CONSENT_FILE), { recursive: true, mode: 0o700 });
+  fs.writeFileSync(TRACES_CONSENT_FILE, at, { mode: 0o600 });
+}
+
+/** The consent's file gone or emptied: true when it no longer says any consent. */
+export function dropConsentFile(): boolean {
+  try {
+    fs.unlinkSync(TRACES_CONSENT_FILE);
+    return true;
+  } catch (err) {
+    if ((err as NodeJS.ErrnoException).code === 'ENOENT') return true;
+  }
+  try {
+    fs.truncateSync(TRACES_CONSENT_FILE, 0);
+    return true;
+  } catch (err) {
+    console.error(`[traces] the consent's file could be neither removed nor emptied: ${describeSecretFileError(err)}`);
+    return false;
+  }
+}
+
+/** Whether the settings' consent stands: its file holds the very same time. */
+export function consentStands(settings: AppSettings | undefined): boolean {
+  const at = traceSettingsOf(settings).uploadConsentAt;
+  if (!at) return false;
+  try {
+    return fs.readFileSync(TRACES_CONSENT_FILE, 'utf8') === at;
+  } catch {
+    return false;
+  }
+}
+
+/** The consent the uploader acts on: the settings' in memory, and only while it stands. */
+export function uploadConsentAt(): string | undefined {
+  const settings = deps?.getSettings();
+  return consentStands(settings) ? traceSettingsOf(settings).uploadConsentAt : undefined;
+}
+
+let unsaved: string | undefined;
+let persistRetry: NodeJS.Timeout | null = null;
+const PERSIST_RETRY_MS = 60_000;
+
+/** What the settings' last write said when it failed, for the window; nothing once a later one held. */
+export function uploadPersistence(): { unsaved?: string } {
+  return unsaved ? { unsaved } : {};
+}
+
+/**
+ * The settings in memory written to disk now, and again every minute until it holds, the window told while it does
+ * not: for a change that already holds in memory (a withdrawal, a deletion's bookkeeping), which must not wait for
+ * the disk. True when written now.
+ */
+function persistSettings(): boolean {
+  if (!deps) return false;
+  try {
+    deps.writeSettings(deps.getSettings());
+  } catch (err) {
+    const reason = settingsNotWritten(err).replace('nothing was changed', 'Tars tries again every minute');
+    console.error(`[traces] ${reason}`);
+    if (unsaved !== reason) { unsaved = reason; deps.emit('traces:changed'); }
+    if (!persistRetry) {
+      persistRetry = setTimeout(() => { persistRetry = null; persistSettings(); }, PERSIST_RETRY_MS);
+      persistRetry.unref?.();
+    }
+    return false;
+  }
+  if (unsaved) { unsaved = undefined; deps.emit('traces:changed'); }
+  return true;
+}
+
+/**
+ * The consent taken back (after "delete everything", or a back-office that forgot this install): at once in memory,
+ * so nothing uploads from now, then off the disk, its file first, which needs no free space, then the settings.
+ * `persisted` when a restart cannot bring it back: the file is gone or empty, or the settings say no consent.
+ */
+export function withdrawUploadConsent(): { persisted: boolean } {
+  if (!deps) return { persisted: false };
+  const t = traceSettingsOf(deps.getSettings());
+  const { uploadConsentAt: _gone, ...rest } = t;
+  deps.setSettings({ ...deps.getSettings(), traces: rest });
+  const dropped = dropConsentFile();
+  const written = persistSettings();
+  // Still to try again while the file holds the consent: a later write of the settings is what removes it then.
+  if (!dropped && !written) console.error('[traces] the withdrawal of the consent is in memory only until a write holds; nothing uploads meanwhile');
+  deps.emit('traces:changed');
+  return { persisted: dropped || written };
+}
+
+/** At start: a consent the settings say and its file does not is none, and the settings are told so. */
+export function reconcileConsent(): void {
+  if (!deps) return;
+  const settings = deps.getSettings();
+  if (!traceSettingsOf(settings).uploadConsentAt || consentStands(settings)) return;
+  console.error('[traces] the settings say consent and its file does not: no consent');
+  withdrawUploadConsent();
+}
 
 /** An agent being created, whose terminal is spawned before its record is in the fleet (agent:create). */
 const preRegistered = new Map<string, AgentStatus>();
@@ -138,27 +254,24 @@ export function traceUploader(): TraceUploader {
       settings: () => {
         const t = traceSettingsOf(deps?.getSettings());
         const allowed = !t.uploadUrl || transportOf(t.uploadUrl) !== 'http-public' || t.uploadAllowPlainHttp === true;
-        return { url: allowed ? t.uploadUrl : '', consentAt: t.uploadConsentAt, since: t.uploadDeletedAt, deletionOwed: t.uploadDeletionOwed === true };
+        // The consent only while it stands (its file says it too): one the settings kept after a withdrawal is none.
+        return { url: allowed ? t.uploadUrl : '', consentAt: uploadConsentAt(), since: t.uploadDeletedAt, deletionOwed: t.uploadDeletionOwed === true };
       },
+      // In memory at once, then written, and tried again until it holds (persistSettings).
       setDeletion: (d) => {
         if (!deps) return;
         const t = traceSettingsOf(deps.getSettings());
         const { uploadDeletedAt: _at, uploadDeletionOwed: _owed, ...rest } = t;
-        deps.saveSettings({ ...deps.getSettings(), traces: { ...rest, ...(d.since !== undefined ? { uploadDeletedAt: d.since } : {}), ...(d.owed ? { uploadDeletionOwed: true } : {}) } });
+        deps.setSettings({ ...deps.getSettings(), traces: { ...rest, ...(d.since !== undefined ? { uploadDeletedAt: d.since } : {}), ...(d.owed ? { uploadDeletionOwed: true } : {}) } });
+        persistSettings();
         deps.emit('traces:changed');
       },
       // Opted in now, not only when the session was recorded: a project or an agent switched off since is not sent.
       eligible: (q) => traceSettingsOf(deps?.getSettings()).projects.includes(q.projectPath) && agentOf(q.agentId)?.traces === true,
       scrubContext: (projectPath) => scrubContextFor(projectPath),
       client: { name: 'tars', version: deps?.clientVersion ?? 'unknown', platform: process.platform },
-      // After "delete everything sent": no upload again until the user consents again.
-      withdrawConsent: () => {
-        if (!deps) return;
-        const t = traceSettingsOf(deps.getSettings());
-        const { uploadConsentAt: _gone, ...rest } = t;
-        deps.saveSettings({ ...deps.getSettings(), traces: rest });
-        deps.emit('traces:changed');
-      },
+      // After "delete everything sent": no upload again until the user consents again, a restart included.
+      withdrawConsent: () => { withdrawUploadConsent(); },
     });
   }
   return uploader;
@@ -166,7 +279,7 @@ export function traceUploader(): TraceUploader {
 
 function uploadPass(): void {
   const t = traceSettingsOf(deps?.getSettings());
-  if (!t.uploadUrl || !t.uploadConsentAt) return;
+  if (!t.uploadUrl || !uploadConsentAt()) return;
   void traceUploader().runOnce().then((r) => { if (r.sent || r.failed) deps?.emit('traces:changed'); });
 }
 
@@ -205,6 +318,8 @@ export function startTracesRuntime(d: TracesDeps): void {
   sweepTraces();
   uploadTimer = setInterval(uploadPass, 5 * 60_000);
   uploadTimer.unref?.();
+  // A consent its file does not hold is none, before anything is sent (it fails closed).
+  reconcileConsent();
   uploadPass();
 }
 
@@ -244,6 +359,8 @@ export function stopTracesRuntime(): void {
   if (uploadSoon) clearTimeout(uploadSoon);
   uploadTimer = null;
   uploadSoon = null;
+  if (persistRetry) clearTimeout(persistRetry);
+  persistRetry = null;
   uploader = null;
   store?.close();
   store = null;
@@ -444,10 +561,19 @@ export function isReaderToken(presented: string): boolean {
   return same;
 }
 
-/** The settings changed by an API route (an agent's endpoint tools), held and saved as the window's saves are. */
+/**
+ * The settings changed by an API route (an agent's endpoint tools): written first, then held in memory, as the
+ * window's saves are (traces-handlers.ts). Throws the reason when they cannot be written, and nothing changes.
+ */
 export function saveSettingsFromApi(settings: AppSettings): void {
   if (!deps) throw new Error('Tars is not ready.');
-  deps.saveSettings(settings);
+  try {
+    deps.writeSettings(settings);
+  } catch (err) {
+    console.error('[traces] settings not written:', err);
+    throw new Error(settingsNotWritten(err));
+  }
+  deps.setSettings(settings);
 }
 
 /** Tells the window an endpoint changed, and whether it now waits for the owner's approval. */

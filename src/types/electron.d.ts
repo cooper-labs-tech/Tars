@@ -3046,6 +3046,10 @@ export interface UploadState {
   lastError?: string;
   /** Waiting before the next try (offline, the server busy or full). */
   nextTryAt?: number;
+  /** The settings could not be written after a change that already holds in memory (a withdrawn consent, a
+   *  deletion's bookkeeping): the reason, with "Tars tries again every minute". Uploads stay off meanwhile. Say it
+   *  as a warning until it goes. */
+  unsaved?: string;
   /** Say each plainly, not as an error:
    *  - 'registration_closed': "this back-office does not take new installs" (looked at again in 6 hours);
    *  - 'install_blocked': "this back-office blocked this install" (looked at again in 6 hours);

@@ -12,7 +12,9 @@ import {
 import type { TraceFilter } from '../services/trace-store';
 import { traceExportLines } from '../services/trace-export';
 import { CLOSED_MODELS_WARNING, traceDecision } from '../services/trace-gate';
-import { previewUpload, traceUploader } from '../services/traces-runtime';
+import {
+  dropConsentFile, previewUpload, recordConsent, settingsNotWritten, traceUploader, uploadPersistence,
+} from '../services/traces-runtime';
 import { cleanBaseUrl } from '../services/inference-endpoints';
 import { SCRUB_VERSION } from '../services/trace-scrub';
 
@@ -25,7 +27,8 @@ import { SCRUB_VERSION } from '../services/trace-scrub';
 export interface TracesHandlerDeps {
   getAppSettings(): AppSettings;
   setAppSettings(settings: AppSettings): void;
-  saveAppSettings(settings: AppSettings): void;
+  /** The settings written, or a throw saying why (main.ts writeAppSettingsFile). */
+  writeAppSettings(settings: AppSettings): void;
 }
 
 /** How each harness measured on an endpoint. */
@@ -47,7 +50,19 @@ function cleanFilter(raw: unknown): TraceFilter {
 }
 
 export function registerTracesHandlers(deps: TracesHandlerDeps): void {
-  const apply = (settings: AppSettings) => { deps.setAppSettings(settings); deps.saveAppSettings(settings); };
+  // Written first, then held in memory, where the uploader and the proxy read them: a setting main could not write
+  // was answered ok and held for the rest of the run (a consent to upload on a full disk, the Audit's L2 on #599).
+  // The reason when it could not, for the window to show; null when it was written and applied.
+  const apply = (settings: AppSettings): string | null => {
+    try {
+      deps.writeAppSettings(settings);
+    } catch (err) {
+      console.error('[traces] settings not written:', err);
+      return settingsNotWritten(err);
+    }
+    deps.setAppSettings(settings);
+    return null;
+  };
   const views = (): EndpointView[] => endpointViews(deps.getAppSettings(), [...agents.values()]);
   const view = (id: string) => views().find(v => v.id === id);
   const tell = (channel: string, payload?: unknown) => {
@@ -66,7 +81,8 @@ export function registerTracesHandlers(deps: TracesHandlerDeps): void {
       allowPlainHttp: typeof i.allowPlainHttp === 'boolean' ? i.allowPlainHttp : undefined,
     }, { window: true });
     if (!r.ok) return r;
-    apply(r.settings);
+    const unsaved = apply(r.settings);
+    if (unsaved) return { ok: false, error: unsaved };
     tell('endpoints:changed', { id: r.endpoint.id, needsApproval: false });
     return { ok: true, endpoint: view(r.endpoint.id) };
   });
@@ -74,7 +90,8 @@ export function registerTracesHandlers(deps: TracesHandlerDeps): void {
   ipcMain.handle('endpoints:approve', (_e, id: unknown) => {
     const r = approveEndpoint(deps.getAppSettings(), String(id));
     if (!r.ok) return r;
-    apply(r.settings);
+    const unsaved = apply(r.settings);
+    if (unsaved) return { ok: false, error: unsaved };
     tell('endpoints:changed', { id: r.endpoint.id, needsApproval: false });
     return { ok: true, endpoint: view(r.endpoint.id) };
   });
@@ -82,14 +99,16 @@ export function registerTracesHandlers(deps: TracesHandlerDeps): void {
   ipcMain.handle('endpoints:setKey', (_e, id: unknown, key: unknown) => {
     const r = setEndpointKey(deps.getAppSettings(), String(id), key === null ? null : typeof key === 'string' ? key : '');
     if (!r.ok) return r;
-    apply(r.settings);
+    const unsaved = apply(r.settings);
+    if (unsaved) return { ok: false, error: unsaved };
     return { ok: true };
   });
 
   ipcMain.handle('endpoints:remove', (_e, id: unknown) => {
     const r = removeEndpoint(deps.getAppSettings(), String(id), [...agents.values()]);
     if (!r.ok) return r;
-    apply(r.settings);
+    const unsaved = apply(r.settings);
+    if (unsaved) return { ok: false, error: unsaved };
     tell('endpoints:changed', { id: String(id), needsApproval: false });
     return { ok: true };
   });
@@ -97,12 +116,14 @@ export function registerTracesHandlers(deps: TracesHandlerDeps): void {
   ipcMain.handle('endpoints:refreshModels', async (_e, id: unknown) => {
     const r = await readModels(deps.getAppSettings(), String(id));
     // Only what the probe owns, onto the settings as they are now (the Audit's M1 on #596).
-    apply(applyEndpointPatch(deps.getAppSettings(), String(id), r.patch, r.probed));
+    const unsaved = apply(applyEndpointPatch(deps.getAppSettings(), String(id), r.patch, r.probed));
+    if (unsaved) return { ok: false, error: unsaved };
     return r.ok ? { ok: true, models: r.models } : { ok: false, error: r.error };
   });
 
   ipcMain.handle('endpoints:check', async (_e, id: unknown) => {
     const r = await checkHealth(deps.getAppSettings(), String(id));
+    // The health is what the probe read, said whether or not its patch could be kept.
     apply(applyEndpointPatch(deps.getAppSettings(), String(id), r.patch, r.probed));
     return r.health;
   });
@@ -155,7 +176,8 @@ export function registerTracesHandlers(deps: TracesHandlerDeps): void {
     if (next.uploadUrl && transportOf(next.uploadUrl) === 'http-public' && !next.uploadAllowPlainHttp) {
       return { ok: false, error: 'A public back-office address takes https. Plain http goes to loopback and private networks only, unless you allow it.' };
     }
-    apply({ ...deps.getAppSettings(), traces: next });
+    const unsaved = apply({ ...deps.getAppSettings(), traces: next });
+    if (unsaved) return { ok: false, error: unsaved };
     sweepTraces();
     return { ok: true, settings: next };
   });
@@ -167,7 +189,8 @@ export function registerTracesHandlers(deps: TracesHandlerDeps): void {
     return { pairs: t.pairs, excludeClosedModels: t.excludeClosedModels, closedModelsWarning: CLOSED_MODELS_WARNING };
   };
   const setPairs = (pairs: TraceSettings['pairs']) => {
-    apply({ ...deps.getAppSettings(), traces: { ...traceSettingsOf(deps.getAppSettings()), pairs } });
+    const unsaved = apply({ ...deps.getAppSettings(), traces: { ...traceSettingsOf(deps.getAppSettings()), pairs } });
+    if (unsaved) return { ok: false as const, error: unsaved };
     return { ok: true as const, ...pairsView() };
   };
   const pairOf = (raw: unknown): TraceSettings['pairs'][number] | null => {
@@ -232,7 +255,8 @@ export function registerTracesHandlers(deps: TracesHandlerDeps): void {
     },
   }));
   ipcMain.handle('traces:preview', (_e, traceId: unknown) => previewUpload(String(traceId)));
-  ipcMain.handle('traces:uploadState', () => traceUploader().state());
+  // With `unsaved` while a change that already holds in memory (a withdrawal) waits for a write that holds.
+  ipcMain.handle('traces:uploadState', () => ({ ...traceUploader().state(), ...uploadPersistence() }));
   // The user gives up a deletion an old back-office never confirmed: its install is forgotten, and what was recorded
   // before the deletion is still never sent.
   ipcMain.handle('traces:ackDeletionCleared', () => { traceUploader().ackDeletionCleared(); return { ok: true }; });
@@ -252,7 +276,19 @@ export function registerTracesHandlers(deps: TracesHandlerDeps): void {
     if (!t.uploadUrl) return { ok: false, error: 'Set the back-office address first.' };
     if (traceUploader().isDeletionOwed()) return { ok: false, error: 'The deletion of what was shared is not confirmed yet: delete again, or give it up.' };
     const at = new Date().toISOString();
-    apply({ ...deps.getAppSettings(), traces: { ...t, uploadConsentAt: at } });
+    // Given once written, never only in memory, where the uploader reads it (the Audit's L2 on #599): its own file
+    // first, then the settings, and the file taken back when the settings cannot be written.
+    try {
+      recordConsent(at);
+    } catch (err) {
+      console.error('[traces] consent not written:', err);
+      return { ok: false, error: settingsNotWritten(err) };
+    }
+    const unsaved = apply({ ...deps.getAppSettings(), traces: { ...t, uploadConsentAt: at } });
+    if (unsaved) {
+      dropConsentFile();
+      return { ok: false, error: unsaved };
+    }
     return { ok: true, at };
   });
 

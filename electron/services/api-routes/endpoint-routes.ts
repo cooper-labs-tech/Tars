@@ -1,7 +1,7 @@
 import type { RouteApp, RouteContext, RouteRequest, SendJson } from './types';
 import { agents } from '../../core/agent-manager';
 import {
-  applyEndpointPatch, checkHealth, endpointViews, readModels, saveEndpoint, setEndpointKey, takeKeyFromDropFile, ENDPOINT_KEYS_DIR,
+  applyEndpointPatch, checkHealth, endpointViews, readKeyFromDropFile, readModels, saveEndpoint, setEndpointKey, ENDPOINT_KEYS_DIR,
 } from '../inference-endpoints';
 import { saveSettingsFromApi, tellEndpointChanged, traceStore } from '../traces-runtime';
 import { sessionDocument } from '../trace-export';
@@ -30,6 +30,20 @@ function caller(req: RouteRequest, send: SendJson): { agentId: string; agentName
     return null;
   }
   return { agentId: req.callerAgentId, agentName: agents.get(req.callerAgentId)?.name };
+}
+
+/**
+ * The settings written, then held (saveSettingsFromApi), or the reason answered and nothing changed: an endpoint
+ * change main could not write was held in memory and answered as done.
+ */
+function saved(settings: Parameters<typeof saveSettingsFromApi>[0], send: SendJson): boolean {
+  try {
+    saveSettingsFromApi(settings);
+    return true;
+  } catch (err) {
+    send({ error: (err as Error).message }, 500);
+    return false;
+  }
 }
 
 const views = (ctx: RouteContext) => endpointViews(ctx.getAppSettings(), [...agents.values()]);
@@ -66,15 +80,18 @@ export function registerEndpointRoutes(app: RouteApp, ctx: RouteContext): void {
     if (!r.ok) { send({ error: r.error }, 400); return; }
     let settings = r.settings;
     let keyNote: string | undefined;
+    // The drop file is taken away only once the settings that hold its key are written: a failed save leaves it.
+    let consume: (() => void) | undefined;
     if (b.keyFile !== undefined) {
-      const key = takeKeyFromDropFile(b.keyFile);
+      const key = readKeyFromDropFile(b.keyFile);
       if (!key.ok) keyNote = key.error;
       else {
         const keyed = setEndpointKey(settings, r.endpoint.id, key.key);
-        if (keyed.ok) settings = keyed.settings;
+        if (keyed.ok) { settings = keyed.settings; consume = key.consume; }
       }
     }
-    saveSettingsFromApi(settings);
+    if (!saved(settings, send)) return;
+    consume?.();
     tellEndpointChanged({ id: r.endpoint.id, by: who, needsApproval: !r.endpoint.approved });
     send({ endpoint: viewOf(ctx, r.endpoint.id), needsApproval: !r.endpoint.approved, ...(keyNote ? { keyNotTaken: keyNote } : {}) }, 201);
   });
@@ -89,7 +106,7 @@ export function registerEndpointRoutes(app: RouteApp, ctx: RouteContext): void {
       holdMaxSeconds: typeof b.holdMaxSeconds === 'number' ? b.holdMaxSeconds : undefined,
     }, who);
     if (!r.ok) { send({ error: r.error }, r.error.startsWith('There is no') ? 404 : 400); return; }
-    saveSettingsFromApi(r.settings);
+    if (!saved(r.settings, send)) return;
     tellEndpointChanged({ id: r.endpoint.id, by: who, needsApproval: !r.endpoint.approved });
     send({ endpoint: viewOf(ctx, r.endpoint.id), needsApproval: !r.endpoint.approved });
   });
@@ -97,11 +114,13 @@ export function registerEndpointRoutes(app: RouteApp, ctx: RouteContext): void {
   app.post(ENDPOINT_KEY, async (req, send) => {
     const who = caller(req, send);
     if (!who) return;
-    const key = takeKeyFromDropFile(req.body.keyFile);
+    const key = readKeyFromDropFile(req.body.keyFile);
     if (!key.ok) { send({ error: key.error, keyDropFolder: ENDPOINT_KEYS_DIR }, 400); return; }
     const r = setEndpointKey(ctx.getAppSettings(), req.params.id, key.key);
     if (!r.ok) { send({ error: r.error }, 404); return; }
-    saveSettingsFromApi(r.settings);
+    // Taken away only once written: a failed save leaves the drop file exactly as it was.
+    if (!saved(r.settings, send)) return;
+    key.consume();
     tellEndpointChanged({ id: req.params.id, by: who, needsApproval: false });
     send({ ok: true, keySet: true });
   });
@@ -110,14 +129,14 @@ export function registerEndpointRoutes(app: RouteApp, ctx: RouteContext): void {
     if (!caller(req, send)) return;
     const r = await readModels(ctx.getAppSettings(), req.params.id);
     // Only what the probe owns, onto the settings as they are now (the Audit's M1 on #596).
-    saveSettingsFromApi(applyEndpointPatch(ctx.getAppSettings(), req.params.id, r.patch, r.probed));
+    if (!saved(applyEndpointPatch(ctx.getAppSettings(), req.params.id, r.patch, r.probed), send)) return;
     send(r.ok ? { models: r.models } : { error: r.error }, r.ok ? 200 : 502);
   });
 
   app.post(ENDPOINT_CHECK, async (req, send) => {
     if (!caller(req, send)) return;
     const r = await checkHealth(ctx.getAppSettings(), req.params.id);
-    saveSettingsFromApi(applyEndpointPatch(ctx.getAppSettings(), req.params.id, r.patch, r.probed));
+    if (!saved(applyEndpointPatch(ctx.getAppSettings(), req.params.id, r.patch, r.probed), send)) return;
     send({ health: r.health });
   });
 

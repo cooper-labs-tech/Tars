@@ -1113,7 +1113,10 @@ the health: the API's `/api/endpoints` and the `endpoint_*` tools of mcp-orchest
 - The folder must be a plain folder, not a link (lstat).
 - The file is opened with `O_NOFOLLOW` and checked by fstat against its lstat: a plain file with one link, 8 KiB at
   most, one printable line.
-- Then Tars takes the key into the private folder and deletes the file.
+- Then Tars takes the key into the private folder and deletes the file, only once the settings that hold the key
+  are written, and only that very file (the same inode). A save that fails leaves the drop file exactly as it was,
+  and the agent is answered the reason, which never holds the key: the drop file is how the owner hands Tars a
+  production key, and until this a failed save lost it.
 - A file that fails a check is left as it is, and only its name is reported.
 - Tars reads a key from no other path, so no argument can make it read `~/.tars-private`, `~/.ssh` or anything else
   and send it out as a Bearer.
@@ -1175,6 +1178,15 @@ would be sent.
 - When the back-office no longer knows the install (a 401: the user's deletion, or its operator's), Tars never
   registers again on its own. Uploads stop, the local traces stay, the consent is withdrawn, and the window says so.
   Registering again is the user's own act.
+- A consent stands only while its own file, `~/.tars-private/traces-upload-consent` (0600, no agent is handed it),
+  holds the very time the settings say. Giving it writes that file, then the settings; either failing answers the
+  window with the reason, and nothing is given. A withdrawal holds in memory at once, then unlinks that file, or else
+  empties it, then writes the settings. Measured on macOS 26 (APFS): a full volume refuses a write, a rename and a
+  truncate but takes an unlink, and a folder that may not be written refuses an unlink but takes a truncate. A start
+  whose settings still say consent with no such file, a partial one or another time has none (it fails closed).
+  Settings that could not be written after a withdrawal or a deletion are tried again every minute, the window told
+  (`unsaved`), and nothing uploads meanwhile. Until this, both were held in memory and saved by a write that swallowed
+  its error: a consent given on a full disk was answered as given, and a withdrawal came back at the next start.
 - The scrubbing applies to what is uploaded only: the endpoint the agent talked to, and the local store, saw the
   session as it was.
 
