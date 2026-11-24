@@ -409,7 +409,12 @@ gemini and grok take no endpoint of Tars's: gemini runs on the stand-in of Gemin
 through `GOOGLE_GEMINI_BASE_URL`, its key set from the window), grok on the OpenAI stand-in as a custom model of its own
 `config.toml`, both written into the sandbox as a user leaves them. Their tool round is a call to Tars's own `whoami`,
 answered only when it reached Tars with the agent's own identity, and they pass three steps more: no question of their
-own at start (folder trust, sign-in), the agent at rest once its task is answered, and, for grok, each hook fired once.
+own at start (folder trust, sign-in), the agent at rest once its task is answered, and, for grok, a hook of the user's
+own in `~/.claude/settings.json` never run in its session (its Claude compatibility off) and one SessionStart per start.
+Their restart step also expects the session the first run ended on, under its own id: grok carries a past session's
+words into a new one, so its history alone does not tell a resume from a fresh start. Tars's MCP servers are registered
+with the binary under test, first on the app's PATH while they are (`<cli> mcp add`), never a gemini or a grok of the
+machine's.
 `TARS_HARNESS_GEMINI` names gemini's own `bundle/gemini.js` (its npm package, unpacked, `#!/usr/bin/env node`).
 
 Opt-in: a harness whose `TARS_HARNESS_<ID>` names no binary is skipped and says so. Install each binary pinned, from

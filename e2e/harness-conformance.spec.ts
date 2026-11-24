@@ -218,15 +218,26 @@ for (const h of HARNESSES) {
           fs.mkdirSync(path.join(resources, 'mcp-orchestrator', 'dist'), { recursive: true });
           fs.copyFileSync(path.resolve('mcp-orchestrator', 'dist', 'bundle.js'), path.join(resources, 'mcp-orchestrator', 'dist', 'bundle.js'));
           fs.copyFileSync(path.resolve('mcp-orchestrator', 'package.json'), path.join(resources, 'mcp-orchestrator', 'package.json'));
-          await app.evaluate(async (_e, { resources, dist }) => {
+          // The registration runs `<cli> mcp add` by its name (execCliSync, from the app's PATH): the binary under test,
+          // under that name, first on the app's PATH while it does, so a gemini or a grok of the machine's never runs
+          // (the Audit's I-2 on #638). gemini 0.70.0's `mcp add -s user` ends in a second and writes the sandbox's own
+          // settings.json only, measured isolated on 24/11; grok 1.0.92's writes its config.toml (23/11).
+          const pinned = path.join(home, 'harness-bin');
+          fs.mkdirSync(pinned, { recursive: true });
+          if (!fs.existsSync(path.join(pinned, h.id))) fs.symlinkSync(bin, path.join(pinned, h.id));
+          await app.evaluate(async (_e, { resources, dist, pinned }) => {
             const was = process.resourcesPath;
+            const pathWas = process.env.PATH;
             Object.defineProperty(process, 'resourcesPath', { value: resources, configurable: true, writable: true });
+            process.env.PATH = [pinned, pathWas].filter(Boolean).join(process.platform === 'win32' ? ';' : ':');
             try {
               await process.mainModule!.require(`${dist}/services/mcp-orchestrator.js`).setupMcpOrchestrator({});
             } finally {
               Object.defineProperty(process, 'resourcesPath', { value: was, configurable: true, writable: true });
+              process.env.PATH = pathWas;
             }
-          }, { resources, dist });
+          }, { resources, dist, pinned });
+          keep({ mcpRegisteredWith: fs.readlinkSync(path.join(pinned, h.id)) });
         }
         mcp = spawn(process.execPath, [path.resolve('mcp-orchestrator', 'dist', 'bundle.js')], {
           env: { PATH: process.env.PATH ?? '', HOME: home, CLAUDE_MGR_API_URL: `http://127.0.0.1:${port}`, CLAUDE_MGR_API_TOKEN: identity.token, CLAUDE_AGENT_ID: LEAD, CLAUDE_PROJECT_PATH: project, TARS_INSTANCE_ID: identity.instance },
