@@ -39,8 +39,11 @@ import { DEV_URL, apiPort } from './ports.mjs';
  * call reached Tars with the agent's own identity. On top of the steps above, each:
  * 6. opens on no question of its own: no folder trust, no sign-in (gemini's --skip-trust, grok's --trust);
  * 7. ends its turn as Tars sees it: the agent back at rest once the task is answered (its hooks);
- * 8. grok only: fires each hook once, its Claude compatibility off (GROK_CLAUDE_HOOKS_ENABLED=0), or Tars's claude hooks
- *    in ~/.claude/settings.json ran in its terminal too: one SessionStart of the agent's in Tars's hook log per start.
+ * 8. grok only: its Claude compatibility off (GROK_CLAUDE_HOOKS_ENABLED=0), so the claude hooks of ~/.claude/settings.json
+ *    never run in its terminal: a hook of the user's own there (SessionStart, writing a file) has not run once the agent
+ *    has started and answered; and Tars's hooks fire once, one SessionStart of the agent's in Tars's hook log per start.
+ *    Measured on 1.0.92 (24/11): grok runs a command named in both ~/.grok/hooks and ~/.claude/settings.json once and
+ *    two different ones twice, so Tars's own hooks, the same scripts in both files, cannot double; the user's can run.
  * Every binary run is isolated, its --version included: the sandbox's HOME, TMPDIR and XDG folders, npm's prefix and cache
  * in sinks of the sandbox, and an `open`/`xdg-open` first on its PATH that records and opens nothing (asserted unused).
  *
@@ -133,7 +136,14 @@ for (const h of HARNESSES) {
         '[cli]', 'auto_update = false', '', '[models]', 'default = "standin"', '', '[model.standin]', `model = "${MODEL_ID}"`,
         `base_url = "${standin.baseUrl}"`, 'name = "Stand-in"', `api_key = "${key}"`, '', '[features]', 'telemetry = false', '',
       ].join('\n'));
+      // A claude hook of the user's own, which Tars keeps beside its own in ~/.claude/settings.json: grok's Claude
+      // compatibility would run it in the agent's terminal (check 8).
+      fs.mkdirSync(path.join(home, '.claude'), { recursive: true });
+      fs.writeFileSync(path.join(home, '.claude', 'settings.json'), JSON.stringify({
+        hooks: { SessionStart: [{ hooks: [{ type: 'command', command: `printf 'ran\\n' >> '${path.join(home, 'user-claude-hook.log')}'` }] }] },
+      }, null, 2));
     }
+    const userClaudeHookRan = () => fs.existsSync(path.join(home, 'user-claude-hook.log'));
 
     const agent = (id: string, name: string, extra: Record<string, unknown>) => ({
       id, name, character: 'robot', status: 'idle', permissionMode: 'bypass', projectPath: project, skills: [],
@@ -307,6 +317,8 @@ for (const h of HARNESSES) {
         }
         if (h.hooksOnce) keep({ sessionStartsFirst: sessionStarts() });
         if (h.hooksOnce) expect.soft(sessionStarts(), '8. one SessionStart of the agent\'s for its one start: each hook fired once').toBe(1);
+        if (h.hooksOnce) keep({ userClaudeHookRan: userClaudeHookRan() });
+        if (h.hooksOnce) expect.soft(userClaudeHookRan(), '8. the user\'s own claude hook never ran in the agent\'s grok session').toBe(false);
       });
 
       // 5. Tars quits and starts again; the agent's first start continues its session.
