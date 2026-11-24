@@ -34,6 +34,8 @@ export class QwenCodeProvider implements CLIProvider {
   readonly displayName = 'Qwen Code';
   readonly binaryName = 'qwen';
   readonly configDir = path.join(os.homedir(), '.qwen');
+  /** --approval-mode plan (0.25.2). */
+  readonly planMode = true as const;
 
   /** The user's own models (~/.qwen/settings.json modelProviders), read, never written. */
   getModels(): ProviderModel[] {

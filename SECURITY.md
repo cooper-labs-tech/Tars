@@ -164,6 +164,11 @@ status. Now:
 - its message may keep an agent's mode or lower it for the session it starts, never
   raise it (403, before anything is typed), and the same holds for `/start` and
   `/dispatch` (`modeRefusal`);
+- plan, the narrowest, is refused (400, before anything is typed or started) for an
+  agent whose CLI declares no plan mode (`CLIProvider.planMode`, Claude Code and Qwen
+  Code today), through a gateway, `/start` and `/dispatch`: until 2.0.7 the ceiling let
+  it through and the session ran as normal, with every write tool, for an ask that
+  meant read-only (the Audit's I-1 on #636);
 - no refusal names an agent, a project or a mode: an agent outside its projects is a
   404 like one that does not exist.
 What it is not: a gateway's message is still typed into an agent that may run in

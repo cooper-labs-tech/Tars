@@ -1,6 +1,7 @@
 import { agents } from '../../core/agent-manager';
 import { isPermissionLevel, levelOf, raises } from '../../core/permission-ceiling';
 import { samePath } from '../../platform/path-compare';
+import { planModeRefusal } from '../../providers/plan-mode';
 import type { AgentStatus } from '../../types';
 import { DEFAULT_GATEWAY, gatewayById, gatewayReaches } from '../hermes-gateways';
 import { performDispatch } from './agent-routes';
@@ -19,6 +20,9 @@ const AMBIGUOUS = 'More than one agent this gateway reaches goes by that name: p
 const MODE_INVALID = 'permission_mode is one of plan, normal, auto, bypass.';
 const MODE_WIDER =
   'A gateway\'s message may keep an agent\'s mode, or lower it for the session it starts, never raise it.';
+/** planModeRefusal's sentence, naming no CLI: a gateway's refusal names nothing of what it reached. */
+const NO_PLAN_MODE =
+  'This agent\'s CLI has no plan mode: plan would run as manual. Ask for normal, auto or bypass.';
 
 /**
  * Incoming webhooks: an external scheduler, the user's Hermes, gives Tars agents work. Tars deliberately has no
@@ -113,6 +117,11 @@ async function fromGateway(routeGateway: string, req: RouteRequest, sendJson: Se
 
   if (isPermissionLevel(asked) && raises(asked, levelOf(agent))) {
     sendJson({ error: MODE_WIDER }, 403);
+    return;
+  }
+  // Plan for a CLI that has none would run as normal, with every write tool (the Audit's I-1 on #636).
+  if (planModeRefusal(agent.provider, asked as string | undefined)) {
+    sendJson({ error: NO_PLAN_MODE }, 400);
     return;
   }
 

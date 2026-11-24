@@ -158,18 +158,22 @@ function announceAgent(agent: AgentStatus): void {
  * A mode asked for an agent's session that it may not have: none of Tars's (400), or wider than the agent's own
  * (403). A session runs at its agent's mode or narrower: whoever starts it, a /start, a /dispatch or a Hermes
  * gateway's message, may lower it for that session, never raise it (core/permission-ceiling.ts, the Audit's NOW-3
- * and R4.1, 2.0.4: the webhook started any agent of any project in bypass). Undefined when none was asked, or the
- * one asked is fine.
+ * and R4.1, 2.0.4: the webhook started any agent of any project in bypass). Plan, the narrowest, for an agent whose
+ * CLI has no plan mode is refused too (400, planModeRefusal's reason): it ran as normal, with every write tool, for an
+ * ask that meant read-only (the Audit's I-1 on #636). Undefined when none was asked, or the one asked is fine.
  */
 export function modeRefusal(agent: AgentStatus, asked: unknown): { status: number; error: string } | undefined {
   if (asked === undefined || asked === null) return undefined;
   if (!isPermissionLevel(asked)) return { status: 400, error: 'permissionMode is one of plan, normal, auto, bypass.' };
   const own = levelOf(agent);
-  if (!raises(asked, own)) return undefined;
-  return {
-    status: 403,
-    error: `${agent.name || agent.id} runs in ${own} mode: a session started for it may run narrower, never wider, and ${asked} is wider. Change its mode in Tars to widen it.`,
-  };
+  if (raises(asked, own)) {
+    return {
+      status: 403,
+      error: `${agent.name || agent.id} runs in ${own} mode: a session started for it may run narrower, never wider, and ${asked} is wider. Change its mode in Tars to widen it.`,
+    };
+  }
+  const noPlan = planModeRefusal(agent.provider, asked);
+  return noPlan ? { status: 400, error: noPlan } : undefined;
 }
 
 async function spawnAgentSession(

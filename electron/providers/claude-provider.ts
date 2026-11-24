@@ -23,6 +23,8 @@ export class ClaudeProvider implements CLIProvider {
   readonly displayName = 'Claude Code';
   readonly binaryName = 'claude';
   readonly configDir = path.join(os.homedir(), '.claude');
+  /** --permission-mode plan. */
+  readonly planMode = true as const;
 
   getModels(): ProviderModel[] {
     return [

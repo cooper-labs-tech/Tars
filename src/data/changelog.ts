@@ -7,6 +7,14 @@ export interface Release {
 
 export const CHANGELOG: Release[] = [
   {
+    id: 64,
+    version: '2.0.7',
+    date: '2026-11-24',
+    updates: [
+      'An agent or a Hermes gateway that asks plan for an agent whose CLI has no plan mode (Codex, Gemini, Grok, OpenCode, Amp, Pi, or a provider through an API key) is now told so, with the modes it can ask for, and nothing starts. Until now the session ran in manual mode with every tool that writes, for a request that meant read only. Claude Code and Qwen Code keep plan.',
+    ],
+  },
+  {
     id: 63,
     version: '2.0.6',
     date: '2026-10-29',

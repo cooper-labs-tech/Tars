@@ -101,6 +101,14 @@ export interface CLIProvider {
   readonly binaryName: string;
   readonly configDir: string;
 
+  /**
+   * The CLI runs Tars's plan mode, read-only, from the line buildInteractiveCommand writes for it (Claude Code's
+   * --permission-mode plan, Qwen Code's --approval-mode plan). Absent: it has none, plan would run as manual, and
+   * plan is refused for it wherever a mode is taken (providers/plan-mode.ts): at creation, on an update, and for a
+   * session asked through /start, /dispatch or a Hermes gateway.
+   */
+  readonly planMode?: true;
+
   /** Available models for this provider */
   getModels(): ProviderModel[];
 
