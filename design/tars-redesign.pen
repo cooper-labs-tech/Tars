@@ -848259,7 +848259,7 @@
                       "type": "text",
                       "id": "eWwbt",
                       "fill": "$text-primary",
-                      "content": "Lead B (project-b) retuned Worker One (project-a): model glm-4.6 to kimi-k2, applied at 14:02.",
+                      "content": "Lead B (project-b) retuned Worker One (project-a): model glm-4.6 to kimi-k2, applied 14:02.",
                       "lineHeight": 1.4,
                       "fontFamily": "$font-ui",
                       "fontSize": 12,
@@ -848499,7 +848499,7 @@
                       "type": "text",
                       "id": "Yk1Gf",
                       "fill": "$text-primary",
-                      "content": "The change to Worker One was undone: model kimi-k2 to glm-4.6.",
+                      "content": "undone by you at 14:20",
                       "lineHeight": 1.4,
                       "fontFamily": "$font-ui",
                       "fontSize": 12,
@@ -848567,7 +848567,7 @@
                 {
                   "type": "frame",
                   "id": "eYQ8v",
-                  "name": "retune notice · an undo by an agent",
+                  "name": "retune notice · an undo by an agent, applied",
                   "width": 760,
                   "height": 40,
                   "fill": "$surface-raised",
@@ -848584,7 +848584,7 @@
                       "type": "rectangle",
                       "id": "phsSF",
                       "name": "d",
-                      "fill": "$status-waiting",
+                      "fill": "$status-running",
                       "width": 6,
                       "height": 6
                     },
@@ -848592,7 +848592,7 @@
                       "type": "text",
                       "id": "BtW5E",
                       "fill": "$text-primary",
-                      "content": "Lead C (project-c) undid a change to Worker One (project-a): model kimi-k2 to glm-4.6, applied at 14:30.",
+                      "content": "Lead C (project-c) undid a change to Worker One (project-a): model kimi-k2 to glm-4.6, applied 14:30.",
                       "lineHeight": 1.4,
                       "fontFamily": "$font-ui",
                       "fontSize": 12,
@@ -848646,6 +848646,285 @@
                         {
                           "type": "text",
                           "id": "VHEVg",
+                          "fill": "$text-muted",
+                          "content": "close",
+                          "lineHeight": 1.4,
+                          "fontFamily": "$font-mono",
+                          "fontSize": 11,
+                          "fontWeight": "normal"
+                        }
+                      ]
+                    }
+                  ]
+                },
+                {
+                  "type": "frame",
+                  "id": "xhSvv",
+                  "name": "retune notice · an undo by an agent, asked",
+                  "width": 760,
+                  "height": 40,
+                  "fill": "$surface-raised",
+                  "stroke": "$border-strong",
+                  "strokeWidth": 1,
+                  "gap": 10,
+                  "padding": [
+                    0,
+                    12
+                  ],
+                  "alignItems": "center",
+                  "children": [
+                    {
+                      "type": "rectangle",
+                      "id": "jDbUI",
+                      "name": "d",
+                      "fill": "$status-waiting",
+                      "width": 6,
+                      "height": 6
+                    },
+                    {
+                      "type": "text",
+                      "id": "pkUio",
+                      "fill": "$text-primary",
+                      "content": "Lead C (project-c) asked to undo a change to Worker One (project-a): model kimi-k2 to glm-4.6: it waits for its turn to end.",
+                      "lineHeight": 1.4,
+                      "fontFamily": "$font-ui",
+                      "fontSize": 12,
+                      "fontWeight": "normal"
+                    },
+                    {
+                      "type": "frame",
+                      "id": "uy25q",
+                      "name": "sp",
+                      "width": "fill_container",
+                      "height": 1
+                    },
+                    {
+                      "type": "frame",
+                      "id": "U2kdx",
+                      "name": "b show",
+                      "height": 26,
+                      "stroke": "$border",
+                      "padding": [
+                        0,
+                        11
+                      ],
+                      "justifyContent": "center",
+                      "alignItems": "center",
+                      "children": [
+                        {
+                          "type": "text",
+                          "id": "c80zu",
+                          "fill": "$text-muted",
+                          "content": "show",
+                          "lineHeight": 1.4,
+                          "fontFamily": "$font-mono",
+                          "fontSize": 11,
+                          "fontWeight": "normal"
+                        }
+                      ]
+                    },
+                    {
+                      "type": "frame",
+                      "id": "t4r1hJ",
+                      "name": "b close",
+                      "height": 26,
+                      "stroke": "$border",
+                      "padding": [
+                        0,
+                        11
+                      ],
+                      "justifyContent": "center",
+                      "alignItems": "center",
+                      "children": [
+                        {
+                          "type": "text",
+                          "id": "pMutD",
+                          "fill": "$text-muted",
+                          "content": "close",
+                          "lineHeight": 1.4,
+                          "fontFamily": "$font-mono",
+                          "fontSize": 11,
+                          "fontWeight": "normal"
+                        }
+                      ]
+                    }
+                  ]
+                },
+                {
+                  "type": "frame",
+                  "id": "fSxvJ",
+                  "name": "retune notice · an undo by an agent, failed",
+                  "width": 760,
+                  "height": 40,
+                  "fill": "$surface-raised",
+                  "stroke": "$border-strong",
+                  "strokeWidth": 1,
+                  "gap": 10,
+                  "padding": [
+                    0,
+                    12
+                  ],
+                  "alignItems": "center",
+                  "children": [
+                    {
+                      "type": "rectangle",
+                      "id": "tY4BQ",
+                      "name": "d",
+                      "fill": "$status-error",
+                      "width": 6,
+                      "height": 6
+                    },
+                    {
+                      "type": "text",
+                      "id": "R6xTPh",
+                      "fill": "$text-primary",
+                      "content": "Lead C (project-c) asked to undo a change to Worker One (project-a): model kimi-k2 to glm-4.6, failed.",
+                      "lineHeight": 1.4,
+                      "fontFamily": "$font-ui",
+                      "fontSize": 12,
+                      "fontWeight": "normal"
+                    },
+                    {
+                      "type": "frame",
+                      "id": "QLzr7",
+                      "name": "sp",
+                      "width": "fill_container",
+                      "height": 1
+                    },
+                    {
+                      "type": "frame",
+                      "id": "bvidC",
+                      "name": "b show",
+                      "height": 26,
+                      "stroke": "$border",
+                      "padding": [
+                        0,
+                        11
+                      ],
+                      "justifyContent": "center",
+                      "alignItems": "center",
+                      "children": [
+                        {
+                          "type": "text",
+                          "id": "h8w1M",
+                          "fill": "$text-muted",
+                          "content": "show",
+                          "lineHeight": 1.4,
+                          "fontFamily": "$font-mono",
+                          "fontSize": 11,
+                          "fontWeight": "normal"
+                        }
+                      ]
+                    },
+                    {
+                      "type": "frame",
+                      "id": "T2tOGv",
+                      "name": "b close",
+                      "height": 26,
+                      "stroke": "$border",
+                      "padding": [
+                        0,
+                        11
+                      ],
+                      "justifyContent": "center",
+                      "alignItems": "center",
+                      "children": [
+                        {
+                          "type": "text",
+                          "id": "SWicL",
+                          "fill": "$text-muted",
+                          "content": "close",
+                          "lineHeight": 1.4,
+                          "fontFamily": "$font-mono",
+                          "fontSize": 11,
+                          "fontWeight": "normal"
+                        }
+                      ]
+                    }
+                  ]
+                },
+                {
+                  "type": "frame",
+                  "id": "Qp7Bv",
+                  "name": "retune notice · an undo by an agent, cancelled",
+                  "width": 760,
+                  "height": 40,
+                  "fill": "$surface-raised",
+                  "stroke": "$border-strong",
+                  "strokeWidth": 1,
+                  "gap": 10,
+                  "padding": [
+                    0,
+                    12
+                  ],
+                  "alignItems": "center",
+                  "children": [
+                    {
+                      "type": "rectangle",
+                      "id": "S5Dge",
+                      "name": "d",
+                      "fill": "$status-idle",
+                      "width": 6,
+                      "height": 6
+                    },
+                    {
+                      "type": "text",
+                      "id": "aR1CL",
+                      "fill": "$text-primary",
+                      "content": "Lead C (project-c) asked to undo a change to Worker One (project-a): model kimi-k2 to glm-4.6, cancelled.",
+                      "lineHeight": 1.4,
+                      "fontFamily": "$font-ui",
+                      "fontSize": 12,
+                      "fontWeight": "normal"
+                    },
+                    {
+                      "type": "frame",
+                      "id": "ItgeV",
+                      "name": "sp",
+                      "width": "fill_container",
+                      "height": 1
+                    },
+                    {
+                      "type": "frame",
+                      "id": "OecAs",
+                      "name": "b show",
+                      "height": 26,
+                      "stroke": "$border",
+                      "padding": [
+                        0,
+                        11
+                      ],
+                      "justifyContent": "center",
+                      "alignItems": "center",
+                      "children": [
+                        {
+                          "type": "text",
+                          "id": "pjyEg",
+                          "fill": "$text-muted",
+                          "content": "show",
+                          "lineHeight": 1.4,
+                          "fontFamily": "$font-mono",
+                          "fontSize": 11,
+                          "fontWeight": "normal"
+                        }
+                      ]
+                    },
+                    {
+                      "type": "frame",
+                      "id": "vDmzO",
+                      "name": "b close",
+                      "height": 26,
+                      "stroke": "$border",
+                      "padding": [
+                        0,
+                        11
+                      ],
+                      "justifyContent": "center",
+                      "alignItems": "center",
+                      "children": [
+                        {
+                          "type": "text",
+                          "id": "LTApq",
                           "fill": "$text-muted",
                           "content": "close",
                           "lineHeight": 1.4,
@@ -848712,7 +848991,7 @@
                   "type": "text",
                   "id": "KJQM0",
                   "fill": "$text-muted",
-                  "content": "the agent's card: its last retune",
+                  "content": "the card: its last retune, an undo in each state",
                   "lineHeight": 1.4,
                   "fontFamily": "$font-mono",
                   "fontSize": 10,
@@ -848886,7 +849165,7 @@
                 {
                   "type": "frame",
                   "id": "nqwsQ",
-                  "name": "card Worker One · after the undo",
+                  "name": "card Worker One · undo applied",
                   "width": 420,
                   "fill": "$surface",
                   "stroke": "$border",
@@ -848992,7 +849271,7 @@
                                   "type": "text",
                                   "id": "oqlUl",
                                   "fill": "$status-running",
-                                  "content": "undone by you at 14:20: Lead B's change taken back",
+                                  "content": "undone by you at 14:20",
                                   "lineHeight": 1.4,
                                   "fontFamily": "$font-mono",
                                   "fontSize": 10.5,
@@ -849014,6 +849293,426 @@
                           "id": "o56Lqu",
                           "fill": "$text-secondary",
                           "content": "model kimi-k2 to glm-4.6 · applied 14:20",
+                          "lineHeight": 1.4,
+                          "fontFamily": "$font-mono",
+                          "fontSize": 10.5,
+                          "fontWeight": "normal"
+                        }
+                      ]
+                    }
+                  ]
+                },
+                {
+                  "type": "frame",
+                  "id": "BQNtR",
+                  "name": "card Worker One · undo asked",
+                  "width": 420,
+                  "fill": "$surface",
+                  "stroke": "$border",
+                  "strokeWidth": 1,
+                  "layout": "vertical",
+                  "gap": 8,
+                  "padding": 12,
+                  "children": [
+                    {
+                      "type": "frame",
+                      "id": "OegdZ",
+                      "name": "head",
+                      "width": "fill_container",
+                      "gap": 8,
+                      "alignItems": "center",
+                      "children": [
+                        {
+                          "type": "rectangle",
+                          "id": "BpmPU",
+                          "name": "d",
+                          "fill": "$status-idle",
+                          "width": 6,
+                          "height": 6
+                        },
+                        {
+                          "type": "text",
+                          "id": "Yd7KU",
+                          "fill": "$text-primary",
+                          "content": "Worker One",
+                          "lineHeight": 1.4,
+                          "fontFamily": "$font-ui",
+                          "fontSize": 12.5,
+                          "fontWeight": "normal"
+                        },
+                        {
+                          "type": "frame",
+                          "id": "wD4N9",
+                          "name": "sp",
+                          "width": "fill_container",
+                          "height": 1
+                        },
+                        {
+                          "type": "text",
+                          "id": "Htfao",
+                          "fill": "$text-muted",
+                          "content": "idle",
+                          "lineHeight": 1.4,
+                          "fontFamily": "$font-mono",
+                          "fontSize": 10.5,
+                          "fontWeight": "normal"
+                        }
+                      ]
+                    },
+                    {
+                      "type": "text",
+                      "id": "gFdG7",
+                      "fill": "$text-muted",
+                      "content": "codex · kimi-k2 · project-a",
+                      "lineHeight": 1.4,
+                      "fontFamily": "$font-mono",
+                      "fontSize": 10.5,
+                      "fontWeight": "normal"
+                    },
+                    {
+                      "type": "frame",
+                      "id": "KI0GM",
+                      "name": "retune",
+                      "width": "fill_container",
+                      "fill": "$surface-raised",
+                      "stroke": "$border",
+                      "strokeWidth": 1,
+                      "layout": "vertical",
+                      "gap": 4,
+                      "padding": [
+                        8,
+                        10
+                      ],
+                      "children": [
+                        {
+                          "type": "frame",
+                          "id": "f4d43X",
+                          "name": "l",
+                          "width": "fill_container",
+                          "gap": 8,
+                          "alignItems": "center",
+                          "children": [
+                            {
+                              "type": "frame",
+                              "id": "a1MVDT",
+                              "name": "state",
+                              "gap": 6,
+                              "alignItems": "center",
+                              "children": [
+                                {
+                                  "type": "rectangle",
+                                  "id": "epd0k",
+                                  "name": "d",
+                                  "fill": "$status-waiting",
+                                  "width": 6,
+                                  "height": 6
+                                },
+                                {
+                                  "type": "text",
+                                  "id": "Di25R",
+                                  "fill": "$status-waiting",
+                                  "content": "undo asked by you at 14:20",
+                                  "lineHeight": 1.4,
+                                  "fontFamily": "$font-mono",
+                                  "fontSize": 10.5,
+                                  "fontWeight": "normal"
+                                }
+                              ]
+                            },
+                            {
+                              "type": "frame",
+                              "id": "uixvI",
+                              "name": "sp",
+                              "width": "fill_container",
+                              "height": 1
+                            }
+                          ]
+                        },
+                        {
+                          "type": "text",
+                          "id": "oJ4Ug",
+                          "fill": "$text-secondary",
+                          "content": "model kimi-k2 to glm-4.6 · waits for its turn to end",
+                          "lineHeight": 1.4,
+                          "fontFamily": "$font-mono",
+                          "fontSize": 10.5,
+                          "fontWeight": "normal"
+                        }
+                      ]
+                    }
+                  ]
+                },
+                {
+                  "type": "frame",
+                  "id": "pn59e",
+                  "name": "card Worker One · undo failed",
+                  "width": 420,
+                  "fill": "$surface",
+                  "stroke": "$border",
+                  "strokeWidth": 1,
+                  "layout": "vertical",
+                  "gap": 8,
+                  "padding": 12,
+                  "children": [
+                    {
+                      "type": "frame",
+                      "id": "R2Sto",
+                      "name": "head",
+                      "width": "fill_container",
+                      "gap": 8,
+                      "alignItems": "center",
+                      "children": [
+                        {
+                          "type": "rectangle",
+                          "id": "GiRdb",
+                          "name": "d",
+                          "fill": "$status-idle",
+                          "width": 6,
+                          "height": 6
+                        },
+                        {
+                          "type": "text",
+                          "id": "TJfBk",
+                          "fill": "$text-primary",
+                          "content": "Worker One",
+                          "lineHeight": 1.4,
+                          "fontFamily": "$font-ui",
+                          "fontSize": 12.5,
+                          "fontWeight": "normal"
+                        },
+                        {
+                          "type": "frame",
+                          "id": "HG8oy",
+                          "name": "sp",
+                          "width": "fill_container",
+                          "height": 1
+                        },
+                        {
+                          "type": "text",
+                          "id": "Do2oW",
+                          "fill": "$text-muted",
+                          "content": "idle",
+                          "lineHeight": 1.4,
+                          "fontFamily": "$font-mono",
+                          "fontSize": 10.5,
+                          "fontWeight": "normal"
+                        }
+                      ]
+                    },
+                    {
+                      "type": "text",
+                      "id": "ghOh0",
+                      "fill": "$text-muted",
+                      "content": "codex · kimi-k2 · project-a",
+                      "lineHeight": 1.4,
+                      "fontFamily": "$font-mono",
+                      "fontSize": 10.5,
+                      "fontWeight": "normal"
+                    },
+                    {
+                      "type": "frame",
+                      "id": "MH6HJ",
+                      "name": "retune",
+                      "width": "fill_container",
+                      "fill": "$surface-raised",
+                      "stroke": "$border",
+                      "strokeWidth": 1,
+                      "layout": "vertical",
+                      "gap": 4,
+                      "padding": [
+                        8,
+                        10
+                      ],
+                      "children": [
+                        {
+                          "type": "frame",
+                          "id": "FBRZV",
+                          "name": "l",
+                          "width": "fill_container",
+                          "gap": 8,
+                          "alignItems": "center",
+                          "children": [
+                            {
+                              "type": "frame",
+                              "id": "BfIYf",
+                              "name": "state",
+                              "gap": 6,
+                              "alignItems": "center",
+                              "children": [
+                                {
+                                  "type": "rectangle",
+                                  "id": "WsbQ4",
+                                  "name": "d",
+                                  "fill": "$status-error",
+                                  "width": 6,
+                                  "height": 6
+                                },
+                                {
+                                  "type": "text",
+                                  "id": "vkz8g",
+                                  "fill": "$status-error",
+                                  "content": "undo failed: asked by you at 14:20",
+                                  "lineHeight": 1.4,
+                                  "fontFamily": "$font-mono",
+                                  "fontSize": 10.5,
+                                  "fontWeight": "normal"
+                                }
+                              ]
+                            },
+                            {
+                              "type": "frame",
+                              "id": "yCArf",
+                              "name": "sp",
+                              "width": "fill_container",
+                              "height": 1
+                            }
+                          ]
+                        },
+                        {
+                          "type": "text",
+                          "id": "g1kJ5T",
+                          "fill": "$text-secondary",
+                          "content": "model kimi-k2 to glm-4.6 · failed",
+                          "lineHeight": 1.4,
+                          "fontFamily": "$font-mono",
+                          "fontSize": 10.5,
+                          "fontWeight": "normal"
+                        }
+                      ]
+                    }
+                  ]
+                },
+                {
+                  "type": "frame",
+                  "id": "x208D",
+                  "name": "card Worker One · undo cancelled",
+                  "width": 420,
+                  "fill": "$surface",
+                  "stroke": "$border",
+                  "strokeWidth": 1,
+                  "layout": "vertical",
+                  "gap": 8,
+                  "padding": 12,
+                  "children": [
+                    {
+                      "type": "frame",
+                      "id": "JSqyy",
+                      "name": "head",
+                      "width": "fill_container",
+                      "gap": 8,
+                      "alignItems": "center",
+                      "children": [
+                        {
+                          "type": "rectangle",
+                          "id": "c6mmk",
+                          "name": "d",
+                          "fill": "$status-idle",
+                          "width": 6,
+                          "height": 6
+                        },
+                        {
+                          "type": "text",
+                          "id": "ZmZhY",
+                          "fill": "$text-primary",
+                          "content": "Worker One",
+                          "lineHeight": 1.4,
+                          "fontFamily": "$font-ui",
+                          "fontSize": 12.5,
+                          "fontWeight": "normal"
+                        },
+                        {
+                          "type": "frame",
+                          "id": "aTGA9",
+                          "name": "sp",
+                          "width": "fill_container",
+                          "height": 1
+                        },
+                        {
+                          "type": "text",
+                          "id": "Q5554q",
+                          "fill": "$text-muted",
+                          "content": "idle",
+                          "lineHeight": 1.4,
+                          "fontFamily": "$font-mono",
+                          "fontSize": 10.5,
+                          "fontWeight": "normal"
+                        }
+                      ]
+                    },
+                    {
+                      "type": "text",
+                      "id": "Og2wO",
+                      "fill": "$text-muted",
+                      "content": "codex · kimi-k2 · project-a",
+                      "lineHeight": 1.4,
+                      "fontFamily": "$font-mono",
+                      "fontSize": 10.5,
+                      "fontWeight": "normal"
+                    },
+                    {
+                      "type": "frame",
+                      "id": "YpOLz",
+                      "name": "retune",
+                      "width": "fill_container",
+                      "fill": "$surface-raised",
+                      "stroke": "$border",
+                      "strokeWidth": 1,
+                      "layout": "vertical",
+                      "gap": 4,
+                      "padding": [
+                        8,
+                        10
+                      ],
+                      "children": [
+                        {
+                          "type": "frame",
+                          "id": "r4j8m",
+                          "name": "l",
+                          "width": "fill_container",
+                          "gap": 8,
+                          "alignItems": "center",
+                          "children": [
+                            {
+                              "type": "frame",
+                              "id": "N92afs",
+                              "name": "state",
+                              "gap": 6,
+                              "alignItems": "center",
+                              "children": [
+                                {
+                                  "type": "rectangle",
+                                  "id": "w6zcr",
+                                  "name": "d",
+                                  "fill": "$status-idle",
+                                  "width": 6,
+                                  "height": 6
+                                },
+                                {
+                                  "type": "text",
+                                  "id": "O7W8m",
+                                  "fill": "$text-muted",
+                                  "content": "undo cancelled: asked by you at 14:20",
+                                  "lineHeight": 1.4,
+                                  "fontFamily": "$font-mono",
+                                  "fontSize": 10.5,
+                                  "fontWeight": "normal"
+                                }
+                              ]
+                            },
+                            {
+                              "type": "frame",
+                              "id": "AyWnV",
+                              "name": "sp",
+                              "width": "fill_container",
+                              "height": 1
+                            }
+                          ]
+                        },
+                        {
+                          "type": "text",
+                          "id": "aJSdo",
+                          "fill": "$text-secondary",
+                          "content": "model kimi-k2 to glm-4.6 · cancelled",
                           "lineHeight": 1.4,
                           "fontFamily": "$font-mono",
                           "fontSize": 10.5,
@@ -849746,31 +850445,21 @@
                           "type": "rectangle",
                           "id": "dlONA",
                           "name": "d",
-                          "fill": "$status-running",
+                          "fill": "$status-waiting",
                           "width": 6,
                           "height": 6
                         },
                         {
                           "type": "text",
                           "id": "t2g4k",
-                          "fill": "$status-running",
-                          "content": "undone by you at 14:20: model kimi-k2 to glm-4.6",
+                          "fill": "$status-waiting",
+                          "content": "undone by you at 14:20 · effort left alone: changed since",
                           "lineHeight": 1.4,
                           "fontFamily": "$font-mono",
                           "fontSize": 10.5,
                           "fontWeight": "normal"
                         }
                       ]
-                    },
-                    {
-                      "type": "text",
-                      "id": "B5iRAu",
-                      "fill": "$status-waiting",
-                      "content": "effort left at high: Lead C changed it since",
-                      "lineHeight": 1.4,
-                      "fontFamily": "$font-mono",
-                      "fontSize": 10.5,
-                      "fontWeight": "normal"
                     }
                   ]
                 },
@@ -849956,7 +850645,7 @@
                       "type": "text",
                       "id": "QJRN0",
                       "fill": "$text-primary",
-                      "content": "Lead B (project-b) retuned Worker One (project-a): model glm-4.6 to kimi-k2, applied at 14:02.",
+                      "content": "Lead B (project-b) retuned Worker One (project-a): model glm-4.6 to kimi-k2, applied 14:02.",
                       "lineHeight": 1.4,
                       "fontFamily": "$font-ui",
                       "fontSize": 12,
@@ -850196,7 +850885,7 @@
                       "type": "text",
                       "id": "X4Bvf",
                       "fill": "$text-primary",
-                      "content": "The change to Worker One was undone: model kimi-k2 to glm-4.6.",
+                      "content": "undone by you at 14:20",
                       "lineHeight": 1.4,
                       "fontFamily": "$font-ui",
                       "fontSize": 12,
@@ -850264,7 +850953,7 @@
                 {
                   "type": "frame",
                   "id": "yjEsh",
-                  "name": "retune notice · an undo by an agent",
+                  "name": "retune notice · an undo by an agent, applied",
                   "width": 760,
                   "height": 40,
                   "fill": "$surface-raised",
@@ -850281,7 +850970,7 @@
                       "type": "rectangle",
                       "id": "lRbhv",
                       "name": "d",
-                      "fill": "$status-waiting",
+                      "fill": "$status-running",
                       "width": 6,
                       "height": 6
                     },
@@ -850289,7 +850978,7 @@
                       "type": "text",
                       "id": "IaTMM",
                       "fill": "$text-primary",
-                      "content": "Lead C (project-c) undid a change to Worker One (project-a): model kimi-k2 to glm-4.6, applied at 14:30.",
+                      "content": "Lead C (project-c) undid a change to Worker One (project-a): model kimi-k2 to glm-4.6, applied 14:30.",
                       "lineHeight": 1.4,
                       "fontFamily": "$font-ui",
                       "fontSize": 12,
@@ -850343,6 +851032,285 @@
                         {
                           "type": "text",
                           "id": "UyXx3",
+                          "fill": "$text-muted",
+                          "content": "close",
+                          "lineHeight": 1.4,
+                          "fontFamily": "$font-mono",
+                          "fontSize": 11,
+                          "fontWeight": "normal"
+                        }
+                      ]
+                    }
+                  ]
+                },
+                {
+                  "type": "frame",
+                  "id": "DeJbJ",
+                  "name": "retune notice · an undo by an agent, asked",
+                  "width": 760,
+                  "height": 40,
+                  "fill": "$surface-raised",
+                  "stroke": "$border-strong",
+                  "strokeWidth": 1,
+                  "gap": 10,
+                  "padding": [
+                    0,
+                    12
+                  ],
+                  "alignItems": "center",
+                  "children": [
+                    {
+                      "type": "rectangle",
+                      "id": "J0bmWb",
+                      "name": "d",
+                      "fill": "$status-waiting",
+                      "width": 6,
+                      "height": 6
+                    },
+                    {
+                      "type": "text",
+                      "id": "Tcf4m",
+                      "fill": "$text-primary",
+                      "content": "Lead C (project-c) asked to undo a change to Worker One (project-a): model kimi-k2 to glm-4.6: it waits for its turn to end.",
+                      "lineHeight": 1.4,
+                      "fontFamily": "$font-ui",
+                      "fontSize": 12,
+                      "fontWeight": "normal"
+                    },
+                    {
+                      "type": "frame",
+                      "id": "MOWaD",
+                      "name": "sp",
+                      "width": "fill_container",
+                      "height": 1
+                    },
+                    {
+                      "type": "frame",
+                      "id": "dDmor",
+                      "name": "b show",
+                      "height": 26,
+                      "stroke": "$border",
+                      "padding": [
+                        0,
+                        11
+                      ],
+                      "justifyContent": "center",
+                      "alignItems": "center",
+                      "children": [
+                        {
+                          "type": "text",
+                          "id": "J1eDS",
+                          "fill": "$text-muted",
+                          "content": "show",
+                          "lineHeight": 1.4,
+                          "fontFamily": "$font-mono",
+                          "fontSize": 11,
+                          "fontWeight": "normal"
+                        }
+                      ]
+                    },
+                    {
+                      "type": "frame",
+                      "id": "Q514pF",
+                      "name": "b close",
+                      "height": 26,
+                      "stroke": "$border",
+                      "padding": [
+                        0,
+                        11
+                      ],
+                      "justifyContent": "center",
+                      "alignItems": "center",
+                      "children": [
+                        {
+                          "type": "text",
+                          "id": "m5VQ4",
+                          "fill": "$text-muted",
+                          "content": "close",
+                          "lineHeight": 1.4,
+                          "fontFamily": "$font-mono",
+                          "fontSize": 11,
+                          "fontWeight": "normal"
+                        }
+                      ]
+                    }
+                  ]
+                },
+                {
+                  "type": "frame",
+                  "id": "vjYTT",
+                  "name": "retune notice · an undo by an agent, failed",
+                  "width": 760,
+                  "height": 40,
+                  "fill": "$surface-raised",
+                  "stroke": "$border-strong",
+                  "strokeWidth": 1,
+                  "gap": 10,
+                  "padding": [
+                    0,
+                    12
+                  ],
+                  "alignItems": "center",
+                  "children": [
+                    {
+                      "type": "rectangle",
+                      "id": "vTwrX",
+                      "name": "d",
+                      "fill": "$status-error",
+                      "width": 6,
+                      "height": 6
+                    },
+                    {
+                      "type": "text",
+                      "id": "UwXu4",
+                      "fill": "$text-primary",
+                      "content": "Lead C (project-c) asked to undo a change to Worker One (project-a): model kimi-k2 to glm-4.6, failed.",
+                      "lineHeight": 1.4,
+                      "fontFamily": "$font-ui",
+                      "fontSize": 12,
+                      "fontWeight": "normal"
+                    },
+                    {
+                      "type": "frame",
+                      "id": "gjUQl",
+                      "name": "sp",
+                      "width": "fill_container",
+                      "height": 1
+                    },
+                    {
+                      "type": "frame",
+                      "id": "QTpPK",
+                      "name": "b show",
+                      "height": 26,
+                      "stroke": "$border",
+                      "padding": [
+                        0,
+                        11
+                      ],
+                      "justifyContent": "center",
+                      "alignItems": "center",
+                      "children": [
+                        {
+                          "type": "text",
+                          "id": "W47d9",
+                          "fill": "$text-muted",
+                          "content": "show",
+                          "lineHeight": 1.4,
+                          "fontFamily": "$font-mono",
+                          "fontSize": 11,
+                          "fontWeight": "normal"
+                        }
+                      ]
+                    },
+                    {
+                      "type": "frame",
+                      "id": "KwP4p",
+                      "name": "b close",
+                      "height": 26,
+                      "stroke": "$border",
+                      "padding": [
+                        0,
+                        11
+                      ],
+                      "justifyContent": "center",
+                      "alignItems": "center",
+                      "children": [
+                        {
+                          "type": "text",
+                          "id": "R7NJS",
+                          "fill": "$text-muted",
+                          "content": "close",
+                          "lineHeight": 1.4,
+                          "fontFamily": "$font-mono",
+                          "fontSize": 11,
+                          "fontWeight": "normal"
+                        }
+                      ]
+                    }
+                  ]
+                },
+                {
+                  "type": "frame",
+                  "id": "ieKMH",
+                  "name": "retune notice · an undo by an agent, cancelled",
+                  "width": 760,
+                  "height": 40,
+                  "fill": "$surface-raised",
+                  "stroke": "$border-strong",
+                  "strokeWidth": 1,
+                  "gap": 10,
+                  "padding": [
+                    0,
+                    12
+                  ],
+                  "alignItems": "center",
+                  "children": [
+                    {
+                      "type": "rectangle",
+                      "id": "CqZjC",
+                      "name": "d",
+                      "fill": "$status-idle",
+                      "width": 6,
+                      "height": 6
+                    },
+                    {
+                      "type": "text",
+                      "id": "VLzPi",
+                      "fill": "$text-primary",
+                      "content": "Lead C (project-c) asked to undo a change to Worker One (project-a): model kimi-k2 to glm-4.6, cancelled.",
+                      "lineHeight": 1.4,
+                      "fontFamily": "$font-ui",
+                      "fontSize": 12,
+                      "fontWeight": "normal"
+                    },
+                    {
+                      "type": "frame",
+                      "id": "xyqvs",
+                      "name": "sp",
+                      "width": "fill_container",
+                      "height": 1
+                    },
+                    {
+                      "type": "frame",
+                      "id": "IBqEb",
+                      "name": "b show",
+                      "height": 26,
+                      "stroke": "$border",
+                      "padding": [
+                        0,
+                        11
+                      ],
+                      "justifyContent": "center",
+                      "alignItems": "center",
+                      "children": [
+                        {
+                          "type": "text",
+                          "id": "i5xgiL",
+                          "fill": "$text-muted",
+                          "content": "show",
+                          "lineHeight": 1.4,
+                          "fontFamily": "$font-mono",
+                          "fontSize": 11,
+                          "fontWeight": "normal"
+                        }
+                      ]
+                    },
+                    {
+                      "type": "frame",
+                      "id": "CG3mI",
+                      "name": "b close",
+                      "height": 26,
+                      "stroke": "$border",
+                      "padding": [
+                        0,
+                        11
+                      ],
+                      "justifyContent": "center",
+                      "alignItems": "center",
+                      "children": [
+                        {
+                          "type": "text",
+                          "id": "FTmxr",
                           "fill": "$text-muted",
                           "content": "close",
                           "lineHeight": 1.4,
@@ -850409,7 +851377,7 @@
                   "type": "text",
                   "id": "oWRsg",
                   "fill": "$text-muted",
-                  "content": "the agent's card: its last retune",
+                  "content": "the card: its last retune, an undo in each state",
                   "lineHeight": 1.4,
                   "fontFamily": "$font-mono",
                   "fontSize": 10,
@@ -850583,7 +851551,7 @@
                 {
                   "type": "frame",
                   "id": "J9gKw",
-                  "name": "card Worker One · after the undo",
+                  "name": "card Worker One · undo applied",
                   "width": 420,
                   "fill": "$surface",
                   "stroke": "$border",
@@ -850689,7 +851657,7 @@
                                   "type": "text",
                                   "id": "iEUi0",
                                   "fill": "$status-running",
-                                  "content": "undone by you at 14:20: Lead B's change taken back",
+                                  "content": "undone by you at 14:20",
                                   "lineHeight": 1.4,
                                   "fontFamily": "$font-mono",
                                   "fontSize": 10.5,
@@ -850711,6 +851679,426 @@
                           "id": "LbrZp",
                           "fill": "$text-secondary",
                           "content": "model kimi-k2 to glm-4.6 · applied 14:20",
+                          "lineHeight": 1.4,
+                          "fontFamily": "$font-mono",
+                          "fontSize": 10.5,
+                          "fontWeight": "normal"
+                        }
+                      ]
+                    }
+                  ]
+                },
+                {
+                  "type": "frame",
+                  "id": "YVqqp",
+                  "name": "card Worker One · undo asked",
+                  "width": 420,
+                  "fill": "$surface",
+                  "stroke": "$border",
+                  "strokeWidth": 1,
+                  "layout": "vertical",
+                  "gap": 8,
+                  "padding": 12,
+                  "children": [
+                    {
+                      "type": "frame",
+                      "id": "PRst3",
+                      "name": "head",
+                      "width": "fill_container",
+                      "gap": 8,
+                      "alignItems": "center",
+                      "children": [
+                        {
+                          "type": "rectangle",
+                          "id": "P4yS1H",
+                          "name": "d",
+                          "fill": "$status-idle",
+                          "width": 6,
+                          "height": 6
+                        },
+                        {
+                          "type": "text",
+                          "id": "GtzEu",
+                          "fill": "$text-primary",
+                          "content": "Worker One",
+                          "lineHeight": 1.4,
+                          "fontFamily": "$font-ui",
+                          "fontSize": 12.5,
+                          "fontWeight": "normal"
+                        },
+                        {
+                          "type": "frame",
+                          "id": "fUhPg",
+                          "name": "sp",
+                          "width": "fill_container",
+                          "height": 1
+                        },
+                        {
+                          "type": "text",
+                          "id": "ASJLp",
+                          "fill": "$text-muted",
+                          "content": "idle",
+                          "lineHeight": 1.4,
+                          "fontFamily": "$font-mono",
+                          "fontSize": 10.5,
+                          "fontWeight": "normal"
+                        }
+                      ]
+                    },
+                    {
+                      "type": "text",
+                      "id": "KeLRj",
+                      "fill": "$text-muted",
+                      "content": "codex · kimi-k2 · project-a",
+                      "lineHeight": 1.4,
+                      "fontFamily": "$font-mono",
+                      "fontSize": 10.5,
+                      "fontWeight": "normal"
+                    },
+                    {
+                      "type": "frame",
+                      "id": "kmrQb",
+                      "name": "retune",
+                      "width": "fill_container",
+                      "fill": "$surface-raised",
+                      "stroke": "$border",
+                      "strokeWidth": 1,
+                      "layout": "vertical",
+                      "gap": 4,
+                      "padding": [
+                        8,
+                        10
+                      ],
+                      "children": [
+                        {
+                          "type": "frame",
+                          "id": "kbbel",
+                          "name": "l",
+                          "width": "fill_container",
+                          "gap": 8,
+                          "alignItems": "center",
+                          "children": [
+                            {
+                              "type": "frame",
+                              "id": "DtBcy",
+                              "name": "state",
+                              "gap": 6,
+                              "alignItems": "center",
+                              "children": [
+                                {
+                                  "type": "rectangle",
+                                  "id": "YzRsP",
+                                  "name": "d",
+                                  "fill": "$status-waiting",
+                                  "width": 6,
+                                  "height": 6
+                                },
+                                {
+                                  "type": "text",
+                                  "id": "N4ZCW5",
+                                  "fill": "$status-waiting",
+                                  "content": "undo asked by you at 14:20",
+                                  "lineHeight": 1.4,
+                                  "fontFamily": "$font-mono",
+                                  "fontSize": 10.5,
+                                  "fontWeight": "normal"
+                                }
+                              ]
+                            },
+                            {
+                              "type": "frame",
+                              "id": "IZLAr",
+                              "name": "sp",
+                              "width": "fill_container",
+                              "height": 1
+                            }
+                          ]
+                        },
+                        {
+                          "type": "text",
+                          "id": "eT1Li",
+                          "fill": "$text-secondary",
+                          "content": "model kimi-k2 to glm-4.6 · waits for its turn to end",
+                          "lineHeight": 1.4,
+                          "fontFamily": "$font-mono",
+                          "fontSize": 10.5,
+                          "fontWeight": "normal"
+                        }
+                      ]
+                    }
+                  ]
+                },
+                {
+                  "type": "frame",
+                  "id": "wW4Qu",
+                  "name": "card Worker One · undo failed",
+                  "width": 420,
+                  "fill": "$surface",
+                  "stroke": "$border",
+                  "strokeWidth": 1,
+                  "layout": "vertical",
+                  "gap": 8,
+                  "padding": 12,
+                  "children": [
+                    {
+                      "type": "frame",
+                      "id": "ooTxE",
+                      "name": "head",
+                      "width": "fill_container",
+                      "gap": 8,
+                      "alignItems": "center",
+                      "children": [
+                        {
+                          "type": "rectangle",
+                          "id": "t7Je1",
+                          "name": "d",
+                          "fill": "$status-idle",
+                          "width": 6,
+                          "height": 6
+                        },
+                        {
+                          "type": "text",
+                          "id": "Hu1eY",
+                          "fill": "$text-primary",
+                          "content": "Worker One",
+                          "lineHeight": 1.4,
+                          "fontFamily": "$font-ui",
+                          "fontSize": 12.5,
+                          "fontWeight": "normal"
+                        },
+                        {
+                          "type": "frame",
+                          "id": "n1Prxo",
+                          "name": "sp",
+                          "width": "fill_container",
+                          "height": 1
+                        },
+                        {
+                          "type": "text",
+                          "id": "KYb7W",
+                          "fill": "$text-muted",
+                          "content": "idle",
+                          "lineHeight": 1.4,
+                          "fontFamily": "$font-mono",
+                          "fontSize": 10.5,
+                          "fontWeight": "normal"
+                        }
+                      ]
+                    },
+                    {
+                      "type": "text",
+                      "id": "aFUxT",
+                      "fill": "$text-muted",
+                      "content": "codex · kimi-k2 · project-a",
+                      "lineHeight": 1.4,
+                      "fontFamily": "$font-mono",
+                      "fontSize": 10.5,
+                      "fontWeight": "normal"
+                    },
+                    {
+                      "type": "frame",
+                      "id": "jX1XQ",
+                      "name": "retune",
+                      "width": "fill_container",
+                      "fill": "$surface-raised",
+                      "stroke": "$border",
+                      "strokeWidth": 1,
+                      "layout": "vertical",
+                      "gap": 4,
+                      "padding": [
+                        8,
+                        10
+                      ],
+                      "children": [
+                        {
+                          "type": "frame",
+                          "id": "X00mn6",
+                          "name": "l",
+                          "width": "fill_container",
+                          "gap": 8,
+                          "alignItems": "center",
+                          "children": [
+                            {
+                              "type": "frame",
+                              "id": "Zs7Rd",
+                              "name": "state",
+                              "gap": 6,
+                              "alignItems": "center",
+                              "children": [
+                                {
+                                  "type": "rectangle",
+                                  "id": "FBjm6",
+                                  "name": "d",
+                                  "fill": "$status-error",
+                                  "width": 6,
+                                  "height": 6
+                                },
+                                {
+                                  "type": "text",
+                                  "id": "WsluG",
+                                  "fill": "$status-error",
+                                  "content": "undo failed: asked by you at 14:20",
+                                  "lineHeight": 1.4,
+                                  "fontFamily": "$font-mono",
+                                  "fontSize": 10.5,
+                                  "fontWeight": "normal"
+                                }
+                              ]
+                            },
+                            {
+                              "type": "frame",
+                              "id": "dGVZt",
+                              "name": "sp",
+                              "width": "fill_container",
+                              "height": 1
+                            }
+                          ]
+                        },
+                        {
+                          "type": "text",
+                          "id": "i8bp3z",
+                          "fill": "$text-secondary",
+                          "content": "model kimi-k2 to glm-4.6 · failed",
+                          "lineHeight": 1.4,
+                          "fontFamily": "$font-mono",
+                          "fontSize": 10.5,
+                          "fontWeight": "normal"
+                        }
+                      ]
+                    }
+                  ]
+                },
+                {
+                  "type": "frame",
+                  "id": "pXqhs",
+                  "name": "card Worker One · undo cancelled",
+                  "width": 420,
+                  "fill": "$surface",
+                  "stroke": "$border",
+                  "strokeWidth": 1,
+                  "layout": "vertical",
+                  "gap": 8,
+                  "padding": 12,
+                  "children": [
+                    {
+                      "type": "frame",
+                      "id": "TW90f",
+                      "name": "head",
+                      "width": "fill_container",
+                      "gap": 8,
+                      "alignItems": "center",
+                      "children": [
+                        {
+                          "type": "rectangle",
+                          "id": "CoFdI",
+                          "name": "d",
+                          "fill": "$status-idle",
+                          "width": 6,
+                          "height": 6
+                        },
+                        {
+                          "type": "text",
+                          "id": "w8SXq0",
+                          "fill": "$text-primary",
+                          "content": "Worker One",
+                          "lineHeight": 1.4,
+                          "fontFamily": "$font-ui",
+                          "fontSize": 12.5,
+                          "fontWeight": "normal"
+                        },
+                        {
+                          "type": "frame",
+                          "id": "nbXNx",
+                          "name": "sp",
+                          "width": "fill_container",
+                          "height": 1
+                        },
+                        {
+                          "type": "text",
+                          "id": "kx2Ky",
+                          "fill": "$text-muted",
+                          "content": "idle",
+                          "lineHeight": 1.4,
+                          "fontFamily": "$font-mono",
+                          "fontSize": 10.5,
+                          "fontWeight": "normal"
+                        }
+                      ]
+                    },
+                    {
+                      "type": "text",
+                      "id": "mR5rc",
+                      "fill": "$text-muted",
+                      "content": "codex · kimi-k2 · project-a",
+                      "lineHeight": 1.4,
+                      "fontFamily": "$font-mono",
+                      "fontSize": 10.5,
+                      "fontWeight": "normal"
+                    },
+                    {
+                      "type": "frame",
+                      "id": "Botu0",
+                      "name": "retune",
+                      "width": "fill_container",
+                      "fill": "$surface-raised",
+                      "stroke": "$border",
+                      "strokeWidth": 1,
+                      "layout": "vertical",
+                      "gap": 4,
+                      "padding": [
+                        8,
+                        10
+                      ],
+                      "children": [
+                        {
+                          "type": "frame",
+                          "id": "q3yo4",
+                          "name": "l",
+                          "width": "fill_container",
+                          "gap": 8,
+                          "alignItems": "center",
+                          "children": [
+                            {
+                              "type": "frame",
+                              "id": "UiS0o",
+                              "name": "state",
+                              "gap": 6,
+                              "alignItems": "center",
+                              "children": [
+                                {
+                                  "type": "rectangle",
+                                  "id": "mUf7j",
+                                  "name": "d",
+                                  "fill": "$status-idle",
+                                  "width": 6,
+                                  "height": 6
+                                },
+                                {
+                                  "type": "text",
+                                  "id": "OXxCy",
+                                  "fill": "$text-muted",
+                                  "content": "undo cancelled: asked by you at 14:20",
+                                  "lineHeight": 1.4,
+                                  "fontFamily": "$font-mono",
+                                  "fontSize": 10.5,
+                                  "fontWeight": "normal"
+                                }
+                              ]
+                            },
+                            {
+                              "type": "frame",
+                              "id": "niJ0N",
+                              "name": "sp",
+                              "width": "fill_container",
+                              "height": 1
+                            }
+                          ]
+                        },
+                        {
+                          "type": "text",
+                          "id": "MLPpd",
+                          "fill": "$text-secondary",
+                          "content": "model kimi-k2 to glm-4.6 · cancelled",
                           "lineHeight": 1.4,
                           "fontFamily": "$font-mono",
                           "fontSize": 10.5,
@@ -851443,31 +852831,21 @@
                           "type": "rectangle",
                           "id": "Kkbpp",
                           "name": "d",
-                          "fill": "$status-running",
+                          "fill": "$status-waiting",
                           "width": 6,
                           "height": 6
                         },
                         {
                           "type": "text",
                           "id": "PPrKc",
-                          "fill": "$status-running",
-                          "content": "undone by you at 14:20: model kimi-k2 to glm-4.6",
+                          "fill": "$status-waiting",
+                          "content": "undone by you at 14:20 · effort left alone: changed since",
                           "lineHeight": 1.4,
                           "fontFamily": "$font-mono",
                           "fontSize": 10.5,
                           "fontWeight": "normal"
                         }
                       ]
-                    },
-                    {
-                      "type": "text",
-                      "id": "b2rTh",
-                      "fill": "$status-waiting",
-                      "content": "effort left at high: Lead C changed it since",
-                      "lineHeight": 1.4,
-                      "fontFamily": "$font-mono",
-                      "fontSize": 10.5,
-                      "fontWeight": "normal"
                     }
                   ]
                 },
