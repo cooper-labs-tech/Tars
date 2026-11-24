@@ -841239,7 +841239,7 @@
                   "type": "text",
                   "id": "X5xKN",
                   "fill": "$text-muted",
-                  "content": "check: checking, reachable, a key refused, not reached, models not read (the last list kept)",
+                  "content": "check: checking, reachable, a key refused, not reached, models not read; added without its models",
                   "lineHeight": 1.4,
                   "fontFamily": "$font-mono",
                   "fontSize": 10,
@@ -842238,6 +842238,265 @@
                           ]
                         }
                       ]
+                    }
+                  ]
+                },
+                {
+                  "type": "frame",
+                  "id": "CFmp6",
+                  "name": "endpoint Home vLLM added without its models",
+                  "width": "fill_container",
+                  "stroke": "$border",
+                  "strokeWidth": {
+                    "bottom": 1
+                  },
+                  "layout": "vertical",
+                  "gap": 8,
+                  "padding": [
+                    11,
+                    0
+                  ],
+                  "children": [
+                    {
+                      "type": "frame",
+                      "id": "L47Pu",
+                      "name": "line",
+                      "width": "fill_container",
+                      "gap": 16,
+                      "alignItems": "center",
+                      "children": [
+                        {
+                          "type": "frame",
+                          "id": "Y7UeWI",
+                          "name": "who",
+                          "width": 330,
+                          "layout": "vertical",
+                          "gap": 2,
+                          "children": [
+                            {
+                              "type": "text",
+                              "id": "c3a0n",
+                              "fill": "$text-primary",
+                              "content": "Home vLLM",
+                              "lineHeight": 1.4,
+                              "fontFamily": "$font-ui",
+                              "fontSize": 12.5,
+                              "fontWeight": "normal"
+                            },
+                            {
+                              "type": "frame",
+                              "id": "uPmSl",
+                              "name": "state",
+                              "gap": 6,
+                              "alignItems": "center",
+                              "children": [
+                                {
+                                  "type": "rectangle",
+                                  "id": "UagGn",
+                                  "name": "d",
+                                  "fill": "$status-running",
+                                  "width": 6,
+                                  "height": 6
+                                },
+                                {
+                                  "type": "text",
+                                  "id": "iC93C",
+                                  "fill": "$status-running",
+                                  "content": "reachable · 9 ms · checked 13:40",
+                                  "lineHeight": 1.4,
+                                  "fontFamily": "$font-mono",
+                                  "fontSize": 10.5,
+                                  "fontWeight": "normal"
+                                }
+                              ]
+                            },
+                            {
+                              "type": "text",
+                              "id": "NyM8B",
+                              "fill": "$text-muted",
+                              "content": "http://192.0.2.40:8000/v1",
+                              "lineHeight": 1.4,
+                              "fontFamily": "$font-mono",
+                              "fontSize": 10.5,
+                              "fontWeight": "normal"
+                            },
+                            {
+                              "type": "text",
+                              "id": "wjl14",
+                              "fill": "$text-muted",
+                              "content": "a key is set · never shown",
+                              "lineHeight": 1.4,
+                              "fontFamily": "$font-mono",
+                              "fontSize": 10.5,
+                              "fontWeight": "normal"
+                            },
+                            {
+                              "type": "text",
+                              "id": "pZ6fu",
+                              "fill": "$text-muted",
+                              "content": "used by no agent",
+                              "lineHeight": 1.4,
+                              "fontFamily": "$font-mono",
+                              "fontSize": 10.5,
+                              "fontWeight": "normal"
+                            }
+                          ]
+                        },
+                        {
+                          "type": "frame",
+                          "id": "M2hMUa",
+                          "name": "models",
+                          "width": 250,
+                          "layout": "vertical",
+                          "gap": 2,
+                          "children": [
+                            {
+                              "type": "text",
+                              "id": "s0NTL",
+                              "fill": "$text-secondary",
+                              "content": "0 models",
+                              "lineHeight": 1.4,
+                              "fontFamily": "$font-mono",
+                              "fontSize": 10.5,
+                              "fontWeight": "normal"
+                            },
+                            {
+                              "type": "text",
+                              "id": "mKrDd",
+                              "fill": "$text-muted",
+                              "textGrowth": "fixed-width",
+                              "width": 250,
+                              "content": "no model read",
+                              "lineHeight": 1.4,
+                              "fontFamily": "$font-mono",
+                              "fontSize": 10.5,
+                              "fontWeight": "normal"
+                            }
+                          ]
+                        },
+                        {
+                          "type": "frame",
+                          "id": "GZz6l",
+                          "name": "sp",
+                          "width": "fill_container",
+                          "height": 1
+                        },
+                        {
+                          "type": "frame",
+                          "id": "SP3No",
+                          "name": "controls",
+                          "gap": 8,
+                          "alignItems": "center",
+                          "children": [
+                            {
+                              "type": "frame",
+                              "id": "RGKBu",
+                              "name": "traces switch",
+                              "gap": 6,
+                              "alignItems": "center",
+                              "children": [
+                                {
+                                  "type": "text",
+                                  "id": "ntIvt",
+                                  "fill": "$text-muted",
+                                  "content": "allows traces",
+                                  "lineHeight": 1.4,
+                                  "fontFamily": "$font-mono",
+                                  "fontSize": 10.5,
+                                  "fontWeight": "normal"
+                                },
+                                {
+                                  "type": "frame",
+                                  "id": "Z8nfF",
+                                  "name": "Toggle off",
+                                  "width": 30,
+                                  "height": 16,
+                                  "fill": "$surface-raised",
+                                  "stroke": "$border",
+                                  "strokeWidth": 1,
+                                  "layout": "none",
+                                  "children": [
+                                    {
+                                      "type": "rectangle",
+                                      "id": "G3TFg",
+                                      "x": 2,
+                                      "y": 1,
+                                      "name": "knob",
+                                      "fill": "$text-secondary",
+                                      "width": 12,
+                                      "height": 12
+                                    }
+                                  ]
+                                }
+                              ]
+                            },
+                            {
+                              "type": "frame",
+                              "id": "TfSFx",
+                              "name": "b check",
+                              "height": 26,
+                              "fill": "$surface",
+                              "stroke": "$border",
+                              "strokeWidth": 1,
+                              "padding": [
+                                0,
+                                11
+                              ],
+                              "justifyContent": "center",
+                              "alignItems": "center",
+                              "children": [
+                                {
+                                  "type": "text",
+                                  "id": "jVQ5F",
+                                  "fill": "$text-primary",
+                                  "content": "check",
+                                  "lineHeight": 1.4,
+                                  "fontFamily": "$font-mono",
+                                  "fontSize": 11,
+                                  "fontWeight": "normal"
+                                }
+                              ]
+                            },
+                            {
+                              "type": "frame",
+                              "id": "SkqXN",
+                              "name": "b remove",
+                              "height": 26,
+                              "fill": "$surface",
+                              "stroke": "$border",
+                              "strokeWidth": 1,
+                              "padding": [
+                                0,
+                                11
+                              ],
+                              "justifyContent": "center",
+                              "alignItems": "center",
+                              "children": [
+                                {
+                                  "type": "text",
+                                  "id": "SeYIr",
+                                  "fill": "$text-primary",
+                                  "content": "remove",
+                                  "lineHeight": 1.4,
+                                  "fontFamily": "$font-mono",
+                                  "fontSize": 11,
+                                  "fontWeight": "normal"
+                                }
+                              ]
+                            }
+                          ]
+                        }
+                      ]
+                    },
+                    {
+                      "type": "text",
+                      "id": "rni0P",
+                      "fill": "$status-error",
+                      "content": "added without its models: Tars could not save the settings (ENOSPC): nothing was changed.",
+                      "lineHeight": 1.4,
+                      "fontFamily": "$font-mono",
+                      "fontSize": 10.5,
+                      "fontWeight": "normal"
                     }
                   ]
                 }
@@ -844671,7 +844930,7 @@
                   "type": "text",
                   "id": "RhhMu",
                   "fill": "$text-muted",
-                  "content": "remove: refused while agents use it; otherwise asked once",
+                  "content": "remove: refused while agents use it, or with main's reason; otherwise asked once",
                   "lineHeight": 1.4,
                   "fontFamily": "$font-mono",
                   "fontSize": 10,
@@ -845317,6 +845576,347 @@
                                 {
                                   "type": "text",
                                   "id": "OJNJ3",
+                                  "fill": "$text-primary",
+                                  "content": "keep it",
+                                  "lineHeight": 1.4,
+                                  "fontFamily": "$font-mono",
+                                  "fontSize": 11,
+                                  "fontWeight": "normal"
+                                }
+                              ]
+                            }
+                          ]
+                        }
+                      ]
+                    }
+                  ]
+                },
+                {
+                  "type": "frame",
+                  "id": "rDwBm",
+                  "name": "endpoint Home vLLM not removed, main's reason",
+                  "width": "fill_container",
+                  "stroke": "$border",
+                  "strokeWidth": {
+                    "bottom": 1
+                  },
+                  "layout": "vertical",
+                  "gap": 8,
+                  "padding": [
+                    11,
+                    0
+                  ],
+                  "children": [
+                    {
+                      "type": "frame",
+                      "id": "GPLTG",
+                      "name": "line",
+                      "width": "fill_container",
+                      "gap": 16,
+                      "alignItems": "center",
+                      "children": [
+                        {
+                          "type": "frame",
+                          "id": "vMEC0",
+                          "name": "who",
+                          "width": 330,
+                          "layout": "vertical",
+                          "gap": 2,
+                          "children": [
+                            {
+                              "type": "text",
+                              "id": "opjru",
+                              "fill": "$text-primary",
+                              "content": "Home vLLM",
+                              "lineHeight": 1.4,
+                              "fontFamily": "$font-ui",
+                              "fontSize": 12.5,
+                              "fontWeight": "normal"
+                            },
+                            {
+                              "type": "frame",
+                              "id": "C7oXr4",
+                              "name": "state",
+                              "gap": 6,
+                              "alignItems": "center",
+                              "children": [
+                                {
+                                  "type": "rectangle",
+                                  "id": "NOZmW",
+                                  "name": "d",
+                                  "fill": "$status-running",
+                                  "width": 6,
+                                  "height": 6
+                                },
+                                {
+                                  "type": "text",
+                                  "id": "O9Aa4",
+                                  "fill": "$status-running",
+                                  "content": "reachable · 9 ms · checked 13:40",
+                                  "lineHeight": 1.4,
+                                  "fontFamily": "$font-mono",
+                                  "fontSize": 10.5,
+                                  "fontWeight": "normal"
+                                }
+                              ]
+                            },
+                            {
+                              "type": "text",
+                              "id": "jO08e",
+                              "fill": "$text-muted",
+                              "content": "http://192.0.2.40:8000/v1",
+                              "lineHeight": 1.4,
+                              "fontFamily": "$font-mono",
+                              "fontSize": 10.5,
+                              "fontWeight": "normal"
+                            },
+                            {
+                              "type": "text",
+                              "id": "kymWQ",
+                              "fill": "$text-muted",
+                              "content": "a key is set · never shown",
+                              "lineHeight": 1.4,
+                              "fontFamily": "$font-mono",
+                              "fontSize": 10.5,
+                              "fontWeight": "normal"
+                            },
+                            {
+                              "type": "text",
+                              "id": "UqGhI",
+                              "fill": "$text-muted",
+                              "content": "used by no agent",
+                              "lineHeight": 1.4,
+                              "fontFamily": "$font-mono",
+                              "fontSize": 10.5,
+                              "fontWeight": "normal"
+                            }
+                          ]
+                        },
+                        {
+                          "type": "frame",
+                          "id": "HhpOH",
+                          "name": "models",
+                          "width": 250,
+                          "layout": "vertical",
+                          "gap": 2,
+                          "children": [
+                            {
+                              "type": "text",
+                              "id": "BDNbX",
+                              "fill": "$text-secondary",
+                              "content": "3 models · read 13:40",
+                              "lineHeight": 1.4,
+                              "fontFamily": "$font-mono",
+                              "fontSize": 10.5,
+                              "fontWeight": "normal"
+                            },
+                            {
+                              "type": "text",
+                              "id": "fS8O1",
+                              "fill": "$text-muted",
+                              "textGrowth": "fixed-width",
+                              "width": 250,
+                              "content": "qwen3-coder-30b · devstral-small · llama-3.3-70b",
+                              "lineHeight": 1.4,
+                              "fontFamily": "$font-mono",
+                              "fontSize": 10.5,
+                              "fontWeight": "normal"
+                            }
+                          ]
+                        },
+                        {
+                          "type": "frame",
+                          "id": "PNPRv",
+                          "name": "sp",
+                          "width": "fill_container",
+                          "height": 1
+                        },
+                        {
+                          "type": "frame",
+                          "id": "qpwZt",
+                          "name": "controls",
+                          "gap": 8,
+                          "alignItems": "center",
+                          "children": [
+                            {
+                              "type": "frame",
+                              "id": "bs3tN",
+                              "name": "traces switch",
+                              "gap": 6,
+                              "alignItems": "center",
+                              "children": [
+                                {
+                                  "type": "text",
+                                  "id": "VNbTG",
+                                  "fill": "$text-muted",
+                                  "content": "allows traces",
+                                  "lineHeight": 1.4,
+                                  "fontFamily": "$font-mono",
+                                  "fontSize": 10.5,
+                                  "fontWeight": "normal"
+                                },
+                                {
+                                  "type": "frame",
+                                  "id": "YoudU",
+                                  "name": "Toggle off",
+                                  "width": 30,
+                                  "height": 16,
+                                  "fill": "$surface-raised",
+                                  "stroke": "$border",
+                                  "strokeWidth": 1,
+                                  "layout": "none",
+                                  "children": [
+                                    {
+                                      "type": "rectangle",
+                                      "id": "Z5a9VJ",
+                                      "x": 2,
+                                      "y": 1,
+                                      "name": "knob",
+                                      "fill": "$text-secondary",
+                                      "width": 12,
+                                      "height": 12
+                                    }
+                                  ]
+                                }
+                              ]
+                            },
+                            {
+                              "type": "frame",
+                              "id": "od4jo",
+                              "name": "b check",
+                              "height": 26,
+                              "fill": "$surface",
+                              "stroke": "$border",
+                              "strokeWidth": 1,
+                              "padding": [
+                                0,
+                                11
+                              ],
+                              "justifyContent": "center",
+                              "alignItems": "center",
+                              "children": [
+                                {
+                                  "type": "text",
+                                  "id": "t6TVM",
+                                  "fill": "$text-primary",
+                                  "content": "check",
+                                  "lineHeight": 1.4,
+                                  "fontFamily": "$font-mono",
+                                  "fontSize": 11,
+                                  "fontWeight": "normal"
+                                }
+                              ]
+                            },
+                            {
+                              "type": "frame",
+                              "id": "UO3kz",
+                              "name": "b remove",
+                              "height": 26,
+                              "fill": "$surface",
+                              "stroke": "$border",
+                              "strokeWidth": 1,
+                              "padding": [
+                                0,
+                                11
+                              ],
+                              "justifyContent": "center",
+                              "alignItems": "center",
+                              "children": [
+                                {
+                                  "type": "text",
+                                  "id": "UCGb8",
+                                  "fill": "$text-primary",
+                                  "content": "remove",
+                                  "lineHeight": 1.4,
+                                  "fontFamily": "$font-mono",
+                                  "fontSize": 11,
+                                  "fontWeight": "normal"
+                                }
+                              ]
+                            }
+                          ]
+                        }
+                      ]
+                    },
+                    {
+                      "type": "frame",
+                      "id": "E60w6e",
+                      "name": "notice",
+                      "width": "fill_container",
+                      "fill": "$surface-raised",
+                      "stroke": "$status-error-40",
+                      "strokeWidth": 1,
+                      "layout": "vertical",
+                      "gap": 10,
+                      "padding": [
+                        12,
+                        14
+                      ],
+                      "children": [
+                        {
+                          "type": "text",
+                          "id": "lEEY0",
+                          "fill": "$text-secondary",
+                          "textGrowth": "fixed-width",
+                          "width": 860,
+                          "content": "Not removed: Tars could not save the settings (ENOSPC): nothing was changed.",
+                          "lineHeight": 1.4,
+                          "fontFamily": "$font-ui",
+                          "fontSize": 12,
+                          "fontWeight": "normal"
+                        },
+                        {
+                          "type": "frame",
+                          "id": "Y7YD8",
+                          "name": "answers",
+                          "gap": 8,
+                          "alignItems": "center",
+                          "children": [
+                            {
+                              "type": "frame",
+                              "id": "Gy1Xv",
+                              "name": "b remove",
+                              "height": 26,
+                              "fill": "$surface",
+                              "stroke": "$status-error-40",
+                              "strokeWidth": 1,
+                              "padding": [
+                                0,
+                                11
+                              ],
+                              "justifyContent": "center",
+                              "alignItems": "center",
+                              "children": [
+                                {
+                                  "type": "text",
+                                  "id": "Q4cQv",
+                                  "fill": "$status-error",
+                                  "content": "remove",
+                                  "lineHeight": 1.4,
+                                  "fontFamily": "$font-mono",
+                                  "fontSize": 11,
+                                  "fontWeight": "normal"
+                                }
+                              ]
+                            },
+                            {
+                              "type": "frame",
+                              "id": "matpq",
+                              "name": "b keep it",
+                              "height": 26,
+                              "fill": "$surface",
+                              "stroke": "$border",
+                              "strokeWidth": 1,
+                              "padding": [
+                                0,
+                                11
+                              ],
+                              "justifyContent": "center",
+                              "alignItems": "center",
+                              "children": [
+                                {
+                                  "type": "text",
+                                  "id": "eRK9j",
                                   "fill": "$text-primary",
                                   "content": "keep it",
                                   "lineHeight": 1.4,
@@ -846259,7 +846859,7 @@
                   "type": "text",
                   "id": "qoQoV",
                   "fill": "$text-muted",
-                  "content": "check: checking, reachable, a key refused, not reached, models not read (the last list kept)",
+                  "content": "check: checking, reachable, a key refused, not reached, models not read; added without its models",
                   "lineHeight": 1.4,
                   "fontFamily": "$font-mono",
                   "fontSize": 10,
@@ -847258,6 +847858,265 @@
                           ]
                         }
                       ]
+                    }
+                  ]
+                },
+                {
+                  "type": "frame",
+                  "id": "Um0LY",
+                  "name": "endpoint Home vLLM added without its models",
+                  "width": "fill_container",
+                  "stroke": "$border",
+                  "strokeWidth": {
+                    "bottom": 1
+                  },
+                  "layout": "vertical",
+                  "gap": 8,
+                  "padding": [
+                    11,
+                    0
+                  ],
+                  "children": [
+                    {
+                      "type": "frame",
+                      "id": "tETjP",
+                      "name": "line",
+                      "width": "fill_container",
+                      "gap": 16,
+                      "alignItems": "center",
+                      "children": [
+                        {
+                          "type": "frame",
+                          "id": "Qfetl",
+                          "name": "who",
+                          "width": 330,
+                          "layout": "vertical",
+                          "gap": 2,
+                          "children": [
+                            {
+                              "type": "text",
+                              "id": "SuBFP",
+                              "fill": "$text-primary",
+                              "content": "Home vLLM",
+                              "lineHeight": 1.4,
+                              "fontFamily": "$font-ui",
+                              "fontSize": 12.5,
+                              "fontWeight": "normal"
+                            },
+                            {
+                              "type": "frame",
+                              "id": "Eo6PJ",
+                              "name": "state",
+                              "gap": 6,
+                              "alignItems": "center",
+                              "children": [
+                                {
+                                  "type": "rectangle",
+                                  "id": "naUrw",
+                                  "name": "d",
+                                  "fill": "$status-running",
+                                  "width": 6,
+                                  "height": 6
+                                },
+                                {
+                                  "type": "text",
+                                  "id": "OD3ys",
+                                  "fill": "$status-running",
+                                  "content": "reachable · 9 ms · checked 13:40",
+                                  "lineHeight": 1.4,
+                                  "fontFamily": "$font-mono",
+                                  "fontSize": 10.5,
+                                  "fontWeight": "normal"
+                                }
+                              ]
+                            },
+                            {
+                              "type": "text",
+                              "id": "L8rCfO",
+                              "fill": "$text-muted",
+                              "content": "http://192.0.2.40:8000/v1",
+                              "lineHeight": 1.4,
+                              "fontFamily": "$font-mono",
+                              "fontSize": 10.5,
+                              "fontWeight": "normal"
+                            },
+                            {
+                              "type": "text",
+                              "id": "r8dno",
+                              "fill": "$text-muted",
+                              "content": "a key is set · never shown",
+                              "lineHeight": 1.4,
+                              "fontFamily": "$font-mono",
+                              "fontSize": 10.5,
+                              "fontWeight": "normal"
+                            },
+                            {
+                              "type": "text",
+                              "id": "lurCH",
+                              "fill": "$text-muted",
+                              "content": "used by no agent",
+                              "lineHeight": 1.4,
+                              "fontFamily": "$font-mono",
+                              "fontSize": 10.5,
+                              "fontWeight": "normal"
+                            }
+                          ]
+                        },
+                        {
+                          "type": "frame",
+                          "id": "s8a33",
+                          "name": "models",
+                          "width": 250,
+                          "layout": "vertical",
+                          "gap": 2,
+                          "children": [
+                            {
+                              "type": "text",
+                              "id": "xD9A2",
+                              "fill": "$text-secondary",
+                              "content": "0 models",
+                              "lineHeight": 1.4,
+                              "fontFamily": "$font-mono",
+                              "fontSize": 10.5,
+                              "fontWeight": "normal"
+                            },
+                            {
+                              "type": "text",
+                              "id": "U59vdZ",
+                              "fill": "$text-muted",
+                              "textGrowth": "fixed-width",
+                              "width": 250,
+                              "content": "no model read",
+                              "lineHeight": 1.4,
+                              "fontFamily": "$font-mono",
+                              "fontSize": 10.5,
+                              "fontWeight": "normal"
+                            }
+                          ]
+                        },
+                        {
+                          "type": "frame",
+                          "id": "eSDUA",
+                          "name": "sp",
+                          "width": "fill_container",
+                          "height": 1
+                        },
+                        {
+                          "type": "frame",
+                          "id": "mDVqE",
+                          "name": "controls",
+                          "gap": 8,
+                          "alignItems": "center",
+                          "children": [
+                            {
+                              "type": "frame",
+                              "id": "UobbC",
+                              "name": "traces switch",
+                              "gap": 6,
+                              "alignItems": "center",
+                              "children": [
+                                {
+                                  "type": "text",
+                                  "id": "DymY6",
+                                  "fill": "$text-muted",
+                                  "content": "allows traces",
+                                  "lineHeight": 1.4,
+                                  "fontFamily": "$font-mono",
+                                  "fontSize": 10.5,
+                                  "fontWeight": "normal"
+                                },
+                                {
+                                  "type": "frame",
+                                  "id": "M9wZw",
+                                  "name": "Toggle off",
+                                  "width": 30,
+                                  "height": 16,
+                                  "fill": "$surface-raised",
+                                  "stroke": "$border",
+                                  "strokeWidth": 1,
+                                  "layout": "none",
+                                  "children": [
+                                    {
+                                      "type": "rectangle",
+                                      "id": "A66pEG",
+                                      "x": 2,
+                                      "y": 1,
+                                      "name": "knob",
+                                      "fill": "$text-secondary",
+                                      "width": 12,
+                                      "height": 12
+                                    }
+                                  ]
+                                }
+                              ]
+                            },
+                            {
+                              "type": "frame",
+                              "id": "iAoHm",
+                              "name": "b check",
+                              "height": 26,
+                              "fill": "$surface",
+                              "stroke": "$border",
+                              "strokeWidth": 1,
+                              "padding": [
+                                0,
+                                11
+                              ],
+                              "justifyContent": "center",
+                              "alignItems": "center",
+                              "children": [
+                                {
+                                  "type": "text",
+                                  "id": "PJrSE",
+                                  "fill": "$text-primary",
+                                  "content": "check",
+                                  "lineHeight": 1.4,
+                                  "fontFamily": "$font-mono",
+                                  "fontSize": 11,
+                                  "fontWeight": "normal"
+                                }
+                              ]
+                            },
+                            {
+                              "type": "frame",
+                              "id": "mGIjZ",
+                              "name": "b remove",
+                              "height": 26,
+                              "fill": "$surface",
+                              "stroke": "$border",
+                              "strokeWidth": 1,
+                              "padding": [
+                                0,
+                                11
+                              ],
+                              "justifyContent": "center",
+                              "alignItems": "center",
+                              "children": [
+                                {
+                                  "type": "text",
+                                  "id": "lMGI1",
+                                  "fill": "$text-primary",
+                                  "content": "remove",
+                                  "lineHeight": 1.4,
+                                  "fontFamily": "$font-mono",
+                                  "fontSize": 11,
+                                  "fontWeight": "normal"
+                                }
+                              ]
+                            }
+                          ]
+                        }
+                      ]
+                    },
+                    {
+                      "type": "text",
+                      "id": "K5afx",
+                      "fill": "$status-error",
+                      "content": "added without its models: Tars could not save the settings (ENOSPC): nothing was changed.",
+                      "lineHeight": 1.4,
+                      "fontFamily": "$font-mono",
+                      "fontSize": 10.5,
+                      "fontWeight": "normal"
                     }
                   ]
                 }
@@ -849691,7 +850550,7 @@
                   "type": "text",
                   "id": "QKzLn",
                   "fill": "$text-muted",
-                  "content": "remove: refused while agents use it; otherwise asked once",
+                  "content": "remove: refused while agents use it, or with main's reason; otherwise asked once",
                   "lineHeight": 1.4,
                   "fontFamily": "$font-mono",
                   "fontSize": 10,
@@ -850337,6 +851196,347 @@
                                 {
                                   "type": "text",
                                   "id": "mRF4G",
+                                  "fill": "$text-primary",
+                                  "content": "keep it",
+                                  "lineHeight": 1.4,
+                                  "fontFamily": "$font-mono",
+                                  "fontSize": 11,
+                                  "fontWeight": "normal"
+                                }
+                              ]
+                            }
+                          ]
+                        }
+                      ]
+                    }
+                  ]
+                },
+                {
+                  "type": "frame",
+                  "id": "lfhPn",
+                  "name": "endpoint Home vLLM not removed, main's reason",
+                  "width": "fill_container",
+                  "stroke": "$border",
+                  "strokeWidth": {
+                    "bottom": 1
+                  },
+                  "layout": "vertical",
+                  "gap": 8,
+                  "padding": [
+                    11,
+                    0
+                  ],
+                  "children": [
+                    {
+                      "type": "frame",
+                      "id": "F4T6Ip",
+                      "name": "line",
+                      "width": "fill_container",
+                      "gap": 16,
+                      "alignItems": "center",
+                      "children": [
+                        {
+                          "type": "frame",
+                          "id": "ADhs4",
+                          "name": "who",
+                          "width": 330,
+                          "layout": "vertical",
+                          "gap": 2,
+                          "children": [
+                            {
+                              "type": "text",
+                              "id": "azBzL",
+                              "fill": "$text-primary",
+                              "content": "Home vLLM",
+                              "lineHeight": 1.4,
+                              "fontFamily": "$font-ui",
+                              "fontSize": 12.5,
+                              "fontWeight": "normal"
+                            },
+                            {
+                              "type": "frame",
+                              "id": "JLpp5",
+                              "name": "state",
+                              "gap": 6,
+                              "alignItems": "center",
+                              "children": [
+                                {
+                                  "type": "rectangle",
+                                  "id": "Vnc11",
+                                  "name": "d",
+                                  "fill": "$status-running",
+                                  "width": 6,
+                                  "height": 6
+                                },
+                                {
+                                  "type": "text",
+                                  "id": "lVri0",
+                                  "fill": "$status-running",
+                                  "content": "reachable · 9 ms · checked 13:40",
+                                  "lineHeight": 1.4,
+                                  "fontFamily": "$font-mono",
+                                  "fontSize": 10.5,
+                                  "fontWeight": "normal"
+                                }
+                              ]
+                            },
+                            {
+                              "type": "text",
+                              "id": "Q02aK",
+                              "fill": "$text-muted",
+                              "content": "http://192.0.2.40:8000/v1",
+                              "lineHeight": 1.4,
+                              "fontFamily": "$font-mono",
+                              "fontSize": 10.5,
+                              "fontWeight": "normal"
+                            },
+                            {
+                              "type": "text",
+                              "id": "mzsAX",
+                              "fill": "$text-muted",
+                              "content": "a key is set · never shown",
+                              "lineHeight": 1.4,
+                              "fontFamily": "$font-mono",
+                              "fontSize": 10.5,
+                              "fontWeight": "normal"
+                            },
+                            {
+                              "type": "text",
+                              "id": "TgYy8",
+                              "fill": "$text-muted",
+                              "content": "used by no agent",
+                              "lineHeight": 1.4,
+                              "fontFamily": "$font-mono",
+                              "fontSize": 10.5,
+                              "fontWeight": "normal"
+                            }
+                          ]
+                        },
+                        {
+                          "type": "frame",
+                          "id": "WLVa4",
+                          "name": "models",
+                          "width": 250,
+                          "layout": "vertical",
+                          "gap": 2,
+                          "children": [
+                            {
+                              "type": "text",
+                              "id": "BV8CX",
+                              "fill": "$text-secondary",
+                              "content": "3 models · read 13:40",
+                              "lineHeight": 1.4,
+                              "fontFamily": "$font-mono",
+                              "fontSize": 10.5,
+                              "fontWeight": "normal"
+                            },
+                            {
+                              "type": "text",
+                              "id": "BImil",
+                              "fill": "$text-muted",
+                              "textGrowth": "fixed-width",
+                              "width": 250,
+                              "content": "qwen3-coder-30b · devstral-small · llama-3.3-70b",
+                              "lineHeight": 1.4,
+                              "fontFamily": "$font-mono",
+                              "fontSize": 10.5,
+                              "fontWeight": "normal"
+                            }
+                          ]
+                        },
+                        {
+                          "type": "frame",
+                          "id": "aAycn",
+                          "name": "sp",
+                          "width": "fill_container",
+                          "height": 1
+                        },
+                        {
+                          "type": "frame",
+                          "id": "IgqXX",
+                          "name": "controls",
+                          "gap": 8,
+                          "alignItems": "center",
+                          "children": [
+                            {
+                              "type": "frame",
+                              "id": "gk7aO",
+                              "name": "traces switch",
+                              "gap": 6,
+                              "alignItems": "center",
+                              "children": [
+                                {
+                                  "type": "text",
+                                  "id": "aMlsL",
+                                  "fill": "$text-muted",
+                                  "content": "allows traces",
+                                  "lineHeight": 1.4,
+                                  "fontFamily": "$font-mono",
+                                  "fontSize": 10.5,
+                                  "fontWeight": "normal"
+                                },
+                                {
+                                  "type": "frame",
+                                  "id": "iJRER",
+                                  "name": "Toggle off",
+                                  "width": 30,
+                                  "height": 16,
+                                  "fill": "$surface-raised",
+                                  "stroke": "$border",
+                                  "strokeWidth": 1,
+                                  "layout": "none",
+                                  "children": [
+                                    {
+                                      "type": "rectangle",
+                                      "id": "LbrlA",
+                                      "x": 2,
+                                      "y": 1,
+                                      "name": "knob",
+                                      "fill": "$text-secondary",
+                                      "width": 12,
+                                      "height": 12
+                                    }
+                                  ]
+                                }
+                              ]
+                            },
+                            {
+                              "type": "frame",
+                              "id": "z6ejot",
+                              "name": "b check",
+                              "height": 26,
+                              "fill": "$surface",
+                              "stroke": "$border",
+                              "strokeWidth": 1,
+                              "padding": [
+                                0,
+                                11
+                              ],
+                              "justifyContent": "center",
+                              "alignItems": "center",
+                              "children": [
+                                {
+                                  "type": "text",
+                                  "id": "PjRQz",
+                                  "fill": "$text-primary",
+                                  "content": "check",
+                                  "lineHeight": 1.4,
+                                  "fontFamily": "$font-mono",
+                                  "fontSize": 11,
+                                  "fontWeight": "normal"
+                                }
+                              ]
+                            },
+                            {
+                              "type": "frame",
+                              "id": "g4LhGr",
+                              "name": "b remove",
+                              "height": 26,
+                              "fill": "$surface",
+                              "stroke": "$border",
+                              "strokeWidth": 1,
+                              "padding": [
+                                0,
+                                11
+                              ],
+                              "justifyContent": "center",
+                              "alignItems": "center",
+                              "children": [
+                                {
+                                  "type": "text",
+                                  "id": "hhoAt",
+                                  "fill": "$text-primary",
+                                  "content": "remove",
+                                  "lineHeight": 1.4,
+                                  "fontFamily": "$font-mono",
+                                  "fontSize": 11,
+                                  "fontWeight": "normal"
+                                }
+                              ]
+                            }
+                          ]
+                        }
+                      ]
+                    },
+                    {
+                      "type": "frame",
+                      "id": "RXs7W",
+                      "name": "notice",
+                      "width": "fill_container",
+                      "fill": "$surface-raised",
+                      "stroke": "$status-error-40",
+                      "strokeWidth": 1,
+                      "layout": "vertical",
+                      "gap": 10,
+                      "padding": [
+                        12,
+                        14
+                      ],
+                      "children": [
+                        {
+                          "type": "text",
+                          "id": "eRrWV",
+                          "fill": "$text-secondary",
+                          "textGrowth": "fixed-width",
+                          "width": 860,
+                          "content": "Not removed: Tars could not save the settings (ENOSPC): nothing was changed.",
+                          "lineHeight": 1.4,
+                          "fontFamily": "$font-ui",
+                          "fontSize": 12,
+                          "fontWeight": "normal"
+                        },
+                        {
+                          "type": "frame",
+                          "id": "VrwI9",
+                          "name": "answers",
+                          "gap": 8,
+                          "alignItems": "center",
+                          "children": [
+                            {
+                              "type": "frame",
+                              "id": "i5yIsC",
+                              "name": "b remove",
+                              "height": 26,
+                              "fill": "$surface",
+                              "stroke": "$status-error-40",
+                              "strokeWidth": 1,
+                              "padding": [
+                                0,
+                                11
+                              ],
+                              "justifyContent": "center",
+                              "alignItems": "center",
+                              "children": [
+                                {
+                                  "type": "text",
+                                  "id": "apqC8",
+                                  "fill": "$status-error",
+                                  "content": "remove",
+                                  "lineHeight": 1.4,
+                                  "fontFamily": "$font-mono",
+                                  "fontSize": 11,
+                                  "fontWeight": "normal"
+                                }
+                              ]
+                            },
+                            {
+                              "type": "frame",
+                              "id": "U2EdOW",
+                              "name": "b keep it",
+                              "height": 26,
+                              "fill": "$surface",
+                              "stroke": "$border",
+                              "strokeWidth": 1,
+                              "padding": [
+                                0,
+                                11
+                              ],
+                              "justifyContent": "center",
+                              "alignItems": "center",
+                              "children": [
+                                {
+                                  "type": "text",
+                                  "id": "y57ZH",
                                   "fill": "$text-primary",
                                   "content": "keep it",
                                   "lineHeight": 1.4,
@@ -902330,7 +903530,7 @@
                           "type": "text",
                           "id": "Q3Psk",
                           "fill": "$status-error",
-                          "content": "notice not read: invalid time value. What leaves this computer reads it again.",
+                          "content": "notice not read: Invalid time value. What leaves this computer reads it again.",
                           "lineHeight": 1.4,
                           "fontFamily": "$font-mono",
                           "fontSize": 10.5,
@@ -906283,7 +907483,7 @@
                           "type": "text",
                           "id": "LG1PP",
                           "fill": "$status-error",
-                          "content": "notice not read: invalid time value. What leaves this computer reads it again.",
+                          "content": "notice not read: Invalid time value. What leaves this computer reads it again.",
                           "lineHeight": 1.4,
                           "fontFamily": "$font-mono",
                           "fontSize": 10.5,
