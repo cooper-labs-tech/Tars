@@ -31,11 +31,11 @@ export const GeneralSection = ({ appSettings, onSaveAppSettings }: GeneralSectio
   // Whether Tars keeps the computer awake right now (#511's keepAwake:state), read as the page opens, after each
   // change, and every five seconds while it is open, since a turn starting or ending changes it.
   const keepAwakeMode = appSettings.keepAwake ?? 'while-working';
-  const [awake, setAwake] = useState<{ active: boolean; working: number; refused?: true } | null>(null);
+  const [awake, setAwake] = useState<{ active: boolean; working: number; refused?: true; scheduled?: Array<{ projectPath: string; until: string }> } | null>(null);
   useEffect(() => {
     let live = true;
     const read = () => window.electronAPI?.keepAwake?.state()
-      .then((s) => { if (live) setAwake({ active: s.active, working: s.working, refused: s.refused }); })
+      .then((s) => { if (live) setAwake({ active: s.active, working: s.working, refused: s.refused, scheduled: s.scheduled }); })
       .catch(() => { /* an older main without the channel: no line */ });
     read();
     const every = setInterval(read, 5_000);
@@ -145,12 +145,24 @@ export const GeneralSection = ({ appSettings, onSaveAppSettings }: GeneralSectio
 };
 
 /** What the keep awake row says it does now, under its hint (frame `Keep awake (2.0.5) · states`). */
-function keepAwakeLine(mode: 'while-working' | 'always' | 'never', state: { active: boolean; working: number; refused?: true }): string {
+function keepAwakeLine(mode: 'while-working' | 'always' | 'never', state: { active: boolean; working: number; refused?: true; scheduled?: Array<{ projectPath: string; until: string }> }): string {
   // Wanted, but the system would not hold its sleep off (#511's `refused`): the setting stays as chosen.
   if (state.refused) return 'cannot keep this computer awake here: the system refused';
+  // 2.0.7: a project's hours open now keep it awake with no agent at work, unless the setting is never.
+  if (state.active && state.scheduled && state.scheduled.length > 0) {
+    const hours = state.scheduled.map(w => `${w.projectPath.split(/[\\/]/).filter(Boolean).pop() ?? w.projectPath}'s hours, until ${clockOfIso(w.until)}`);
+    return `awake now · ${hours.join(', ')}`;
+  }
   if (state.active) {
     if (mode === 'always') return 'awake while Tars is open';
     return `awake now · ${state.working} ${state.working === 1 ? 'agent' : 'agents'} working`;
   }
   return mode === 'never' ? 'sleeps as usual, even during a turn' : 'sleeps as usual · no agent is working';
+}
+
+/** 06:00, from an ISO time, in this computer's clock. */
+function clockOfIso(iso: string): string {
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return iso;
+  return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
 }
