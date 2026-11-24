@@ -4,7 +4,7 @@ import * as path from 'path';
 import type { AppSettings } from '../../../electron/types';
 import {
   TRACES_CONSENT_FILE, configureTraces, consentStands, recordConsent, reconcileConsent, saveSettingsFromApi,
-  uploadConsentAt, uploadPersistence, withdrawUploadConsent,
+  stopTracesRuntime, uploadConsentAt, uploadPersistence, withdrawUploadConsent,
 } from '../../../electron/services/traces-runtime';
 
 /**
@@ -61,6 +61,8 @@ beforeEach(() => {
 });
 
 afterEach(() => {
+  // A retry a failed write left pending (W1 to W4) would stand in for the next test's own (W5).
+  stopTracesRuntime();
   vi.useRealTimers();
   if (posix) fs.chmodSync(privateDir, 0o700);
   fs.rmSync(TRACES_CONSENT_FILE, { force: true });
