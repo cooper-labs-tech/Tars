@@ -168,14 +168,20 @@ function persistSettings(): boolean {
  * so nothing uploads from now, then off the disk, its file first, which needs no free space, then the settings.
  * `persisted` when a restart cannot bring it back: the file is gone or empty, or the settings say no consent.
  */
-export function withdrawUploadConsent(deletion?: { owed: boolean; since?: number }): { persisted: boolean } {
+export function withdrawUploadConsent(deletion?: { owed: boolean; since?: number; by?: 'you' | 'start' }): { persisted: boolean } {
   if (!deps) return { persisted: false };
   const t = traceSettingsOf(deps.getSettings());
   const { uploadConsentAt: _gone, ...kept } = t;
-  // A deletion's moment and owed mark go in with the withdrawal, in the same write (the Audit's I-1 at 965cfced0).
-  const { uploadDeletedAt: _at, uploadDeletionOwed: _owed, ...unmarked } = kept;
+  // A deletion's moment, owed mark and origin go in with the withdrawal, in the same write (the Audit's I-1 at
+  // 965cfced0, and its I-3 on #599 for the origin).
+  const { uploadDeletedAt: _at, uploadDeletionOwed: _owed, uploadDeletionBy: _by, ...unmarked } = kept;
   const rest = deletion
-    ? { ...unmarked, ...(deletion.since !== undefined ? { uploadDeletedAt: deletion.since } : {}), ...(deletion.owed ? { uploadDeletionOwed: true } : {}) }
+    ? {
+      ...unmarked,
+      ...(deletion.since !== undefined ? { uploadDeletedAt: deletion.since } : {}),
+      ...(deletion.owed ? { uploadDeletionOwed: true } : {}),
+      ...(deletion.by ? { uploadDeletionBy: deletion.by } : {}),
+    }
     : kept;
   deps.setSettings({ ...deps.getSettings(), traces: rest });
   const dropped = dropConsentFile();
@@ -218,7 +224,7 @@ export function reconcileConsent(): void {
     console.error(`[traces] the trace store could not be read at start (${describeSecretFileError(err)}): the deletion's moment is this start`);
   }
   const since = Math.max(t.uploadDeletedAt ?? 0, Date.now(), newest ?? 0);
-  withdrawUploadConsent({ owed: t.uploadDeletionOwed === true || installHeld(), since });
+  withdrawUploadConsent({ owed: t.uploadDeletionOwed === true || installHeld(), since, by: 'start' });
 }
 
 /** An agent being created, whose terminal is spawned before its record is in the fleet (agent:create). */
@@ -252,6 +258,7 @@ export function traceSettingsOf(settings: Partial<AppSettings> | undefined): Tra
     ...(t?.uploadAllowPlainHttp === true ? { uploadAllowPlainHttp: true } : {}),
     ...(typeof t?.uploadDeletedAt === 'number' ? { uploadDeletedAt: t.uploadDeletedAt } : {}),
     ...(t?.uploadDeletionOwed === true ? { uploadDeletionOwed: true } : {}),
+    ...(t?.uploadDeletionBy === 'you' || t?.uploadDeletionBy === 'start' ? { uploadDeletionBy: t.uploadDeletionBy } : {}),
   };
 }
 
@@ -302,7 +309,7 @@ export function traceUploader(): TraceUploader {
         const t = traceSettingsOf(deps?.getSettings());
         const allowed = !t.uploadUrl || transportOf(t.uploadUrl) !== 'http-public' || t.uploadAllowPlainHttp === true;
         // The consent only while it stands (its file says it too): one the settings kept after a withdrawal is none.
-        return { url: allowed ? t.uploadUrl : '', consentAt: uploadConsentAt(), since: t.uploadDeletedAt, deletionOwed: t.uploadDeletionOwed === true };
+        return { url: allowed ? t.uploadUrl : '', consentAt: uploadConsentAt(), since: t.uploadDeletedAt, deletionOwed: t.uploadDeletionOwed === true, deletionBy: t.uploadDeletionBy };
       },
       // In memory at once, then written, and tried again until it holds (persistSettings).
       setDeletion: (d) => {

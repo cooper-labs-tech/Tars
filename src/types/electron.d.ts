@@ -3027,6 +3027,9 @@ export interface TraceSettingsView {
   uploadDeletedAt?: number;
   /** A deletion not confirmed yet: consent is refused until it is. */
   uploadDeletionOwed?: boolean;
+  /** Whose the latest deletion is: 'you', the user's "delete everything"; 'start', a start that found a withdrawal
+   *  Tars could not write down and took it for a deletion. */
+  uploadDeletionBy?: 'you' | 'start';
 }
 
 export interface UploadNotice {
@@ -3070,6 +3073,8 @@ export interface UploadState {
   deletionCleared: boolean;
   /** A deletion asked for and not confirmed by the back-office: sharing stays off; offer "delete again". */
   deletionOwed: boolean;
+  /** Whose the latest deletion is, while there is one: 'you' or 'start' (TraceSettings.uploadDeletionBy). */
+  deletionBy?: 'you' | 'start';
 }
 
 export interface TraceStats {
