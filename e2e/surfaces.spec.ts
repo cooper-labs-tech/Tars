@@ -113,7 +113,11 @@ for (const surface of ALL as Array<{ name: string; route: string; clickText?: st
     // reads "checking" until all of them have answered: it was photographed
     // that way at a load average of about 40, 5,161 pixels (QA's gate of #311,
     // 2026-10-05). A probe with several rows waits for the last of them.
-    for (const probe of ['[data-gateway-state="checking"]', 'input[placeholder="detecting…"]', ':text-is("checking")']) {
+    // Settings · Hermes · Gateways says "reading the tailnet…" until main has
+    // answered its connection read: it was photographed that way once, 2,879
+    // pixels, in a whole run at a load average of about 3 (QA's re-check of #599,
+    // 2026-11-23), and was green alone three times.
+    for (const probe of ['[data-gateway-state="checking"]', 'input[placeholder="detecting…"]', ':text-is("checking")', ':text-is("reading the tailnet…")']) {
       const probing = page.locator(probe);
       const until = Date.now() + 15_000;
       while (await probing.count() > 0 && Date.now() < until) await page.waitForTimeout(100);
