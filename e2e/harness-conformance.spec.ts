@@ -197,6 +197,25 @@ for (const h of HARNESSES) {
           const tokens = process.mainModule!.require(`${dist}/core/agent-tokens.js`);
           return { token: tokens.mintRunToken(lead).token as string, instance: tokens.tarsInstanceId() as string };
         }, { dist, lead: LEAD });
+        if (via !== 'endpoint') {
+          // Tars's MCP servers registered in the harness's own configuration before its CLI starts, as a packaged Tars
+          // does at every start (setupMcpOrchestrator), and as the CLI matrix does: a development run finds no bundle
+          // under process.resourcesPath, the app's own, and registered none (the first run of 24/11: grok's tool search
+          // found "No MCP tools are available in this session").
+          const resources = path.join(home, 'resources');
+          fs.mkdirSync(path.join(resources, 'mcp-orchestrator', 'dist'), { recursive: true });
+          fs.copyFileSync(path.resolve('mcp-orchestrator', 'dist', 'bundle.js'), path.join(resources, 'mcp-orchestrator', 'dist', 'bundle.js'));
+          fs.copyFileSync(path.resolve('mcp-orchestrator', 'package.json'), path.join(resources, 'mcp-orchestrator', 'package.json'));
+          await app.evaluate(async (_e, { resources, dist }) => {
+            const was = process.resourcesPath;
+            Object.defineProperty(process, 'resourcesPath', { value: resources, configurable: true, writable: true });
+            try {
+              await process.mainModule!.require(`${dist}/services/mcp-orchestrator.js`).setupMcpOrchestrator({});
+            } finally {
+              Object.defineProperty(process, 'resourcesPath', { value: was, configurable: true, writable: true });
+            }
+          }, { resources, dist });
+        }
         mcp = spawn(process.execPath, [path.resolve('mcp-orchestrator', 'dist', 'bundle.js')], {
           env: { PATH: process.env.PATH ?? '', HOME: home, CLAUDE_MGR_API_URL: `http://127.0.0.1:${port}`, CLAUDE_MGR_API_TOKEN: identity.token, CLAUDE_AGENT_ID: LEAD, CLAUDE_PROJECT_PATH: project, TARS_INSTANCE_ID: identity.instance },
         });
