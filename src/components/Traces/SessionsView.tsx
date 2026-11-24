@@ -8,7 +8,7 @@ import type { HarnessId, TraceFilter, TraceSessionSummary, TraceSettingsView } f
 import { bytes } from '@/components/Resources/format';
 import { Notice, Unread } from '@/components/Resources/bits';
 import { fmtTokens } from '@/lib/usage-format';
-import { dayClockOf, dayOf, marksOf, outcomeOf, projectNameOf, sizeOf } from '@/lib/traces-format';
+import { dayClockOf, dayOf, marksOf, outcomeOf, projectNameOf, reasonOf, sizeOf } from '@/lib/traces-format';
 import { useEndpoints } from '@/hooks/useEndpoints';
 import { useElectronAgents } from '@/hooks/useElectron';
 import { Meter, Stat, StateLine } from './bits';
@@ -64,6 +64,9 @@ export function SessionsView({ onOpen }: { onOpen: (traceId: string) => void }) 
   const { agents } = useElectronAgents();
   const [selected, setSelected] = useState<string | null>(null);
   const [deleting, setDeleting] = useState<{ traceIds?: string[]; label: string; body: string } | null>(null);
+  /** A removal main refused: said in its dialog, above its answers; the dialog's button tries again. */
+  const [removeError, setRemoveError] = useState<string | null>(null);
+  const closeDelete = () => { setDeleting(null); setRemoveError(null); };
   const [done, setDone] = useState<string | null>(null);
   const [exporting, setExporting] = useState<{ one?: TraceSessionSummary } | null>(null);
 
@@ -75,8 +78,17 @@ export function SessionsView({ onOpen }: { onOpen: (traceId: string) => void }) 
   const remove = async () => {
     const api = tracesApi();
     if (!api || !deleting) return;
-    const r = await api.remove(deleting.traceIds ? { traceIds: deleting.traceIds } : { filter });
-    setDeleting(null);
+    let r: Awaited<ReturnType<typeof api.remove>>;
+    try {
+      r = await api.remove(deleting.traceIds ? { traceIds: deleting.traceIds } : { filter });
+    } catch (e) {
+      // Main's refusal (a full disk) reaches the window as a rejected call: said in the dialog, which stays, never an
+      // unhandled rejection.
+      console.warn('[traces] deleting sessions failed:', e);
+      setRemoveError(reasonOf(e));
+      return;
+    }
+    closeDelete();
     setDone(`${r.deleted} session${r.deleted === 1 ? '' : 's'} deleted · ${sizeOf(r.bytesFreed)} freed`);
     void reload();
     void readStats();
@@ -206,15 +218,17 @@ export function SessionsView({ onOpen }: { onOpen: (traceId: string) => void }) 
 
       {deleting && (
         <DialogShell
-          onClose={() => setDeleting(null)}
+          onClose={closeDelete}
           width={560}
           title={deleting.traceIds ? 'Delete this session?' : `Delete ${shown} session${shown === 1 ? '' : 's'}?`}
           subtitle={deleting.body}
           footerRight={<>
-            <Button onClick={() => setDeleting(null)}>Cancel</Button>
+            <Button onClick={closeDelete}>Cancel</Button>
             <Button variant="danger" onClick={() => { void remove(); }}>{deleting.label}</Button>
           </>}
-        />
+        >
+          {removeError && <div data-remove-refused><StateLine word={`not deleted: ${removeError}. ${deleting.label} tries again.`} tone="error" /></div>}
+        </DialogShell>
       )}
 
       {exporting && (

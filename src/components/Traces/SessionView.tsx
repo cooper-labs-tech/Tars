@@ -6,7 +6,7 @@ import type { TraceMessageView, TraceOutcome, TraceRequestView, TraceSessionSumm
 import { sizeOf as bytes } from '@/lib/traces-format';
 import { Unread } from '@/components/Resources/bits';
 import { fmtTokens } from '@/lib/usage-format';
-import { clockOf, clockSecondsOf, dayClockOf, durationOf, outcomeOf, outcomeWordsOf, projectNameOf } from '@/lib/traces-format';
+import { clockOf, clockSecondsOf, dayClockOf, durationOf, outcomeOf, outcomeWordsOf, projectNameOf, reasonOf } from '@/lib/traces-format';
 import { Fact, StateLine } from './bits';
 import { tracesApi } from './hooks';
 import { ExportDialog } from './ExportDialog';
@@ -50,6 +50,8 @@ export function SessionView({ traceId, onBack }: { traceId: string; onBack: () =
   const [request, setRequest] = useState<string | null>(null);
   const [messages, setMessages] = useState<Messages | null>(null);
   const [deleting, setDeleting] = useState(false);
+  /** A removal main refused: said in its dialog, above its answers; Delete tries again. */
+  const [removeError, setRemoveError] = useState<string | null>(null);
   const [exporting, setExporting] = useState(false);
 
   const read = useCallback(async () => {
@@ -72,10 +74,19 @@ export function SessionView({ traceId, onBack }: { traceId: string; onBack: () =
   const remove = async () => {
     const api = tracesApi();
     if (!api) return;
-    await api.remove({ traceIds: [traceId] });
-    setDeleting(false);
+    try {
+      await api.remove({ traceIds: [traceId] });
+    } catch (e) {
+      // Main's refusal (a full disk) reaches the window as a rejected call: said in the dialog, which stays, never an
+      // unhandled rejection.
+      console.warn('[traces] deleting a session failed:', e);
+      setRemoveError(reasonOf(e));
+      return;
+    }
+    closeDelete();
     onBack();
   };
+  const closeDelete = () => { setDeleting(false); setRemoveError(null); };
 
   if (error) return <Unread text="could not read this session:" detail={error} onRetry={() => { void read(); }} />;
   if (data === null) {
@@ -167,15 +178,17 @@ export function SessionView({ traceId, onBack }: { traceId: string; onBack: () =
 
       {deleting && (
         <DialogShell
-          onClose={() => setDeleting(false)}
+          onClose={closeDelete}
           width={560}
           title="Delete this session?"
           subtitle={`${s.agentName ?? s.agentId}, ${dayClockOf(s.startedAt)}: ${s.turnCount} turns, ${s.requestCount} requests, ${bytes(s.bytes)}. The reader can no longer read it. This cannot be undone.`}
           footerRight={<>
-            <Button onClick={() => setDeleting(false)}>Cancel</Button>
+            <Button onClick={closeDelete}>Cancel</Button>
             <Button variant="danger" onClick={() => { void remove(); }}>Delete</Button>
           </>}
-        />
+        >
+          {removeError && <div data-remove-refused><StateLine word={`not deleted: ${removeError}. Delete tries again.`} tone="error" /></div>}
+        </DialogShell>
       )}
       {exporting && <ExportDialog filter={{}} oneSession={s} onClose={() => setExporting(false)} />}
     </div>

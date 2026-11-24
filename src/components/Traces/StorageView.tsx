@@ -4,7 +4,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { Button, DialogShell, Dropdown, Input, PanelCaption } from '@/components/ui';
 import type { TraceSettingsView } from '@/types/electron';
 import { Box, Notice, Row, Unread } from '@/components/Resources/bits';
-import { dayClockOf, dayOf, projectNameOf, sizeOf } from '@/lib/traces-format';
+import { dayClockOf, dayOf, projectNameOf, reasonOf, sizeOf } from '@/lib/traces-format';
 import { Meter, StateLine } from './bits';
 import { tracesApi, useTraceStats } from './hooks';
 import { ExportDialog } from './ExportDialog';
@@ -26,6 +26,8 @@ export function StorageView() {
   const [saveError, setSaveError] = useState<string | null>(null);
   const [reader, setReader] = useState<Reader | null>(null);
   const [dialog, setDialog] = useState<'create' | 'rotate' | 'revoke' | 'delete-all' | null>(null);
+  /** Deleting every session refused by main: said in its dialog, above its answers; its button tries again. */
+  const [removeError, setRemoveError] = useState<string | null>(null);
   const [shown, setShown] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
   const [exporting, setExporting] = useState(false);
@@ -71,8 +73,18 @@ export function StorageView() {
   const deleteAll = async () => {
     const api = tracesApi();
     if (!api) return;
-    const r = await api.remove({ filter: {} });
+    let r: Awaited<ReturnType<typeof api.remove>>;
+    try {
+      r = await api.remove({ filter: {} });
+    } catch (e) {
+      // Main's refusal (a full disk) reaches the window as a rejected call: said in the dialog, which stays, never an
+      // unhandled rejection.
+      console.warn('[traces] deleting every session failed:', e);
+      setRemoveError(reasonOf(e));
+      return;
+    }
     setDialog(null);
+    setRemoveError(null);
     setDone(`${r.deleted} session${r.deleted === 1 ? '' : 's'} deleted · ${sizeOf(r.bytesFreed)} freed`);
     void read();
   };
@@ -194,9 +206,11 @@ export function StorageView() {
           footerRight={<><Button onClick={() => setDialog(null)}>Keep it</Button><Button variant="danger" onClick={() => { void revoke(); }}>Revoke</Button></>} />
       )}
       {dialog === 'delete-all' && stats && (
-        <DialogShell onClose={() => setDialog(null)} width={560} title={`Delete ${stats.sessions} sessions?`}
+        <DialogShell onClose={() => { setDialog(null); setRemoveError(null); }} width={560} title={`Delete ${stats.sessions} sessions?`}
           subtitle={`Every recorded session, ${sizeOf(stats.bytes)}. The reader can no longer read them. This cannot be undone.`}
-          footerRight={<><Button onClick={() => setDialog(null)}>Cancel</Button><Button variant="danger" onClick={() => { void deleteAll(); }}>{`Delete ${stats.sessions} sessions`}</Button></>} />
+          footerRight={<><Button onClick={() => { setDialog(null); setRemoveError(null); }}>Cancel</Button><Button variant="danger" onClick={() => { void deleteAll(); }}>{`Delete ${stats.sessions} sessions`}</Button></>}>
+          {removeError && <div data-remove-refused><StateLine word={`not deleted: ${removeError}. Delete ${stats.sessions} sessions tries again.`} tone="error" /></div>}
+        </DialogShell>
       )}
       {shown !== null && (
         <DialogShell

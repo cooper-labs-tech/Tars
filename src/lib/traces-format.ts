@@ -133,3 +133,20 @@ export function outcomeWordsOf(o: TraceOutcome | undefined): string {
   if (o.heldRequests) words.push(`${o.heldRequests} request${o.heldRequests === 1 ? '' : 's'} held`);
   return words.join(' · ');
 }
+
+/**
+ * Main's own reason for a failure, in words a line of the view can carry: without Electron's "Error invoking remote
+ * method '<channel>': Error: " in front, without a system error's code and the call it failed in ("ENOSPC: no space
+ * left on device, write" says "no space left on device"), and without the final period, which the line's own sentence
+ * puts (QA's re-check of #599: "404 not_found.. Nothing was forgotten", and the channel's name shown to the user).
+ * Shared by the upload view and the three places a removal of sessions is asked.
+ */
+export function reasonOf(e: unknown): string {
+  let s = (e instanceof Error ? e.message : String(e)).trim();
+  s = s.replace(/^Error invoking remote method '[^']*':\s*/, '');
+  while (/^[A-Za-z]*Error:\s*/.test(s)) s = s.replace(/^[A-Za-z]*Error:\s*/, '');
+  // A system error's code (ENOSPC, EACCES...), not a message that happens to start with ERROR.
+  const system = s.match(/^(?!ERROR:)E[A-Z]+:\s*([^,]+)(?:,.*)?$/);
+  if (system) s = system[1];
+  return s.replace(/[.\s]+$/, '');
+}

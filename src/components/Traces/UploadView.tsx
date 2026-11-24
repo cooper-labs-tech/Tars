@@ -9,7 +9,7 @@ import type { ElectronAPI } from '@/types/electron';
 type UploadPreview = NonNullable<Awaited<ReturnType<NonNullable<ElectronAPI['traces']>['preview']>>>;
 import { Box, Row, Unread } from '@/components/Resources/bits';
 import { Toggle } from '@/components/Settings/Toggle';
-import { clockOf, dayClockOf, dayOf } from '@/lib/traces-format';
+import { clockOf, dayClockOf, dayOf, reasonOf } from '@/lib/traces-format';
 import { StateLine } from './bits';
 import { tracesApi } from './hooks';
 
@@ -30,22 +30,6 @@ function Bullets({ caption, items, tone }: { caption: string; items: string[]; t
 }
 
 /**
- * Main's own reason for a failure, in words a line of the view can carry: without Electron's "Error invoking remote
- * method '<channel>': Error: " in front, without a system error's code and the call it failed in ("ENOSPC: no space
- * left on device, write" says "no space left on device"), and without the final period, which the line's own sentence
- * puts (QA's re-check of #599: "404 not_found.. Nothing was forgotten", and the channel's name shown to the user).
- */
-function reasonOf(e: unknown): string {
-  let s = (e instanceof Error ? e.message : String(e)).trim();
-  s = s.replace(/^Error invoking remote method '[^']*':\s*/, '');
-  while (/^[A-Za-z]*Error:\s*/.test(s)) s = s.replace(/^[A-Za-z]*Error:\s*/, '');
-  // A system error's code (ENOSPC, EACCES...), not a message that happens to start with ERROR.
-  const system = s.match(/^(?!ERROR:)E[A-Z]+:\s*([^,]+)(?:,.*)?$/);
-  if (system) s = system[1];
-  return s.replace(/[.\s]+$/, '');
-}
-
-/**
  * A failure thrown on the way to main, said on its line in main's own words (reasonOf), and logged whole for whoever
  * diagnoses it: the line drops a system error's path and Electron's channel, the console keeps them (the Audit's I-1
  * on #599).
@@ -55,16 +39,28 @@ function said(what: string, e: unknown): string {
   return reasonOf(e);
 }
 
-/** The upload's state in words: queued, sent, failed with the back-office's reason, offline. */
-function stateWord(s: UploadState): { word: string; tone: 'running' | 'waiting' | 'error' | 'idle' } {
+/**
+ * Nothing uploaded since the last deletion (its moment, the settings' uploadDeletedAt): the sent count then still holds
+ * the sessions of before it, which a full disk can keep marked sent (the Audit's I-2b on #599), so it is not said.
+ */
+function nothingSentSince(s: UploadState, deletedAt?: number): deletedAt is number {
+  return deletedAt !== undefined && !(s.lastUploadAt !== undefined && s.lastUploadAt > deletedAt);
+}
+
+/** The upload's state in words: queued, sent, failed with the back-office's reason, offline, after a deletion. */
+function stateWord(s: UploadState, deletedAt?: number): { word: string; tone: 'running' | 'waiting' | 'error' | 'idle' } {
   const next = s.nextTryAt ? ` · next try ${clockOf(s.nextTryAt)}` : '';
   // Said plainly, not as an error: the back-office's own choice. Main looks again in 6 hours.
   if (s.notice === 'registration_closed') return { word: 'this back-office does not take new installs · looked at again in 6 hours', tone: 'idle' };
   if (s.notice === 'install_blocked') return { word: 'this back-office blocked this install · looked at again in 6 hours', tone: 'waiting' };
   // Forgotten by your deletion or by its operator: uploads stopped and the consent withdrawn; sharing again is your act.
   if (s.notice === 'forgotten') return { word: 'this back-office no longer knows this Tars · uploading stopped, the traces on this computer stay', tone: 'idle' };
+  // A deletion the back-office has not confirmed: nothing goes until it does, or until it is given up.
+  if (s.deletionOwed) return { word: 'deletion not confirmed yet · nothing is sent meanwhile', tone: 'waiting' };
   if (s.lastError && /^\d{3} /.test(s.lastError)) return { word: `failed: ${s.lastError}${next}`, tone: 'error' };
   if (s.lastError) return { word: `offline: the back-office was not reached (${s.lastError})${next}`, tone: 'waiting' };
+  // After a deletion, what was sent before it is never "all sent": nothing has gone since.
+  if (nothingSentSince(s, deletedAt)) return { word: `nothing sent since the deletion of ${dayClockOf(deletedAt)}`, tone: 'idle' };
   if (s.pendingSessions > 0) return { word: `sending · ${s.pendingSessions} session${s.pendingSessions === 1 ? '' : 's'} queued`, tone: 'waiting' };
   if (s.sentSessions > 0) return { word: `all sent · ${s.sentSessions} session${s.sentSessions === 1 ? '' : 's'}`, tone: 'running' };
   return { word: 'nothing to send yet', tone: 'idle' };
@@ -293,7 +289,9 @@ export function UploadView() {
       : state?.notice === 'forgotten'
         ? { word: 'consent withdrawn: nothing is sent until you read what leaves this computer', tone: 'waiting' as const }
         : { word: 'nothing is sent until you read what leaves this computer', tone: 'waiting' as const };
-  const status = state && address ? stateWord(state) : null;
+  const status = state && address ? stateWord(state, settings?.uploadDeletedAt) : null;
+  /** Nothing uploaded since the last deletion: the sent figure says none since, never the sessions of before it. */
+  const sentSince = state ? nothingSentSince(state, settings?.uploadDeletedAt) : false;
   /**
    * Settings main holds and could not write (a withdrawn consent, a deletion's bookkeeping): main's own words, beside
    * the consent and the deletion, while it lasts. traces:changed says when it comes and goes, and read() reads it.
@@ -377,9 +375,9 @@ export function UploadView() {
           {status && state && (
             <Box name="Upload" caption="UPLOAD">
               <div className="px-4 pb-3 space-y-2.5">
-                <StateLine word={status.word} tone={status.tone} />
+                <div data-upload-status><StateLine word={status.word} tone={status.tone} /></div>
                 <div className="grid grid-cols-3 gap-4">
-                  {[['QUEUED', String(state.pendingSessions), 'sessions to send'], ['SENT', String(state.sentSessions), 'sessions'],
+                  {[['QUEUED', String(state.pendingSessions), 'sessions to send'], sentSince ? ['SENT', '0', 'since the deletion'] : ['SENT', String(state.sentSessions), 'sessions'],
                     ['LAST UPLOAD', state.lastUploadAt ? clockOf(state.lastUploadAt) : '-', state.lastUploadAt ? dayOf(state.lastUploadAt) : 'none yet']].map(([k, v, sub]) => (
                     <div key={k} className="min-w-0">
                       <PanelCaption>{k}</PanelCaption>
@@ -416,6 +414,13 @@ export function UploadView() {
               {inProgress && <StateLine word="stopping the upload under way, then asking the back-office to delete" tone="waiting" />}
               {deleted && !inProgress && <StateLine word={deleted.word} tone={deleted.tone} />}
               {owed && !inProgress && <StateLine word={`not confirmed yet${state?.lastError ? `: ${state.lastError}` : ''}. Nothing new is sent meanwhile.`} tone="waiting" />}
+              {/* Where an owed deletion comes from, when this view did not see it asked (after a restart, the Audit's I-3
+                  on PR 599): main does not say which, so both, in words that hold for each. */}
+              {owed && !inProgress && !deleted && (
+                <p data-deletion-owed-why className="text-[11px] leading-snug text-muted-foreground">
+                  Asked by you, or by Tars at a start that found your consent without its own file: a withdrawal it could not write down before it closed.
+                </p>
+              )}
               {giveUpError && <StateLine word={`not given up: ${giveUpError}`} tone="error" />}
               {giveUpUnfinished && <StateLine word={`given up, though Tars could not finish: ${giveUpUnfinished}`} tone="waiting" />}
               {unsaved}
