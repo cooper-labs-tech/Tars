@@ -63,7 +63,7 @@ export const TRACES_INSTALL_FILE = privatePath('traces-install.json');
 /**
  * The consent to upload, in a file of its own beside the install, in the private folder no agent is handed: it holds
  * the time the consent was given, and the consent stands only while this file and the settings say the same time.
- * A withdrawal must hold whatever the disk does, and measured on macOS 26 (APFS) a full volume refuses a write, a
+ * A withdrawal must hold on a disk main cannot write, and measured on macOS 26 (APFS) a full volume refuses a write, a
  * rename and even a truncate (ENOSPC) but takes an unlink, while a folder that may not be written refuses an unlink
  * and a rename (EACCES) but takes a truncate. So a withdrawal unlinks this file, or else truncates it, and a start
  * whose settings still say consent with no such file, a partial one or another time has none: it fails closed.
@@ -165,12 +165,33 @@ export function withdrawUploadConsent(): { persisted: boolean } {
   return { persisted: dropped || written };
 }
 
-/** At start: a consent the settings say and its file does not is none, and the settings are told so. */
+/** Whether this install's file still names an install a DELETE could be asked with. */
+function installHeld(): boolean {
+  try {
+    return typeof (JSON.parse(fs.readFileSync(TRACES_INSTALL_FILE, 'utf8')) as { token?: unknown })?.token === 'string';
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * At start: a consent the settings say and its file does not is a withdrawal Tars could not write down, and it may
+ * have come with "delete everything", whose moment and owed DELETE live in the settings alone (the Audit's M1 at
+ * a3c07fbfa). Which it was is not known now, so it is taken for a deletion (it fails closed): its moment is the
+ * latest of the one kept, now and the newest session's start, as deleteEverywhere sets it, and the DELETE is owed
+ * while the install is still here. The only other withdrawal, a 401's, drops the install with it: taken for a
+ * deletion, it owes nothing and holds back only the sessions recorded before it, which a new consent then never sends.
+ */
 export function reconcileConsent(): void {
   if (!deps) return;
   const settings = deps.getSettings();
-  if (!traceSettingsOf(settings).uploadConsentAt || consentStands(settings)) return;
-  console.error('[traces] the settings say consent and its file does not: no consent');
+  const t = traceSettingsOf(settings);
+  if (!t.uploadConsentAt || consentStands(settings)) return;
+  console.error('[traces] the settings say consent and its file does not: no consent, and taken for a deletion');
+  const newest = store || fs.existsSync(TRACES_DB_FILE) ? traceStore().newestStartedAt() : undefined;
+  const since = Math.max(t.uploadDeletedAt ?? 0, Date.now(), newest ?? 0);
+  const owed = t.uploadDeletionOwed === true || installHeld();
+  deps.setSettings({ ...settings, traces: { ...t, uploadDeletedAt: since, ...(owed ? { uploadDeletionOwed: true } : {}) } });
   withdrawUploadConsent();
 }
 
@@ -280,7 +301,9 @@ export function traceUploader(): TraceUploader {
 function uploadPass(): void {
   const t = traceSettingsOf(deps?.getSettings());
   if (!t.uploadUrl || !uploadConsentAt()) return;
-  void traceUploader().runOnce().then((r) => { if (r.sent || r.failed) deps?.emit('traces:changed'); });
+  traceUploader().runOnce()
+    .then((r) => { if (r.sent || r.failed) deps?.emit('traces:changed'); })
+    .catch((err) => { console.error(`[traces] an upload pass failed: ${describeSecretFileError(err)}`); });
 }
 
 function changed(): void {

@@ -48,6 +48,11 @@ import * as path from 'node:path';
  *      held is lost (the Audit's mutant S1).
  * P13. (The Audit's probe PB, its mutant S2) A save over a private file that
  *      cannot be read writes over it, instead of setting it aside.
+ * Added before its code after the Audit's re-read of #596 at a3c07fbfa (its I-3, 24/11):
+ * P14. A save that writes the private file and then cannot write app-settings.json
+ *      throws, and the window is told "nothing was changed", while the private
+ *      file holds the new keys: an endpoint key loads at the next start. A save
+ *      that throws must leave the private file as it was, or gone if there was none.
  * (The Telegram bot's token, its switch and its authorized chats, which these
  * cases used as samples, went with Tars's own Telegram bot in 2.0.5: Discord's
  * token and Slack's switch stand in for them.)
@@ -231,5 +236,23 @@ describe('after the Audit\'s gate of 06a46bcb', () => {
     const aside = fs.readdirSync(PRIVATE_DIR).filter(n => n.startsWith('settings-secrets.json.unreadable-'));
     expect(aside.length).toBe(1);
     expect(fs.readFileSync(path.join(PRIVATE_DIR, aside[0]), 'utf8')).toBe('{ broken');
+  });
+
+  it('P14. a save that cannot write app-settings.json after the private file leaves the private file as it was', () => {
+    saveSettingsSplit({ ...KEYS, slackEnabled: true } as unknown as AppSettings);
+    const held = fs.readFileSync(SECRETS_FILE, 'utf8');
+    // A folder where app-settings.json goes: no rename lands on it, on any system.
+    fs.rmSync(APP_SETTINGS_FILE);
+    fs.mkdirSync(APP_SETTINGS_FILE);
+    try {
+      expect(() => saveSettingsSplit({ ...KEYS, deepSeekApiKey: 'ds-new-999' } as unknown as AppSettings)).toThrow();
+      expect(fs.readFileSync(SECRETS_FILE, 'utf8')).toBe(held);
+      // With no private file before it, none after.
+      fs.rmSync(SECRETS_FILE);
+      expect(() => saveSettingsSplit({ deepSeekApiKey: 'ds-new-999' } as unknown as AppSettings)).toThrow();
+      expect(fs.existsSync(SECRETS_FILE)).toBe(false);
+    } finally {
+      fs.rmSync(APP_SETTINGS_FILE, { recursive: true, force: true });
+    }
   });
 });

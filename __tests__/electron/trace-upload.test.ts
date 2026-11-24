@@ -57,6 +57,12 @@ import { hasPosixModes } from '../setup/platform-limits';
  *     requests), or is split into parts that lose a request, share a batch id, or name a turn not yet sent.
  * 14. A back-office closed to new installs (403 registration_closed), or one that blocked this install
  *     (403 install_blocked), reads as an error retried soon, instead of a state the window says plainly.
+ * Added before their code after the Audit's re-read at a3c07fbfa (its L4, 24/11). A private folder that may not be
+ * written (0500, measured on macOS 26) refuses the install file's unlink, and takes its truncate:
+ * 28. A 401 then: the unlink throws before the consent is withdrawn, so sharing stays on and the pass rejects (an
+ *     unhandled rejection in main) instead of saying the back-office forgot this Tars.
+ * 29. A DELETE that went through then: the unlink throws after it, and the window is told nothing was deleted.
+ * 30. Giving up an owed deletion then: the unlink throws out of abandonDeletion.
  */
 
 type Seen = { method: string; url: string; headers: http.IncomingHttpHeaders; body: Buffer };
@@ -550,5 +556,49 @@ describe('the trace uploader', () => {
     expect(fs.existsSync(file)).toBe(false);
     expect(u.state()).toMatchObject({ registered: false, sentSessions: 0 });
     expect(await u.deleteEverywhere()).toMatchObject({ ok: false });
+  });
+});
+
+describe('the install file in a private folder that may not be written (the Audit\'s L4 at a3c07fbfa)', () => {
+  const posix = process.platform !== 'win32';
+  const privateDir = () => path.join(dir, 'private');
+  const locked = async <T>(run: () => Promise<T> | T): Promise<T> => {
+    fs.chmodSync(privateDir(), 0o500);
+    try { return await run(); } finally { fs.chmodSync(privateDir(), 0o700); }
+  };
+
+  it.skipIf(!posix)('28: a 401 withdraws the consent first, resolves, says the back-office forgot this Tars, and keeps no install', async () => {
+    seed('t1', 'first');
+    const u = uploader();
+    await u.runOnce();
+    bo.installs.clear();
+    seed('t2', 'second', 2000);
+    const r = await locked(() => u.runOnce());
+    expect(r).toMatchObject({ sent: 0, failed: 1 });
+    expect(withdrawn).toBe(1);
+    expect(u.state()).toMatchObject({ notice: 'forgotten', registered: false });
+  });
+
+  it.skipIf(!posix)('29: a DELETE that went through is said so, and the install is forgotten', async () => {
+    seed('t1', 'first');
+    const u = uploader();
+    await u.runOnce();
+    const d = await locked(() => u.deleteEverywhere());
+    expect(d).toMatchObject({ ok: true, deleted: 1 });
+    expect(bo.seen.some(s => s.method === 'DELETE' && s.url === '/v1/installs/me')).toBe(true);
+    expect(deletion.owed).toBe(false);
+    expect(u.state()).toMatchObject({ registered: false, sentSessions: 0 });
+  });
+
+  it.skipIf(!posix)('30: giving up an owed deletion throws nothing, and its install is forgotten', async () => {
+    seed('t1', 'first');
+    const u = uploader();
+    await u.runOnce();
+    deletion = { owed: true, since: 5000 };
+    let r: ReturnType<TraceUploader['abandonDeletion']> | undefined;
+    await locked(() => { r = u.abandonDeletion(); });
+    expect(r).toEqual({ ok: true });
+    expect(deletion).toEqual({ owed: false, since: 5000 });
+    expect(u.state()).toMatchObject({ deletionOwed: false, registered: false });
   });
 });

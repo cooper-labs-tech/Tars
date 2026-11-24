@@ -28,6 +28,13 @@ import { DEV_URL, apiPort } from './ports.mjs';
  * told (uploadState().unsaved) and Tars tries again; with the folder writable again it holds. A restart has no
  * consent, and nothing but the deletion's own DELETE reaches the back-office after it. Until this fix the
  * withdrawal lived in memory only: the restart had the consent again and uploaded at once.
+ * And a deletion that survives a quit before its bookkeeping is written (the third test, the Audit's M1 at
+ * a3c07fbfa): a back-office stand-in that takes installs, blobs and batches, and answers the DELETE 503 until told
+ * otherwise. Consent, an upload pass (pre-1 goes), then pre-2 recorded and still pending; then the private folder
+ * made 0500 and "delete everything" asked: the DELETE fails, the settings cannot be written, and Tars is quit before
+ * a retry holds. At the next start the deletion is owed again, a consent is refused until the DELETE is asked again
+ * and holds, and after a new consent only a session started since is sent: pre-1 and pre-2 never go again. Until this
+ * fix the start withdrew the consent and nothing else, so the new consent sent pre-2 and no DELETE was asked again.
  * The artefact: values.json with each answer, the back-office's request log, a screenshot per launch.
  */
 
@@ -190,6 +197,126 @@ test('a withdrawal of the consent that cannot be saved holds at once, is told an
     await stepShot(w.page, '02-restarted');
     expect(afterRestart.uploadConsentAt, 'a restart shows no consent').toBeUndefined();
     expect(uploads, 'nothing uploaded after the withdrawal').toEqual([]);
+  } finally {
+    if (app) await app.close().catch(() => {});
+    fs.writeFileSync(test.info().outputPath('back-office-requests.json'), JSON.stringify(requests, null, 2));
+    await new Promise<void>(resolve => backOffice.close(() => resolve()));
+    if (fs.existsSync(privateDir)) fs.chmodSync(privateDir, 0o700);
+    await removeHome(home);
+  }
+});
+
+test('a deletion whose bookkeeping cannot be written survives a quit: owed again at the next start, and nothing recorded before it is sent', async () => {
+  test.skip(process.platform === 'win32', 'the private folder is made unwritable with POSIX permissions');
+  test.setTimeout(300_000);
+  const home = fs.mkdtempSync(path.join(os.tmpdir(), 'dorothy-e2e-trace-deletion-'));
+  const privateDir = path.join(home, '.tars-private');
+  const project = path.join(home, 'projects', 'project-a');
+  const dataDir = path.join(home, '.tars');
+  for (const d of [project, dataDir]) fs.mkdirSync(d, { recursive: true });
+  const AGENT = 'eeee5555-0000-4000-8000-0000000000f1';
+  fs.writeFileSync(path.join(dataDir, 'agents.json'), JSON.stringify([{
+    id: AGENT, name: 'T', character: 'robot', status: 'idle', permissionMode: 'bypass', projectPath: project, skills: [],
+    provider: 'qwen-code', traces: true, createdAt: '2026-11-24T08:00:00.000Z', lastActivity: '2026-11-24T08:00:00.000Z',
+  }], null, 2));
+  fs.writeFileSync(path.join(dataDir, 'projects.json'), JSON.stringify([project]));
+
+  // A back-office that takes installs, blobs and batches; its DELETE answers 503 until told otherwise.
+  const requests: Array<{ method?: string; url?: string; at: string }> = [];
+  let deleteStatus = 503;
+  let installs = 0;
+  const backOffice = http.createServer((req, res) => {
+    const chunks: Buffer[] = [];
+    req.on('data', c => chunks.push(c));
+    req.on('end', () => {
+      requests.push({ method: req.method, url: req.url, at: new Date().toISOString() });
+      const answer = (status: number, body: unknown) => { res.writeHead(status, { 'content-type': 'application/json' }); res.end(JSON.stringify(body)); };
+      const url = req.url ?? '';
+      if (req.method === 'POST' && url === '/v1/installs') { installs++; answer(201, { installId: `inst-${installs}`, token: `tbi_${installs}` }); return; }
+      if (req.method === 'POST' && url === '/v1/blobs/missing') answer(200, { missing: [] });
+      else if (req.method === 'PUT' && url.startsWith('/v1/batches/')) answer(200, { missingBlobs: [] });
+      else if (req.method === 'PUT' && url.startsWith('/v1/blobs/')) answer(201, { stored: true });
+      else if (req.method === 'DELETE' && url === '/v1/installs/me') answer(deleteStatus, deleteStatus === 200 ? { deleted: { sessions: 1 } } : { error: 'unavailable' });
+      else answer(404, { error: 'not_found' });
+    });
+  });
+  await new Promise<void>(resolve => backOffice.listen(0, '127.0.0.1', resolve));
+  const uploadUrl = `http://127.0.0.1:${(backOffice.address() as { port: number }).port}`;
+  fs.writeFileSync(path.join(dataDir, 'app-settings.json'), JSON.stringify({
+    autoStartAgentsOnLaunch: false, traces: { projects: [project], capBytes: 1024 ** 3, retentionDays: 30, pairs: [{ harness: 'qwen-code', models: '*' }], uploadUrl },
+  }, null, 2));
+
+  const values: Record<string, unknown> = { uploadUrl };
+  const keep = (more: Record<string, unknown>) => { Object.assign(values, more); recordValues(values); };
+  const dist = path.resolve('electron', 'dist');
+  const launch = () => launchSandboxed(electron, home, {
+    env: { NODE_ENV: 'development', DOROTHY_DEV_URL: DEV_URL, DOROTHY_API_PORT: apiPort(31948), DOROTHY_E2E: '1' },
+  });
+  // A session recorded by the app's own store, and the uploader's pass run now (in place of its 5-minute timer).
+  const record = (a: ElectronApplication, traceId: string, startedAt: number) => a.evaluate((_e, o) => {
+    const store = process.mainModule!.require(`${o.dist}/services/traces-runtime.js`).traceStore();
+    store.openTrace({ traceId: o.traceId, projectPath: o.project, agentId: o.agent, agentName: 'T', harness: 'qwen-code', endpointId: 'ep-000001', endpointName: 'E', endpointBaseUrl: 'http://192.0.2.10:9000/v1', model: 'open-coder-1', startedAt: o.startedAt });
+    const body = (v: unknown) => Buffer.from(JSON.stringify(v));
+    store.ingest({ traceId: o.traceId, agentId: o.agent, surface: 'openai_chat', startedAt: o.startedAt, endedAt: o.startedAt + 100, status: 200, contentType: 'application/json',
+      requestBody: body({ model: 'open-coder-1', messages: [{ role: 'user', content: `the task of ${o.traceId}` }] }),
+      responseBody: body({ choices: [{ message: { role: 'assistant', content: 'done' }, finish_reason: 'stop' }], usage: { prompt_tokens: 5, completion_tokens: 1 } }),
+      attempts: 1, heldMs: 0 });
+  }, { dist, traceId, startedAt, project, agent: AGENT });
+  const pass = (a: ElectronApplication) => a.evaluate((_e, d) => process.mainModule!.require(`${d}/services/traces-runtime.js`).traceUploader().runOnce(), dist) as Promise<{ sent: number; failed: number }>;
+  const batchesOf = (from: number, id: string) => requests.slice(from).filter(r => r.method === 'PUT' && r.url?.startsWith(`/v1/batches/${id}.`));
+
+  let app: ElectronApplication | null = null;
+  try {
+    app = await launch();
+    let w = await traces(app);
+    await w.page.waitForLoadState('domcontentloaded');
+    expect(await w.call<{ ok: boolean }>('giveUploadConsent')).toMatchObject({ ok: true });
+    await record(app, 'pre-1', Date.now() - 120_000);
+    const first = await pass(app);
+    expect(first, JSON.stringify(first)).toMatchObject({ sent: 1, failed: 0 });
+    await record(app, 'pre-2', Date.now() - 60_000);
+
+    // "Delete everything" with a private folder that may not be written: the DELETE fails, nothing can be saved,
+    // and Tars is quit before a retry holds.
+    fs.chmodSync(privateDir, 0o500);
+    try {
+      const deleted = await w.call<{ ok: boolean; error?: string }>('deleteEverywhere');
+      const told = await w.call<{ unsaved?: string; deletionOwed?: boolean }>('uploadState');
+      keep({ deletedWhileUnwritable: deleted, toldWhileUnwritable: told });
+      expect(deleted.ok, JSON.stringify(deleted)).toBe(false);
+      await stepShot(w.page, '01-deleted-unsaved');
+      await app.close();
+      app = null;
+    } finally {
+      fs.chmodSync(privateDir, 0o700);
+    }
+
+    // The next start: the deletion owed again, a consent refused until it is done.
+    const restartedAt = requests.length;
+    app = await launch();
+    w = await traces(app);
+    await w.page.waitForLoadState('domcontentloaded');
+    const state = await w.call<{ deletionOwed?: boolean; consentAt?: string }>('uploadState');
+    const refused = await w.call<{ ok: boolean; error?: string }>('giveUploadConsent');
+    keep({ stateAfterRestart: state, consentAfterRestart: refused });
+    expect.soft(state.deletionOwed, 'the deletion is owed again at the next start').toBe(true);
+    expect.soft(refused.ok, 'a consent is refused while the deletion is owed').toBe(false);
+    if (!refused.ok) {
+      deleteStatus = 200;
+      const again = await w.call<{ ok: boolean; error?: string }>('deleteEverywhere');
+      const given = await w.call<{ ok: boolean; error?: string }>('giveUploadConsent');
+      keep({ deletedAgain: again, consentAfterDelete: given });
+      expect(again, JSON.stringify(again)).toMatchObject({ ok: true });
+      expect(given, JSON.stringify(given)).toMatchObject({ ok: true });
+    }
+    await record(app, 'post-1', Date.now() + 1_000);
+    const after = await pass(app);
+    await stepShot(w.page, '02-restarted');
+    keep({ passAfterConsent: after, requestsAfterRestart: requests.slice(restartedAt) });
+    expect(batchesOf(restartedAt, 'pre-1'), 'pre-1 is not sent again').toEqual([]);
+    expect(batchesOf(restartedAt, 'pre-2'), 'pre-2, recorded before the deletion, is never sent').toEqual([]);
+    expect(requests.slice(restartedAt).filter(r => r.method === 'DELETE').length, 'the DELETE is asked again').toBeGreaterThan(0);
+    expect(batchesOf(restartedAt, 'post-1').length, 'a session started since is sent').toBeGreaterThan(0);
   } finally {
     if (app) await app.close().catch(() => {});
     fs.writeFileSync(test.info().outputPath('back-office-requests.json'), JSON.stringify(requests, null, 2));
