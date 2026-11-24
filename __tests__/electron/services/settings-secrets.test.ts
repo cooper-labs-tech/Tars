@@ -68,6 +68,21 @@ import {
 } from '../../../electron/services/settings-secrets';
 import { DATA_DIR, PRIVATE_DIR, APP_SETTINGS_FILE } from '../../../electron/constants';
 import { settingsNotWritten } from '../../../electron/services/traces-runtime';
+
+// P15: the put-back of the private file, its second write in one save, can be made to land on a full volume.
+const putBack = vi.hoisted(() => ({ fail: false, writes: 0 }));
+vi.mock('../../../electron/utils/secret-file', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('../../../electron/utils/secret-file')>();
+  return {
+    ...actual,
+    writeSecretFileSync: (file: string, contents: string) => {
+      if (putBack.fail && file.endsWith('settings-secrets.json') && ++putBack.writes === 2) {
+        throw Object.assign(new Error('no space left on device'), { code: 'ENOSPC' });
+      }
+      return actual.writeSecretFileSync(file, contents);
+    },
+  };
+});
 import type { AppSettings } from '../../../electron/types';
 
 const KEYS = { deepSeekApiKey: 'ds-secret-111', discordBotToken: '123:dc-secret-222', memoryHonchoApiKey: 'honcho-333', xApiSecret: 'x-444' };
@@ -266,12 +281,8 @@ describe('after the Audit\'s gate of 06a46bcb', () => {
     fs.rmSync(APP_SETTINGS_FILE);
     fs.mkdirSync(APP_SETTINGS_FILE);
     // The second write of the private file in this save, the put-back, lands on a full volume.
-    const rename = fs.renameSync;
-    let toSecrets = 0;
-    const spy = vi.spyOn(fs, 'renameSync').mockImplementation((from, to) => {
-      if (String(to) === SECRETS_FILE && ++toSecrets === 2) throw Object.assign(new Error('no space left on device'), { code: 'ENOSPC' });
-      return rename(from, to);
-    });
+    putBack.fail = true;
+    putBack.writes = 0;
     const log = vi.spyOn(console, 'error').mockImplementation(() => {});
     let thrown: unknown;
     try {
@@ -279,7 +290,7 @@ describe('after the Audit\'s gate of 06a46bcb', () => {
     } catch (err) {
       thrown = err;
     } finally {
-      spy.mockRestore();
+      putBack.fail = false;
       log.mockRestore();
       fs.rmSync(APP_SETTINGS_FILE, { recursive: true, force: true });
     }
