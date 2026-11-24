@@ -4,7 +4,7 @@ import * as path from 'path';
 import type { AppSettings } from '../../../electron/types';
 import {
   TRACES_CONSENT_FILE, TRACES_DB_FILE, TRACES_INSTALL_FILE, configureTraces, consentStands, recordConsent, reconcileConsent,
-  saveSettingsFromApi, stopTracesRuntime, traceStore, traceUploader, uploadConsentAt, uploadPersistence, withdrawUploadConsent,
+  saveSettingsFromApi, stopTracesRuntime, traceSettingsOf, traceStore, traceUploader, uploadConsentAt, uploadPersistence, withdrawUploadConsent,
 } from '../../../electron/services/traces-runtime';
 import { DATA_DIR, PRIVATE_DIR } from '../../../electron/constants';
 import { assertThrowaway } from '../../setup/throwaway-dirs';
@@ -50,6 +50,11 @@ assertThrowaway({ DATA_DIR, PRIVATE_DIR });
  *      with a deletion owed, and never no consent with no moment of the deletion.
  * W12. (Its I-3.) A start whose trace store cannot be opened throws out of reconcileConsent, and so out of the start,
  *      instead of withdrawing the consent it found without its file.
+ * Added before their code after the Audit's I-3 on #599 (24/11): the window must be able to say why a deletion is
+ * there.
+ * W13. A deletion the start took (a consent without its file, no install left) looks exactly like one the user asked:
+ *      a moment, nothing owed, no consent, and nothing in the settings or the upload state says which.
+ * W14. A deletion the user asked does not say it is theirs, or says it in a write of its own after the withdrawal.
  */
 
 const AT = '2026-11-24T10:00:00.000Z';
@@ -162,6 +167,33 @@ describe('a deletion whose bookkeeping could not be written, then a restart (the
     }
     expect(consentIn(memory)).toBeUndefined();
     expect(deletionIn(memory)?.uploadDeletedAt).toBeGreaterThanOrEqual(before);
+  });
+
+  it('W13. a deletion the start took says so, in the settings the window reads and in the upload state', () => {
+    deletedThenRestarted();
+    reconcileConsent();
+    const by = (s: AppSettings | null) => (s as { traces?: { uploadDeletionBy?: string } } | null)?.traces?.uploadDeletionBy;
+    expect(by(memory)).toBe('start');
+    expect(by(disk)).toBe('start');
+    expect((traceSettingsOf(memory) as { uploadDeletionBy?: string }).uploadDeletionBy).toBe('start');
+    expect((traceUploader().state() as { deletionBy?: string }).deletionBy).toBe('start');
+  });
+
+  it('W14. a deletion the user asked says so, in the same single write as the withdrawal', async () => {
+    fs.writeFileSync(TRACES_INSTALL_FILE, JSON.stringify({ url: 'http://127.0.0.1:9', installId: 'i', token: 'tok', secret: 's'.repeat(64), registeredAt: 1 }), { mode: 0o600 });
+    const writes: AppSettings[] = [];
+    configureTraces({
+      getSettings: () => memory,
+      setSettings: (s) => { memory = s; },
+      writeSettings: (s) => { writes.push(structuredClone(s)); disk = structuredClone(s); },
+      getAgent: () => undefined,
+      emit: () => {},
+    });
+    await traceUploader().deleteEverywhere();
+    const by = (s: AppSettings | null) => (s as { traces?: { uploadDeletionBy?: string } } | null)?.traces?.uploadDeletionBy;
+    for (const w of writes.filter(x => deletionIn(x)?.uploadDeletedAt !== undefined)) expect(by(w), JSON.stringify(w)).toBe('you');
+    expect(by(disk)).toBe('you');
+    expect((traceUploader().state() as { deletionBy?: string }).deletionBy).toBe('you');
   });
 
   it('W10. a start whose settings say no consent leaves the deletion marks as they are', () => {
