@@ -24,7 +24,10 @@ const GEMINI_SESSION_ID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9
 
 /**
  * A permission mode onto gemini's --approval-mode (0.70.0 --help: default, auto_edit, yolo, plan); normal: none.
- * No plan: Tars has no plan mode for gemini (plan-mode.ts), so a gemini agent in plan is refused before its line.
+ * No plan (measured on 0.70.0, 24/11): gemini's plan mode hides every MCP tool that declares no readOnlyHint, which is
+ * every one of Tars's, and asks before one that does, so a gemini agent in plan could never report to Tars. Tars gives
+ * gemini no plan mode (plan-mode.ts): a stored plan is refused at creation and update, and a session asked in plan
+ * (/start, /dispatch, a Hermes gateway) runs as normal, as on every CLI with no plan mode, until #640 refuses it.
  */
 export function geminiApprovalMode(mode: AgentPermissionMode | undefined): 'auto_edit' | 'yolo' | null {
   if (mode === 'auto') return 'auto_edit';
