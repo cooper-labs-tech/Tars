@@ -129,7 +129,8 @@ for (const h of HARNESSES) {
     if (via === 'own-model') {
       fs.mkdirSync(path.join(home, '.grok'), { recursive: true });
       fs.writeFileSync(path.join(home, '.grok', 'config.toml'), [
-        'auto_update = false', '', '[models]', 'default = "standin"', '', '[model.standin]', `model = "${MODEL_ID}"`,
+        // `cli.auto_update`, the key grok 1.0.92 reads (`grok inspect` calls a top-level `auto_update` unrecognized).
+        '[cli]', 'auto_update = false', '', '[models]', 'default = "standin"', '', '[model.standin]', `model = "${MODEL_ID}"`,
         `base_url = "${standin.baseUrl}"`, 'name = "Stand-in"', `api_key = "${key}"`, '', '[features]', 'telemetry = false', '',
       ].join('\n'));
     }
