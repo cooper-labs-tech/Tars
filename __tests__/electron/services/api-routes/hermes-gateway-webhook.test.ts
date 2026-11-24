@@ -371,6 +371,8 @@ describe('plan for an agent whose CLI has no plan mode (7, the Audit\'s I-1 on #
     expect(namesNothing(body)).toEqual([]);
     expect(JSON.stringify(body)).not.toMatch(/codex|openrouter/i);
     expect(cole.written).toEqual([]);
+    // Only the spawns from here: liveTerminal's own terminal above is one.
+    vi.mocked(pty.spawn).mockClear();
     const { spawned } = nextSpawn();
     const idle = await hook(vpsSecret, { agent_id: ROSA.id, message: 'read only, please', permission_mode: 'plan' });
     expect(idle.status, JSON.stringify(idle.body)).toBe(400);
