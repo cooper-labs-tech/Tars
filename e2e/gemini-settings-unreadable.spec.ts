@@ -16,6 +16,7 @@ import { DEV_URL, apiPort } from './ports.mjs';
  *    it, the user's comments, server and auth kept.
  * Red on main 58f2863b4: Tars's start replaces the first file with its hooks and servers alone, and the second loses
  * its comments.
+ * Once with the classic shell and once with the new interface (QA, 24/11), as the window starts the agent from either.
  *
  * Then, in both, the window's MCP channels for gemini (the Audit's M1 on #634): the calls Settings > MCP makes
  * (`electronAPI.mcp.list`, `update`, `delete`), from the window, for gemini; the page as drawn names claude only
@@ -60,7 +61,7 @@ function asGeminiReads(text: string): Record<string, unknown> {
   return JSON.parse(text.replace(/("(?:\\.|[^"\\])*")|\/\/[^\n]*|\/\*[\s\S]*?\*\//g, (m, str) => (str ? m : ' '.repeat(m.length))));
 }
 
-async function run(label: string, settings: string, port: number) {
+async function run(label: string, settings: string, port: number, newInterface: boolean) {
   const home = fs.mkdtempSync(path.join(os.tmpdir(), `dorothy-e2e-gemini-${label}-`));
   const project = path.join(home, 'projects', 'demo');
   const dir = path.join(home, '.tars');
@@ -76,7 +77,7 @@ async function run(label: string, settings: string, port: number) {
   }], null, 2));
   fs.writeFileSync(path.join(dir, 'projects.json'), JSON.stringify([project]));
   fs.writeFileSync(path.join(dir, 'hermes-connection.json'), JSON.stringify({ mode: 'local', localPort: 9, authMode: 'token' }));
-  fs.writeFileSync(path.join(dir, 'app-settings.json'), JSON.stringify({ autoStartAgentsOnLaunch: false, ollamaBaseUrl: 'http://127.0.0.1:9', geminiEnabled: true }));
+  fs.writeFileSync(path.join(dir, 'app-settings.json'), JSON.stringify({ autoStartAgentsOnLaunch: false, ollamaBaseUrl: 'http://127.0.0.1:9', geminiEnabled: true, newInterface }));
 
   const app = await launchSandboxed(electron, home, {
     env: { NODE_ENV: 'development', DOROTHY_DEV_URL: DEV_URL, DOROTHY_API_PORT: apiPort(port), DOROTHY_E2E: '1' },
@@ -121,11 +122,12 @@ async function run(label: string, settings: string, port: number) {
   }
 }
 
-test.describe("gemini's settings file", () => {
+for (const newInterface of [false, true]) test.describe(`gemini's settings file${newInterface ? ' (new interface)' : ''}`, () => {
   test.setTimeout(180_000);
+  const shell = newInterface ? '-new-interface' : '';
 
   test('1. one gemini could not read either is left byte for byte, and the agent says it runs without Tars\'s hooks', async () => {
-    const r = await run('unreadable', UNREADABLE, 31372);
+    const r = await run(`unreadable${shell}`, UNREADABLE, newInterface ? 31374 : 31372, newInterface);
     recordValues({ unreadable: r });
     expect(r.after, 'the user\'s settings file was replaced').toBe(UNREADABLE);
     expect(r.notices.join('\n'), 'the agent was not told it runs without Tars\'s hooks').toMatch(/settings\.json.*turns/);
@@ -141,7 +143,7 @@ test.describe("gemini's settings file", () => {
   });
 
   test("2. one with comments gets Tars's hooks, its comments and the user's settings kept", async () => {
-    const r = await run('commented', COMMENTED, 31373);
+    const r = await run(`commented${shell}`, COMMENTED, newInterface ? 31375 : 31373, newInterface);
     recordValues({ commented: r });
     for (const comment of ['// My gemini settings, kept by hand.', '/* the servers I use */', '// mine']) expect(r.after, comment).toContain(comment);
     const settings = asGeminiReads(r.after) as { mcpServers: Record<string, unknown>; security: { auth: unknown; environmentVariableRedaction?: { allowed?: string[] } }; hooks?: unknown };
