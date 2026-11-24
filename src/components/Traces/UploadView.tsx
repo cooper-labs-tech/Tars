@@ -294,6 +294,13 @@ export function UploadView() {
         ? { word: 'consent withdrawn: nothing is sent until you read what leaves this computer', tone: 'waiting' as const }
         : { word: 'nothing is sent until you read what leaves this computer', tone: 'waiting' as const };
   const status = state && address ? stateWord(state) : null;
+  /**
+   * Settings main holds and could not write (a withdrawn consent, a deletion's bookkeeping): main's own words, beside
+   * the consent and the deletion, while it lasts. traces:changed says when it comes and goes, and read() reads it.
+   */
+  const unsaved = state?.unsaved
+    ? <div data-upload-unsaved><StateLine word={state.unsaved} tone="waiting" /></div>
+    : null;
   /** A deletion asked for and not confirmed: sharing stays off; delete again, or give it up. */
   const owed = !!(settings?.uploadDeletionOwed || state?.deletionOwed);
   /** The session previewed, or the reason main could not build it. */
@@ -358,6 +365,7 @@ export function UploadView() {
             {saveError && <Row><StateLine word={saveError} tone="error" /></Row>}
             <Row className="space-y-2 py-2.5">
               <StateLine word={consentWord.word} tone={consentWord.tone} />
+              {unsaved}
               {noticeError && <StateLine word={`notice not read: ${noticeError}. What leaves this computer reads it again.`} tone="error" />}
               <div className="flex items-center gap-2">
                 <Button size="sm" onClick={() => { void openNotice(); }} disabled={!notice && !noticeError}>What leaves this computer</Button>
@@ -410,6 +418,7 @@ export function UploadView() {
               {owed && !inProgress && <StateLine word={`not confirmed yet${state?.lastError ? `: ${state.lastError}` : ''}. Nothing new is sent meanwhile.`} tone="waiting" />}
               {giveUpError && <StateLine word={`not given up: ${giveUpError}`} tone="error" />}
               {giveUpUnfinished && <StateLine word={`given up, though Tars could not finish: ${giveUpUnfinished}`} tone="waiting" />}
+              {unsaved}
               <div className="flex items-center gap-2">
                 <Button size="sm" variant="danger" disabled={!address || inProgress} onClick={() => setDeleting(true)}>{inProgress ? 'deleting' : owed ? 'Delete again' : 'Delete everything this Tars sent'}</Button>
                 {owed && !inProgress && <Button size="sm" variant="ghost" onClick={() => { setGiveUpError(null); setGiveUpUnfinished(null); setGivingUp(true); }}>Give up this deletion</Button>}
