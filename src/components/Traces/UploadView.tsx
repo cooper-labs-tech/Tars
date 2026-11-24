@@ -418,7 +418,7 @@ export function UploadView() {
                   on PR 599): main does not say which, so both, in words that hold for each. */}
               {owed && !inProgress && !deleted && (
                 <p data-deletion-owed-why className="text-[11px] leading-snug text-muted-foreground">
-                  Asked by you, or by Tars at a start that found your consent without its own file: a withdrawal it could not write down before it closed.
+                  Asked by you, or by Tars when it started: it found your consent still in its settings but not in the file that confirms it, and takes that for a withdrawal it could not finish saving, so for a deletion, to be safe.
                 </p>
               )}
               {giveUpError && <StateLine word={`not given up: ${giveUpError}`} tone="error" />}

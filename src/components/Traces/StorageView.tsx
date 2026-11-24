@@ -28,6 +28,9 @@ export function StorageView() {
   const [dialog, setDialog] = useState<'create' | 'rotate' | 'revoke' | 'delete-all' | null>(null);
   /** Deleting every session refused by main: said in its dialog, above its answers; its button tries again. */
   const [removeError, setRemoveError] = useState<string | null>(null);
+  /** A reader token main could not make, rotate or revoke: said in its dialog, above its answers; its button tries again. */
+  const [tokenError, setTokenError] = useState<string | null>(null);
+  const closeDialog = () => { setDialog(null); setRemoveError(null); setTokenError(null); };
   const [shown, setShown] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
   const [exporting, setExporting] = useState(false);
@@ -52,22 +55,40 @@ export function StorageView() {
 
   const capOk = /^\d+$/.test(cap) && Number(cap) >= 1;
 
+  // A token main could not make or revoke (a refused unlink, a full disk) is said in its dialog, which stays: never an
+  // unhandled rejection, never a dialog that waits without a word (the Audit's L1 on PR 599).
   const makeToken = async () => {
     const api = tracesApi();
     if (!api) return;
-    const r = await api.rotateReaderToken();
-    setDialog(null);
+    let r: Awaited<ReturnType<typeof api.rotateReaderToken>>;
+    try {
+      r = await api.rotateReaderToken();
+    } catch (e) {
+      console.warn('[traces] making the reader token failed:', e);
+      setTokenError(reasonOf(e));
+      return;
+    }
+    closeDialog();
     setCopied(false);
     setShown(r.token);
-    setReader(await api.readerToken());
+    setReader(await api.readerToken().catch(() => null));
   };
 
   const revoke = async () => {
     const api = tracesApi();
     if (!api) return;
-    await api.revokeReaderToken();
-    setDialog(null);
-    setReader(await api.readerToken());
+    // Main answers { ok: false, error } when the revocation cannot hold, and throws in builds before that: both said.
+    let r: { ok: true } | { ok: false; error: string };
+    try {
+      r = await (api.revokeReaderToken() as Promise<{ ok: true } | { ok: false; error: string }>);
+    } catch (e) {
+      console.warn('[traces] revoking the reader token failed:', e);
+      setTokenError(reasonOf(e));
+      return;
+    }
+    if (!r.ok) { setTokenError(reasonOf(r.error)); return; }
+    closeDialog();
+    setReader(await api.readerToken().catch(() => null));
   };
 
   const deleteAll = async () => {
@@ -191,24 +212,30 @@ export function StorageView() {
       </div>
 
       {dialog === 'create' && (
-        <DialogShell onClose={() => setDialog(null)} width={560} title="Create a reader token?"
+        <DialogShell onClose={closeDialog} width={560} title="Create a reader token?"
           subtitle="It opens /api/traces/ and nothing else, read only: every recorded session, of every project. Revoke it to stop at once."
-          footerRight={<><Button onClick={() => setDialog(null)}>Cancel</Button><Button variant="primary" onClick={() => { void makeToken(); }}>Create</Button></>} />
+          footerRight={<><Button onClick={closeDialog}>Cancel</Button><Button variant="primary" onClick={() => { void makeToken(); }}>Create</Button></>}>
+          {tokenError && <div data-token-refused><StateLine word={`not created: ${tokenError}. Create tries again.`} tone="error" /></div>}
+        </DialogShell>
       )}
       {dialog === 'rotate' && (
-        <DialogShell onClose={() => setDialog(null)} width={560} title="Rotate the reader token?"
+        <DialogShell onClose={closeDialog} width={560} title="Rotate the reader token?"
           subtitle="The one the reader holds stops working at once. You will see the new one once, to give it to the reader."
-          footerRight={<><Button onClick={() => setDialog(null)}>Cancel</Button><Button variant="primary" onClick={() => { void makeToken(); }}>Rotate</Button></>} />
+          footerRight={<><Button onClick={closeDialog}>Cancel</Button><Button variant="primary" onClick={() => { void makeToken(); }}>Rotate</Button></>}>
+          {tokenError && <div data-token-refused><StateLine word={`not rotated: ${tokenError}. Rotate tries again.`} tone="error" /></div>}
+        </DialogShell>
       )}
       {dialog === 'revoke' && (
-        <DialogShell onClose={() => setDialog(null)} width={560} title="Revoke the reader token?"
+        <DialogShell onClose={closeDialog} width={560} title="Revoke the reader token?"
           subtitle="/api/traces/ refuses every read from now on. Create another to give access again."
-          footerRight={<><Button onClick={() => setDialog(null)}>Keep it</Button><Button variant="danger" onClick={() => { void revoke(); }}>Revoke</Button></>} />
+          footerRight={<><Button onClick={closeDialog}>Keep it</Button><Button variant="danger" onClick={() => { void revoke(); }}>Revoke</Button></>}>
+          {tokenError && <div data-token-refused><StateLine word={`not revoked: ${tokenError}. Revoke tries again.`} tone="error" /></div>}
+        </DialogShell>
       )}
       {dialog === 'delete-all' && stats && (
-        <DialogShell onClose={() => { setDialog(null); setRemoveError(null); }} width={560} title={`Delete ${stats.sessions} sessions?`}
+        <DialogShell onClose={closeDialog} width={560} title={`Delete ${stats.sessions} sessions?`}
           subtitle={`Every recorded session, ${sizeOf(stats.bytes)}. The reader can no longer read them. This cannot be undone.`}
-          footerRight={<><Button onClick={() => { setDialog(null); setRemoveError(null); }}>Cancel</Button><Button variant="danger" onClick={() => { void deleteAll(); }}>{`Delete ${stats.sessions} sessions`}</Button></>}>
+          footerRight={<><Button onClick={closeDialog}>Cancel</Button><Button variant="danger" onClick={() => { void deleteAll(); }}>{`Delete ${stats.sessions} sessions`}</Button></>}>
           {removeError && <div data-remove-refused><StateLine word={`not deleted: ${removeError}. Delete ${stats.sessions} sessions tries again.`} tone="error" /></div>}
         </DialogShell>
       )}
