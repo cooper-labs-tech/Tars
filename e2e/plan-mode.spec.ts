@@ -28,6 +28,10 @@ import { DEV_URL, apiPort } from './ports.mjs';
  * with every write tool for a read-only ask. Now it is a 400 whose error says
  * Codex has no plan mode and which modes to ask for, and nothing is started.
  *
+ * An agent stored in plan on codex (Old codex planner), which an API create took until 13/10 (the Audit's L1 on
+ * #640): its CLI ran it as normal on every start, while the window showed plan. It is read back in manual, the mode
+ * it runs in, agents.json says so, and its window shows manual chosen.
+ *
  * The artefact: a screenshot per state and values.json with what each read.
  */
 
@@ -69,6 +73,8 @@ test('plan, a permission mode: chosen for Claude Code in New agent and passed to
     agent({ id: 'p1', name: 'Planner', provider: 'claude', permissionMode: 'plan', cliPath: claude }),
     agent({ id: 'c1', name: 'Codex worker', provider: 'codex', permissionMode: 'normal', cliPath: codex }),
     agent({ id: 'l1', name: 'Lead', provider: 'claude', permissionMode: 'normal', role: 'orchestrator', orchestratorMode: true, cliPath: claude }),
+    // Stored in plan by an API create before 13/10, which took plan for any CLI (the Audit's L1 on #640).
+    agent({ id: 'c2', name: 'Old codex planner', provider: 'codex', permissionMode: 'plan', cliPath: codex }),
   ], null, 2));
   fs.writeFileSync(path.join(dir, 'projects.json'), JSON.stringify([project]));
   fs.writeFileSync(path.join(dir, 'hermes-connection.json'), JSON.stringify({ mode: 'local', localPort: 9, authMode: 'token' }));
@@ -127,6 +133,18 @@ test('plan, a permission mode: chosen for Claude Code in New agent and passed to
       await expect(dialog).toHaveCount(0);
     }
 
+    // An agent stored in plan on codex: read back in manual, the mode its CLI runs it in, and written so.
+    {
+      seen.oldPlannerOnDisk = onDisk().find(a => a.id === 'c2')?.permissionMode;
+      expect(seen.oldPlannerOnDisk, 'agents.json says the mode it runs in').toBe('normal');
+      const { dialog, group } = await windowModes('Old codex planner');
+      await expect(group.getByRole('radio', { name: 'Manual', exact: true })).toHaveAttribute('aria-checked', 'true', { timeout: 30_000 });
+      seen.windowOldPlanner = await group.getByRole('radio').evaluateAll(els => els.map(e => `${e.textContent}${e.getAttribute('aria-checked') === 'true' ? '*' : ''}`));
+      await stepShot(page, '02b-window-old-planner');
+      await dialog.getByRole('button', { name: 'close', exact: true }).click();
+      await expect(dialog).toHaveCount(0);
+    }
+
     // Plan asked through the API for Codex worker, by Lead with its terminal's own token: refused, with why.
     {
       const leadStarted = await page.evaluate(() => (window as unknown as { electronAPI: { agent: { start: (a: { id: string; prompt: string }) => Promise<unknown> } } })
@@ -181,8 +199,8 @@ test('plan, a permission mode: chosen for Claude Code in New agent and passed to
     await modal.getByPlaceholder('Describe what you want done.').fill('Read the project and say what you would change.');
     const before = startedWith().length;
     await modal.getByRole('button', { name: 'Create and start', exact: true }).click();
-    await expect.poll(() => onDisk().length, { timeout: 30_000 }).toBe(4);
-    const created = onDisk().find(a => a.id !== 'p1' && a.id !== 'c1' && a.id !== 'l1');
+    await expect.poll(() => onDisk().length, { timeout: 30_000 }).toBe(5);
+    const created = onDisk().find(a => !['p1', 'c1', 'l1', 'c2'].includes(a.id as string));
     seen.created = { provider: created?.provider, permissionMode: created?.permissionMode };
     expect(created).toMatchObject({ provider: 'claude', permissionMode: 'plan' });
     // The app also runs the CLI for its own probes (a version, and so on), which
