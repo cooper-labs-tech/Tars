@@ -255,8 +255,10 @@ export function registerTracesHandlers(deps: TracesHandlerDeps): void {
     },
   }));
   ipcMain.handle('traces:preview', (_e, traceId: unknown) => previewUpload(String(traceId)));
-  // With `unsaved` while a change that already holds in memory (a withdrawal) waits for a write that holds.
-  ipcMain.handle('traces:uploadState', () => ({ ...traceUploader().state(), ...uploadPersistence() }));
+  // With `unsaved` while a change that already holds in memory (a withdrawal) waits for a write that holds: every
+  // answer that carries the upload state takes it from here (the Audit's I-2 on #599).
+  const uploadState = () => ({ ...traceUploader().state(), ...uploadPersistence() });
+  ipcMain.handle('traces:uploadState', () => uploadState());
   // The user gives up a deletion an old back-office never confirmed: its install is forgotten, and what was recorded
   // before the deletion is still never sent.
   ipcMain.handle('traces:ackDeletionCleared', () => { traceUploader().ackDeletionCleared(); return { ok: true }; });
@@ -264,7 +266,7 @@ export function registerTracesHandlers(deps: TracesHandlerDeps): void {
     const r = traceUploader().abandonDeletion();
     if (!r.ok) return r;
     tell('traces:changed');
-    return { ok: true, state: traceUploader().state() };
+    return { ok: true, state: uploadState() };
   });
   ipcMain.handle('traces:deleteEverywhere', async () => {
     const r = await traceUploader().deleteEverywhere();
