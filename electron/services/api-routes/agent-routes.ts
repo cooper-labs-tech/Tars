@@ -70,6 +70,8 @@ import { mcpConfigPathFor } from '../mcp-roles';
 import { envelopeValue } from '../../utils/envelope-value';
 import { replyTargetOf } from '../../core/reply-target';
 import { oneTaskQueue, neverStarted, workerOrderRefusal, workerStopRefusal, isReportTo, noteFrom, behindText, unknownTaskText, terminalTurnOf, holdsMessages, type Busy, type QueuedTask } from '../../core/one-task';
+import { capVerdict } from '../../core/project-cap';
+import { fleetOperations } from '../fleet-operations';
 import { chatIdentityOf, chatOfAsker, orchestratorMoved } from '../../core/chat-identity';
 
 /**
@@ -1001,6 +1003,24 @@ function reportSender(req: RouteRequest, agent: AgentStatus): AgentStatus | unde
   return caller && !hasOrchestratorPowers(caller) && isReportTo(caller, agent) ? caller : undefined;
 }
 
+/**
+ * Why work handed to `agent` now (or its queued item `ref`) waits for its project's cap (core/project-cap.ts), or
+ * undefined: the project's workers at work (a run Tars is handing, a turn in the terminal), and the first items of the
+ * others' queues that could go in now, oldest first. The queue's gate asks it at every turn (registerAgentRoutes).
+ */
+function capHold(agent: AgentStatus, ref?: string): string | undefined {
+  const cap = fleetOperations()?.capOf(agent.projectPath);
+  if (cap === undefined) return undefined;
+  const fleet = [...agents.values()].filter((a) => a.projectPath === agent.projectPath).map((a) => {
+    const atWork = !!(oneTaskQueue.busyRun(a.id) ?? terminalTurn(a));
+    const head = !atWork && !oneTaskQueue.pausedOf(a.id) ? oneTaskQueue.queued(a.id)[0] : undefined;
+    return { id: a.id, projectPath: a.projectPath, role: a.role, kind: a.kind, atWork, ...(head ? { waitingSince: head.queuedAt } : {}) };
+  });
+  const me = fleet.find((a) => a.id === agent.id)!;
+  const queuedAt = ref ? oneTaskQueue.find(ref)?.queuedAt ?? Infinity : Infinity;
+  return capVerdict({ cap, agent: me, fleet, queuedAt });
+}
+
 /** What a task asked now (or the queued task `ref`) waits behind, said for its asker. */
 function busyText(agent: AgentStatus, ref?: string): string {
   const busy = oneTaskQueue.busyRun(agent.id) ?? terminalTurn(agent);
@@ -1008,6 +1028,11 @@ function busyText(agent: AgentStatus, ref?: string): string {
   const line = oneTaskQueue.queued(agent.id);
   const at = ref ? line.findIndex((t) => t.ref === ref) : -1;
   const before = at >= 0 ? at : line.length;
+  // Paused, nothing goes in until it is resumed: that is what it waits for (a stop, a restart, a project's hours).
+  const paused = oneTaskQueue.pausedOf(agent.id);
+  if (paused) return `its queue, paused: ${paused.why}`;
+  const cap = !busy && !before ? capHold(agent, ref) : undefined;
+  if (cap) return cap;
   const head = busy ? behindText(busy, nameOf) : 'the tasks queued before it';
   return before && busy ? `${head}, and ${before} task${before === 1 ? '' : 's'} queued before it` : head;
 }
@@ -1581,7 +1606,11 @@ async function performDispatchLocked(
   // no session (the Audit's M1 on #449). A note or information waits for the
   // run's end in the terminal's writer instead, and is no task.
   const behindWork = !opts.turnTaken && oneTaskQueue.mustQueue(agent.id, undefined);
-  if (livePty && cliRunningIn(livePty) && behindWork && opts.task) {
+  // Its project's cap (2.0.7, core/project-cap.ts): a task, or a message that would start a session, waits in the
+  // queue while the project's workers at work fill it. A message typed into a session up goes in as before: an answer
+  // to a question must never wait behind the tasks waiting on it.
+  const capHeld = !opts.turnTaken && !opts.information && !!capHold(agent);
+  if (livePty && cliRunningIn(livePty) && (behindWork || capHeld) && opts.task) {
     queueDispatch(agent, opts, ctx, sendJson, taskRef, previousStatus);
     return;
   }
@@ -1671,8 +1700,9 @@ async function performDispatchLocked(
   // One task at a time (core/one-task.ts): a run over ACP holds the agent, or
   // tasks wait before this one. A session started now would be a second copy
   // of the agent at work: the task waits its turn instead, and the caller is
-  // told which task it waits behind.
-  if (behindWork) {
+  // told which task it waits behind. And while its project's cap is full, a session started now would be one more
+  // worker at work: the message waits in the queue as well.
+  if (behindWork || capHeld) {
     queueDispatch(agent, opts, ctx, sendJson, taskRef, previousStatus);
     return;
   }
@@ -2103,6 +2133,12 @@ function answersFor(agent: AgentStatus, req: RouteRequest):
 
 export function registerAgentRoutes(app_: RouteApp, ctx: RouteContext): void {
   replayContext = ctx;
+  // A project's cap holds a queued item's turn (2.0.7, core/project-cap.ts): every queued task and message goes in
+  // through takeTurn, whichever route queued it, a restart's replay included.
+  oneTaskQueue.setGate((agentId, ref) => {
+    const agent = agents.get(agentId);
+    return agent ? capHold(agent, ref) : undefined;
+  });
   // GET /api/agents/:id/wait: long-poll until agent status changes
   app_.get(/^\/api\/agents\/([^/]+)\/wait$/, (req, sendJson) => {
     const agent = visibleAgent(req);
@@ -2652,6 +2688,15 @@ export function registerAgentRoutes(app_: RouteApp, ctx: RouteContext): void {
         }, 409);
         return false;
       }
+      // Its project's cap is full (2.0.7): /start does not queue; /dispatch and delegate_task wait for a place.
+      const capped = capHold(agent);
+      if (capped) {
+        sendJson({
+          error: `"${agent.name || agent.id}" waits for ${capped}: starting it now would pass the cap. Send the task with /dispatch or delegate_task, which wait for a place.`,
+          code: 'project_cap',
+        }, 409);
+        return false;
+      }
       return spawnAgentSession(agent, prompt, { model, permissionMode: bodyPermissionMode, printMode, by: senderName(agent, req), wokenBy: { by: senderName(agent, req), via: 'start' }, taskRef, sender: senderOf(agent, req) }, ctx, sendJson);
     });
     if (!spawned) {
@@ -2821,7 +2866,8 @@ export function registerAgentRoutes(app_: RouteApp, ctx: RouteContext): void {
       // One task at a time: the agent works (a task in hand, a turn in its
       // terminal), or tasks wait before this one. Queued or not, it has its
       // id from now, and takes its turn below.
-      const waits = oneTaskQueue.mustQueue(agent.id, terminalTurn(agent));
+      // Or its project's cap is full (2.0.7, core/project-cap.ts): it waits in the queue just the same.
+      const waits = oneTaskQueue.mustQueue(agent.id, terminalTurn(agent)) || !!capHold(agent);
       const behind = waits ? busyText(agent) : undefined;
       const queued = oneTaskQueue.enqueue(agent.id, {
         ...(requester ? { requesterId: requester } : {}), title: firstLineOf(task), how: 'task', from: senderName(agent, req),

@@ -6,3 +6,4 @@ export { registerGuideTools } from "./guide.js";
 export { registerHeavySlotTools } from "./heavy.js";
 export { registerDiskTools } from "./disk.js";
 export { registerWorktreeTools } from "./worktrees.js";
+export { registerFleetTools } from "./fleet.js";

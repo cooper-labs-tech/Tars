@@ -16,6 +16,11 @@ import type { AgentStatus, AppSettings, KeepAwakeMode } from '../types';
  * The system can refuse one: `start` throws, or the blocker it returns is not started (on Linux with no inhibitor
  * service, say). Then nothing is held, the state says `refused`, and it is asked again at the next sync; `refused`
  * goes once the blocker is granted or no longer wanted.
+ *
+ * 2.0.7: a project's hours (services/fleet-operations.ts) keep it awake while their window is open, before any agent
+ * works yet (a night whose first task comes at 19:30 must find the computer up), under 'while-working' and 'always'.
+ * 'never' outranks them: it is the owner's word, and a schedule may be an orchestrator's. The state names the open
+ * windows (`scheduled`), and has no such key when none is open.
  */
 
 export type { KeepAwakeMode };
@@ -30,7 +35,12 @@ export interface KeepAwakeState {
   working: number;
   /** Wanted, but the system refused the blocker: the computer may sleep. */
   refused?: true;
+  /** The projects' windows open now (2.0.7), each until its stop: only when there is one. */
+  scheduled?: ScheduledWindow[];
 }
+
+/** A project's window, open now (services/fleet-operations.ts): it keeps the computer awake until `until` (ISO). */
+export interface ScheduledWindow { projectPath: string; until: string }
 
 interface Blocker {
   start(type: 'prevent-app-suspension'): number;
@@ -47,6 +57,7 @@ export function createKeepAwake(deps: {
   blocker: Blocker;
   settings: () => Pick<AppSettings, 'keepAwake'> | undefined;
   agents: () => Iterable<Pick<AgentStatus, 'status'>>;
+  windows?: () => ScheduledWindow[];
 }) {
   let id: number | undefined;
   let since: string | undefined;
@@ -58,12 +69,16 @@ export function createKeepAwake(deps: {
     return n;
   };
 
-  const wanted = (mode: KeepAwakeMode): boolean => (mode === 'while-working' ? working() > 0 : mode === 'always');
+  const windows = (): ScheduledWindow[] => deps.windows?.() ?? [];
+
+  const wanted = (mode: KeepAwakeMode): boolean => (mode === 'while-working' ? working() > 0 || windows().length > 0 : mode === 'always');
 
   const state = (): KeepAwakeState => {
     const mode = keepAwakeMode(deps.settings());
-    if (id !== undefined) return { mode, active: true, since, working: working() };
-    return { mode, active: false, working: working(), ...(refused ? { refused: true as const } : {}) };
+    const open = windows();
+    const scheduled = open.length ? { scheduled: open } : {};
+    if (id !== undefined) return { mode, active: true, since, working: working(), ...scheduled };
+    return { mode, active: false, working: working(), ...(refused ? { refused: true as const } : {}), ...scheduled };
   };
 
   /** Asks the system for the blocker: true when it holds. */

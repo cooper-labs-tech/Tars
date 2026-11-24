@@ -86,10 +86,12 @@ export async function stopAgent(
   agent.currentSessionId = undefined;
   agent.lastActivity = agent.stoppedAt;
 
-  // Its queue: kept, paused until someone resumes it (it would start the agent again), or dropped.
+  // Its queue: kept, paused until someone resumes it (it would start the agent again), or dropped. A queue paused
+  // already keeps its pause and the reason given (the owner's, a project's hours: services/fleet-operations.ts resumes
+  // at the next start only the queues still paused for its own reason).
   const waiting = oneTaskQueue.queued(agent.id);
   if (opts.dropQueue) for (const item of waiting) oneTaskQueue.cancel(item.ref, `it was dropped with the stop by ${request.by}`);
-  else if (waiting.length) oneTaskQueue.pause(agent.id, `stopped by ${request.by}`);
+  else if (waiting.length && !oneTaskQueue.pausedOf(agent.id)) oneTaskQueue.pause(agent.id, `stopped by ${request.by}`);
   if (opts.outcome) {
     opts.outcome.kept = opts.dropQueue ? 0 : waiting.length;
     opts.outcome.dropped = opts.dropQueue ? waiting.length : 0;

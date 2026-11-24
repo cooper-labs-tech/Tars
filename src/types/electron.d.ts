@@ -1499,8 +1499,63 @@ export interface AgentQueueItem {
 export interface AgentQueue {
   agentId: string;
   paused?: { since: string; why: string };
+  /** 2.0.7: why its first item waits besides the agent's own work: "its project's cap: 3 of 3 agents at work". */
+  waitingFor?: string;
   items: AgentQueueItem[];
 }
+
+/** A project's hours as set (2.0.7): HH:MM on 24 hours, the zone always said. */
+export interface FleetScheduleInput {
+  start: string;
+  stop: string;
+  timeZone: 'UTC' | 'local';
+  /** 'resume-queues' (the default): the agents start as their work comes; 'start-agents': each agent at rest is started too. */
+  onStart?: 'resume-queues' | 'start-agents';
+}
+
+/** A project's window, open now (no closedAt) or the last one. Times are ISO. */
+export interface FleetWindow {
+  start: string;
+  end: string;
+  openedAt: string;
+  /** Opened past its start: Tars was not running then, or the computer slept. */
+  late?: string;
+  resumed: string[];
+  started: string[];
+  startFailed: Array<{ agent: string; why: string }>;
+  closedAt?: string;
+  closedLate?: string;
+  /** 'cleared': ended because its hours were removed, nobody stopped. */
+  ended?: 'cleared';
+  stopped: Array<{ id: string; agent: string; at: string; stoppedAt?: string; afterTurn?: true }>;
+  /** At work at the stop: stopped once its turn ends. */
+  stopping: Array<{ id: string; agent: string }>;
+  leftRunning: Array<{ agent: string; why: string }>;
+  paused: string[];
+  pauseWhy?: string;
+  stopReason?: string;
+  /** Once a window each: battery, lid (closed with no external display), keep-awake (never, or refused), unknown-battery, unknown-lid. */
+  warnings: Array<{ kind: 'battery' | 'lid' | 'keep-awake' | 'unknown-battery' | 'unknown-lid'; at: string; text: string }>;
+  /** The computer slept during the window, and woke. */
+  slept: Array<{ at: string; wokeAt?: string }>;
+}
+
+export interface FleetProject {
+  projectPath: string;
+  schedule?: FleetScheduleInput & {
+    onStart: 'resume-queues' | 'start-agents';
+    setBy: string;
+    setAt: string;
+    /** "every day from 22:00 to 06:00 UTC" */
+    line: string;
+    /** The window open now, or the next one. */
+    next: { open: boolean; start: string; end: string };
+  };
+  cap?: { cap: number; setBy: string; setAt: string };
+  window?: FleetWindow;
+}
+
+export type FleetAnswer = { success: true; project: FleetProject } | { success: false; error: string; code?: string };
 
 type AgentQueueAnswer = { success: true; view: AgentQueue } | { success: false; error: string; code?: 'already_started' | 'not_found' };
 
@@ -2993,7 +3048,27 @@ export interface ElectronAPI {
      * how many agents are working (`running`) now, whatever the mode; and `refused` while the blocker is wanted but
      * the system refused it, so the computer may sleep (asked again at each change of the fleet, and every 30 s).
      */
-    state: () => Promise<{ mode: 'while-working' | 'always' | 'never'; active: boolean; since?: string; working: number; refused?: true }>;
+    state: () => Promise<{
+      mode: 'while-working' | 'always' | 'never'; active: boolean; since?: string; working: number; refused?: true;
+      /** 2.0.7: the projects' windows open now, each keeping the computer awake until `until` (ISO); absent when none is open. */
+      scheduled?: Array<{ projectPath: string; until: string }>;
+    }>;
+  };
+
+  /**
+   * Each project's hours and its cap on workers at work (2.0.7, main's services/fleet-operations.ts), set from the
+   * window for any project and filed under "you"; the project's orchestrator sets its own through the API. Every change,
+   * and every window's start, stop, warning and sleep, comes as onChanged with every project.
+   */
+  fleet: {
+    state: () => Promise<{ projects: FleetProject[] }>;
+    /** Refused with `code`: zone_required, invalid_time, empty_window, invalid_on_start, invalid_schedule, invalid_project. */
+    setSchedule: (projectPath: string, schedule: FleetScheduleInput) => Promise<FleetAnswer>;
+    /** The window open now, if any, ends with it: nobody stopped, no queue paused. */
+    clearSchedule: (projectPath: string) => Promise<FleetAnswer>;
+    /** 1 to 64, or null to remove it; refused with `code` invalid_cap. */
+    setCap: (projectPath: string, cap: number | null) => Promise<FleetAnswer>;
+    onChanged: (callback: (state: { projects: FleetProject[] }) => void) => () => void;
   };
 
   errorReports: {
