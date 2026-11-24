@@ -126,10 +126,14 @@ test('a task delegated right after a gemini agent restarts goes in once its fiel
     expect.soft(task.text).toContain('echo field-late-42');
     // 2. Nothing lost, and the task's turn after the field.
     expect.soft(after.filter((e) => e.lost !== undefined), 'nothing typed before the field was drawn').toEqual([]);
+    // The stand-in logs what was typed by its head and a turn by its last 600 characters, where Tars's own lines
+    // follow the task: the task is found by the head of what was typed, its turn as the turn that follows it.
     const drawn = after.findIndex((e) => e.field === 'drawn');
-    const turn = after.findIndex((e) => e.turn === true && String(e.text).includes('FIELD-LATE'));
+    const typed = after.findIndex((e) => typeof e.head === 'string' && e.head.includes('FIELD-LATE'));
+    const turn = after.findIndex((e, i) => i > typed && e.turn === true);
     expect.soft(drawn, 'the restarted gemini drew its field').toBeGreaterThanOrEqual(0);
-    expect.soft(turn, 'the task\'s turn began after the field was drawn').toBeGreaterThan(drawn);
+    expect.soft(typed, 'the task was typed after the field was drawn').toBeGreaterThan(drawn);
+    expect.soft(turn, 'the task\'s turn began after it was typed').toBeGreaterThan(typed);
   } finally {
     mcp?.kill();
     await app.close();
