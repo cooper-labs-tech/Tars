@@ -496,7 +496,15 @@ export class TraceUploader {
       // after this moment may ever go again.
       // The moment of the deletion, never earlier than the newest session it covers: a clock moved backward since
       // those sessions must not let them through on re-consent (the re-read's L2 at ee4d55975).
-      const since = Math.max(this.now(), this.deps.store.newestStartedAt() ?? 0);
+      // A store that cannot be read must not stop the withdrawal: the moment is then the click, the latest one Tars
+      // can stand behind, as at a start (reconcileConsent).
+      let newest: number | undefined;
+      try {
+        newest = this.deps.store.newestStartedAt();
+      } catch (err) {
+        console.error(`[traces] the trace store could not be read at the deletion (${describeSecretFileError(err)}): its moment is now`);
+      }
+      const since = Math.max(this.now(), newest ?? 0);
       this.deps.withdrawConsent(this.readInstall() ? { owed: true, since } : undefined);
       this.abort?.abort();
       await this.pass?.catch(() => undefined);
