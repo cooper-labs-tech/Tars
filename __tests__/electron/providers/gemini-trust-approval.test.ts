@@ -22,9 +22,12 @@ import { pinPlatform } from './win-fake-disk';
  * 2. A bypass agent's line without `--approval-mode yolo`: its first tool call, a reply to Tars among them, waits on a
  *    question for ever, and the task never ends.
  * 3. An auto agent's line without `--approval-mode auto_edit`: it runs in a mode other than the one the window shows.
- * 3b. A plan for gemini let through: Tars has no plan mode for gemini (hasPlanMode is claude's and Qwen Code's), so a
- *    gemini agent in plan is refused before any line is built (planModeRefusal, at creation, by the API and by an
- *    update); a line that mapped plan would be a branch nothing reaches (the Audit's I-1 on #636).
+ * 3b. A gemini line that runs gemini's plan mode for Tars's plan: measured on 0.70.0 (24/11), gemini's plan mode hides
+ *    every MCP tool that declares no readOnlyHint, which is every one of Tars's, and asks before one that does ("Allow
+ *    execution of MCP tool ...?", the turn never ending), so a gemini agent in plan could never report to Tars. Tars
+ *    gives gemini no plan mode: a stored plan is refused at creation and update (planModeRefusal), and a session asked
+ *    in plan (through /start, /dispatch or a Hermes gateway) gets no approval mode, so it runs as normal, as on every
+ *    CLI with no plan mode, until #640 refuses it there too (the Audit's M1 on #636).
  * 4. A normal agent's line with an approval mode: gemini no longer asks before a tool, as the user chose it would.
  * 5. The flags put after `-i <task>`, or between a flag and its value: gemini reads them as part of something else.
  *
@@ -92,11 +95,16 @@ describe('a gemini agent runs in its permission mode\'s approval mode (2, 3, 3b,
     expect(w.indexOf('--approval-mode')).toBeLessThan(w.indexOf('-i'));
   });
 
-  it('plan: refused for gemini before any line is built, and no line maps it', async () => {
+  it('plan: a stored plan is refused for gemini, and a session asked in plan gets no approval mode, so it runs as normal', async () => {
     const { planModeRefusal } = await import('../../../electron/providers/plan-mode');
     expect(planModeRefusal('gemini', 'plan')).toMatch(/no plan mode/);
     const { geminiApprovalMode } = await import('../../../electron/providers/gemini-provider');
     expect(geminiApprovalMode('plan')).toBeNull();
+    // The line spawnAgentSession builds for a session asked in plan: gemini's default, which asks before each tool,
+    // as every CLI with no plan mode runs it until #640 refuses the session.
+    const w = words(await line({ permissionMode: 'plan', prompt: 'go' }));
+    expect(w).not.toContain('--approval-mode');
+    expect(w).toContain('--skip-trust');
   });
 
   it.each([['normal'], [undefined]])('%s: no approval mode, so gemini asks before a tool', async (permissionMode) => {
