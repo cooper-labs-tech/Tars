@@ -92,7 +92,9 @@ export function UploadView() {
   const [saveError, setSaveError] = useState<string | null>(null);
   const [showNotice, setShowNotice] = useState(false);
   /** The session as the upload sends it, built by the same function: its batches (id and body) and blobs (hash and content). */
-  const [preview, setPreview] = useState<({ title: string } & UploadPreview) | 'none' | null>(null);
+  const [preview, setPreview] = useState<({ title: string } & UploadPreview) | 'none' | { error: string } | null>(null);
+  /** The notice main could not read: said under the consent's state, and its button reads it again. */
+  const [noticeError, setNoticeError] = useState<string | null>(null);
   const [deleting, setDeleting] = useState(false);
   /** The deletion under way: main stops the running upload pass first, then asks the back-office to delete. */
   const [inProgress, setInProgress] = useState(false);
@@ -122,14 +124,29 @@ export function UploadView() {
     } catch (e) { setError(said('reading the settings', e)); }
   }, []);
 
+  /** Main's notice of what leaves this computer; a read main cannot answer is said, never silent (the Audit's I-1 on PR 599). */
+  const readNotice = useCallback(async (): Promise<UploadNotice | null> => {
+    const api = tracesApi();
+    if (!api) return null;
+    try {
+      const n = await api.uploadNotice();
+      setNotice(n);
+      setNoticeError(null);
+      return n;
+    } catch (e) {
+      setNoticeError(said('reading the notice', e));
+      return null;
+    }
+  }, []);
+
   useEffect(() => {
     void read();
-    void tracesApi()?.uploadNotice().then(setNotice).catch(() => undefined);
+    void readNotice();
     const off = tracesApi()?.onChanged(() => { void read(); });
     // The uploader works on its own: its state is read again every 10 s while the view is open.
     const tick = setInterval(() => { void tracesApi()?.uploadState().then(setState).catch(() => undefined); }, 10_000);
     return () => { off?.(); clearInterval(tick); };
-  }, [read]);
+  }, [read, readNotice]);
 
   /** Saves the address and the plain http leave; `allow` is the switch's new value when the switch itself saves. */
   const saveUrl = async (allow: boolean = plainHttp) => {
@@ -186,12 +203,19 @@ export function UploadView() {
     const api = tracesApi();
     if (!api) return;
     const projects = settings?.projects ?? [];
-    for (const project of projects.length > 0 ? projects : [undefined]) {
-      const list = await api.list({ project, limit: 1 });
-      const s = list.sessions[0];
-      if (!s) continue;
-      const p = await api.preview(s.traceId);
-      if (p) { setPreview({ title: `${s.agentName ?? s.agentId}, ${dayClockOf(s.startedAt)}, as it would be uploaded`, ...p }); return; }
+    try {
+      for (const project of projects.length > 0 ? projects : [undefined]) {
+        const list = await api.list({ project, limit: 1 });
+        const s = list.sessions[0];
+        if (!s) continue;
+        const p = await api.preview(s.traceId);
+        if (p) { setPreview({ title: `${s.agentName ?? s.agentId}, ${dayClockOf(s.startedAt)}, as it would be uploaded`, ...p }); return; }
+      }
+    } catch (e) {
+      // On a fresh install the preview first writes the install's secret, which a full disk refuses: said in the
+      // preview's dialog, where Try again builds it again, never an unhandled rejection (the Audit's L1 on #599).
+      setPreview({ error: said('previewing a session', e) });
+      return;
     }
     setPreview('none');
   };
@@ -263,8 +287,11 @@ export function UploadView() {
   const status = state && address ? stateWord(state) : null;
   /** A deletion asked for and not confirmed: sharing stays off; delete again, or give it up. */
   const owed = !!(settings?.uploadDeletionOwed || state?.deletionOwed);
-  const masked = preview && preview !== 'none'
-    ? Object.entries(preview.counts).filter(([, n]) => n > 0).map(([k, n]) => `${n} ${k}`).join(' · ')
+  /** The session previewed, or the reason main could not build it. */
+  const shown = preview && preview !== 'none' && !('error' in preview) ? preview : null;
+  const previewError = preview && preview !== 'none' && 'error' in preview ? preview.error : null;
+  const masked = shown
+    ? Object.entries(shown.counts).filter(([, n]) => n > 0).map(([k, n]) => `${n} ${k}`).join(' · ')
     : '';
 
   return (
@@ -322,8 +349,9 @@ export function UploadView() {
             {saveError && <Row><StateLine word={saveError} tone="error" /></Row>}
             <Row className="space-y-2 py-2.5">
               <StateLine word={consentWord.word} tone={consentWord.tone} />
+              {noticeError && <StateLine word={`notice not read: ${noticeError}. What leaves this computer reads it again.`} tone="error" />}
               <div className="flex items-center gap-2">
-                <Button size="sm" onClick={() => setShowNotice(true)} disabled={!notice}>What leaves this computer</Button>
+                <Button size="sm" onClick={() => { if (notice) setShowNotice(true); else void readNotice().then(n => { if (n) setShowNotice(true); }); }} disabled={!notice && !noticeError}>What leaves this computer</Button>
                 <Button size="sm" onClick={() => { void previewOne(); }}>Preview a session</Button>
               </div>
             </Row>
@@ -416,15 +444,17 @@ export function UploadView() {
         <DialogShell
           onClose={() => setPreview(null)}
           width={760}
-          title={preview === 'none' ? 'No session to preview yet' : preview.title}
+          title={preview === 'none' ? 'No session to preview yet' : 'error' in preview ? 'No session previewed' : preview.title}
           subtitle={preview === 'none' ? 'No session of a project opted in was recorded yet.' : undefined}
+          footerLeft={previewError !== null ? <Button onClick={() => { void previewOne(); }}>Try again</Button> : undefined}
           footerRight={<Button onClick={() => setPreview(null)}>Close</Button>}
         >
-          {preview !== 'none' && (
+          {previewError !== null && <StateLine word={`not previewed: ${previewError}. Try again builds it again.`} tone="error" />}
+          {shown && (
             <div className="space-y-2.5">
-              <p className="font-mono text-[11px] text-status-waiting">{`masked: ${masked || 'nothing'} · scrub ${preview.scrubVersion}`}</p>
+              <p className="font-mono text-[11px] text-status-waiting">{`masked: ${masked || 'nothing'} · scrub ${shown.scrubVersion}`}</p>
               <pre data-upload-preview className="max-h-[420px] overflow-auto px-2.5 py-2 bg-term-bg border border-border font-mono text-[11.5px] leading-normal text-foreground whitespace-pre-wrap break-words">
-                {JSON.stringify(preview.document, null, 2)}
+                {JSON.stringify(shown.document, null, 2)}
               </pre>
               <p className="text-[11px] text-muted-foreground">This is the document Tars would send, whole: projects, agents and endpoints go as keys, never their names or addresses.</p>
             </div>
