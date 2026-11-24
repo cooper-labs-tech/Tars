@@ -57,11 +57,12 @@ function undoHead(last: Pick<AgentRetuned, 'state' | 'by' | 'askedAt' | 'effecti
  * Audit's M1 on #604). Frame `Agents · retuned by an agent`, the cards `card Worker One · retuned / retune failed /
  * retune cancelled`, and Worker Two's asked one.
  */
-function retuneHead(last: Pick<AgentRetuned, 'state' | 'by' | 'askedAt'>): { word: string; tone: StatusTone } {
+function retuneHead(last: Pick<AgentRetuned, 'state' | 'by' | 'askedAt' | 'effectiveAt'>): { word: string; tone: StatusTone } {
   const by = byWords(last.by);
   const asked = clockOfIso(last.askedAt);
   if (last.state === 'queued') return { word: `retune asked by ${by} at ${asked}`, tone: 'waiting' };
-  if (last.state === 'applied') return { word: `retuned by ${by} at ${asked}`, tone: 'waiting' };
+  // When the change held, as the undo says it (the Audit's I-1 on #604): a retune queued at 14:02 held at 14:05.
+  if (last.state === 'applied') return { word: `retuned by ${by} at ${clockOfIso(last.effectiveAt ?? last.askedAt)}`, tone: 'waiting' };
   return { word: `retune ${last.state}: asked by ${by} at ${asked}`, tone: last.state === 'failed' ? 'error' : 'idle' };
 }
 
