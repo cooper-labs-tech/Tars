@@ -33040,6 +33040,33 @@
                             },
                             {
                               "type": "frame",
+                              "id": "JsqqK",
+                              "name": "s Across projects",
+                              "width": "fill_container",
+                              "height": 26,
+                              "padding": [
+                                5,
+                                10,
+                                5,
+                                30
+                              ],
+                              "alignItems": "center",
+                              "children": [
+                                {
+                                  "type": "text",
+                                  "id": "Y6ePe",
+                                  "name": "l",
+                                  "fill": "$text-muted",
+                                  "content": "Across projects",
+                                  "lineHeight": 1.4,
+                                  "fontFamily": "$font-ui",
+                                  "fontSize": 11.5,
+                                  "fontWeight": "normal"
+                                }
+                              ]
+                            },
+                            {
+                              "type": "frame",
                               "id": "b46TC",
                               "name": "g Hermes",
                               "width": "fill_container",
@@ -34548,6 +34575,33 @@
                                   "name": "l",
                                   "fill": "$text-primary",
                                   "content": "Permissions",
+                                  "lineHeight": 1.4,
+                                  "fontFamily": "$font-ui",
+                                  "fontSize": 11.5,
+                                  "fontWeight": "normal"
+                                }
+                              ]
+                            },
+                            {
+                              "type": "frame",
+                              "id": "d6zRW",
+                              "name": "s Across projects",
+                              "width": "fill_container",
+                              "height": 26,
+                              "padding": [
+                                5,
+                                10,
+                                5,
+                                30
+                              ],
+                              "alignItems": "center",
+                              "children": [
+                                {
+                                  "type": "text",
+                                  "id": "JVUaG",
+                                  "name": "l",
+                                  "fill": "$text-muted",
+                                  "content": "Across projects",
                                   "lineHeight": 1.4,
                                   "fontFamily": "$font-ui",
                                   "fontSize": 11.5,
@@ -55868,6 +55922,33 @@
                                   "name": "l",
                                   "fill": "$text-muted",
                                   "content": "Permissions",
+                                  "lineHeight": 1.4,
+                                  "fontFamily": "$font-ui",
+                                  "fontSize": 11.5,
+                                  "fontWeight": "normal"
+                                }
+                              ]
+                            },
+                            {
+                              "type": "frame",
+                              "id": "gRbTt",
+                              "name": "s Across projects",
+                              "width": "fill_container",
+                              "height": 26,
+                              "padding": [
+                                5,
+                                10,
+                                5,
+                                30
+                              ],
+                              "alignItems": "center",
+                              "children": [
+                                {
+                                  "type": "text",
+                                  "id": "mvKOL",
+                                  "name": "l",
+                                  "fill": "$text-muted",
+                                  "content": "Across projects",
                                   "lineHeight": 1.4,
                                   "fontFamily": "$font-ui",
                                   "fontSize": 11.5,
@@ -78651,6 +78732,33 @@
                                   "name": "l",
                                   "fill": "$text-muted",
                                   "content": "Permissions",
+                                  "lineHeight": 1.4,
+                                  "fontFamily": "$font-ui",
+                                  "fontSize": 11.5,
+                                  "fontWeight": "normal"
+                                }
+                              ]
+                            },
+                            {
+                              "type": "frame",
+                              "id": "SJEgm",
+                              "name": "s Across projects",
+                              "width": "fill_container",
+                              "height": 26,
+                              "padding": [
+                                5,
+                                10,
+                                5,
+                                30
+                              ],
+                              "alignItems": "center",
+                              "children": [
+                                {
+                                  "type": "text",
+                                  "id": "YENGj",
+                                  "name": "l",
+                                  "fill": "$text-muted",
+                                  "content": "Across projects",
                                   "lineHeight": 1.4,
                                   "fontFamily": "$font-ui",
                                   "fontSize": 11.5,
@@ -155823,6 +155931,33 @@
                             },
                             {
                               "type": "frame",
+                              "id": "VePcn",
+                              "name": "s Across projects",
+                              "width": "fill_container",
+                              "height": 26,
+                              "padding": [
+                                5,
+                                10,
+                                5,
+                                30
+                              ],
+                              "alignItems": "center",
+                              "children": [
+                                {
+                                  "type": "text",
+                                  "id": "eAR45",
+                                  "name": "l",
+                                  "fill": "$text-muted",
+                                  "content": "Across projects",
+                                  "lineHeight": 1.4,
+                                  "fontFamily": "$font-ui",
+                                  "fontSize": 11.5,
+                                  "fontWeight": "normal"
+                                }
+                              ]
+                            },
+                            {
+                              "type": "frame",
                               "id": "EZSD7",
                               "name": "g Hermes",
                               "width": "fill_container",
@@ -164483,6 +164618,33 @@
                                   "name": "l",
                                   "fill": "$text-muted",
                                   "content": "Permissions",
+                                  "lineHeight": 1.4,
+                                  "fontFamily": "$font-ui",
+                                  "fontSize": 11.5,
+                                  "fontWeight": "normal"
+                                }
+                              ]
+                            },
+                            {
+                              "type": "frame",
+                              "id": "E2Lfw",
+                              "name": "s Across projects",
+                              "width": "fill_container",
+                              "height": 26,
+                              "padding": [
+                                5,
+                                10,
+                                5,
+                                30
+                              ],
+                              "alignItems": "center",
+                              "children": [
+                                {
+                                  "type": "text",
+                                  "id": "D72cBv",
+                                  "name": "l",
+                                  "fill": "$text-muted",
+                                  "content": "Across projects",
                                   "lineHeight": 1.4,
                                   "fontFamily": "$font-ui",
                                   "fontSize": 11.5,
