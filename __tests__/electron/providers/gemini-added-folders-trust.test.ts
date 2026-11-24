@@ -24,6 +24,19 @@ import { pinPlatform } from './win-fake-disk';
  * 4. A trustedFolders.json that is not JSON replaced: the user's trust gone.
  * 5. The file written again when every folder is already there.
  * 6. A parent trusted (`TRUST_PARENT`) where the folder alone was asked for.
+ *
+ * The file is the user's, read by gemini 0.70.0 as `JSON.parse(stripJsonComments(content))`, its keys compared
+ * case-insensitively on macOS and Windows (`normalizePath`), written by gemini atomically at mode 0600 (its
+ * `saveTrustedFolders`), measured in its bundle on 24/11. Written after the code above, on the orchestrator's review
+ * (the rule #634 set for gemini's settings file), and red on it where marked:
+ * 7. A decision the user made about the same folder (TRUST_PARENT, DO_NOT_TRUST) overwritten with Tars's (red).
+ * 8. On macOS, the folder written again under its own spelling when the user's file has it in another case, which gemini
+ *    reads as the same folder (red).
+ * 9. A file Tars creates more open than gemini's own, 0600 (red).
+ * 10. An existing file's mode changed (holds: the shared writer keeps it).
+ * 11. A commented file, which gemini reads, replaced or rewritten without its comments: until #634's JSONC writer is in,
+ *     Tars writes nothing to it and says so, the line is still built, and gemini asks (holds).
+ * 12. A file that is JSON but not an object left without a word (red).
  */
 
 let tmpDir: string;
@@ -42,6 +55,7 @@ beforeEach(() => {
 });
 
 afterEach(() => {
+  vi.restoreAllMocks();
   unpin();
   if (fs.existsSync(tmpDir)) fs.rmSync(tmpDir, { recursive: true, force: true });
 });
@@ -92,6 +106,60 @@ describe("the user's own trust is kept (2, 4, 5)", () => {
     await line();
     expect(fs.readFileSync(store(), 'utf8')).toBe(content);
     expect(fs.statSync(store()).mtimeMs).toBe(before);
+  });
+});
+
+describe("the file is the user's: read and written as gemini does (7 to 12)", () => {
+  const tars = () => path.join(tmpDir, '.tars');
+  const seed = (content: string, mode = 0o600) => {
+    fs.mkdirSync(path.dirname(store()), { recursive: true });
+    fs.writeFileSync(store(), content, { mode });
+    fs.chmodSync(store(), mode);
+  };
+
+  it('7. keeps the decision the user made about the same folder', async () => {
+    seed(JSON.stringify({ [tars()]: 'DO_NOT_TRUST' }));
+    await line();
+    expect(read()[tars()]).toBe('DO_NOT_TRUST');
+  });
+
+  it('8. on macOS, reads a key in another case as the same folder, as gemini does, and adds nothing', async () => {
+    unpin();
+    unpin = pinPlatform('darwin');
+    const content = JSON.stringify({ [tars().toUpperCase()]: 'TRUST_FOLDER' });
+    seed(content);
+    await line();
+    expect(fs.readFileSync(store(), 'utf8')).toBe(content);
+  });
+
+  it('9. creates the file at 0600, as gemini creates it', async () => {
+    await line();
+    expect(fs.statSync(store()).mode & 0o777).toBe(0o600);
+  });
+
+  it("10. keeps an existing file's mode", async () => {
+    seed(JSON.stringify({ '/Users/me/code': 'TRUST_FOLDER' }), 0o640);
+    await line();
+    expect(read()[tars()]).toBe('TRUST_FOLDER');
+    expect(fs.statSync(store()).mode & 0o777).toBe(0o640);
+  });
+
+  it('11. leaves a commented file exactly as it was, says so, and the line is still built', async () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+    const content = '{\n  // the user\'s own note\n  "/Users/me/code": "TRUST_FOLDER"\n}\n';
+    seed(content);
+    const command = await line();
+    expect(command).toContain('--include-directories');
+    expect(fs.readFileSync(store(), 'utf8')).toBe(content);
+    expect(warn.mock.calls.flat().join(' ')).toContain(store());
+  });
+
+  it('12. leaves a file that is JSON but not an object, and says so', async () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+    seed('["/Users/me/code"]\n');
+    await line();
+    expect(fs.readFileSync(store(), 'utf8')).toBe('["/Users/me/code"]\n');
+    expect(warn.mock.calls.flat().join(' ')).toContain(store());
   });
 });
 
