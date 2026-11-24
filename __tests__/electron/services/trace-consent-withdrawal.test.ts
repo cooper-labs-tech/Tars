@@ -3,8 +3,8 @@ import * as fs from 'fs';
 import * as path from 'path';
 import type { AppSettings } from '../../../electron/types';
 import {
-  TRACES_CONSENT_FILE, configureTraces, consentStands, recordConsent, reconcileConsent, saveSettingsFromApi,
-  stopTracesRuntime, uploadConsentAt, uploadPersistence, withdrawUploadConsent,
+  TRACES_CONSENT_FILE, TRACES_DB_FILE, TRACES_INSTALL_FILE, configureTraces, consentStands, recordConsent, reconcileConsent,
+  saveSettingsFromApi, stopTracesRuntime, traceStore, uploadConsentAt, uploadPersistence, withdrawUploadConsent,
 } from '../../../electron/services/traces-runtime';
 
 /**
@@ -28,6 +28,16 @@ import {
  * W7. A consent given is not written to its file, so it never stands.
  * S1. An endpoint change through the API (saveSettingsFromApi) that cannot be written is held in memory anyway.
  * S2. One that can is no longer written first and then applied.
+ * Added before their code after the Audit's re-read at a3c07fbfa (its M1, 24/11). "Delete everything" keeps the
+ * moment of the deletion and whether its DELETE is still owed in the settings alone, so on settings that cannot be
+ * written and a quit before a retry holds:
+ * W8. The next start withdraws the consent and nothing else: no moment, so a later consent sends what was recorded
+ *     before the deletion; no owed mark, so a DELETE that never went through is never asked again.
+ * W9. Or it rebuilds a moment earlier than the deletion's: one from the settings kept, while a session recorded
+ *     since (or under a clock moved backward) started later.
+ * W10. A start whose settings say no consent invents a deletion.
+ * A consent the settings name and its file does not hold is a withdrawal Tars could not record; whether it came with
+ * a deletion is not known then, so the start takes it for one (it fails closed).
  */
 
 const AT = '2026-11-24T10:00:00.000Z';
@@ -66,6 +76,51 @@ afterEach(() => {
   vi.useRealTimers();
   if (posix) fs.chmodSync(privateDir, 0o700);
   fs.rmSync(TRACES_CONSENT_FILE, { force: true });
+  fs.rmSync(TRACES_INSTALL_FILE, { force: true });
+  fs.rmSync(path.dirname(TRACES_DB_FILE), { recursive: true, force: true });
+});
+
+const deletionIn = (s: AppSettings | null) => (s as { traces?: { uploadDeletedAt?: number; uploadDeletionOwed?: boolean } } | null)?.traces;
+
+describe('a deletion whose bookkeeping could not be written, then a restart (the Audit\'s M1)', () => {
+  // "Delete everything": the consent's file dropped, the settings not written, Tars quit before a retry held.
+  const deletedThenRestarted = () => {
+    fs.rmSync(TRACES_CONSENT_FILE);
+    memory = structuredClone(disk!);
+  };
+
+  it('W8. the start takes it for a deletion: a moment no earlier than the start, the DELETE owed again, both written', () => {
+    fs.writeFileSync(TRACES_INSTALL_FILE, JSON.stringify({ url: 'https://backoffice.example.com', installId: 'i', token: 'tok', secret: 's'.repeat(64), registeredAt: 1 }), { mode: 0o600 });
+    deletedThenRestarted();
+    const before = Date.now();
+    reconcileConsent();
+    for (const s of [memory, disk]) {
+      expect(consentIn(s)).toBeUndefined();
+      expect(deletionIn(s)?.uploadDeletedAt).toBeGreaterThanOrEqual(before);
+      expect(deletionIn(s)?.uploadDeletionOwed).toBe(true);
+    }
+  });
+
+  it('W9. the moment is the latest of the one kept, now, and the newest session; with no install file, nothing is owed', () => {
+    const later = Date.now() + 3600_000;
+    traceStore().openTrace({ traceId: 't-late', projectPath: '/p', agentId: 'a', agentName: 'A', harness: 'qwen-code', endpointId: 'ep-000001', endpointName: 'E', endpointBaseUrl: 'http://192.0.2.10:9000/v1', model: 'm', startedAt: later });
+    deletedThenRestarted();
+    reconcileConsent();
+    expect(deletionIn(disk)?.uploadDeletedAt).toBe(later);
+    expect(deletionIn(disk)?.uploadDeletionOwed).toBeUndefined();
+    // A moment kept later still than both stays.
+    const kept = later + 3600_000;
+    memory = { traces: { ...withConsent().traces, uploadDeletedAt: kept } } as unknown as AppSettings;
+    reconcileConsent();
+    expect(deletionIn(memory)?.uploadDeletedAt).toBe(kept);
+  });
+
+  it('W10. a start whose settings say no consent leaves the deletion marks as they are', () => {
+    memory = { traces: { projects: [], uploadUrl: 'https://backoffice.example.com' } } as unknown as AppSettings;
+    reconcileConsent();
+    expect(deletionIn(memory)?.uploadDeletedAt).toBeUndefined();
+    expect(events).toEqual([]);
+  });
 });
 
 describe('a consent stands only while its own file says so', () => {
