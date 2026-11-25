@@ -28,7 +28,10 @@ import { hasPosixModes } from '../../setup/platform-limits';
  * 7. A rotation whose new write fails (a full disk): it throws before it touches the old token, which still opens the
  *    routes, now and after a restart.
  * 8. (The Audit's I-2 at c447c1ceb.) A rotation whose old file can be neither removed nor emptied: its words do not
- *    say the old token would open the routes again after a restart.
+ *    say the old token would open the routes again after a restart. On macOS and Linux only (the Audit's L1 at
+ *    01b73680c): a read-only file (0o444) refuses the truncate and its folder (0o500) the unlink. On Windows no mode
+ *    refuses the unlink, since libuv deletes a read-only file there, so the rotation holds and there is nothing to
+ *    say; a file neither removed nor emptied there takes a lock or an ACL, and no witness here carries that case.
  */
 
 assertThrowaway({ DATA_DIR, PRIVATE_DIR });
@@ -123,17 +126,17 @@ describe("the trace reader's token", () => {
     expect(String(thrown)).toMatch(/ENOSPC/);
   });
 
-  it('8: a rotation whose old file stays: refused now, and said to open again after a restart', () => {
+  it.skipIf(!posix)('8: a rotation whose old file stays: refused now, and said to open again after a restart', () => {
     const token = rotateReaderToken();
     const folder = path.dirname(TRACES_READER_TOKEN_FILE);
-    // A read-only file: Windows refuses its unlink and truncate; macOS and Linux need the folder to refuse the unlink.
+    // The file refuses the truncate, the folder the unlink.
     fs.chmodSync(TRACES_READER_TOKEN_FILE, 0o444);
-    if (posix) fs.chmodSync(folder, 0o500);
+    fs.chmodSync(folder, 0o500);
     let thrown: unknown;
     try {
       try { rotateReaderToken(); } catch (err) { thrown = err; }
     } finally {
-      if (posix) fs.chmodSync(folder, 0o700);
+      fs.chmodSync(folder, 0o700);
       fs.chmodSync(TRACES_READER_TOKEN_FILE, 0o600);
     }
     expect(isReaderToken(token)).toBe(false);

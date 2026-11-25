@@ -28,6 +28,19 @@ import { assertThrowaway } from '../../setup/throwaway-dirs';
  * V9. A grant (opting a project in) no longer writes first.
  * The count the window shows, pendingSessions, is a pass's own rule (trace-upload.ts state()), so it is what is
  * measured here.
+ * Added before their code after the Audit's re-read at 01b73680c (25/11):
+ * V10. (Its L2.) The consent's file can be neither removed nor emptied, and the settings cannot be written: a restart
+ *      before a write holds shares the revoke's sessions again, and the window is told only that Tars tries again.
+ *      On macOS and Linux only: a read-only file (0o444) refuses the truncate and its folder (0o500) the unlink. On
+ *      Windows libuv deletes a read-only file, so no mode makes the case there, and no witness here carries it.
+ * V11. (Its L3.) A revoke whose write failed, then the settings written by another save once the disk writes again,
+ *      then Tars quits before the next try: the next start finds the consent in the settings and not in its file,
+ *      and takes it for a deletion.
+ * V12. (Its L4.) An endpoint's address moved in the same save that turns its traces off, on settings that cannot be
+ *      written: the new address, approved by the act, applies before it is written, and the answer is ok.
+ * V13. (The orchestrator's note for #599, which shows these words as they are.) While a revoke holds the consent
+ *      back, the note says only that sharing is stopped and Tars tries again: not that Tars tries once more as it
+ *      quits, nor that a start before a write holds takes the consent as withdrawn.
  */
 
 assertThrowaway({ DATA_DIR, PRIVATE_DIR });
@@ -174,5 +187,56 @@ describe('a revoke of sharing on settings that cannot be written applies at once
     const answer = call('traces:setSettings', { projects: [P1, P2] }) as { ok: boolean };
     expect(answer.ok).toBe(false);
     expect((memory.traces as { projects: string[] }).projects).toEqual([P2]);
+  });
+
+  it.skipIf(process.platform === 'win32')('V10. a revoke whose consent file stays and whose settings are refused: the window is told a restart would share again', () => {
+    const file = runtime.TRACES_CONSENT_FILE;
+    const folder = path.dirname(file);
+    fs.chmodSync(file, 0o444);
+    fs.chmodSync(folder, 0o500);
+    failWith = full();
+    let answer: { ok: boolean; unsaved?: string };
+    try {
+      answer = call('traces:removePair', { harness: 'qwen-code', models: '*' }) as { ok: boolean; unsaved?: string };
+    } finally {
+      fs.chmodSync(folder, 0o700);
+      fs.chmodSync(file, 0o600);
+    }
+    expect(answer.ok).toBe(true);
+    expect(answer.unsaved).toMatch(/restart/);
+    expect(answer.unsaved).toMatch(/once more as it quits/);
+    expect(runtime.uploadPersistence().unsaved).toMatch(/restart/);
+  });
+
+  it('V11. a revoke written by another save before Tars quits: the next start still finds the consent', () => {
+    failWith = full();
+    call('traces:removePair', { harness: 'qwen-code', models: '*' });
+    // The disk writes again, and the window saves a grant through its own write (not the runtime's retry).
+    failWith = null;
+    const answer = call('traces:setSettings', { projects: [P1, P2, path.join(DATA_DIR, '..', 'projects', 'three')] });
+    expect(answer).toMatchObject({ ok: true });
+    expect(disk.traces).toMatchObject({ pairs: [] });
+    // Tars quits before the minute's retry, then starts again on what is on disk.
+    runtime.stopTracesRuntime();
+    memory = structuredClone(disk);
+    runtime.reconcileConsent();
+    expect(runtime.uploadConsentAt()).toBe(AT);
+  });
+
+  it('V12. an address moved with traces turned off, on settings that cannot be written: the move is not applied, and the answer says so', () => {
+    failWith = full();
+    const answer = call('endpoints:save', { id: EP, baseUrl: 'http://127.0.0.1:10/v1', allowTraces: false }) as { ok: boolean };
+    const ep = (memory.inferenceEndpoints ?? []).find(e => e.id === EP);
+    expect(ep?.allowTraces).toBe(false);
+    expect(ep?.baseUrl).toBe(BASE);
+    expect(answer.ok).toBe(false);
+  });
+
+  it('V13. while a revoke holds the consent back, the note says what a quit before it is saved does', () => {
+    failWith = full();
+    const answer = call('traces:removePair', { harness: 'qwen-code', models: '*' }) as { ok: boolean; unsaved?: string };
+    expect(answer.unsaved).toMatch(/once more as it quits/);
+    expect(answer.unsaved).toMatch(/the next start takes your consent as withdrawn/);
+    expect(runtime.uploadPersistence().unsaved).toBe(answer.unsaved);
   });
 });

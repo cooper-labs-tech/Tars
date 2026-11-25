@@ -2899,7 +2899,8 @@ export interface ElectronAPI {
     /** `uploadUrl`: the back-office address any user may point at their own server, '' for none. A new address
      *  clears the consent: the notice is shown again. */
     /** A change that takes away from sharing (projects opted out, closed models left out) applies at once: ok, with
-     *  `unsaved` while it is not written yet (Tars tries again every minute, and shares nothing meanwhile). */
+     *  `unsaved` while it is not written yet (Tars tries again every minute, and shares nothing meanwhile; when the
+     *  consent's file can be neither removed nor emptied, the words say a restart would share again instead). */
     setSettings: (s: { projects?: string[]; capBytes?: number; retentionDays?: number; excludeClosedModels?: boolean; uploadUrl?: string; uploadAllowPlainHttp?: boolean }) => Promise<{ ok: true; settings: TraceSettingsView; unsaved?: string } | { ok: false; error: string }>;
     /** The harness and model pairs that may be traced (empty as Tars ships), and the closed-model default with the
      *  warning to show beside its switch. */
@@ -3063,8 +3064,8 @@ export interface UploadState {
   /** Waiting before the next try (offline, the server busy or full). */
   nextTryAt?: number;
   /** The settings could not be written after a change that already holds in memory (a withdrawn consent, a
-   *  deletion's bookkeeping): the reason, with "Tars tries again every minute". Uploads stay off meanwhile. Say it
-   *  as a warning until it goes. */
+   *  deletion's bookkeeping, a revoke of sharing): the reason, with "Tars tries again every minute". Uploads stay off
+   *  meanwhile, unless the words say a restart would share again. Say it as a warning until it goes. */
   unsaved?: string;
   /** Say each plainly, not as an error:
    *  - 'registration_closed': "this back-office does not take new installs" (looked at again in 6 hours);

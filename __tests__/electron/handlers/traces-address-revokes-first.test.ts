@@ -22,8 +22,11 @@ import { assertThrowaway } from '../../setup/throwaway-dirs';
  * R5. The consent's file can be neither removed nor emptied (a read-only file in a folder that may not be written),
  *     and the settings cannot be written: a restart before a write holds brings the consent back for the old
  *     address, and the window is told only that sharing stopped.
- * A read-only file (0o444) refuses the unlink and the truncate on Windows by itself; on macOS and Linux the folder
- * must refuse the unlink too (0o500), so both are set where the system has them.
+ *     On macOS and Linux only (the Audit's L1 at 01b73680c): a read-only file (0o444) refuses the truncate and its
+ *     folder (0o500) the unlink. On Windows no mode refuses the unlink: libuv deletes a read-only file there (a POSIX
+ *     delete that ignores the attribute, else the attribute cleared first), so the withdrawal holds and there is
+ *     nothing to say. A file neither removed nor emptied on Windows takes a lock or an ACL, and no witness here
+ *     carries that case; the code that says it (dropPrivateFile, then the words) is the same on every system.
  */
 
 assertThrowaway({ DATA_DIR, PRIVATE_DIR });
@@ -88,17 +91,17 @@ describe('the back-office address, changed on settings that cannot be written', 
     expect(runtime.uploadConsentAt()).toBeUndefined();
   });
 
-  it('R5. emptied when neither the consent\'s file nor the settings can be written: the window is told a restart would share again', () => {
+  it.skipIf(process.platform === 'win32')('R5. emptied when neither the consent\'s file nor the settings can be written: the window is told a restart would share again', () => {
     const file = runtime.TRACES_CONSENT_FILE;
     const folder = path.dirname(file);
     fs.chmodSync(file, 0o444);
-    if (process.platform !== 'win32') fs.chmodSync(folder, 0o500);
+    fs.chmodSync(folder, 0o500);
     failWith = full();
     let answer: { ok: boolean; error?: string };
     try {
       answer = call('traces:setSettings', { uploadUrl: '' }) as { ok: boolean; error?: string };
     } finally {
-      if (process.platform !== 'win32') fs.chmodSync(folder, 0o700);
+      fs.chmodSync(folder, 0o700);
       fs.chmodSync(file, 0o600);
     }
     expect(runtime.uploadConsentAt()).toBeUndefined();

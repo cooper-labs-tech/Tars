@@ -279,13 +279,19 @@ not come back at a restart on a full volume or in a private folder that may not 
 and a start that finds it was not written down takes it for a deletion, so nothing recorded before it is sent. It
 does come back when its file can be neither removed nor emptied and no write of the settings holds before Tars quits
 (SECURITY.md, § 9). A grant (a trace or endpoint setting that widens sharing) is written first, then held in memory,
-or answered with the reason; a save that fails leaves the keys' file as it was. A revoke of sharing applies first:
-emptying or changing the address, opting a project out, removing a pair, leaving closed models out, turning an
-endpoint's traces off, removing an endpoint. Each holds in memory at once, is written, and is tried again every
-minute until it holds, the window answered ok with the reason it is not saved yet (`unsaved`). What is sent follows
-the trace gate as it is at sending, so a revoke also holds back what was recorded before it.
+or answered with the reason; a save that fails leaves the keys' file as it was. A revoke of sharing made in the
+window applies first: emptying or changing the address, opting a project out, removing a pair, leaving closed models
+out, turning an endpoint's traces off, removing an endpoint. Each holds in memory at once, is written, and is tried
+again every minute until it holds. The window is answered ok with the reason it is not saved yet (`unsaved`), except
+for the address, which is answered with the reason it was not saved, its withdrawal holding. When the consent's file
+can be neither removed nor emptied either, that reason says a restart before the settings are saved would share
+again what the revoke stopped. An agent that turns its endpoint's traces off or moves its address through the local
+API has its change written first, and on a failed write is answered with the reason, nothing changed: a revoke
+applied first could drop the owner's consent. What is sent follows the trace gate as it is at sending, so a revoke
+also holds back what was recorded before it.
 
-A revoke whose write never holds before Tars quits fails closed, and does more than the user asked. Its consent's
+A revoke whose write never holds before Tars quits (it tries once more as it quits) fails closed, and does more than
+the user asked. Its consent's
 file is dropped (none is given meanwhile), so the next start finds a consent the settings name and its file does
 not hold, and takes it for a deletion of its own (`uploadDeletionBy: 'start'`): the sessions recorded before that
 start are never sent anywhere, and if an install is still there its DELETE is owed, offered in the window and asked
