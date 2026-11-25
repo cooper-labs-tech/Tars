@@ -52,7 +52,7 @@ import { EventEmitter } from 'events';
  *     model, mode and skills, so a gemini or Qwen Code agent already holding a
  *     comma folder or vault could save nothing, and the dialog has no field
  *     that clears one (a vault none at all).
- * 12e. Clearing or changing one folder is refused for another the agent holds
+ * 12e. Clearing the secondary folder is refused for a vault the agent holds
  *     and the update does not touch.
  * 12f. A move to gemini or Qwen Code keeping such a folder, or such a folder
  *     sent, is taken: the agent then works without it.

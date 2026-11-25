@@ -4,6 +4,7 @@ import * as os from 'os';
 import * as path from 'path';
 import { launchSandboxed, recordValues, removeHome } from './fixture.mjs';
 import { DEV_URL, apiPort } from './ports.mjs';
+import { writeFakeClis } from './fake-clis.mjs';
 
 /**
  * A folder a gemini agent can never see is refused where the user sets it, with a reason the window shows (the
@@ -34,6 +35,16 @@ import { DEV_URL, apiPort } from './ports.mjs';
  *    ([data-secondary-project-error]), word for word the same as main's answer in 1, the field keeps the path, and the
  *    agent keeps no folder.
  * Red on 6970bc906: the dialog dropped the answer, and no line showed. The artefact adds refused-on-screen.png.
+ *
+ * The second test: a folder set while the agent's CLI runs, typed by main as that CLI's own command, and only where
+ * one was measured to take it (the Audit's point on #636 at 6970bc906: the window typed `/add-dir <path>` into every
+ * CLI's terminal, and grok 1.0.92, which has no such command, took it as a prompt). Claude Code 2.1.332 takes
+ * `/add-dir <path>` asking nothing; grok has none (the measures are in __tests__/electron/handlers/
+ * secondary-folder-live.test.ts). The stand-ins of e2e/fake-clis.mjs log every line typed into them. Asserted:
+ * 6. a claude agent whose CLI runs is typed `/add-dir <folder>` by main, and the answer says `now`;
+ * 7. a grok agent whose CLI runs is typed nothing, and the answer says `next-start`;
+ * 8. ~/.tars-private is refused for the running claude agent, its reason naming it, and nothing is typed for it.
+ * Red on e4d550b48: main typed nothing, its answer said nothing of when, and it took ~/.tars-private.
  */
 
 type Api = { electronAPI: { agent: {
@@ -129,6 +140,85 @@ test('a gemini agent is refused a secondary folder whose name holds a comma, wit
     expect.soft(moved.success, JSON.stringify(moved)).toBe(false);
     expect.soft(moved.error ?? '').toMatch(/comma/);
     expect.soft(afterMove?.provider ?? 'claude').toBe('claude');
+  } finally {
+    await app.close();
+    await removeHome(home);
+  }
+});
+
+type LiveApi = { electronAPI: { agent: {
+  start(p: { id: string; prompt: string }): Promise<unknown>;
+  setSecondaryProject(p: { id: string; secondaryProjectPath: string | null }): Promise<{ success: boolean; error?: string; appliesAt?: string }>;
+  get(id: string): Promise<{ cliRunning?: boolean; currentSessionId?: string; status?: string; secondaryProjectPath?: string } | null>;
+} } };
+type Rec = { agent?: string; kind?: string; launch?: unknown; typed?: string };
+
+test("a folder set while the agent's CLI runs is typed into it as that CLI's own command, and only claude's", async () => {
+  test.setTimeout(150_000);
+  const home = fs.mkdtempSync(path.join(os.tmpdir(), 'dorothy-e2e-live-folder-'));
+  const project = path.join(home, 'projects', 'demo');
+  const dir = path.join(home, '.tars');
+  const shared = path.join(home, 'shared lib');
+  const privateDir = path.join(home, '.tars-private');
+  for (const d of [project, dir, shared, privateDir]) fs.mkdirSync(d, { recursive: true });
+  const fakes = writeFakeClis(home, ['claude', 'grok']) as Record<string, string>;
+  const at = { character: 'robot', status: 'idle', role: 'worker', projectPath: project, skills: [], permissionMode: 'bypass', createdAt: '2026-11-25T08:00:00.000Z', lastActivity: '2026-11-25T08:00:00.000Z' };
+  fs.writeFileSync(path.join(dir, 'agents.json'), JSON.stringify([
+    { id: 'live-claude', name: 'Claude Live', provider: 'claude', cliPath: fakes.claude, ...at },
+    { id: 'live-grok', name: 'Grok Live', provider: 'grok', cliPath: fakes.grok, ...at },
+  ], null, 2));
+  fs.writeFileSync(path.join(dir, 'projects.json'), JSON.stringify([project]));
+  fs.writeFileSync(path.join(dir, 'app-settings.json'), JSON.stringify({
+    autoStartAgentsOnLaunch: false, ollamaBaseUrl: 'http://127.0.0.1:9', grokEnabled: true,
+    cliPaths: { claude: fakes.claude, grok: fakes.grok, additionalPaths: [path.join(home, 'bin')] },
+  }));
+  const log = path.join(home, 'fake-cli.jsonl');
+  const recs = (id: string): Rec[] => (fs.existsSync(log) ? fs.readFileSync(log, 'utf8').trim().split('\n').filter(Boolean).map((l) => { try { return JSON.parse(l) as Rec; } catch { return {}; } }) : []).filter((r) => r.agent === id);
+  const typedBy = (id: string) => recs(id).filter((r) => typeof r.typed === 'string').map((r) => r.typed as string);
+  const values: Record<string, unknown> = { home };
+  const keep = (more: Record<string, unknown>) => { Object.assign(values, more); recordValues(values); };
+
+  const app: ElectronApplication = await launchSandboxed(electron, home, {
+    env: { NODE_ENV: 'development', DOROTHY_DEV_URL: DEV_URL, DOROTHY_API_PORT: apiPort(31380), DOROTHY_E2E: '1' },
+  });
+  try {
+    const page = await app.firstWindow();
+    await page.goto(`${DEV_URL}/agents`, { waitUntil: 'domcontentloaded' });
+    await page.waitForFunction(() => !!(window as unknown as Partial<LiveApi>).electronAPI);
+    const get = (id: string) => page.evaluate((i) => (window as unknown as LiveApi).electronAPI.agent.get(i), id);
+    const setFor = (id: string, folder: string) => page.evaluate(({ i, f }) => (window as unknown as LiveApi).electronAPI.agent.setSecondaryProject({ id: i, secondaryProjectPath: f }), { i: id, f: folder });
+
+    for (const id of ['live-claude', 'live-grok']) await page.evaluate((i) => (window as unknown as LiveApi).electronAPI.agent.start({ id: i, prompt: '' }), id);
+    await expect.poll(() => ['live-claude', 'live-grok'].filter((id) => recs(id).some((r) => r.launch)).length, { timeout: 60_000, message: 'both CLIs launched' }).toBe(2);
+    // Up, and claude's session registered: its launch is over, so Tars may type into it.
+    await expect.poll(async () => !!(await get('live-claude'))?.currentSessionId && !!(await get('live-claude'))?.cliRunning, { timeout: 60_000, message: "claude's session up" }).toBe(true);
+    await expect.poll(async () => !!(await get('live-grok'))?.cliRunning, { timeout: 60_000, message: "grok's CLI up" }).toBe(true);
+    const before = { claude: typedBy('live-claude').length, grok: typedBy('live-grok').length };
+
+    // 6. claude.
+    const claudeAnswer = await setFor('live-claude', shared);
+    await expect.poll(() => typedBy('live-claude').slice(before.claude), { timeout: 15_000, message: 'what claude was typed' }).toContain(`/add-dir ${shared}`);
+    // 7. grok, given the same time.
+    const grokAnswer = await setFor('live-grok', shared);
+    await page.waitForTimeout(3_000);
+    const grokTyped = typedBy('live-grok').slice(before.grok);
+    // 8. ~/.tars-private, for the running claude agent.
+    const claudeTypedBefore = typedBy('live-claude').length;
+    const privateAnswer = await setFor('live-claude', privateDir);
+    await page.waitForTimeout(3_000);
+    const privateTyped = typedBy('live-claude').slice(claudeTypedBefore);
+    const claudeAfter = await get('live-claude');
+    keep({ claudeAnswer, claudeTyped: typedBy('live-claude').slice(before.claude), grokAnswer, grokTyped, privateAnswer, privateTyped, claudeFolder: claudeAfter?.secondaryProjectPath ?? null });
+
+    expect.soft(claudeAnswer.success, JSON.stringify(claudeAnswer)).toBe(true);
+    expect.soft(claudeAnswer.appliesAt).toBe('now');
+    expect.soft(grokAnswer.success, JSON.stringify(grokAnswer)).toBe(true);
+    expect.soft(grokAnswer.appliesAt).toBe('next-start');
+    expect.soft(grokTyped, 'nothing typed into grok').toEqual([]);
+    expect.soft(privateAnswer.success, JSON.stringify(privateAnswer)).toBe(false);
+    expect.soft(privateAnswer.error ?? '').toMatch(/tars-private/);
+    expect.soft(privateTyped, 'nothing typed for ~/.tars-private').toEqual([]);
+    expect.soft(claudeAfter?.secondaryProjectPath).toBe(shared);
   } finally {
     await app.close();
     await removeHome(home);
