@@ -14,6 +14,10 @@ import { describe, it, expect, vi } from 'vitest';
  * codex resumes too since 2.0.4, as codex takes it, measured on 0.163: `codex
  * resume <id>` continues the session in its own rollout, and `codex fork <id>`
  * goes on under a new session (codex-commands.test.ts has the whole argv).
+ *
+ * grok resumes too, as grok takes it, measured on 1.0.92: `--resume <uuid>`, the
+ * session its hooks report, and grok's own `--fork-session` for a fork
+ * (grok-resume.test.ts has the whole line).
  */
 
 // Read by the providers' modules as they load, so it is set before any import.
@@ -69,9 +73,13 @@ describe('the resume a restart asks for', () => {
     expect(await commandFor('codex', { resumeSessionId: SESSION })).toMatch(new RegExp(`^${home}'/usr/local/bin/cli' resume .*'${SESSION}'$`));
   });
 
+  it('reaches grok by its own --resume and --fork-session (grok 1.0.92, measured)', async () => {
+    expect(await commandFor('grok', { resumeSessionId: SESSION, forkSession: true })).toContain(` --resume '${SESSION}' --fork-session`);
+  });
+
   it('reaches no other CLI, whose resume flag nobody has verified', async () => {
     const { getAllProviders } = await import('../../../electron/providers');
-    for (const provider of getAllProviders().filter(p => p.binaryName !== 'claude' && p.binaryName !== 'codex' && p.id !== 'qwen-code')) {
+    for (const provider of getAllProviders().filter(p => p.binaryName !== 'claude' && p.binaryName !== 'codex' && p.id !== 'qwen-code' && p.id !== 'grok')) {
       const command = await commandFor(provider.id, { resumeSessionId: SESSION, forkSession: true });
       expect(command, provider.id).not.toContain(SESSION);
     }
