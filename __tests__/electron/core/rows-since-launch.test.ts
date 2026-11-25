@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from 'vitest';
-import { attachTerminalMirror, markCliLaunch, rowsSinceLaunch } from '../../../electron/core/terminal-mirror';
+import { attachTerminalMirror, endLaunchLog, markCliLaunch, rowsSinceLaunch } from '../../../electron/core/terminal-mirror';
 
 /**
  * The rows a CLI drew since it was launched into its terminal, at the bottom of what it drew: what a provider's
@@ -21,7 +21,10 @@ import { attachTerminalMirror, markCliLaunch, rowsSinceLaunch } from '../../../e
  * 10. What cannot be known (more written since the launch than is kept) reads as up.
  * The Audit's L4 on #601 (1.91 MB per terminal at the cap, measured):
  * 11. A terminal whose CLI reads no screen (no upOnScreen) keeps a launch log all the same.
- * 12. A quiet terminal keeps its log past the launch window.
+ * 12. A quiet terminal keeps its log past the launch window. Since 25/11 (the Audit's L1 on #641) the window's end is
+ *     its launch's, decided by core/agent-launch.ts, which the launch poll ends within a second (utils/agents-tick.ts):
+ *     the log has no timer of its own, which let it go before a give-up read its rows, and goes when the launch ends
+ *     (endLaunchLog), up or given up, at the next launch, or with the terminal.
  * 13. The cap is counted in characters, so a log of wide characters runs past it in bytes.
  */
 
@@ -128,7 +131,7 @@ describe('the rows a CLI drew since its launch', () => {
     expect(rowsSinceLaunch(p as never)).toEqual([]);
   });
 
-  it('12: the log goes when the launch window ends, on a quiet terminal too', () => {
+  it('12: the log goes when its launch ends, on a quiet terminal too, and not before by a clock of its own', () => {
     vi.useFakeTimers();
     try {
       const p = mirrored();
@@ -136,6 +139,8 @@ describe('the rows a CLI drew since its launch', () => {
       p.emit(BOX);
       expect(hasBox(rowsSinceLaunch(p as never))).toBe(true);
       vi.advanceTimersByTime(180_001);
+      expect(hasBox(rowsSinceLaunch(p as never))).toBe(true);
+      endLaunchLog(p as never);
       expect(rowsSinceLaunch(p as never)).toEqual([]);
     } finally {
       vi.useRealTimers();

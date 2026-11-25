@@ -48,6 +48,7 @@ vi.mock('../../../electron/core/terminal-mirror', () => ({
   terminalText: () => state.history ?? state.screen,
   rowsSinceLaunch: () => state.screen,
   markCliLaunch: () => undefined,
+  endLaunchLog: () => undefined,
 }));
 vi.mock('../../../electron/services/agent-truth', () => ({ lastInterruptAt: () => undefined }));
 
