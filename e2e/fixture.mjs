@@ -485,6 +485,23 @@ function sandboxXdg(sandboxHome) {
   };
 }
 
+/**
+ * gemini's and grok's own homes, each the one it takes in the sandbox when
+ * none is set, so a runner's exported ones never reach the app or the CLIs it
+ * starts (the Audit's L4 on #638). Measured on 2026-11-25, each binary isolated:
+ * gemini 0.70.0 takes GEMINI_CLI_HOME before HOME as the folder its `.gemini`
+ * lies in, and wrote its projects.json, history and tmp there; grok 1.0.92 takes
+ * GROK_HOME in place of ~/.grok, wrote its files there, and resolves ~/.grok
+ * through the home's real path. The rest of both families is dropped with the
+ * caller's (inheritable). A spec's env may still name another.
+ */
+function sandboxCliHomes(sandboxHome) {
+  return {
+    GEMINI_CLI_HOME: sandboxHome,
+    GROK_HOME: path.join(fs.realpathSync(sandboxHome), '.grok'),
+  };
+}
+
 function windowsHome(sandboxHome) {
   if (!onWindows) return {};
   const roaming = path.join(sandboxHome, 'AppData', 'Roaming');
@@ -636,6 +653,10 @@ const RENDERING_ARGS = ['--lang=fr-FR', ...(onWindows ? ['--disable-lcd-text'] :
  * on #643). XDG_DATA_HOME, XDG_STATE_HOME and XDG_CACHE_HOME are the sandbox's
  * `.local/share`, `.local/state` and `.cache` the same way, where each CLI keeps
  * its sessions, its logs and its caches when they are unset (the Audit's I-3).
+ * GEMINI_CLI_HOME and GROK_HOME are the sandbox's (sandboxCliHomes), and no
+ * other variable of either CLI's comes from the caller: a runner's reached the
+ * app, and gemini and grok read and wrote the runner's folders (the Audit's L4
+ * on #638).
  *
  * The HOME must lie inside a folder the specs make their sandboxes in, judged
  * as removeHome judges it, or nothing is written there and no app is started
@@ -655,15 +676,15 @@ export async function launchSandboxed(electron, sandboxHome, { env = {}, profile
     ...options,
     // A packed app (executablePath, e2e/sandbox-build.packed.spec.ts) runs its own code: no '.' to name it.
     args: [...(options.executablePath ? [] : ['.']), `--user-data-dir=${path.join(sandboxHome, profile)}`, ...RENDERING_ARGS],
-    env: withSandboxPath({ ...inheritable(process.env), PATH: sandboxPath(sandboxHome), DOROTHY_TAILSCALE_BIN: writeFakeTailscale(sandboxHome), ...sandboxXdg(sandboxHome), ...env, ...windowsHome(sandboxHome), HOME: sandboxHome, CFFIXED_USER_HOME: sandboxHome }, env),
+    env: withSandboxPath({ ...inheritable(process.env), PATH: sandboxPath(sandboxHome), DOROTHY_TAILSCALE_BIN: writeFakeTailscale(sandboxHome), ...sandboxXdg(sandboxHome), ...sandboxCliHomes(sandboxHome), ...env, ...windowsHome(sandboxHome), HOME: sandboxHome, CFFIXED_USER_HOME: sandboxHome }, env),
   });
   // What the app inherited, checked the way its folders are below: a run
   // started by an agent inside Tars carries that agent's CLAUDE_MGR_API_URL
   // (the live Tars, 31415) and its token, and handed them to the app until
   // 2026-09-23. Anything of that family the app holds now came from the spec,
-  // or is the fixture's own DOROTHY_TAILSCALE_BIN.
+  // or is the fixture's own DOROTHY_TAILSCALE_BIN, GEMINI_CLI_HOME or GROK_HOME.
   const leaked = await app.evaluate((_electron, { allowed, pattern }) => Object.keys(process.env)
-    .filter(name => new RegExp(pattern).test(name) && !allowed.includes(name)), { allowed: [...Object.keys(env), 'DOROTHY_TAILSCALE_BIN'], pattern: LEAKY.source });
+    .filter(name => new RegExp(pattern).test(name) && !allowed.includes(name)), { allowed: [...Object.keys(env), 'DOROTHY_TAILSCALE_BIN', ...Object.keys(sandboxCliHomes(sandboxHome))], pattern: LEAKY.source });
   if (leaked.length > 0) {
     await app.close();
     throw new Error(`the app inherited the caller's ${leaked.join(', ')}; launchSandboxed hands it nothing of that family`);
@@ -721,9 +742,14 @@ export async function launchSandboxed(electron, sandboxHome, { env = {}, profile
  * CLAUDE_MGR_API_URL (the live Tars on 31415) and CLAUDE_MGR_API_TOKEN, with
  * TARS_CLAUDE_ACCOUNT, TARS_INSTANCE_ID and TARS_CHATS_READ, and a shell may
  * carry DOROTHY_* or ANTHROPIC_* of its own; a spec that wants one sets it in
- * its env.
+ * its env. GEMINI_* and GROK_* go too, measured on gemini 0.70.0 and grok
+ * 1.0.92 (the Audit's L4 on #638): besides each one's home, GROK_CONFIG_PATH
+ * and GROK_CONFIG lay a config of the runner's over grok's own, GROK_AUTH_PATH
+ * names its login, GEMINI_CLI_TRUSTED_FOLDERS_PATH and
+ * GEMINI_CLI_SYSTEM_SETTINGS_PATH name gemini's trust and system settings, and
+ * GEMINI_API_KEY is a key of the runner's.
  */
-const LEAKY = /^(CLAUDE|DOROTHY|ANTHROPIC|TARS_)|^CLAUDECODE$/;
+const LEAKY = /^(CLAUDE|DOROTHY|ANTHROPIC|TARS_|GEMINI_|GROK_)|^CLAUDECODE$/;
 export function inheritable(env) {
   return Object.fromEntries(Object.entries(env).filter(([name]) => !LEAKY.test(name)));
 }
