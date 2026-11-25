@@ -7,6 +7,8 @@ import { keyEnvFor } from '../services/cli-keys';
 import { DATA_DIR } from '../constants';
 import { handedSecondaryFolder } from '../utils/handed-folder';
 import { trustGeminiFolders } from '../utils/gemini-trust';
+import { splitFolderSentence, splitOnItsLine } from './added-folders';
+import { agentNotice } from '../core/agent-notices';
 import { legacyShCommand, usesNodeHooks } from '../utils/hook-command';
 import { allowAgentToken, configureGeminiNodeHooks } from '../utils/gemini-node-hooks';
 import type {
@@ -22,7 +24,7 @@ import { writeSharedJsonSync } from '../utils/shared-file';
 
 /** A session of gemini's own, as its hooks report it: a uuid. */
 const GEMINI_SESSION_ID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-/** The folders already said to be left out of a gemini line, so each is said once per run of Tars. */
+/** The folders already said, with no agent to tell, to be left out of a gemini line: each said once per run of Tars. */
 const unpassableSaid = new Set<string>();
 
 /**
@@ -107,13 +109,15 @@ export class GeminiProvider implements CLIProvider {
     added.push(DATA_DIR);
     // gemini splits every --include-directories value at commas and trims each piece (`coerceCommaSeparated`, 0.70.0),
     // with no way to escape one: a folder whose path holds a comma, or ends in a space, would reach it as other
-    // folders, untrusted, and gemini would ask. Such a folder is left out of the line, and of gemini's store, and said
-    // once per run of Tars (the Audit's I-3 on #636).
+    // folders, untrusted, and gemini would ask. Such a folder is left out of the line, and of gemini's store (the
+    // Audit's I-3 on #636). It is refused where it is set (providers/added-folders.ts); one set before that is said in
+    // the agent's own output at each launch, where its user reads it (the Audit's L1 at aef730f1c).
     const passed = added.filter((folder) => {
-      if (!/,|\s$/.test(folder)) return true;
-      if (!unpassableSaid.has(folder)) {
+      if (!splitOnItsLine(folder)) return true;
+      if (params.agentId) agentNotice(params.agentId, splitFolderSentence('gemini', folder));
+      else if (!unpassableSaid.has(folder)) {
         unpassableSaid.add(folder);
-        console.warn(`[gemini] ${folder} is not added to a gemini agent's workspace: gemini splits --include-directories at commas and trims each piece, so no spelling of that folder reaches it whole`);
+        console.warn(`[gemini] ${splitFolderSentence('gemini', folder)}`);
       }
       return false;
     });

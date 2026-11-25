@@ -6,6 +6,7 @@ import type { AppSettings } from '../types';
 import { keyEnvFor } from '../services/cli-keys';
 import { updateSharedTextSync } from '../utils/shared-file';
 import { removeTomlTable } from '../utils/toml-tables';
+import { agentNotice } from '../core/agent-notices';
 import { parse as parseToml } from 'smol-toml';
 import type {
   CLIProvider,
@@ -57,6 +58,11 @@ export class GrokProvider implements CLIProvider {
   }
 
   buildInteractiveCommand(params: InteractiveCommandParams): string {
+    // grok has no flag for a secondary folder (above): one is refused where it is set (providers/added-folders.ts),
+    // and one set before that is said in the agent's output at each launch, where its user reads it.
+    if (params.agentId && params.secondaryProjectPath) {
+      agentNotice(params.agentId, `grok takes no secondary folder, so ${params.secondaryProjectPath} is not in this agent's workspace: clear it, or give the agent another CLI`);
+    }
     let command = `'${params.binaryPath.replace(/'/g, "'\\''")}'`;
 
     // Model

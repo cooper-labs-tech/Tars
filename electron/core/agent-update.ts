@@ -8,6 +8,7 @@ import { orchestratorMoved } from './chat-identity';
 import { launchSettings, changedLaunchSettings, restartForSettings, type RestartOutcome } from './agent-restart';
 import { assignRole, requestedRole } from './agent-role';
 import { planModeRefusal } from '../providers/plan-mode';
+import { addedFolderRefusal } from '../providers/added-folders';
 import { skillsProblem } from '../utils/skill-name';
 import { handedFolderProblem } from '../utils/handed-folder';
 import type { AgentStatus, WorktreeConfig, AgentCharacter, AgentProvider, AgentPermissionMode, AgentEffort, AgentRole } from '../types';
@@ -106,6 +107,14 @@ export async function updateAgent(params: AgentUpdate, opts: AgentUpdateOptions 
   if (params.provider !== undefined || params.permissionMode !== undefined) {
     const noPlan = planModeRefusal(params.provider ?? agent.provider, params.permissionMode ?? agent.permissionMode);
     if (noPlan) return { success: false, error: noPlan };
+  }
+  // A folder the agent's CLI would never see, set here or kept across a move to that CLI (providers/added-folders.ts).
+  if (params.provider !== undefined || params.secondaryProjectPath !== undefined || params.obsidianVaultPaths !== undefined) {
+    const noFolder = addedFolderRefusal(params.provider ?? agent.provider, {
+      secondary: params.secondaryProjectPath !== undefined ? params.secondaryProjectPath : agent.secondaryProjectPath,
+      vaults: params.obsidianVaultPaths !== undefined ? params.obsidianVaultPaths : agent.obsidianVaultPaths,
+    });
+    if (noFolder) return { success: false, error: noFolder };
   }
   let role: AgentRole | undefined;
   try {

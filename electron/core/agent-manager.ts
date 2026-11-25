@@ -23,6 +23,7 @@ import { keptSender } from '../services/agent-queues';
 import { dialogOpen, dialogShown } from './agent-launch';
 import type * as pty from 'node-pty';
 import { cliStoppedIn, spawnAgentPty, agentShell, codexLaunching } from './agent-pty';
+import { setAgentNoticeSink } from './agent-notices';
 import { killPty } from './pty-kill';
 import { withPath, type DirectLaunch, type Launch } from '../platform';
 import { buildFullPath } from '../utils/path-builder';
@@ -411,6 +412,14 @@ export function appendAgentOutput(agent: AgentStatus, chunk: string): void {
   }
   markAgentsDirty();
 }
+
+// A notice from below the agent store (core/agent-notices.ts: a gemini launch without Tars's hooks) goes where a person
+// reads it, the agent's kept output, as a refused session's does (hooks-routes.ts).
+setAgentNoticeSink((agentId, line) => {
+  const agent = agents.get(agentId);
+  if (agent) appendAgentOutput(agent, `\r\n[Tars] ${line}\r\n`);
+  else console.log(`[notice] ${agentId}: ${line}`);
+});
 
 interface AgentsFile {
   version: number;
