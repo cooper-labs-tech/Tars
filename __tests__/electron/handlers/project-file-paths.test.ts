@@ -63,13 +63,19 @@ function deps(): IpcHandlerDependencies {
 }
 registerIpcHandlers(deps());
 
-/** A project with a file at its top and two in folders, each holding the word `needle`. */
+/**
+ * A project with a file at its top and two in folders, each holding the word `needle`, added as the user adds
+ * one (~/.tars/projects.json): the channels take a project Tars knows only (project-search-roots.test.ts).
+ */
 function project(): string {
   const root = fs.mkdtempSync(path.join(fs.realpathSync(tmpHome), 'project-'));
   for (const rel of ['README.md', 'src/app/page.tsx', 'src/lib/needle.ts']) {
     fs.mkdirSync(path.join(root, path.dirname(rel)), { recursive: true });
     fs.writeFileSync(path.join(root, rel), `// a needle in ${rel}\n`);
   }
+  const list = path.join(tmpHome, '.tars', 'projects.json');
+  const known = fs.existsSync(list) ? JSON.parse(fs.readFileSync(list, 'utf8')) as string[] : [];
+  fs.writeFileSync(list, JSON.stringify([...known, root]));
   return root;
 }
 
