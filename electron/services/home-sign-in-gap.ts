@@ -20,10 +20,23 @@ const NAME: Record<HomeCli, string> = { gemini: 'gemini', grok: 'grok' };
 
 /**
  * Whether the CLI keeps a sign-in in this home, where it keeps one: gemini 0.70.0 in .gemini/oauth_creds.json under
- * GEMINI_CLI_HOME, grok 1.0.92 in auth.json in GROK_HOME (both read in their own files).
+ * GEMINI_CLI_HOME, or, with its encrypted storage on, in .gemini/gemini-credentials.json (measured isolated on 25/11: a
+ * planted one is what gemini read at its start); grok 1.0.92 in auth.json in GROK_HOME (both read in their own files).
+ * gemini's encrypted storage may also keep it in the keychain (service gemini-cli-oauth), which this never reads: no
+ * `security`, no keychain call. That case is not seen here, and homeSignInGap claims nothing when it is possible.
  */
 export function signedInAt(cli: HomeCli, home: string): boolean {
-  return fs.existsSync(cli === 'gemini' ? path.join(home, '.gemini', 'oauth_creds.json') : path.join(home, 'auth.json'));
+  if (cli === 'grok') return fs.existsSync(path.join(home, 'auth.json'));
+  return ['oauth_creds.json', 'gemini-credentials.json'].some((file) => fs.existsSync(path.join(home, '.gemini', file)));
+}
+
+/**
+ * Whether gemini may keep its sign-in in the keychain, for one environment: its encrypted storage on
+ * (GEMINI_FORCE_ENCRYPTED_FILE_STORAGE=true) without its file storage forced (GEMINI_FORCE_FILE_STORAGE=true), read in
+ * its bundle. A keychain sign-in serves every home, so no home can be said not signed in.
+ */
+export function geminiKeychainPossible(env: Record<string, string | undefined>): boolean {
+  return env.GEMINI_FORCE_ENCRYPTED_FILE_STORAGE === 'true' && env.GEMINI_FORCE_FILE_STORAGE !== 'true';
 }
 
 /**
@@ -38,8 +51,10 @@ export async function homeSignInGap(opts: {
   shellHome: () => Promise<string | undefined>;
   homeDir?: string;
   signedIn?: (cli: HomeCli, home: string) => boolean;
+  /** gemini's sign-in may be in the keychain (geminiKeychainPossible): nothing is claimed then. */
+  keychainPossible?: boolean;
 }): Promise<string | undefined> {
-  if (opts.keyed) return undefined;
+  if (opts.keyed || (opts.cli === 'gemini' && opts.keychainPossible)) return undefined;
   const signedIn = opts.signedIn ?? signedInAt;
   if (signedIn(opts.cli, opts.home)) return undefined;
   const other = await opts.shellHome();
@@ -66,7 +81,12 @@ export function noteHomeLaunch(agentId: string, cli: HomeCli): void {
   const known = deps;
   if (!known) return;
   const home = cli === 'gemini' ? geminiCliHome() : grokHome();
-  homeSignInGap({ cli, home, keyed: known.keyed(cli), shellHome: () => loginShellValue(VARIABLE[cli]) }).then(
+  // gemini's encrypted storage, as Tars's own environment or the user's login shell sets it (once per run each).
+  const keychainPossible = async () => cli === 'gemini' && (geminiKeychainPossible(process.env) || geminiKeychainPossible({
+    GEMINI_FORCE_ENCRYPTED_FILE_STORAGE: await loginShellValue('GEMINI_FORCE_ENCRYPTED_FILE_STORAGE'),
+    GEMINI_FORCE_FILE_STORAGE: await loginShellValue('GEMINI_FORCE_FILE_STORAGE'),
+  }));
+  keychainPossible().then((keychain) => homeSignInGap({ cli, home, keyed: known.keyed(cli), shellHome: () => loginShellValue(VARIABLE[cli]), keychainPossible: keychain })).then(
     (text) => { if (text) known.notSignedIn(agentId, text); },
     () => { /* nothing known to say */ },
   );
