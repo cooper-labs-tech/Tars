@@ -19,7 +19,17 @@ import { DEV_URL, apiPort } from './ports.mjs';
  *    terminal waits: the field holds the whole text, the focus stays in it, and nothing reaches the agent.
  * Red on main at 58f2863b4: the terminal took the focus mid-typing, the field kept the first keys only, and the rest
  * went to the agent.
- * The artefact: values.json (the field, the focus, what the agent was sent) and focus-kept.png.
+ *
+ * The window's quick shell, under its Git tab, is a login shell in the project folder: it took the focus 250 ms after
+ * it was built, with no look at the user (the Audit's M1 on #649 at 65457d56f). A shell once opened is built again with
+ * every window, and with every "Rail section" click (the Audit's L1), so an Enter after the steal ran the tail of what
+ * the user typed as a command. main's pty:write and pty:create handlers are wrapped too. Asserted, on a third agent:
+ * 3. its window opened, its shell opened, the window closed and opened again, and its footer field typed into at once:
+ *    the field holds the whole text, and neither the shell nor the agent gets a key;
+ * 4. then, the window settled, the "Rail section" tab already shown clicked, and a key pressed a moment later: neither
+ *    the shell nor the agent gets it.
+ * Red on 65457d56f: the shell took the field's keys in 3, and the key in 4.
+ * The artefact: values.json (the field, the focus, what the agent and the shell were sent) and focus-kept.png.
  */
 
 const TEXT = 'notes for later, typed into the field';
@@ -34,6 +44,7 @@ test('an agent window gives its terminal the focus, but never over a field the u
   fs.writeFileSync(path.join(dir, 'agents.json'), JSON.stringify([
     { id: 'left', name: 'Left Alone', ...at },
     { id: 'typed', name: 'Typed Into', ...at },
+    { id: 'shelly', name: 'Shell Open', ...at },
   ], null, 2));
   fs.writeFileSync(path.join(dir, 'projects.json'), JSON.stringify([project]));
   fs.writeFileSync(path.join(dir, 'app-settings.json'), JSON.stringify({ autoStartAgentsOnLaunch: false, ollamaBaseUrl: 'http://127.0.0.1:9' }));
@@ -54,8 +65,21 @@ test('an agent window gives its terminal the focus, but never over a field the u
       g.windowInputs.push({ id: String(a.id ?? ''), input: String(a.input ?? '') });
       return input(event, ...args);
     });
+    // What the window's quick shells are created with, and sent (pty:create, pty:write).
+    const create = handlers.get('pty:create')!;
+    const write = handlers.get('pty:write')!;
+    const s = globalThis as unknown as { shellsCreated: number; shellWrites: string[] };
+    s.shellsCreated = 0;
+    s.shellWrites = [];
+    handlers.set('pty:create', async (event: unknown, ...args: unknown[]) => { s.shellsCreated += 1; return create(event, ...args); });
+    handlers.set('pty:write', async (event: unknown, ...args: unknown[]) => {
+      s.shellWrites.push(String(((args[0] ?? {}) as { data?: unknown }).data ?? ''));
+      return write(event, ...args);
+    });
   });
   const sentTo = (id: string) => app.evaluate((_electron, i) => (globalThis as unknown as { windowInputs: { id: string; input: string }[] }).windowInputs.filter(x => x.id === i).map(x => x.input), id);
+  const shells = () => app.evaluate(() => (globalThis as unknown as { shellsCreated: number }).shellsCreated);
+  const shellWrites = () => app.evaluate(() => (globalThis as unknown as { shellWrites: string[] }).shellWrites.slice());
   /** What has the focus: the agent's terminal (xterm's own textarea), the footer field, or something else. */
   const focusIs = () => page.evaluate(() => {
     const el = document.activeElement as HTMLElement | null;
@@ -88,11 +112,48 @@ test('an agent window gives its terminal the focus, but never over a field the u
     const sent = await sentTo('typed');
     await page.screenshot({ path: test.info().outputPath('focus-kept.png') });
 
-    keep({ leftFocus, fieldValue, typedFocus, sent });
+    await page.getByRole('button', { name: 'close', exact: true }).first().click();
+
+    // 3. A window whose shell is open, opened again and typed into at once.
+    await page.locator('[data-agent-card="shelly"]').click({ position: { x: 24, y: 14 } });
+    await page.getByRole('button', { name: 'open shell', exact: true }).click();
+    await expect.poll(shells, { timeout: 20_000, message: 'the quick shell started' }).toBe(1);
+    await page.waitForTimeout(1_500);
+    await page.getByRole('button', { name: 'close', exact: true }).first().click();
+    const writesBefore = (await shellWrites()).length;
+    await page.locator('[data-agent-card="shelly"]').click({ position: { x: 24, y: 14 } });
+    await field.focus();
+    await page.keyboard.type(TEXT, { delay: 45 });
+    await page.waitForTimeout(1_000);
+    const shellFieldValue = await field.inputValue();
+    const shellFocus = await focusIs();
+    const shellGot = (await shellWrites()).slice(writesBefore);
+    const shellAgentGot = await sentTo('shelly');
+    await page.screenshot({ path: test.info().outputPath('shell-kept.png') });
+
+    // 4. Settled, the "Rail section" tab already shown clicked, and a key a moment later.
+    await page.waitForTimeout(1_500);
+    const railWritesBefore = (await shellWrites()).length;
+    const railAgentBefore = (await sentTo('shelly')).length;
+    const railFocusBefore = await focusIs();
+    await page.getByRole('radiogroup', { name: 'Rail section' }).getByRole('radio', { name: 'Git' }).click();
+    await page.waitForTimeout(1_200);
+    await page.keyboard.press('q');
+    await page.waitForTimeout(300);
+    const railShellGot = (await shellWrites()).slice(railWritesBefore);
+    const railAgentGot = (await sentTo('shelly')).slice(railAgentBefore);
+
+    keep({ leftFocus, fieldValue, typedFocus, sent, shellFieldValue, shellFocus, shellGot, shellAgentGot, railFocusBefore, railShellGot, railAgentGot });
     expect.soft(leftFocus, 'the terminal takes the focus when nothing else has it').toBe('terminal');
     expect.soft(fieldValue, 'the field holds every key typed into it').toBe(TEXT);
     expect.soft(typedFocus, 'the focus stays in the field').toBe('field');
     expect.soft(sent, 'nothing reaches the agent').toEqual([]);
+    expect.soft(shellFieldValue, 'with the shell open, the field holds every key typed into it').toBe(TEXT);
+    expect.soft(shellFocus, 'with the shell open, the focus stays in the field').toBe('field');
+    expect.soft(shellGot, 'with the shell open, nothing reaches the shell').toEqual([]);
+    expect.soft(shellAgentGot, 'with the shell open, nothing reaches the agent').toEqual([]);
+    expect.soft(railShellGot, 'a tab click does not hand the shell the next key').toEqual([]);
+    expect.soft(railAgentGot, 'a tab click does not hand the agent the next key').toEqual([]);
   } finally {
     await app.close();
     await removeHome(home);
