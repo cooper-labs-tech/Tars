@@ -1622,7 +1622,12 @@ export interface ElectronAPI {
     /** An asleep agent's CLI started on its own conversation, nothing typed; refused for one that is not asleep. */
     wake: (id: string) => Promise<{ success: boolean; error?: string }>;
     resize: (params: { id: string; cols: number; rows: number }) => Promise<{ success: boolean }>;
-    setSecondaryProject: (params: { id: string; secondaryProjectPath: string | null }) => Promise<{ success: boolean; error?: string; agent?: AgentStatus }>;
+    /**
+     * `appliesAt` on success: 'now' when main typed the folder into the CLI that runs, as its own command (Claude
+     * Code's /add-dir); 'next-start' when it reaches the CLI on its line at its next start (every other CLI, a CLI not
+     * running, a dialog on screen, a cleared folder).
+     */
+    setSecondaryProject: (params: { id: string; secondaryProjectPath: string | null }) => Promise<{ success: boolean; error?: string; agent?: AgentStatus; appliesAt?: 'now' | 'next-start' }>;
     onOutput: (callback: (event: AgentEvent) => void) => () => void;
     onError: (callback: (event: AgentEvent) => void) => () => void;
     onComplete: (callback: (event: AgentEvent) => void) => () => void;

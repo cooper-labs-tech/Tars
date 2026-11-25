@@ -46,6 +46,8 @@ import { writeAtomicSync } from '../utils/secret-file';
 import { getProvider, getAllProviders } from '../providers';
 import { planModeRefusal } from '../providers/plan-mode';
 import { addedFolderRefusal } from '../providers/added-folders';
+import { handedFolderProblem } from '../utils/handed-folder';
+import { typeAddedFolder } from '../core/secondary-folder';
 import { withoutRetiredSettings } from '../services/telegram-retired';
 import { messagesWaiting, oweToFirstMessage, writeHumanInput } from '../core/pty-manager';
 import { killPty } from '../core/pty-kill';
@@ -1173,6 +1175,9 @@ function registerAgentHandlers(deps: IpcHandlerDependencies): void {
 
     // Validate the path if provided
     if (secondaryProjectPath) {
+      // Never ~/.tars-private, from here as from agent:update: typed into the CLI below, it would be handed at once.
+      const handed = handedFolderProblem(secondaryProjectPath);
+      if (handed) return { success: false, error: `Not saved: ${handed}.` };
       if (!fs.existsSync(secondaryProjectPath)) {
         return { success: false, error: 'Path does not exist' };
       }
@@ -1190,7 +1195,9 @@ function registerAgentHandlers(deps: IpcHandlerDependencies): void {
     // Save updated agents to disk
     saveAgents();
 
-    return { success: true, agent };
+    // Typed into the session that runs, as its CLI's own command, where one takes it; else at its next start
+    // (core/secondary-folder.ts). The window says which.
+    return { success: true, agent, appliesAt: typeAddedFolder(agent, secondaryProjectPath) };
   });
 
   // Send input to an agent
