@@ -33,15 +33,17 @@ export function geminiStorage(env: Record<string, string | undefined>): GeminiSt
 
 /**
  * Whether the CLI keeps a sign-in in this home, where it reads one: gemini 0.70.0 in .gemini/oauth_creds.json under
- * GEMINI_CLI_HOME, or under its file storage in .gemini/gemini-credentials.json only (measured isolated on 25/11: a
- * planted one is what gemini read at its start); grok 1.0.92 in auth.json in GROK_HOME (both read in their own files).
- * The keychain is never read: no `security`, no keychain call. That case is not seen here, and homeSignInGap claims
- * nothing when it is possible.
+ * GEMINI_CLI_HOME; under its file storage in .gemini/gemini-credentials.json (measured isolated on 25/11: a planted one
+ * is what gemini read at its start), or in that oauth_creds.json still, which gemini moves into its store while the
+ * store is empty (loadCredentials, then migrateFromFileStorage, read in its bundle; the Audit's L1 on #645 at
+ * e2b9af494); grok 1.0.92 in auth.json in GROK_HOME. The keychain is never read: no `security`, no keychain call. That
+ * case is not seen here, and homeSignInGap claims nothing when it is possible.
  */
 export function signedInAt(cli: HomeCli, home: string, storage: GeminiStorage = 'plain'): boolean {
   if (cli === 'grok') return fs.existsSync(path.join(home, 'auth.json'));
   if (storage === 'keychain') return false;
-  return fs.existsSync(path.join(home, '.gemini', storage === 'file' ? 'gemini-credentials.json' : 'oauth_creds.json'));
+  const files = storage === 'file' ? ['gemini-credentials.json', 'oauth_creds.json'] : ['oauth_creds.json'];
+  return files.some((file) => fs.existsSync(path.join(home, '.gemini', file)));
 }
 
 /**
