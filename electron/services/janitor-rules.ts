@@ -31,7 +31,8 @@ import { shortIdOf } from './agent-tmp';
  *   project's root) or ignored or untracked (in a worktree): a user's own release/ is never proposed;
  * - worktree-node-modules: the node_modules of a worktree nothing changed in for 7 days (caches aside).
  * None of these when a report names it or a process works in it. A temporary item carries its agent's project.
- * Never, whatever matches: ~/.tars-private, ~/Documents, the uv cache, the Trash, ~/Library/Developer (Xcode, the iOS
+ * Never, whatever matches: ~/.tars-private, ~/Documents, the uv cache (wherever uv puts it, from the variables Tars runs
+ * with: never()), the Trash (the Finder's, and Linux's), ~/Library/Developer (Xcode, the iOS
  * runtimes and simulators), a Docker volume, a project's own folder, anything inside a worktree a fleet agent works
  * in, one with uncommitted work, or one a process works in. When the processes cannot be read (no lsof, Windows),
  * nothing that needs "nothing runs in it" is proposed.
@@ -170,12 +171,31 @@ async function newestChange(dir: string, now: number, cachesAside = false, maxDe
   return newest;
 }
 
-/** The never list: folders nothing is ever proposed in. */
+/**
+ * A folder a tool takes from an environment variable of Tars's own: the variable set and absolute, else none. An empty
+ * one is unset to the tool, and a relative one would be Tars's working folder (`/` when the Finder started it), which
+ * would put the whole disk on the never list.
+ */
+function fromEnv(name: string, ...under: string[]): string[] {
+  const value = process.env[name];
+  return value && path.isAbsolute(value) ? [path.join(value, ...under)] : [];
+}
+
+/**
+ * The never list: folders nothing is ever proposed in. The uv cache is wherever uv may put it (uv 0.13.1, measured by
+ * QA): $UV_CACHE_DIR, else $XDG_CACHE_HOME/uv, else ~/.cache/uv, and %LOCALAPPDATA%\uv\cache on Windows, with the
+ * ~/Library/Caches/uv of older versions; every one of them is on the list, whichever uv would take. The Trash is the
+ * Finder's ~/.Trash and Linux's freedesktop.org trash, $XDG_DATA_HOME/Trash or ~/.local/share/Trash. The variables are
+ * the ones Tars runs with: a uv a shell starts with others is not seen here.
+ */
 function never(world: JanitorWorld): string[] {
   const h = world.home;
   return [
-    world.privateDir, path.join(h, 'Documents'), path.join(h, '.cache', 'uv'), path.join(h, 'Library', 'Caches', 'uv'),
-    path.join(h, '.Trash'), path.join(h, 'Library', 'Developer'), '/Library/Developer',
+    world.privateDir, path.join(h, 'Documents'),
+    ...fromEnv('UV_CACHE_DIR'), ...fromEnv('XDG_CACHE_HOME', 'uv'), ...fromEnv('LOCALAPPDATA', 'uv', 'cache'),
+    path.join(h, '.cache', 'uv'), path.join(h, 'Library', 'Caches', 'uv'),
+    path.join(h, '.Trash'), ...fromEnv('XDG_DATA_HOME', 'Trash'), path.join(h, '.local', 'share', 'Trash'),
+    path.join(h, 'Library', 'Developer'), '/Library/Developer',
   ].map(real);
 }
 
