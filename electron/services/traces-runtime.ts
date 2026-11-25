@@ -238,6 +238,9 @@ export function withdrawUploadConsent(deletion?: { owed: boolean; since?: number
     : kept;
   deps.setSettings({ ...deps.getSettings(), traces: rest });
   const dropped = dropConsentFile();
+  // A file that stays gives the consent back to a restart before the settings hold, and the note that stays says so
+  // (persistSettings clears it once a write holds).
+  if (!dropped && t.uploadConsentAt) revokeComesBack = true;
   const written = persistSettings();
   // Still to try again while the file holds the consent: a later write of the settings is what removes it then.
   if (!dropped && !written) console.error('[traces] the withdrawal of the consent is in memory only until a write holds; nothing uploads meanwhile');
