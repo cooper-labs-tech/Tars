@@ -37,11 +37,37 @@ import { safeEffort } from './cli-provider';
  * Note: Grok has no `--add-dir`/multi-root flag, so secondary-project and
  * Obsidian-vault mounting are intentionally not emitted.
  */
+/**
+ * The home grok reads, as grok 1.0.92 takes it (measured isolated on 24/11): GROK_HOME in place of ~/.grok, where
+ * `grok mcp add` writes its config.toml and grok its docs and logs. A blank variable names none. GROK_CONFIG_PATH and
+ * GROK_CONFIG are no home: each names an overlay grok only reads (`grok mcp add` still wrote ~/.grok/config.toml under
+ * GROK_CONFIG_PATH, the overlay unchanged; GROK_CONFIG wins over it, QA's measure), so both are left to the user,
+ * never read here nor handed on.
+ */
+export function grokHome(env: NodeJS.ProcessEnv = process.env, homeDir: string = os.homedir(), platform: NodeJS.Platform = process.platform): string {
+  // A relative value would be read from wherever grok runs: taken as unset (the Audit's I-1 on #645). Handed always,
+  // the default included: grok's one binary reads the same with GROK_HOME unset or set to ~/.grok (`grok inspect`,
+  // measured isolated on 25/11), where gemini's launcher does not (gemini-provider.ts, homeOnLine).
+  const value = env.GROK_HOME?.trim();
+  return value && (platform === 'win32' ? path.win32 : path.posix).isAbsolute(value) ? value : path.join(homeDir, '.grok');
+}
+
 export class GrokProvider implements CLIProvider {
   readonly id = 'grok' as const;
   readonly displayName = 'Grok CLI';
   readonly binaryName = 'grok';
-  readonly configDir = path.join(os.homedir(), '.grok');
+  /** grok's home, where Tars writes its config.toml, handed to the grok Tars starts (homeOnLine). */
+  readonly configDir = grokHome();
+
+  /**
+   * The home handed to the grok Tars starts, so that it reads the folder Tars writes whatever an rc file of the agent's
+   * shell sets, as codex's CODEX_HOME is (codex-provider.ts): on macOS and Linux in the line, which no rc file runs
+   * after; on Windows, where the line's first word is the binary itself and nothing is sourced (platform/launch.ts),
+   * in the terminal's environment (getPtyEnvVars).
+   */
+  private homeOnLine(): string {
+    return process.platform === 'win32' ? '' : `env GROK_HOME=${this.shellQuote(this.configDir)} `;
+  }
 
   getModels(): ProviderModel[] {
     // IDs from `grok models` (authenticated). The available set is
@@ -57,7 +83,7 @@ export class GrokProvider implements CLIProvider {
   }
 
   buildInteractiveCommand(params: InteractiveCommandParams): string {
-    let command = `'${params.binaryPath.replace(/'/g, "'\\''")}'`;
+    let command = `${this.homeOnLine()}'${params.binaryPath.replace(/'/g, "'\\''")}'`;
 
     // Model
     if (params.model) {
@@ -102,7 +128,7 @@ export class GrokProvider implements CLIProvider {
   }
 
   buildOneShotCommand(params: OneShotCommandParams): string {
-    let command = `'${params.binaryPath.replace(/'/g, "'\\''")}'`;
+    let command = `${this.homeOnLine()}'${params.binaryPath.replace(/'/g, "'\\''")}'`;
 
     // Model must precede -p, since -p/--single consumes the next token as the prompt.
     if (params.model) {
@@ -128,6 +154,8 @@ export class GrokProvider implements CLIProvider {
       // back to every project's agents instead of its own.
       CLAUDE_AGENT_ID: agentId,
       CLAUDE_PROJECT_PATH: projectPath,
+      // The home Tars reads and writes (homeOnLine says why).
+      GROK_HOME: this.configDir,
       // Its API key from Settings, under the variable it reads (services/cli-keys.ts).
       ...keyEnvFor('grok', appSettings),
     };

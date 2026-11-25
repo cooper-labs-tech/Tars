@@ -399,6 +399,17 @@ E2E_MATRIX_SHELL=classic npm run e2e:matrix                      # one shell (cl
 TARS_CLI_MATRIX_LIVE=1 npm run e2e:matrix -- e2e/cli-matrix.live.spec.ts   # the real CLIs, on purpose only
 ```
 
+gemini's and grok's homes, with the real binaries (opt-in, each pinned in a folder of its own, every run of it
+isolated):
+
+```bash
+TARS_HARNESS_GEMINI=/path/to/gemini/bundle/gemini.js TARS_HARNESS_GROK=/path/to/grok npx playwright test e2e/cli-homes.spec.ts
+```
+
+It exports `GEMINI_CLI_HOME` and `GROK_HOME` to folders of the sandbox, lets Tars write gemini's hooks and register
+its MCP servers, and has gemini's and grok's own `mcp list` say what they see there; nothing may land in the plain
+`~/.gemini` or `~/.grok`.
+
 `e2e/cli-matrix.spec.ts` starts nine agents in one project, one per CLI Tars drives, each on a stand-in faithful to
 its CLI where Tars depends on it (`e2e/fake-clis.mjs`, `e2e/fake-codex.mjs`). It makes each in turn the orchestrator
 and has it delegate to, message and hear back from every other: 72 ordered pairs, five cells each.

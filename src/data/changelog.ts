@@ -7,6 +7,14 @@ export interface Release {
 
 export const CHANGELOG: Release[] = [
   {
+    id: 64,
+    version: '2.0.7',
+    date: '2026-11-24',
+    updates: [
+      'When Tars itself starts with GEMINI_CLI_HOME or GROK_HOME set, as when you open it from a shell that exports one, it writes Gemini\'s and Grok\'s settings, hooks and MCP servers into that home and starts them on it. Opened from the Dock, Tars cannot see a value your shell\'s startup files set: its agents then use the default home, and a Gemini or Grok agent says so when your sign-in is in the other one.',
+    ],
+  },
+  {
     id: 63,
     version: '2.0.6',
     date: '2026-10-29',
