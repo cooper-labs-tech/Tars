@@ -17,8 +17,10 @@ import { DEV_URL, apiPort } from './ports.mjs';
  * 1. Settings, Inference endpoints, removing the endpoint: [data-endpoint-remove-refused];
  * 2. Settings, Inference endpoints, Never record closed models: its error line;
  * 3. Traces, Who may be traced, the list read: its alert.
+ * 4. Settings, Inference endpoints, the list read (useEndpoints, the Audit's L1 on #599 at 465f4454a): the section's
+ *    first row.
  * Each holds the sentence, and neither "Error invoking remote method" nor "Error:".
- * Red on 5752bea8a's window: the three lines showed the wrapping.
+ * Red on 5752bea8a's window: the first three lines showed the wrapping; red on 465f4454a: the fourth did.
  * The artefact: values.json (each line as shown) and thrown-<n>.png.
  */
 
@@ -82,8 +84,16 @@ test('a call main throws on is said in main\'s own sentence, in the endpoints, t
     const pairsShown = (await pairsLine.textContent({ timeout: 1_000 }).catch(() => null)) ?? null;
     await shot(3);
 
-    keep({ removeShown, closedShown, pairsShown });
-    for (const [what, shown] of [['the removal', removeShown], ['the closed models switch', closedShown], ['the pairs', pairsShown]] as const) {
+    // 4. The endpoints, read.
+    await throwOn('endpoints:list');
+    await page.goto(`${DEV_URL}/settings?section=inference-endpoints`, { waitUntil: 'domcontentloaded' });
+    const listLine = page.locator('[data-settings-row]').filter({ hasText: SENTENCE });
+    await expect.soft(listLine, 'the endpoints not read').toBeVisible({ timeout: 10_000 });
+    const listShown = (await listLine.first().textContent({ timeout: 1_000 }).catch(() => null)) ?? null;
+    await shot(4);
+
+    keep({ removeShown, closedShown, pairsShown, listShown });
+    for (const [what, shown] of [['the removal', removeShown], ['the closed models switch', closedShown], ['the pairs', pairsShown], ['the endpoints list', listShown]] as const) {
       expect.soft(shown ?? '', `${what}: main's sentence`).toContain(SENTENCE);
       expect.soft(shown ?? '', `${what}: no wrapping`).not.toMatch(WRAPPING);
     }
