@@ -98,11 +98,11 @@ describe('Review and the project rule', () => {
   });
 
   it('R3. no repository in a refused folder is reviewed, an agent\'s or one under a refused project', () => {
-    for (const repo of [heldAgent, heldRepo]) {
-      const refused = refuseUnknownRepository(repo);
-      expect(refused, repo).toMatchObject({ success: false });
-      expect(refused?.error, repo).toMatch(/dot/i);
-    }
+    // An agent's folder there is known, and refused with the rule's reason; a repository under a refused project is
+    // refused too, whether a scan found it before or, as now, no scan of that project runs.
+    expect(refuseUnknownRepository(heldAgent)).toMatchObject({ success: false });
+    expect(refuseUnknownRepository(heldAgent)?.error).toMatch(/dot/i);
+    expect(refuseUnknownRepository(heldRepo)).toMatchObject({ success: false });
   });
 
   it('R4. a project the rule allows is scanned, and an agent\'s folder it allows reviewed', async () => {
