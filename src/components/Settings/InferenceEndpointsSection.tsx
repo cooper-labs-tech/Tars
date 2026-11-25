@@ -14,11 +14,14 @@ import { Toggle } from './Toggle';
 
 const DEFAULT_HOLD = 120;
 
-/** A state word in its tone, with its square: the frames' `state` line. */
-const State = ({ word, tone }: { word: string; tone: StatusTone }) => (
-  <span className={`flex items-center gap-1.5 font-mono text-[10.5px] ${tone === 'idle' ? 'text-muted-foreground' : `text-status-${tone}`}`}>
-    <StatusSquare tone={tone} />
-    <span className="truncate">{word}</span>
+/**
+ * A state word in its tone, with its square: the frames' `state` line. One line, cut at its end; `wrap` keeps every
+ * word of a sentence of main's that must be read whole (an unsaved note, the Audit's L2 on PR 599).
+ */
+const State = ({ word, tone, wrap = false }: { word: string; tone: StatusTone; wrap?: boolean }) => (
+  <span className={`flex ${wrap ? 'items-start' : 'items-center'} gap-1.5 font-mono text-[10.5px] ${tone === 'idle' ? 'text-muted-foreground' : `text-status-${tone}`}`}>
+    <StatusSquare tone={tone} className={wrap ? 'mt-[5px] shrink-0' : undefined} />
+    <span className={wrap ? 'break-words' : 'truncate'}>{word}</span>
   </span>
 );
 
@@ -52,7 +55,13 @@ export const InferenceEndpointsSection = () => {
   const [removing, setRemoving] = useState<{ id: string; refusedBy?: string[]; error?: string } | null>(null);
   const [rowError, setRowError] = useState<Record<string, string>>({});
   /** Traces turned off for an endpoint, held by main and not written yet: main's words under its row until it is. */
-  const [rowUnsaved, setRowUnsaved] = useUnsavedNote<{ id: string; word: string }>();
+  // Keyed by endpoint: a second endpoint's revoke never takes the first one's note off its row.
+  const [rowUnsaved, setRowUnsaved] = useUnsavedNote<Record<string, string>>();
+  const noteRow = (id: string, word?: string) => setRowUnsaved(m => {
+    const next = { ...(m ?? {}) };
+    if (word) next[id] = word; else delete next[id];
+    return Object.keys(next).length > 0 ? next : null;
+  });
   /** An endpoint removed, held by main and not written yet: its row is gone, so main's words go above the list. */
   const [removeUnsaved, setRemoveUnsaved] = useUnsavedNote();
 
@@ -79,7 +88,7 @@ export const InferenceEndpointsSection = () => {
     }
     setRowError(m => ({ ...m, [e.id]: r.ok ? '' : r.error }));
     // Traces turned off apply at once; when main could not write it yet, its words say so under the row.
-    if (r.ok) setRowUnsaved(r.unsaved ? { id: e.id, word: r.unsaved } : null);
+    if (r.ok) noteRow(e.id, r.unsaved);
     void reload();
   };
 
@@ -104,16 +113,29 @@ export const InferenceEndpointsSection = () => {
     void reload();
   };
 
+  // A call that fails is said under its row, as a refusal is: never an uncaught rejection (the Audit's I-2 on PR 599).
   const approve = async (id: string) => {
     if (!api) return;
-    const r = await api.approve(id);
+    let r: Awaited<ReturnType<typeof api.approve>>;
+    try {
+      r = await api.approve(id);
+    } catch (err) {
+      setRowError(m => ({ ...m, [id]: err instanceof Error ? err.message : String(err) }));
+      return;
+    }
     setRowError(m => ({ ...m, [id]: r.ok ? '' : r.error }));
     void reload();
   };
 
   const putBack = async (e: EndpointView) => {
     if (!api || !e.approvedBaseUrl) return;
-    const r = await api.save({ id: e.id, name: e.name, baseUrl: e.approvedBaseUrl, allowTraces: e.allowTraces, holdMaxSeconds: e.holdMaxSeconds, sendSessionHeaders: e.sendSessionHeaders, allowPlainHttp: e.allowPlainHttp });
+    let r: Awaited<ReturnType<typeof api.save>>;
+    try {
+      r = await api.save({ id: e.id, name: e.name, baseUrl: e.approvedBaseUrl, allowTraces: e.allowTraces, holdMaxSeconds: e.holdMaxSeconds, sendSessionHeaders: e.sendSessionHeaders, allowPlainHttp: e.allowPlainHttp });
+    } catch (err) {
+      setRowError(m => ({ ...m, [e.id]: err instanceof Error ? err.message : String(err) }));
+      return;
+    }
     setRowError(m => ({ ...m, [e.id]: r.ok ? '' : r.error }));
     void reload();
   };
@@ -146,7 +168,7 @@ export const InferenceEndpointsSection = () => {
 
       {removeUnsaved && (
         <div data-endpoint-remove-unsaved className="px-4 py-[11px]">
-          <State word={removeUnsaved} tone="waiting" />
+          <State wrap word={removeUnsaved} tone="waiting" />
         </div>
       )}
 
@@ -194,7 +216,7 @@ export const InferenceEndpointsSection = () => {
             </div>
 
             {rowError[e.id] && <p data-endpoint-row-error className="mt-2 font-mono text-[10.5px] text-status-error">{rowError[e.id]}</p>}
-            {rowUnsaved?.id === e.id && <div data-endpoint-unsaved className="mt-2"><State word={rowUnsaved.word} tone="waiting" /></div>}
+            {rowUnsaved?.[e.id] && <div data-endpoint-unsaved className="mt-2"><State wrap word={rowUnsaved[e.id]} tone="waiting" /></div>}
 
             {by && !e.allowTraces && (
               <p className="mt-2 font-mono text-[10.5px] text-status-waiting">
@@ -252,7 +274,7 @@ export const InferenceEndpointsSection = () => {
             onDone={done => {
               setForm(null);
               if (done?.error) setRowError(m => ({ ...m, [done.id]: done.error ?? '' }));
-              if (done?.unsaved) setRowUnsaved({ id: done.id, word: done.unsaved });
+              if (done?.unsaved) noteRow(done.id, done.unsaved);
               void reload();
             }}
           />
@@ -311,6 +333,9 @@ function EndpointForm({ endpoint, onDone }: { endpoint?: EndpointView; onDone: (
       }
       // Traces turned off here apply at once; main's words say so under the row while they are not written.
       onDone(saved.unsaved ? { id, unsaved: saved.unsaved } : undefined);
+    } catch (err) {
+      // A call that fails is said in the form's note, as a refusal is: never an uncaught rejection (the Audit's I-2).
+      setNote({ text: err instanceof Error ? err.message : String(err), tone: 'error' });
     } finally {
       setBusy(false);
     }
@@ -318,16 +343,25 @@ function EndpointForm({ endpoint, onDone }: { endpoint?: EndpointView; onDone: (
 
   const clearKey = async () => {
     if (!api || !endpoint) return;
-    const r = await api.setKey(endpoint.id, null);
-    setNote(r.ok ? { text: 'the key is cleared', tone: 'idle' } : { text: r.error, tone: 'error' });
+    try {
+      const r = await api.setKey(endpoint.id, null);
+      setNote(r.ok ? { text: 'the key is cleared', tone: 'idle' } : { text: r.error, tone: 'error' });
+    } catch (err) {
+      setNote({ text: err instanceof Error ? err.message : String(err), tone: 'error' });
+    }
   };
 
   const readAgain = async () => {
     if (!api || !endpoint) return;
     setReading(true);
-    const r = await api.refreshModels(endpoint.id);
-    setReading(false);
-    setNote(r.ok ? { text: `${r.models.length} models read`, tone: 'running' } : { text: `list not updated: ${clauseOf(r.error)}. The last list is kept.`, tone: 'waiting' });
+    try {
+      const r = await api.refreshModels(endpoint.id);
+      setNote(r.ok ? { text: `${r.models.length} models read`, tone: 'running' } : { text: `list not updated: ${clauseOf(r.error)}. The last list is kept.`, tone: 'waiting' });
+    } catch (err) {
+      setNote({ text: `list not updated: ${clauseOf(err instanceof Error ? err.message : String(err))}. The last list is kept.`, tone: 'waiting' });
+    } finally {
+      setReading(false);
+    }
   };
 
   return (
@@ -507,7 +541,7 @@ function ClosedModelsRow() {
         </div>
       )}
       {error && <p className="px-4 pb-2 font-mono text-[10.5px] text-status-error">{error}</p>}
-      {unsaved && <div data-closed-models-unsaved className="px-4 pb-[11px]"><State word={unsaved} tone="waiting" /></div>}
+      {unsaved && <div data-closed-models-unsaved className="px-4 pb-[11px]"><State wrap word={unsaved} tone="waiting" /></div>}
     </div>
   );
 }

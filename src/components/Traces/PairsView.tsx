@@ -54,7 +54,14 @@ export function PairsView() {
   const add = async () => {
     const api = tracesApi();
     if (!api || !harness || !models.trim() || duplicate) return;
-    const r = await api.addPair({ harness, models: models.trim(), ...(note.trim() ? { note: note.trim() } : {}) });
+    // A call that fails is said on the refusal line, as main's refusal is: never an uncaught rejection (the Audit's I-2).
+    let r: Awaited<ReturnType<typeof api.addPair>>;
+    try {
+      r = await api.addPair({ harness, models: models.trim(), ...(note.trim() ? { note: note.trim() } : {}) });
+    } catch (e) {
+      setRefusal(e instanceof Error ? e.message : String(e));
+      return;
+    }
     if (!r.ok) { setRefusal(r.error); return; }
     setPairs(r.pairs);
     setRefusal(null);
@@ -82,7 +89,13 @@ export function PairsView() {
   const undo = async () => {
     const api = tracesApi();
     if (!api || !removed) return;
-    const r = await api.addPair(removed);
+    let r: Awaited<ReturnType<typeof api.addPair>>;
+    try {
+      r = await api.addPair(removed);
+    } catch (e) {
+      setRefusal(e instanceof Error ? e.message : String(e));
+      return;
+    }
     if (!r.ok) { setRefusal(r.error); return; }
     setPairs(r.pairs);
     setRemoved(null);
@@ -91,7 +104,13 @@ export function PairsView() {
   const importFile = async () => {
     const api = tracesApi();
     if (!api) return;
-    const r = await api.importPairs();
+    let r: Awaited<ReturnType<typeof api.importPairs>>;
+    try {
+      r = await api.importPairs();
+    } catch (e) {
+      setImportError(e instanceof Error ? e.message : String(e));
+      return;
+    }
     if (!r.ok) { if (!r.cancelled) setImportError(r.error); return; }
     setPairs(r.pairs);
     setRefusal(null);
@@ -120,7 +139,7 @@ export function PairsView() {
       {removed && (
         <Notice tone="waiting" actions={<Button size="sm" className="font-mono" onClick={() => { void undo(); }}>undo</Button>}>
           {`${pairWords(removed)} removed: its agents record nothing from their next session. Their recorded sessions stay in Traces.`}
-          {unsaved && <div data-pairs-unsaved className="mt-1.5"><StateLine word={unsaved} tone="waiting" /></div>}
+          {unsaved && <div data-pairs-unsaved className="mt-1.5"><StateLine wrap word={unsaved} tone="waiting" /></div>}
         </Notice>
       )}
 

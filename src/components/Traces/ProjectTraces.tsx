@@ -25,10 +25,15 @@ export function ProjectTraces({ projectPath, agents }: { projectPath: string; ag
   const read = useCallback(() => {
     const api = tracesApi();
     if (!api) return;
-    void api.settings().then(s => { setProjects(s.projects); setUpload({ url: s.uploadUrl, consent: !!s.uploadConsentAt }); })
+    // The consent is the one the uploader acts on (uploadState.consentAt), never the settings' alone: a consent whose
+    // file a revoke dropped is no consent (the Audit's I-5 on PR 599).
+    void Promise.all([api.settings(), api.uploadState()])
+      .then(([s, u]) => { setProjects(s.projects); setUpload({ url: s.uploadUrl, consent: !!u.consentAt }); })
       .catch(e => setError(e instanceof Error ? e.message : String(e)));
   }, []);
   useEffect(() => { read(); }, [read]);
+  // A consent main holds back or gives back comes with 'traces:changed': the panel reads it again.
+  useEffect(() => tracesApi()?.onChanged(() => read()), [read]);
 
   if (!tracesApi()) return null;
   const key = comparablePath(projectPath);
@@ -78,7 +83,7 @@ export function ProjectTraces({ projectPath, agents }: { projectPath: string; ag
         <Toggle label="Record traces for this project" enabled={on} disabled={projects === null} onChange={() => { void toggle(); }} />
       </div>
       {error && <p className="mt-2 font-mono text-[10.5px] text-status-error">{error}</p>}
-      {unsaved && <div data-project-traces-unsaved className="mt-2"><StateLine word={unsaved} tone="waiting" /></div>}
+      {unsaved && <div data-project-traces-unsaved className="mt-2"><StateLine wrap word={unsaved} tone="waiting" /></div>}
       {on && (
         <div className="mt-2.5 flex items-center gap-2">
           {upload.url && !upload.consent

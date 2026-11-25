@@ -305,8 +305,10 @@ export function UploadView() {
     ? { word: 'no address: nothing leaves this computer', tone: 'idle' as const }
     : consentHeld && unsavedWord
       ? { word: unsavedWord, tone: 'waiting' as const }
-    : settings?.uploadConsentAt
-      ? { word: `consent given ${dayClockOf(Date.parse(settings.uploadConsentAt))}${state?.registered ? ' · this install is registered' : ''}`, tone: 'running' as const }
+    // The consent the uploader acts on (uploadState.consentAt: the settings' and its file's), never the settings' alone
+    // (the Audit's I-5 on PR 599): a consent whose file is gone is no consent.
+    : state?.consentAt
+      ? { word: `consent given ${dayClockOf(Date.parse(state.consentAt))}${state.registered ? ' · this install is registered' : ''}`, tone: 'running' as const }
       : settings?.uploadDeletionOwed || state?.deletionOwed
         ? { word: "a deletion waits for the back-office's confirmation: sharing stays off until it confirms, or you give it up", tone: 'waiting' as const }
       : state?.notice === 'forgotten'
@@ -322,7 +324,7 @@ export function UploadView() {
    * the consent and the deletion, while it lasts. traces:changed says when it comes and goes, and read() reads it.
    */
   const unsaved = unsavedWord
-    ? <div data-upload-unsaved><StateLine word={unsavedWord} tone="waiting" /></div>
+    ? <div data-upload-unsaved><StateLine wrap word={unsavedWord} tone="waiting" /></div>
     : null;
   /** A deletion asked for and not confirmed: sharing stays off; delete again, or give it up. */
   const owed = !!(settings?.uploadDeletionOwed || state?.deletionOwed);
@@ -387,7 +389,7 @@ export function UploadView() {
             )}
             {saveError && <Row><div data-backoffice-error><StateLine word={saveError} tone="error" /></div></Row>}
             <Row className="space-y-2 py-2.5">
-              <div data-consent-line={consentHeld ? 'held' : undefined}><StateLine word={consentWord.word} tone={consentWord.tone} /></div>
+              <div data-consent-line={consentHeld ? 'held' : undefined}><StateLine wrap={consentHeld} word={consentWord.word} tone={consentWord.tone} /></div>
               {/* A held consent's line already says main's note: not twice in this card. */}
               {!consentHeld && unsaved}
               {noticeError && <StateLine word={`notice not read: ${noticeError}. What leaves this computer reads it again.`} tone="error" />}
@@ -469,7 +471,7 @@ export function UploadView() {
           footerLeft={<Button onClick={() => { void previewOne(); }}>Preview a session</Button>}
           footerRight={<>
             <Button onClick={closeNotice}>Not now</Button>
-            <Button variant="primary" disabled={!address || !!settings?.uploadConsentAt || owed} onClick={() => { void consent(); }}>Upload what I opt in</Button>
+            <Button variant="primary" disabled={!address || !!state?.consentAt || owed} onClick={() => { void consent(); }}>Upload what I opt in</Button>
           </>}
         >
           <div className="space-y-4">
