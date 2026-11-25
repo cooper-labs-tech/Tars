@@ -152,6 +152,9 @@ const SECTION = '## How Tars works';
 const MEMORY = 'NOTE-7731 the build runs on Node 22';
 // Every CLI whose config folder is not Claude's, so with no SessionStart hook.
 const NO_HOOK = ['opencode', 'amp', 'codex', 'gemini', 'grok', 'pi'] as const;
+/** And Kimi Code, whose folder (~/.kimi-code) is not Claude's either: it has no hook at all, its turns read from its
+ *  session log, and it is up once its input box is drawn (startedFromWindow draws it). */
+const NO_HOOK_AND_KIMI = [...NO_HOOK, 'kimi-code'] as const;
 
 function deps(): IpcHandlerDependencies {
   const fixed: Record<string, unknown> = {
@@ -213,6 +216,11 @@ async function startedFromWindow(prompt: string, fields: Partial<AgentStatus> = 
   // node-pty names the CLI once it runs in the terminal's foreground.
   terminal.process = agent.provider ?? 'opencode';
   terminal.write.mockClear();
+  // kimi-code is up once its input box is drawn (Kimi Code 2.6.3, KimiCodeProvider.upOnScreen): it draws it, as the
+  // terminal's own listeners receive it, the mirror's among them.
+  if (agent.provider === 'kimi-code') {
+    for (const [listener] of terminal.onData.mock.calls) listener('╭──────────╮\r\n│ >        │\r\n╰──────────╯\r\n');
+  }
   return { agent, terminal, command };
 }
 
@@ -300,7 +308,7 @@ afterEach(async () => {
 });
 
 describe('a CLI without Claude\'s hook started from the window with no task', () => {
-  it.each(NO_HOOK)('%s starts on no prompt: no section, no memory, no skills line (1)', async (provider) => {
+  it.each(NO_HOOK_AND_KIMI)('%s starts on no prompt: no section, no memory, no skills line (1)', async (provider) => {
     const { agent, command } = await startedFromWindow('', { provider });
     expect(count(command), command).toBe(0);
     expect(command).not.toContain(MEMORY);
@@ -382,7 +390,7 @@ describe('a CLI launched again into a terminal that still owes the section', () 
 });
 
 describe("whose session it is (10)", () => {
-  it.each(NO_HOOK)("%s: the first task typed in says whose session it is, once, and the next message does not", async (provider) => {
+  it.each(NO_HOOK_AND_KIMI)("%s: the first task typed in says whose session it is, once, and the next message does not", async (provider) => {
     const { agent, terminal } = await startedFromWindow('', { provider });
     const identity = `[Tars: you are agent "${agent.name}" (id ${agent.id}),`;
     await dispatch(agent.id, 'FIRST>> rebase onto main');
