@@ -296,15 +296,17 @@ export function UploadView() {
   /** Main's note while a change it holds is not written yet (its answer's, or the upload state's). */
   const unsavedWord = state?.unsaved ?? answerUnsaved;
   /**
-   * A consent the settings still carry but that does not stand (the Audit's I-5 on PR 599): a revoke not yet written
-   * has main drop the consent's file, so the uploader reads none (uploadState.consentAt empty). The line then says
-   * main's own words, never "consent given".
+   * A consent main holds back while a revoke is not written yet (the Audit's I-5 and I-3 on PR 599): main says so
+   * itself, uploadState.unsavedKind 'consent-held', and the consent line then says main's own words, never "consent
+   * given". Any other note ('revoke-comes-back', 'owed') keeps its own line, and the consent line reads consentAt.
    */
-  const consentHeld = !!settings?.uploadConsentAt && !!state && !state.consentAt && !!unsavedWord;
+  const heldWord = state?.unsavedKind === 'consent-held' ? state.unsaved : undefined;
+  /** The line says main's words only under an address; without one it says so, and the note keeps its own line. */
+  const consentHeld = !!address && !!heldWord;
   const consentWord = !address
     ? { word: 'no address: nothing leaves this computer', tone: 'idle' as const }
-    : consentHeld && unsavedWord
-      ? { word: unsavedWord, tone: 'waiting' as const }
+    : consentHeld && heldWord
+      ? { word: heldWord, tone: 'waiting' as const }
     // The consent the uploader acts on (uploadState.consentAt: the settings' and its file's), never the settings' alone
     // (the Audit's I-5 on PR 599): a consent whose file is gone is no consent.
     : state?.consentAt
