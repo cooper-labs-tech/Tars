@@ -28,8 +28,15 @@ export function StorageView() {
   const [dialog, setDialog] = useState<'create' | 'rotate' | 'revoke' | 'delete-all' | null>(null);
   /** Deleting every session refused by main: said in its dialog, above its answers; its button tries again. */
   const [removeError, setRemoveError] = useState<string | null>(null);
-  /** A reader token main could not make, rotate or revoke: said in its dialog, above its answers; its button tries again. */
-  const [tokenError, setTokenError] = useState<string | null>(null);
+  /**
+   * A reader token not made, rotated or revoked: said in its dialog, above its answers; its button tries again.
+   * `answered`: main refused, in a sentence that says what holds now; else the call itself failed, and nothing is known
+   * of the token (the Audit's I-2 on PR 599).
+   */
+  const [tokenError, setTokenError] = useState<{ reason: string; answered: boolean } | null>(null);
+  /** I-4: what could not be read or copied in this view, said where it was asked. */
+  const [readError, setReadError] = useState<string | null>(null);
+  const [copyError, setCopyError] = useState<string | null>(null);
   const closeDialog = () => { setDialog(null); setRemoveError(null); setTokenError(null); };
   const [shown, setShown] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
@@ -39,18 +46,39 @@ export function StorageView() {
   const readAll = useCallback(async () => {
     const api = tracesApi();
     if (!api) return;
-    const s = await api.settings();
-    setSettings(s);
-    setCap(String(Math.round(s.capBytes / GB)));
-    setReader(await api.readerToken());
+    try {
+      const s = await api.settings();
+      setSettings(s);
+      setCap(String(Math.round(s.capBytes / GB)));
+      setReader(await api.readerToken());
+      setReadError(null);
+    } catch (e) {
+      console.warn('[traces] reading the storage settings or the reader token failed:', e);
+      setReadError(reasonOf(e));
+    }
   }, []);
   useEffect(() => { void readAll(); }, [readAll]);
 
   const save = async (patch: { capBytes?: number; retentionDays?: number }) => {
     const api = tracesApi();
     if (!api) return;
-    const r = await api.setSettings(patch);
+    let r: Awaited<ReturnType<typeof api.setSettings>>;
+    try {
+      r = await api.setSettings(patch);
+    } catch (e) {
+      console.warn('[traces] saving the storage settings failed:', e);
+      setSaveError(`not saved: ${reasonOf(e)}`);
+      return;
+    }
     if (r.ok) { setSettings(r.settings); setSaveError(null); void read(); } else setSaveError(r.error);
+  };
+
+  /** A token's refusal in words: main's own sentence once, or only that the call failed (the Audit's I-1 and I-2). */
+  const tokenLine = (button: string, holds?: string) => {
+    if (!tokenError) return '';
+    if (!tokenError.answered) return `the call failed: ${tokenError.reason}. ${button} tries again.`;
+    const said = holds && !/opens nothing/.test(tokenError.reason) ? ` ${holds}` : '';
+    return `${tokenError.reason}.${said} ${button} tries again.`;
   };
 
   const capOk = /^\d+$/.test(cap) && Number(cap) >= 1;
@@ -65,12 +93,12 @@ export function StorageView() {
       r = await api.rotateReaderToken();
     } catch (e) {
       console.warn('[traces] making the reader token failed:', e);
-      setTokenError(reasonOf(e));
+      setTokenError({ reason: reasonOf(e), answered: false });
       return;
     }
     // Main drops the old token before it writes the new one: a refusal leaves no token at all, so the page reads again.
     if ('ok' in r) {
-      setTokenError(reasonOf(r.error));
+      setTokenError({ reason: reasonOf(r.error), answered: true });
       setReader(await api.readerToken().catch(() => null));
       return;
     }
@@ -84,17 +112,17 @@ export function StorageView() {
     const api = tracesApi();
     if (!api) return;
     // Main refuses the token in memory at once, and answers { ok: false, error } when it cannot save that: the token
-    // then opens nothing until Tars quits. A rejected call is said the same way.
+    // then opens nothing until Tars quits. A rejected call says only that it failed: nothing is known of the token.
     let r: Awaited<ReturnType<typeof api.revokeReaderToken>>;
     try {
       r = await api.revokeReaderToken();
     } catch (e) {
       console.warn('[traces] revoking the reader token failed:', e);
-      setTokenError(reasonOf(e));
+      setTokenError({ reason: reasonOf(e), answered: false });
       return;
     }
     if (!r.ok) {
-      setTokenError(reasonOf(r.error));
+      setTokenError({ reason: reasonOf(r.error), answered: true });
       setReader(await api.readerToken().catch(() => null));
       return;
     }
@@ -161,6 +189,7 @@ export function StorageView() {
               onChange={d => { void save({ retentionDays: Number(d) }); }} />
           </Row>
           {saveError && <Row><StateLine word={saveError} tone="error" /></Row>}
+          {readError && <Row><div data-storage-read-error><StateLine wrap word={`not read: ${readError}. Open Storage again to read it again.`} tone="error" /></div></Row>}
           {stats?.byProject && stats.byProject.length > 0 && (
             <Row className="space-y-1.5 py-2.5">
               <PanelCaption>BY PROJECT</PanelCaption>
@@ -226,21 +255,21 @@ export function StorageView() {
         <DialogShell onClose={closeDialog} width={560} title="Create a reader token?"
           subtitle="It opens /api/traces/ and nothing else, read only: every recorded session, of every project. Revoke it to stop at once."
           footerRight={<><Button onClick={closeDialog}>Cancel</Button><Button variant="primary" onClick={() => { void makeToken(); }}>Create</Button></>}>
-          {tokenError && <div data-token-refused><StateLine word={`not created: ${tokenError}. Create tries again.`} tone="error" /></div>}
+          {tokenError && <div data-token-refused={tokenError.answered ? 'answered' : 'call'}><StateLine wrap word={tokenLine('Create')} tone="error" /></div>}
         </DialogShell>
       )}
       {dialog === 'rotate' && (
         <DialogShell onClose={closeDialog} width={560} title="Rotate the reader token?"
           subtitle="The one the reader holds stops working at once. You will see the new one once, to give it to the reader."
           footerRight={<><Button onClick={closeDialog}>Cancel</Button><Button variant="primary" onClick={() => { void makeToken(); }}>Rotate</Button></>}>
-          {tokenError && <div data-token-refused><StateLine word={`not rotated: ${tokenError}. The old token opens nothing now; Rotate tries again.`} tone="error" /></div>}
+          {tokenError && <div data-token-refused={tokenError.answered ? 'answered' : 'call'}><StateLine wrap word={tokenLine('Rotate', 'The old token opens nothing now.')} tone="error" /></div>}
         </DialogShell>
       )}
       {dialog === 'revoke' && (
         <DialogShell onClose={closeDialog} width={560} title="Revoke the reader token?"
           subtitle="/api/traces/ refuses every read from now on. Create another to give access again."
           footerRight={<><Button onClick={closeDialog}>Keep it</Button><Button variant="danger" onClick={() => { void revoke(); }}>Revoke</Button></>}>
-          {tokenError && <div data-token-refused><StateLine word={`not saved: ${tokenError}. The token opens nothing until Tars quits; Revoke tries again.`} tone="error" /></div>}
+          {tokenError && <div data-token-refused={tokenError.answered ? 'answered' : 'call'}><StateLine wrap word={tokenLine('Revoke', 'The token opens nothing until Tars quits.')} tone="error" /></div>}
         </DialogShell>
       )}
       {dialog === 'delete-all' && stats && (
@@ -253,17 +282,24 @@ export function StorageView() {
       {shown !== null && (
         <DialogShell
           // The token goes from the window's memory as the dialog closes, however it closes.
-          onClose={() => setShown(null)}
+          onClose={() => { setShown(null); setCopyError(null); }}
           width={560}
           title="The reader token"
           footerRight={<>
-            <Button variant="primary" onClick={() => { void navigator.clipboard.writeText(shown).then(() => setCopied(true)); }}>{copied ? 'Copied' : 'Copy'}</Button>
-            <Button onClick={() => setShown(null)}>Done</Button>
+            <Button variant="primary" onClick={() => {
+              // The clipboard can refuse (no focus, no permission): said here, and the token stays selectable by hand.
+              void navigator.clipboard.writeText(shown).then(() => { setCopied(true); setCopyError(null); }, (e: unknown) => {
+                console.warn('[traces] copying the reader token failed:', e);
+                setCopyError(reasonOf(e));
+              });
+            }}>{copied ? 'Copied' : 'Copy'}</Button>
+            <Button onClick={() => { setShown(null); setCopyError(null); }}>Done</Button>
           </>}
         >
           <div className="space-y-2.5">
             <p className="text-xs text-status-waiting">Copy it now: the window will not show it again. Give it to the external reader as the Bearer of its reads.</p>
             <pre data-reader-token className="px-2.5 py-2 bg-term-bg border border-border font-mono text-[11.5px] text-foreground whitespace-pre-wrap break-all select-all">{shown}</pre>
+            {copyError && <div data-token-copy-error><StateLine wrap word={`not copied: ${copyError}. Select the token above and copy it by hand.`} tone="error" /></div>}
             {reader?.createdAt && <p className="font-mono text-[10.5px] text-muted-foreground">{`created ${dayClockOf(Date.parse(reader.createdAt))}`}</p>}
           </div>
         </DialogShell>

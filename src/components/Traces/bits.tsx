@@ -10,13 +10,16 @@ import type { StatusTone } from '@/components/ui';
  * (components/Resources/bits.tsx); these are the three it does not have.
  */
 
-/** A state in its tone: the 6px square and the words, mono. */
-export function StateLine({ word, tone, className = '' }: { word: string; tone: StatusTone; className?: string }) {
+/**
+ * A state in its tone: the 6px square and the words, mono. One line, cut at its end; `wrap` keeps every word, on as
+ * many lines as it takes, for a sentence of main's that must be read whole (a token's refusal).
+ */
+export function StateLine({ word, tone, className = '', wrap = false }: { word: string; tone: StatusTone; className?: string; wrap?: boolean }) {
   const ink = tone === 'idle' ? 'text-muted-foreground' : tone === 'running' ? 'text-status-running' : tone === 'waiting' ? 'text-status-waiting' : 'text-status-error';
   return (
-    <span className={`inline-flex items-center gap-1.5 min-w-0 font-mono text-[10.5px] ${ink} ${className}`}>
-      <StatusSquare tone={tone} />
-      <span className="truncate">{word}</span>
+    <span className={`inline-flex ${wrap ? 'items-start' : 'items-center'} gap-1.5 min-w-0 font-mono text-[10.5px] ${ink} ${className}`}>
+      <StatusSquare tone={tone} className={wrap ? 'mt-[5px] shrink-0' : undefined} />
+      <span className={wrap ? 'break-words' : 'truncate'}>{word}</span>
     </span>
   );
 }
