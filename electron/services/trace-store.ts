@@ -329,11 +329,21 @@ export class TraceStore {
   }
 
   /** The sessions with something not yet uploaded (new, or grown since), oldest change first. */
-  uploadQueue(limit: number): Array<{ traceId: string; seq: number; projectPath: string; agentId: string; startedAt: number }> {
-    return (this.db.prepare(`SELECT t.trace_id, t.updated_seq, t.project_path, t.agent_id, t.started_at FROM traces t
+  /**
+   * The sessions with a change not sent, oldest change first, a page at a time: `afterSeq` is the last change of the
+   * page before, and `since` leaves out what started at or before a deletion's moment, which never goes again. The
+   * rest of what decides a sending (the trace gate) is the uploader's: a page may hold none it can send, so it reads
+   * the next one rather than stopping (the Audit's L2 at c447c1ceb).
+   */
+  uploadQueue(limit: number, page: { afterSeq?: number; since?: number } = {}): Array<{ traceId: string; seq: number; projectPath: string; agentId: string; startedAt: number; harness: string; model: string; endpointId: string }> {
+    return (this.db.prepare(`SELECT t.trace_id, t.updated_seq, t.project_path, t.agent_id, t.started_at, t.harness, t.model, t.endpoint_id FROM traces t
       LEFT JOIN uploads u ON u.trace_id = t.trace_id
-      WHERE t.updated_seq > COALESCE(u.uploaded_seq, 0) ORDER BY t.updated_seq ASC LIMIT ?`).all(limit) as Row[])
-      .map(r => ({ traceId: String(r.trace_id), seq: num(r.updated_seq), projectPath: String(r.project_path), agentId: String(r.agent_id), startedAt: num(r.started_at) }));
+      WHERE t.updated_seq > COALESCE(u.uploaded_seq, 0) AND t.updated_seq > ? AND t.started_at > ?
+      ORDER BY t.updated_seq ASC LIMIT ?`).all(page.afterSeq ?? 0, page.since ?? Number.MIN_SAFE_INTEGER, limit) as Row[])
+      .map(r => ({
+        traceId: String(r.trace_id), seq: num(r.updated_seq), projectPath: String(r.project_path), agentId: String(r.agent_id), startedAt: num(r.started_at),
+        harness: String(r.harness ?? ''), model: String(r.model ?? ''), endpointId: String(r.endpoint_id ?? ''),
+      }));
   }
 
   /** A session uploaded as it was at `seq`. */

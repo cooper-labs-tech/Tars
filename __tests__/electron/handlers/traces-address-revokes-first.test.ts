@@ -1,5 +1,8 @@
+// First: the home's guard, before anything loads electron/constants (throwaway-home.ts).
+import '../../setup/throwaway-home';
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import * as fs from 'fs';
+import * as path from 'path';
 import type { AppSettings } from '../../../electron/types';
 import { DATA_DIR, PRIVATE_DIR } from '../../../electron/constants';
 import { assertThrowaway } from '../../setup/throwaway-dirs';
@@ -15,6 +18,12 @@ import { assertThrowaway } from '../../setup/throwaway-dirs';
  * R2. The address changed to another one, the same.
  * R3. The window is told nothing changed, though sharing must have stopped.
  * R4. A change that drops no consent (none was given) is no longer written first and applied after.
+ * Added before its code after the Audit's re-read at c447c1ceb (its L1, 25/11):
+ * R5. The consent's file can be neither removed nor emptied (a read-only file in a folder that may not be written),
+ *     and the settings cannot be written: a restart before a write holds brings the consent back for the old
+ *     address, and the window is told only that sharing stopped.
+ * A read-only file (0o444) refuses the unlink and the truncate on Windows by itself; on macOS and Linux the folder
+ * must refuse the unlink too (0o500), so both are set where the system has them.
  */
 
 assertThrowaway({ DATA_DIR, PRIVATE_DIR });
@@ -77,6 +86,24 @@ describe('the back-office address, changed on settings that cannot be written', 
     failWith = full();
     call('traces:setSettings', { uploadUrl: 'https://other.example.com' });
     expect(runtime.uploadConsentAt()).toBeUndefined();
+  });
+
+  it('R5. emptied when neither the consent\'s file nor the settings can be written: the window is told a restart would share again', () => {
+    const file = runtime.TRACES_CONSENT_FILE;
+    const folder = path.dirname(file);
+    fs.chmodSync(file, 0o444);
+    if (process.platform !== 'win32') fs.chmodSync(folder, 0o500);
+    failWith = full();
+    let answer: { ok: boolean; error?: string };
+    try {
+      answer = call('traces:setSettings', { uploadUrl: '' }) as { ok: boolean; error?: string };
+    } finally {
+      if (process.platform !== 'win32') fs.chmodSync(folder, 0o700);
+      fs.chmodSync(file, 0o600);
+    }
+    expect(runtime.uploadConsentAt()).toBeUndefined();
+    expect(answer.ok).toBe(false);
+    expect(answer.error).toMatch(/restart/);
   });
 
   it('R4. a change that drops no consent is written first, then applied', () => {

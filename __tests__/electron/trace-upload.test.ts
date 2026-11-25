@@ -78,6 +78,11 @@ import { hasPosixModes } from '../setup/platform-limits';
  *     those recorded before a deletion, which will never be sent.
  * 36. After a deletion whose progress could not be forgotten (a full disk), the sent count still counts the sessions
  *     sent before it, which the back-office deleted.
+ * Added before their code after the Audit's re-read at c447c1ceb (its L2, 25/11). A pass read the 5000 oldest
+ * queued sessions and stopped when none of them could be sent, so past 5000 that never can (recorded before a
+ * deletion, or of a project or agent opted out), nothing was ever sent again:
+ * 37. 5001 sessions recorded before the deletion's moment and 1 after: one pass does not send that 1.
+ * 38. 5001 sessions of a project not opted in and 1 of one that is: the same.
  */
 
 type Seen = { method: string; url: string; headers: http.IncomingHttpHeaders; body: Buffer };
@@ -653,6 +658,30 @@ describe('forgetting the progress after a DELETE that went through, on a full di
       vi.restoreAllMocks();
     }
   });
+
+  // Sessions that only open (no request): queued, never sendable here.
+  const many = (n: number, startedAt: number, projectPath = PROJECT) => {
+    for (let i = 0; i < n; i++) {
+      store.openTrace({ traceId: `old-${projectPath.length}-${i}`, projectPath, agentId: 'agent-1', agentName: 'Q', harness: 'qwen-code', endpointId: 'ep-000001', endpointName: 'Remote host', endpointBaseUrl: 'http://192.0.2.10:9000/v1', model: 'open-coder-1', startedAt });
+    }
+  };
+
+  it('37: 5001 sessions before the deletion and 1 after: one pass sends that 1', async () => {
+    many(5001, 1000);
+    deletion = { owed: false, since: 5000 };
+    seed('after', 'after the deletion', 9000);
+    const r = await uploader().runOnce();
+    expect(r).toMatchObject({ sent: 1, failed: 0 });
+    expect(bo.sessions.has('after')).toBe(true);
+  }, 60_000);
+
+  it('38: 5001 sessions of a project not opted in and 1 of one that is: one pass sends that 1', async () => {
+    many(5001, 9000, path.join(HOME, 'projects', 'project-b'));
+    seed('in', 'opted in', 9000);
+    const r = await uploader().runOnce();
+    expect(r).toMatchObject({ sent: 1, failed: 0 });
+    expect(bo.sessions.has('in')).toBe(true);
+  }, 60_000);
 
   it('35: pending counts only what would be sent: opted in now, started after the deletion, a change not sent', async () => {
     seed('in', 'opted in', 9000);

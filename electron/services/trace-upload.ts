@@ -37,8 +37,12 @@ export interface UploaderDeps {
    * for, not yet confirmed by the back-office).
    */
   setDeletion(d: { owed: boolean; since?: number }): void;
-  /** Whether a session may be sent now: its project and its agent opted in at this moment. */
-  eligible(session: { projectPath: string; agentId: string }): boolean;
+  /**
+   * Whether a session may be sent now: the trace gate as it is at this moment (trace-gate.ts), so a revoke made after
+   * the session was recorded (its project or agent opted out, its pair removed, closed models left out, its
+   * endpoint's traces off or the endpoint gone) holds it back.
+   */
+  eligible(session: { projectPath: string; agentId: string; harness: string; model: string; endpointId: string }): boolean;
   scrubContext(projectPath: string): ScrubContext;
   client: { name: string; version: string; platform: string };
   /**
@@ -62,10 +66,10 @@ export interface UploadStateView {
   consentAt?: string;
   registered: boolean;
   /**
-   * The sessions a pass would send now, by its own rule: a change not sent yet, the project and the agent opted in
-   * at this moment, and started after the latest deletion's moment. No closed-model rule applies at sending: the gate
-   * decided that when the session was recorded (trace-gate.ts), and one it left out was never recorded. A session
-   * held back by the consent, the address or an owed deletion still counts here: those stop every session alike.
+   * The sessions a pass would send now, by its own rule: a change not sent yet, the trace gate as it is at this
+   * moment (the project and the agent opted in, the endpoint there, approved and allowing traces, the pair on the
+   * list, closed models left out when that is on), and started after the latest deletion's moment. A session held
+   * back by the consent, the address or an owed deletion still counts here: those stop every session alike.
    */
   pendingSessions: number;
   /** The sessions sent and still on the back-office: those started after the latest deletion's moment. */
@@ -100,7 +104,10 @@ function compress(body: Buffer): { body: Buffer; encoding: string } {
 }
 
 const ROLES = new Set(['system', 'user', 'assistant', 'tool', 'developer']);
-const BATCH_SESSIONS = 50;
+/** One pass: the queue read QUEUE_PAGE rows at a time, at most PASS_PAGES pages, at most PASS_SESSIONS sent. */
+const QUEUE_PAGE = 5000;
+const PASS_PAGES = 200;
+const PASS_SESSIONS = 2000;
 const sha256 = (b: Buffer): string => createHash('sha256').update(b).digest('hex');
 
 export class TraceUploader {
@@ -196,7 +203,7 @@ export class TraceUploader {
   }
 
   /** Whether a pass would send this session now: opted in now, and started after the latest deletion's moment. */
-  private sendable(q: { projectPath: string; agentId: string; startedAt: number }, since: number | undefined): boolean {
+  private sendable(q: { projectPath: string; agentId: string; startedAt: number; harness: string; model: string; endpointId: string }, since: number | undefined): boolean {
     return this.deps.eligible(q) && (since === undefined || q.startedAt > since);
   }
 
@@ -204,8 +211,10 @@ export class TraceUploader {
     const owed = this.owed();
     const s = this.deps.settings();
     const counts = this.deps.store.uploadCounts(s.since);
-    // What the pass would send, by the pass's own rule: every session with a change not sent, read in full.
-    const pending = this.deps.store.uploadQueue(Number.MAX_SAFE_INTEGER).filter(q => this.sendable(q, s.since)).length;
+    // What the pass would send, by the pass's own rule. The deletion's moment is in the query, so what it holds back
+    // is not read; the trace gate is not (it reads the settings and the fleet), so the rest of the queue is read in
+    // full on each call: one row per session with a change not sent (the Audit's I-4 at c447c1ceb).
+    const pending = this.deps.store.uploadQueue(Number.MAX_SAFE_INTEGER, { since: s.since }).filter(q => this.sendable(q, s.since)).length;
     const install = this.readInstall();
     return {
       configured: !!s.url, consentAt: s.consentAt, registered: !!install && install.url === s.url,
@@ -285,19 +294,23 @@ export class TraceUploader {
       if (!this.mayGoOn(url)) return { sent, failed: 0 };
       let install = this.readInstall();
       if (!install || install.url !== url) install = await this.register(url);
-      for (let round = 0; round < 40; round++) {
+      // The queue a page at a time, by change: a page with nothing to send (sessions of a project opted out, say) is
+      // passed over, never the end (the Audit's L2 at c447c1ceb). At most PASS_SESSIONS sent in one pass.
+      let afterSeq = 0;
+      for (let page = 0; page < PASS_PAGES && sent < PASS_SESSIONS; page++) {
         const since = this.deps.settings().since;
-        const queue = this.deps.store.uploadQueue(5000)
-          .filter(q => this.sendable(q, since))
-          .slice(0, BATCH_SESSIONS);
-        if (!queue.length) break;
-        for (const q of queue) {
+        const rows = this.deps.store.uploadQueue(QUEUE_PAGE, { afterSeq, since });
+        if (!rows.length) break;
+        afterSeq = rows[rows.length - 1].seq;
+        for (const q of rows) {
+          if (sent >= PASS_SESSIONS) break;
+          if (!this.sendable(q, this.deps.settings().since)) continue;
           if (!this.mayGoOn(url)) return { sent, failed: 0 };
           await this.sendSession(install, q.traceId, q.seq);
           this.deps.store.markUploaded(q.traceId, q.seq, this.now());
           sent++;
         }
-        if (queue.length < BATCH_SESSIONS) break;
+        if (rows.length < QUEUE_PAGE) break;
       }
       this.failures = 0;
       this.nextTryAt = undefined;

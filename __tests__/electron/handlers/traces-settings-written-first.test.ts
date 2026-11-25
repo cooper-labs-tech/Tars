@@ -16,6 +16,9 @@ import type { AppSettings } from '../../../electron/types';
  * 4. A write that works is no longer applied in memory, or no longer answered ok.
  * 5. Another trace or endpoint setting of the same handlers keeps the old order: traces:setSettings, the pairs,
  *    endpoints:save, :approve, :setKey and :remove.
+ * Since 25/11 only the grants among these write first. The revokes of sharing (a project opted out, a pair removed,
+ * closed models left out, an endpoint's traces off, an endpoint removed) apply first, and are held in
+ * traces-revokes-apply-first.test.ts.
  */
 
 const handlers = new Map<string, (...args: unknown[]) => unknown>();
@@ -105,13 +108,14 @@ describe('the other trace and endpoint settings of the same handlers (5)', () =>
     });
   }
 
-  it('endpoints:approve, :setKey and :remove: a write that fails changes nothing in memory', async () => {
+  // endpoints:remove is a revoke of sharing, which applies first since 25/11 (traces-revokes-apply-first.test.ts V5).
+  it('endpoints:approve and :setKey: a write that fails changes nothing in memory', async () => {
     const saved = await call('endpoints:save', { name: 'Local', baseUrl: 'http://127.0.0.1:9/v1' });
     const id = String((saved.endpoint as { id: string }).id);
     failWith = full();
     events = [];
     const before = structuredClone(memory);
-    for (const [channel, args] of [['endpoints:setKey', [id, 'sk-test-not-a-key']], ['endpoints:approve', [id]], ['endpoints:remove', [id]]] as const) {
+    for (const [channel, args] of [['endpoints:setKey', [id, 'sk-test-not-a-key']], ['endpoints:approve', [id]]] as const) {
       const answer = await call(channel, ...args);
       expect(answer.ok, `${channel}: ${JSON.stringify(answer)}`).toBe(false);
       expect(String(answer.error), channel).toMatch(/ENOSPC/);

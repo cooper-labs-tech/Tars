@@ -8,7 +8,7 @@ import {
 } from '../services/inference-endpoints';
 import {
   endpointWaits, readerTokenStatus, revokeReaderToken, rotateReaderToken, sweepTraces, traceSettingsOf, traceStore,
-  withdrawUploadConsent,
+  withdrawUploadConsent, holdRevoke,
 } from '../services/traces-runtime';
 import type { TraceFilter } from '../services/trace-store';
 import { traceExportLines } from '../services/trace-export';
@@ -55,6 +55,7 @@ export function registerTracesHandlers(deps: TracesHandlerDeps): void {
   // Written first, then held in memory, where the uploader and the proxy read them: a setting main could not write
   // was answered ok and held for the rest of the run (a consent to upload on a full disk, the Audit's L2 on #599).
   // The reason when it could not, for the window to show; null when it was written and applied.
+  const samePair = (a: { harness: string; models: string }, b: { harness: string; models: string }) => a.harness === b.harness && a.models === b.models;
   // `then`: what the failure left, when something already held before the write (a withdrawal).
   const apply = (settings: AppSettings, then?: string): string | null => {
     try {
@@ -87,10 +88,28 @@ export function registerTracesHandlers(deps: TracesHandlerDeps): void {
       allowPlainHttp: typeof i.allowPlainHttp === 'boolean' ? i.allowPlainHttp : undefined,
     }, { window: true });
     if (!r.ok) return r;
-    const unsaved = apply(r.settings);
-    if (unsaved) return { ok: false, error: unsaved };
+    // Traces turned off for an endpoint is a revoke of sharing: it applies first, then is written (holdRevoke), with
+    // the rest of the save when that grants nothing (names, the hold, the defaults the save fills in). A save that
+    // also grants (session headers or plain http turned on) has that part written first.
+    const before = (deps.getAppSettings().inferenceEndpoints ?? []).find(e => e.id === r.endpoint.id);
+    let held: string | undefined;
+    if (before?.allowTraces === true && r.endpoint.allowTraces === false) {
+      const grants = (before.sendSessionHeaders !== true && r.endpoint.sendSessionHeaders === true)
+        || (before.allowPlainHttp !== true && r.endpoint.allowPlainHttp === true);
+      if (!grants) {
+        held = holdRevoke(r.settings);
+      } else {
+        const now = deps.getAppSettings();
+        held = holdRevoke({ ...now, inferenceEndpoints: (now.inferenceEndpoints ?? []).map(e => (e.id === r.endpoint.id ? { ...e, allowTraces: false } : e)) });
+        const unsaved = apply(r.settings, 'traces stay off for it, and the rest was not saved');
+        if (unsaved) return { ok: false, error: unsaved };
+      }
+    } else {
+      const unsaved = apply(r.settings);
+      if (unsaved) return { ok: false, error: unsaved };
+    }
     tell('endpoints:changed', { id: r.endpoint.id, needsApproval: false });
-    return { ok: true, endpoint: view(r.endpoint.id) };
+    return { ok: true, endpoint: view(r.endpoint.id), ...(held ? { unsaved: held } : {}) };
   });
 
   ipcMain.handle('endpoints:approve', (_e, id: unknown) => {
@@ -113,10 +132,10 @@ export function registerTracesHandlers(deps: TracesHandlerDeps): void {
   ipcMain.handle('endpoints:remove', (_e, id: unknown) => {
     const r = removeEndpoint(deps.getAppSettings(), String(id), [...agents.values()]);
     if (!r.ok) return r;
-    const unsaved = apply(r.settings);
-    if (unsaved) return { ok: false, error: unsaved };
+    // A revoke of sharing: it applies first, then is written (holdRevoke).
+    const held = holdRevoke(r.settings);
     tell('endpoints:changed', { id: String(id), needsApproval: false });
-    return { ok: true };
+    return { ok: true, ...(held ? { unsaved: held } : {}) };
   });
 
   ipcMain.handle('endpoints:refreshModels', async (_e, id: unknown) => {
@@ -186,11 +205,30 @@ export function registerTracesHandlers(deps: TracesHandlerDeps): void {
     // the disk, before the rest is written, so a write that fails never leaves sharing on (the Audit's L2 at
     // 1e9571eab). Settings that never hold then: the next start takes it for a deletion, which fails closed.
     const dropsConsent = !!current.uploadConsentAt && !next.uploadConsentAt;
-    if (dropsConsent) withdrawUploadConsent();
-    const unsaved = apply({ ...deps.getAppSettings(), traces: next }, dropsConsent ? 'sharing stopped at once, and the address was not saved' : undefined);
-    if (unsaved) return { ok: false, error: unsaved };
+    // `persisted` false: neither the consent's file nor the settings hold the withdrawal, so a restart before a write
+    // holds would share again with the old address (the Audit's L1 at c447c1ceb). Said, not hidden.
+    const withdrawn = dropsConsent ? withdrawUploadConsent() : undefined;
+    // What the patch takes away from sharing (projects opted out, pairs removed, closed models left out) applies
+    // first, then is written (holdRevoke); what it grants, or anything else it changes, is written first.
+    const base = traceSettingsOf(deps.getAppSettings());
+    const narrowed: TraceSettings = {
+      ...base,
+      projects: base.projects.filter(x => next.projects.includes(x)),
+      pairs: base.pairs.filter(x => next.pairs.some(y => samePair(x, y))),
+      excludeClosedModels: base.excludeClosedModels || next.excludeClosedModels,
+    };
+    const revoked = JSON.stringify(narrowed) !== JSON.stringify(base);
+    const held = revoked ? holdRevoke({ ...deps.getAppSettings(), traces: narrowed }) : undefined;
+    if (JSON.stringify(next) !== JSON.stringify({ ...narrowed, ...(next.uploadConsentAt ? { uploadConsentAt: next.uploadConsentAt } : {}) })) {
+      const then = withdrawn && !withdrawn.persisted
+        ? 'sharing stopped for now, but a restart before the settings are saved would share again with the old address; Tars tries again every minute'
+        : dropsConsent ? 'sharing stopped at once, and the address was not saved'
+        : revoked ? 'what it took away from sharing holds, and the rest was not saved' : undefined;
+      const unsaved = apply({ ...deps.getAppSettings(), traces: next }, then);
+      if (unsaved) return { ok: false, error: unsaved };
+    }
     sweepTraces();
-    return { ok: true, settings: next };
+    return { ok: true, settings: traceSettingsOf(deps.getAppSettings()), ...(held ? { unsaved: held } : {}) };
   });
 
   // The harness and model pairs that may be traced: the owner's list, empty as Tars ships, and the closed-model
@@ -209,7 +247,7 @@ export function registerTracesHandlers(deps: TracesHandlerDeps): void {
     if (typeof o.harness !== 'string' || !o.harness.trim() || typeof o.models !== 'string' || !o.models.trim()) return null;
     return { harness: o.harness.trim().slice(0, 80), models: o.models.trim().slice(0, 200), ...(typeof o.note === 'string' && o.note ? { note: o.note.slice(0, 200) } : {}) };
   };
-  const same = (a: { harness: string; models: string }, b: { harness: string; models: string }) => a.harness === b.harness && a.models === b.models;
+  const same = samePair;
   ipcMain.handle('traces:pairs', () => pairsView());
   ipcMain.handle('traces:addPair', (_e, raw: unknown) => {
     const pair = pairOf(raw);
@@ -221,7 +259,9 @@ export function registerTracesHandlers(deps: TracesHandlerDeps): void {
   ipcMain.handle('traces:removePair', (_e, raw: unknown) => {
     const pair = pairOf(raw);
     if (!pair) return { ok: false, error: 'A pair is a harness and a model glob.' };
-    return setPairs(traceSettingsOf(deps.getAppSettings()).pairs.filter(p => !same(p, pair)));
+    // A revoke of sharing: it applies first, then is written (holdRevoke).
+    const held = holdRevoke({ ...deps.getAppSettings(), traces: { ...traceSettingsOf(deps.getAppSettings()), pairs: traceSettingsOf(deps.getAppSettings()).pairs.filter(p => !same(p, pair)) } });
+    return { ok: true as const, ...pairsView(), ...(held ? { unsaved: held } : {}) };
   });
   // A list of pairs from a JSON file the owner picks (an array of { harness, models, note? }), added to the list.
   ipcMain.handle('traces:importPairs', async () => {

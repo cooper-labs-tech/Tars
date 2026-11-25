@@ -40,6 +40,9 @@ import { DEV_URL, apiPort } from './ports.mjs';
  * sharing: the consent must go at once, and an upload pass then sends nothing, before and after a restart. Until
  * this fix the revoke threw on the unlink and the old token kept opening the route, and the emptied address left the
  * consent and the old address in memory, where the uploader kept sending.
+ * And a project opted out on the 0500 folder (the fifth test): a pass then sends nothing of it, and neither does a
+ * pass after a restart. Until this fix the opt-out wrote first, was answered "nothing was changed", and the pass sent
+ * that project's session.
  * The artefact: values.json with each answer, the back-office's request log, a screenshot per launch.
  */
 
@@ -249,8 +252,11 @@ test('a deletion whose bookkeeping cannot be written survives a quit: owed again
   });
   await new Promise<void>(resolve => backOffice.listen(0, '127.0.0.1', resolve));
   const uploadUrl = `http://127.0.0.1:${(backOffice.address() as { port: number }).port}`;
+  // The endpoint the recorded sessions name: what is sent follows the trace gate as it is at sending (since 25/11).
   fs.writeFileSync(path.join(dataDir, 'app-settings.json'), JSON.stringify({
-    autoStartAgentsOnLaunch: false, traces: { projects: [project], capBytes: 1024 ** 3, retentionDays: 30, pairs: [{ harness: 'qwen-code', models: '*' }], uploadUrl },
+    autoStartAgentsOnLaunch: false,
+    inferenceEndpoints: [{ id: 'ep-000001', name: 'E', baseUrl: 'http://127.0.0.1:9/v1', allowTraces: true, approved: true, approvedBaseUrl: 'http://127.0.0.1:9/v1', models: ['open-coder-1'] }],
+    traces: { projects: [project], capBytes: 1024 ** 3, retentionDays: 30, pairs: [{ harness: 'qwen-code', models: '*' }], uploadUrl },
   }, null, 2));
 
   const values: Record<string, unknown> = { uploadUrl };
@@ -402,6 +408,107 @@ test('a reader token revoked and an address emptied on a folder that cannot be w
     expect(readAfterRestart, 'the revoked token opens nothing after a restart').toBe(401);
     expect(afterRestart.uploadConsentAt, 'no consent after a restart').toBeUndefined();
     expect(requests.slice(before), 'nothing is sent after a restart').toEqual([]);
+  } finally {
+    if (app) await app.close().catch(() => {});
+    fs.writeFileSync(test.info().outputPath('back-office-requests.json'), JSON.stringify(requests, null, 2));
+    await new Promise<void>(resolve => backOffice.close(() => resolve()));
+    if (fs.existsSync(privateDir)) fs.chmodSync(privateDir, 0o700);
+    await removeHome(home);
+  }
+});
+
+test('a project opted out on a folder that cannot be written: nothing of it is sent, before or after a restart', async () => {
+  test.skip(process.platform === 'win32', 'the private folder is made unwritable with POSIX permissions');
+  test.setTimeout(300_000);
+  const home = fs.mkdtempSync(path.join(os.tmpdir(), 'dorothy-e2e-trace-optout-'));
+  const privateDir = path.join(home, '.tars-private');
+  const projectA = path.join(home, 'projects', 'project-a');
+  const projectB = path.join(home, 'projects', 'project-b');
+  const dataDir = path.join(home, '.tars');
+  for (const d of [projectA, projectB, dataDir]) fs.mkdirSync(d, { recursive: true });
+  const AGENT = 'eeee5555-0000-4000-8000-0000000000f2';
+  fs.writeFileSync(path.join(dataDir, 'agents.json'), JSON.stringify([{
+    id: AGENT, name: 'T', character: 'robot', status: 'idle', permissionMode: 'bypass', projectPath: projectA, skills: [],
+    provider: 'qwen-code', traces: true, createdAt: '2026-11-25T08:00:00.000Z', lastActivity: '2026-11-25T08:00:00.000Z',
+  }], null, 2));
+  fs.writeFileSync(path.join(dataDir, 'projects.json'), JSON.stringify([projectA, projectB]));
+
+  // A back-office that takes installs, blobs and batches.
+  const requests: Array<{ method?: string; url?: string; at: string }> = [];
+  const backOffice = http.createServer((req, res) => {
+    req.on('data', () => {});
+    req.on('end', () => {
+      requests.push({ method: req.method, url: req.url, at: new Date().toISOString() });
+      const answer = (status: number, body: unknown) => { res.writeHead(status, { 'content-type': 'application/json' }); res.end(JSON.stringify(body)); };
+      const url = req.url ?? '';
+      if (req.method === 'POST' && url === '/v1/installs') answer(201, { installId: 'inst-1', token: 'tbi_1' });
+      else if (req.method === 'POST' && url === '/v1/blobs/missing') answer(200, { missing: [] });
+      else if (req.method === 'PUT' && url.startsWith('/v1/batches/')) answer(200, { missingBlobs: [] });
+      else if (req.method === 'PUT' && url.startsWith('/v1/blobs/')) answer(201, { stored: true });
+      else answer(404, { error: 'not_found' });
+    });
+  });
+  await new Promise<void>(resolve => backOffice.listen(0, '127.0.0.1', resolve));
+  const uploadUrl = `http://127.0.0.1:${(backOffice.address() as { port: number }).port}`;
+  fs.writeFileSync(path.join(dataDir, 'app-settings.json'), JSON.stringify({
+    autoStartAgentsOnLaunch: false,
+    inferenceEndpoints: [{ id: 'ep-000001', name: 'E', baseUrl: 'http://127.0.0.1:9/v1', allowTraces: true, approved: true, approvedBaseUrl: 'http://127.0.0.1:9/v1', models: ['open-coder-1'] }],
+    traces: { projects: [projectA, projectB], capBytes: 1024 ** 3, retentionDays: 30, pairs: [{ harness: 'qwen-code', models: '*' }], uploadUrl },
+  }, null, 2));
+
+  const values: Record<string, unknown> = { uploadUrl };
+  const keep = (more: Record<string, unknown>) => { Object.assign(values, more); recordValues(values); };
+  const dist = path.resolve('electron', 'dist');
+  const launch = () => launchSandboxed(electron, home, {
+    env: { NODE_ENV: 'development', DOROTHY_DEV_URL: DEV_URL, DOROTHY_API_PORT: apiPort(31952), DOROTHY_E2E: '1' },
+  });
+  const record = (a: ElectronApplication, traceId: string, projectPath: string) => a.evaluate((_e, o) => {
+    const store = process.mainModule!.require(`${o.dist}/services/traces-runtime.js`).traceStore();
+    const startedAt = Date.now();
+    store.openTrace({ traceId: o.traceId, projectPath: o.projectPath, agentId: o.agent, agentName: 'T', harness: 'qwen-code', endpointId: 'ep-000001', endpointName: 'E', endpointBaseUrl: 'http://127.0.0.1:9/v1', model: 'open-coder-1', startedAt });
+    const body = (v: unknown) => Buffer.from(JSON.stringify(v));
+    store.ingest({ traceId: o.traceId, agentId: o.agent, surface: 'openai_chat', startedAt, endedAt: startedAt + 100, status: 200, contentType: 'application/json',
+      requestBody: body({ model: 'open-coder-1', messages: [{ role: 'user', content: `the task of ${o.traceId}` }] }),
+      responseBody: body({ choices: [{ message: { role: 'assistant', content: 'done' }, finish_reason: 'stop' }], usage: { prompt_tokens: 5, completion_tokens: 1 } }),
+      attempts: 1, heldMs: 0 });
+  }, { dist, traceId, projectPath, agent: AGENT });
+  const pass = (a: ElectronApplication) => a.evaluate((_e, d) => process.mainModule!.require(`${d}/services/traces-runtime.js`).traceUploader().runOnce(), dist) as Promise<{ sent: number; failed: number }>;
+  const sentOf = (from: number, id: string) => requests.slice(from).filter(r => r.method === 'PUT' && r.url?.startsWith(`/v1/batches/${id}.`));
+
+  let app: ElectronApplication | null = null;
+  try {
+    app = await launch();
+    let w = await traces(app);
+    await w.page.waitForLoadState('domcontentloaded');
+    expect(await w.call<{ ok: boolean }>('giveUploadConsent')).toMatchObject({ ok: true });
+    await record(app, 'a-1', projectA);
+
+    // Project A opted out on a private folder that may not be written, then a pass, then a quit before a write holds.
+    fs.chmodSync(privateDir, 0o500);
+    const from = requests.length;
+    try {
+      const optedOut = await w.call<{ ok: boolean; unsaved?: string; error?: string }>('setSettings', { projects: [projectB] });
+      const passed = await pass(app);
+      keep({ optedOut, passWhileUnsaved: passed, requestsWhileUnsaved: requests.slice(from) });
+      await stepShot(w.page, '01-opted-out-unsaved');
+      expect.soft(optedOut, 'the opt-out applied, answered with its unsaved note').toMatchObject({ ok: true });
+      expect(sentOf(from, 'a-1'), 'nothing of project A is sent after its opt-out').toEqual([]);
+      await app.close();
+      app = null;
+    } finally {
+      fs.chmodSync(privateDir, 0o700);
+    }
+
+    // The next start: still nothing of project A.
+    const restartedAt = requests.length;
+    app = await launch();
+    w = await traces(app);
+    await w.page.waitForLoadState('domcontentloaded');
+    const afterRestart = await pass(app);
+    const settingsAfter = await w.call<{ uploadConsentAt?: string }>('settings');
+    keep({ passAfterRestart: afterRestart, consentAfterRestart: settingsAfter.uploadConsentAt ?? null, requestsAfterRestart: requests.slice(restartedAt) });
+    await stepShot(w.page, '02-restarted');
+    expect(sentOf(restartedAt, 'a-1'), 'nothing of project A is sent after a restart').toEqual([]);
   } finally {
     if (app) await app.close().catch(() => {});
     fs.writeFileSync(test.info().outputPath('back-office-requests.json'), JSON.stringify(requests, null, 2));

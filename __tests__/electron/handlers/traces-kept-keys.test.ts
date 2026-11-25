@@ -1,3 +1,5 @@
+// First: the home's guard, before anything loads electron/constants (throwaway-home.ts).
+import '../../setup/throwaway-home';
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import * as fs from 'fs';
 import type { AppSettings } from '../../../electron/types';

@@ -1,3 +1,5 @@
+// First: the home's guard, before anything loads electron/constants (throwaway-home.ts).
+import '../../setup/throwaway-home';
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
@@ -25,6 +27,8 @@ import { hasPosixModes } from '../../setup/platform-limits';
  *    opens the routes, now and after a restart.
  * 7. A rotation whose new write fails (a full disk): it throws before it touches the old token, which still opens the
  *    routes, now and after a restart.
+ * 8. (The Audit's I-2 at c447c1ceb.) A rotation whose old file can be neither removed nor emptied: its words do not
+ *    say the old token would open the routes again after a restart.
  */
 
 assertThrowaway({ DATA_DIR, PRIVATE_DIR });
@@ -117,5 +121,22 @@ describe("the trace reader's token", () => {
     expect(resolveCaller({ authorization: `Bearer ${token}` }, '/api/traces/sessions')).toMatchObject({ ok: false, status: 401 });
     expect(onDisk()).toBe('');
     expect(String(thrown)).toMatch(/ENOSPC/);
+  });
+
+  it('8: a rotation whose old file stays: refused now, and said to open again after a restart', () => {
+    const token = rotateReaderToken();
+    const folder = path.dirname(TRACES_READER_TOKEN_FILE);
+    // A read-only file: Windows refuses its unlink and truncate; macOS and Linux need the folder to refuse the unlink.
+    fs.chmodSync(TRACES_READER_TOKEN_FILE, 0o444);
+    if (posix) fs.chmodSync(folder, 0o500);
+    let thrown: unknown;
+    try {
+      try { rotateReaderToken(); } catch (err) { thrown = err; }
+    } finally {
+      if (posix) fs.chmodSync(folder, 0o700);
+      fs.chmodSync(TRACES_READER_TOKEN_FILE, 0o600);
+    }
+    expect(isReaderToken(token)).toBe(false);
+    expect(String(thrown)).toMatch(/after a restart/);
   });
 });
