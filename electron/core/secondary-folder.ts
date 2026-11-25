@@ -1,4 +1,5 @@
 import type { AgentStatus } from '../types';
+import { getProvider } from '../providers';
 
 /**
  * When a secondary folder set from the agent's window (agent:setSecondaryProject) reaches its CLI. Nothing is typed
@@ -22,11 +23,15 @@ import type { AgentStatus } from '../types';
 /** When the folder reaches the agent's CLI, as the window says it. */
 export type FolderAppliesAt = 'next-start' | 'not-handed';
 
-/** The providers whose launch line hands the agent its secondary folder ('local' runs claude). */
-const HANDS_THE_FOLDER: ReadonlySet<string> = new Set(['claude', 'local', 'codex', 'gemini', 'qwen-code']);
+/** The providers whose launch line hands the agent its secondary folder, by the id of the provider Tars runs. */
+const HANDS_THE_FOLDER: ReadonlySet<string> = new Set(['claude', 'codex', 'gemini', 'qwen-code']);
 
-/** When `folder`, just set for an agent on `provider`, reaches its CLI. A cleared folder leaves its line at the next start. */
+/**
+ * When `folder`, just set for an agent on `provider`, reaches its CLI. Read on the provider Tars actually runs for that
+ * id (getProvider): `local`, and an id it does not know, run claude (the Audit's I-2 on #636). A cleared folder leaves
+ * its line at the next start.
+ */
 export function folderAppliesAt(provider: AgentStatus['provider'], folder: string | null): FolderAppliesAt {
   if (!folder) return 'next-start';
-  return HANDS_THE_FOLDER.has(provider ?? 'claude') ? 'next-start' : 'not-handed';
+  return HANDS_THE_FOLDER.has(getProvider(provider).id) ? 'next-start' : 'not-handed';
 }
