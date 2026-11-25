@@ -42,6 +42,7 @@ import { marketplaceListing } from '../services/skills-marketplace';
 import { skillsProblem } from '../utils/skill-name';
 import { resolveWorktreePath } from '../utils/worktree-path';
 import { landsUnderSafeRoot } from '../utils/real-target';
+import { mayOpenExternally } from '../utils/external-url';
 import { writeAtomicSync } from '../utils/secret-file';
 import { getProvider, getAllProviders } from '../providers';
 import { planModeRefusal } from '../providers/plan-mode';
@@ -2298,7 +2299,9 @@ function registerUpdateHandlers(): void {
 
   ipcMain.handle('app:quitAndInstall', async () => quitAndInstall());
 
+  // The update's download page: an https URL only goes to the system's browser (utils/external-url.ts, 2.0.7).
   ipcMain.handle('app:openExternal', async (_event, url: string) => {
+    if (!mayOpenExternally(url)) return { success: false, error: 'Only an https address is opened in the browser' };
     shell.openExternal(url);
     return { success: true };
   });
@@ -2893,7 +2896,10 @@ function registerShellHandlers(deps: IpcHandlerDependencies): void {
    */
   ipcMain.handle('shell:reveal', async (_event, { path: target }: { path: string }) => {
     if (typeof target !== 'string' || !target || !fs.existsSync(target)) return { success: false, error: 'no such path' };
-    const known = [...readCustomProjects(), ...[...deps.agents.values()].flatMap((a) => [a.projectPath, a.worktreePath])]
+    // The folders the Projects page and Review list: added by hand, the agents', and those Claude Code has worked in
+    // (its history, as fs:list-projects and fs:read-project-files take them), each judged as a project by the rule.
+    const seen = (await projectFolders(path.join(os.homedir(), '.claude', 'projects'))).map((f) => f.projectPath);
+    const known = [...readCustomProjects(), ...[...deps.agents.values()].flatMap((a) => [a.projectPath, a.worktreePath]), ...seen]
       .filter((p): p is string => typeof p === 'string' && !!p && path.isAbsolute(p));
     if (!windowMayReveal(target, known)) {
       return { success: false, error: 'Only a folder Tars knows (a project, an agent\'s folder, its data folder) is shown from here' };

@@ -142,7 +142,15 @@ export function windowMayReveal(target: unknown, projects: string[]): boolean {
   const own = [DATA_DIR, path.join(home(), '.claude')];
   if (own.some((f) => samePath(resolved, f) || samePath(real, realTarget(f) ?? f))) return true;
   if (isWithinDir(real, DATA_DIR) || inCredentialPlace(resolved, real)) return false;
-  return landsUnderSafeRoot(resolved, projectRoots(projects).filter(mayBeProject), inside);
+  return landsUnderSafeRoot(resolved, projectsHolding(resolved, real, projects), inside);
+}
+
+/**
+ * The projects among `projects` that `resolved` (or its real path) lies in, and that the rule allows. Only those are
+ * judged on the disk: a project on a mount gone offline is not looked at to read another (fs-roots-home.test.ts, 7).
+ */
+function projectsHolding(resolved: string, real: string | undefined, projects: string[]): string[] {
+  return projectRoots(projects).filter((p) => (inside(path.resolve(p), resolved) || (!!real && inside(path.resolve(p), real))) && mayBeProject(p));
 }
 
 export function localFileServes(target: string): boolean {
