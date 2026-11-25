@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation';
 import { Button, DialogShell, Dropdown, Input, PanelCaption } from '@/components/ui';
 import type { TracePair } from '@/types/electron';
 import { Notice, Unread } from '@/components/Resources/bits';
-import { clauseOf } from '@/lib/traces-format';
+import { clauseOf, reasonOf } from '@/lib/traces-format';
 import { StateLine } from './bits';
 import { tracesApi, useUnsavedNote } from './hooks';
 
@@ -46,7 +46,7 @@ export function PairsView() {
       setExclude(view.excludeClosedModels);
       setWarning(view.closedModelsWarning);
       setError(null);
-    } catch (e) { setError(e instanceof Error ? e.message : String(e)); }
+    } catch (e) { setError(reasonOf(e)); }
   }, []);
   useEffect(() => { void read(); }, [read]);
 
@@ -59,7 +59,7 @@ export function PairsView() {
     try {
       r = await api.addPair({ harness, models: models.trim(), ...(note.trim() ? { note: note.trim() } : {}) });
     } catch (e) {
-      setRefusal(e instanceof Error ? e.message : String(e));
+      setRefusal(reasonOf(e));
       return;
     }
     if (!r.ok) { setRefusal(r.error); return; }
@@ -75,7 +75,7 @@ export function PairsView() {
     try {
       r = await api.removePair({ harness: pair.harness, models: pair.models });
     } catch (e) {
-      setRefusal(e instanceof Error ? e.message : String(e));
+      setRefusal(reasonOf(e));
       return;
     }
     if (!r.ok) { setRefusal(r.error); return; }
@@ -93,7 +93,7 @@ export function PairsView() {
     try {
       r = await api.addPair(removed);
     } catch (e) {
-      setRefusal(e instanceof Error ? e.message : String(e));
+      setRefusal(reasonOf(e));
       return;
     }
     if (!r.ok) { setRefusal(r.error); return; }
@@ -108,7 +108,7 @@ export function PairsView() {
     try {
       r = await api.importPairs();
     } catch (e) {
-      setImportError(e instanceof Error ? e.message : String(e));
+      setImportError(reasonOf(e));
       return;
     }
     if (!r.ok) { if (!r.cancelled) setImportError(r.error); return; }

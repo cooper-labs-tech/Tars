@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import type { AgentStatus } from '@/types/electron';
 import { Button, Panel, PanelCaption } from '@/components/ui';
 import { comparablePath, lastPathPart } from '@/lib/display-path';
+import { reasonOf } from '@/lib/traces-format';
 import { Toggle } from '@/components/Settings/Toggle';
 import { StateLine } from './bits';
 import { tracesApi, useUnsavedNote } from './hooks';
@@ -29,7 +30,7 @@ export function ProjectTraces({ projectPath, agents }: { projectPath: string; ag
     // file a revoke dropped is no consent (the Audit's I-5 on PR 599).
     void Promise.all([api.settings(), api.uploadState()])
       .then(([s, u]) => { setProjects(s.projects); setUpload({ url: s.uploadUrl, consent: !!u.consentAt }); })
-      .catch(e => setError(e instanceof Error ? e.message : String(e)));
+      .catch(e => setError(reasonOf(e)));
   }, []);
   useEffect(() => { read(); }, [read]);
   // A consent main holds back or gives back comes with 'traces:changed': the panel reads it again.
@@ -52,7 +53,7 @@ export function ProjectTraces({ projectPath, agents }: { projectPath: string; ag
     try {
       r = await api.setSettings({ projects: next });
     } catch (e) {
-      setError(e instanceof Error ? e.message : String(e));
+      setError(reasonOf(e));
       return;
     }
     if (!r.ok) { setError(r.error); return; }

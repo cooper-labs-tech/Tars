@@ -57,7 +57,7 @@ export function SessionView({ traceId, onBack }: { traceId: string; onBack: () =
   const read = useCallback(async () => {
     const api = tracesApi();
     if (!api) return;
-    try { setData(await api.session(traceId)); setError(null); } catch (e) { setError(e instanceof Error ? e.message : String(e)); }
+    try { setData(await api.session(traceId)); setError(null); } catch (e) { setError(reasonOf(e)); }
   }, [traceId]);
   useEffect(() => { void read(); }, [read]);
 

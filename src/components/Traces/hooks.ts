@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { TraceFilter, TraceSessionSummary, TraceStats } from '@/types/electron';
+import { reasonOf } from '@/lib/traces-format';
 
 /** The traces channel, or nothing in a browser without the desktop app. */
 export const tracesApi = () => (typeof window !== 'undefined' ? window.electronAPI?.traces : undefined);
@@ -40,7 +41,7 @@ export function useTraceStats() {
   const read = useCallback(async () => {
     const api = tracesApi();
     if (!api) return;
-    try { setStats(await api.stats()); setError(null); } catch (e) { setError(e instanceof Error ? e.message : String(e)); }
+    try { setStats(await api.stats()); setError(null); } catch (e) { setError(reasonOf(e)); }
   }, []);
   useEffect(() => { void read(); }, [read]);
   useTracesChanged(read);
@@ -68,7 +69,7 @@ export function useTraceSessions(filter: TraceFilter) {
       setTotal({ sessions: res.totals.count, bytes: res.totals.bytes });
       setError(null);
     } catch (e) {
-      setError(e instanceof Error ? e.message : String(e));
+      setError(reasonOf(e));
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [key]);
@@ -81,7 +82,7 @@ export function useTraceSessions(filter: TraceFilter) {
       setSessions(prev => [...(prev ?? []), ...res.sessions]);
       setCursor(res.nextCursor);
     } catch (e) {
-      setError(e instanceof Error ? e.message : String(e));
+      setError(reasonOf(e));
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [key, cursor]);

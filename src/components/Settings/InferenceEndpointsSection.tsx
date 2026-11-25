@@ -7,7 +7,7 @@ import type { StatusTone } from '@/components/ui';
 import type { EndpointView, EndpointWait } from '@/types/electron';
 import { useEndpoints } from '@/hooks/useEndpoints';
 import { useUnsavedNote } from '@/components/Traces/hooks';
-import { clauseOf, clockOf, clockSecondsOf, healthOf, modelsLineOf, usedByOf } from '@/lib/traces-format';
+import { clauseOf, clockOf, clockSecondsOf, healthOf, modelsLineOf, reasonOf, usedByOf } from '@/lib/traces-format';
 import { SettingsCard } from './SettingsCard';
 import { SettingsRow } from './SettingsRow';
 import { Toggle } from './Toggle';
@@ -83,7 +83,7 @@ export const InferenceEndpointsSection = () => {
     try {
       r = await api.save({ id: e.id, name: e.name, baseUrl: e.baseUrl, allowTraces: !e.allowTraces, holdMaxSeconds: e.holdMaxSeconds, sendSessionHeaders: e.sendSessionHeaders, allowPlainHttp: e.allowPlainHttp });
     } catch (err) {
-      setRowError(m => ({ ...m, [e.id]: err instanceof Error ? err.message : String(err) }));
+      setRowError(m => ({ ...m, [e.id]: reasonOf(err) }));
       return;
     }
     setRowError(m => ({ ...m, [e.id]: r.ok ? '' : r.error }));
@@ -102,7 +102,7 @@ export const InferenceEndpointsSection = () => {
     try {
       r = await api.remove(id);
     } catch (err) {
-      setRemoving({ id, error: err instanceof Error ? err.message : String(err) });
+      setRemoving({ id, error: reasonOf(err) });
       return;
     }
     // A removal applies at once; when main could not write it yet, its words go above the list (the row is gone).
@@ -120,7 +120,7 @@ export const InferenceEndpointsSection = () => {
     try {
       r = await api.approve(id);
     } catch (err) {
-      setRowError(m => ({ ...m, [id]: err instanceof Error ? err.message : String(err) }));
+      setRowError(m => ({ ...m, [id]: reasonOf(err) }));
       return;
     }
     setRowError(m => ({ ...m, [id]: r.ok ? '' : r.error }));
@@ -133,7 +133,7 @@ export const InferenceEndpointsSection = () => {
     try {
       r = await api.save({ id: e.id, name: e.name, baseUrl: e.approvedBaseUrl, allowTraces: e.allowTraces, holdMaxSeconds: e.holdMaxSeconds, sendSessionHeaders: e.sendSessionHeaders, allowPlainHttp: e.allowPlainHttp });
     } catch (err) {
-      setRowError(m => ({ ...m, [e.id]: err instanceof Error ? err.message : String(err) }));
+      setRowError(m => ({ ...m, [e.id]: reasonOf(err) }));
       return;
     }
     setRowError(m => ({ ...m, [e.id]: r.ok ? '' : r.error }));
@@ -335,7 +335,7 @@ function EndpointForm({ endpoint, onDone }: { endpoint?: EndpointView; onDone: (
       onDone(saved.unsaved ? { id, unsaved: saved.unsaved } : undefined);
     } catch (err) {
       // A call that fails is said in the form's note, as a refusal is: never an uncaught rejection (the Audit's I-2).
-      setNote({ text: err instanceof Error ? err.message : String(err), tone: 'error' });
+      setNote({ text: reasonOf(err), tone: 'error' });
     } finally {
       setBusy(false);
     }
@@ -347,7 +347,7 @@ function EndpointForm({ endpoint, onDone }: { endpoint?: EndpointView; onDone: (
       const r = await api.setKey(endpoint.id, null);
       setNote(r.ok ? { text: 'the key is cleared', tone: 'idle' } : { text: r.error, tone: 'error' });
     } catch (err) {
-      setNote({ text: err instanceof Error ? err.message : String(err), tone: 'error' });
+      setNote({ text: reasonOf(err), tone: 'error' });
     }
   };
 
@@ -358,7 +358,7 @@ function EndpointForm({ endpoint, onDone }: { endpoint?: EndpointView; onDone: (
       const r = await api.refreshModels(endpoint.id);
       setNote(r.ok ? { text: `${r.models.length} models read`, tone: 'running' } : { text: `list not updated: ${clauseOf(r.error)}. The last list is kept.`, tone: 'waiting' });
     } catch (err) {
-      setNote({ text: `list not updated: ${clauseOf(err instanceof Error ? err.message : String(err))}. The last list is kept.`, tone: 'waiting' });
+      setNote({ text: `list not updated: ${clauseOf(reasonOf(err))}. The last list is kept.`, tone: 'waiting' });
     } finally {
       setReading(false);
     }
@@ -496,7 +496,7 @@ function ClosedModelsRow() {
 
   const read = useCallback(() => {
     if (!api) return;
-    void api.pairs().then(v => { setExclude(v.excludeClosedModels); setWarning(v.closedModelsWarning); }).catch(e => setError(String(e)));
+    void api.pairs().then(v => { setExclude(v.excludeClosedModels); setWarning(v.closedModelsWarning); }).catch(e => setError(reasonOf(e)));
   }, [api]);
   useEffect(() => { read(); }, [read]);
 
@@ -507,7 +507,7 @@ function ClosedModelsRow() {
     try {
       r = await api.setSettings({ excludeClosedModels: !exclude });
     } catch (e) {
-      setError(e instanceof Error ? e.message : String(e));
+      setError(reasonOf(e));
       return;
     }
     if (!r.ok) { setError(r.error); return; }
