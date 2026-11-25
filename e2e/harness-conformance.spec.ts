@@ -268,7 +268,8 @@ for (const h of HARNESSES) {
           keep({ mcpRegisteredWith: pinned ? fs.readlinkSync(path.join(pinned, h.id)) : 'resolved by name (Windows)' });
           if (process.platform !== 'win32') {
             const said = () => (fs.existsSync(appLog) ? fs.readFileSync(appLog, 'utf8') : '');
-            await expect.poll(() => said().includes(`via ${h.id} mcp add`), { timeout: 15_000, message: `${label}: the servers registered via ${h.id} mcp add, the binary under test` }).toBe(true);
+            // Registered at the first start; at the second Tars finds the servers there and runs no `mcp add`.
+            if (label === 'first') await expect.poll(() => said().includes(`via ${h.id} mcp add`), { timeout: 15_000, message: `${label}: the servers registered via ${h.id} mcp add, the binary under test` }).toBe(true);
             expect.soft(said(), `${label}: no ${h.id} mcp add failed, which falls back to Tars's own writer`).not.toContain(`${h.id} mcp add failed`);
           }
         }
