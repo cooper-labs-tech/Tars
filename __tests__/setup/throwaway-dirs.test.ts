@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
@@ -22,6 +22,13 @@ import { assertThrowaway } from './throwaway-dirs';
  * Each case bites a guard of its own (the Audit's L1 at ae56b8d6e), run as mutants (reports/traces-lows/mutants/):
  * G3 a prefix test without the separator, G4 a guard that compares the path as written (G4 is given the raw string,
  * never path.join's, which would fold the `..` first), G5 a guard that does not follow links.
+ * Added before the home's guard (QA's proof of its own home guard, 25/11). Loading electron/constants settles
+ * ~/.dorothy and ~/.tars in os.homedir() at once (core/data-dir-move.ts), so a guard called after that import comes
+ * too late:
+ * G6. A file whose first import is the home's guard, under a home outside the temporary folder: something is made in
+ *     that home before the guard throws.
+ * G7. (The gap itself.) The old order, the constants loaded and the guard called after: the home gets a link before
+ *     the guard throws. Shown on a stand-in home inside this test's own folder, never the real one.
  */
 
 let base: string;
@@ -67,6 +74,41 @@ describe('the throwaway guard', () => {
     const climbing = `${tmp}${path.sep}..${path.sep}not-tmp${path.sep}.tars-private`;
     expect(climbing.startsWith(tmp)).toBe(true);
     expect(() => assertThrowaway({ PRIVATE_DIR: climbing }, tmp)).toThrow(/PRIVATE_DIR/);
+  });
+
+  // A stand-in home outside a stand-in temporary folder, both in this test's own folder, holding a .tars as an
+  // owner's would: the variables the system reads them from point there while a fixture loads.
+  const underStandIns = async (fixture: string) => {
+    const home = path.join(outside, 'home');
+    fs.mkdirSync(path.join(home, '.tars'), { recursive: true });
+    const names = ['HOME', 'USERPROFILE', 'TMPDIR', 'TMP', 'TEMP'] as const;
+    const saved = Object.fromEntries(names.map(n => [n, process.env[n]]));
+    process.env.HOME = home;
+    process.env.USERPROFILE = home;
+    for (const n of ['TMPDIR', 'TMP', 'TEMP'] as const) process.env[n] = tmp;
+    vi.resetModules();
+    let thrown: unknown;
+    try {
+      await import(fixture);
+    } catch (err) {
+      thrown = err;
+    } finally {
+      for (const n of names) { if (saved[n] === undefined) delete process.env[n]; else process.env[n] = saved[n]; }
+      vi.resetModules();
+    }
+    return { thrown, made: fs.readdirSync(home).sort() };
+  };
+
+  it('G6. the home\'s guard first: under a home outside the temporary folder it throws, and nothing is made there', async () => {
+    const r = await underStandIns('./fixtures/throwaway/guarded-first');
+    expect(String(r.thrown)).toMatch(/HOME/);
+    expect(r.made).toEqual(['.tars']);
+  });
+
+  it.skipIf(process.platform === 'win32')('G7. the old order: the constants make a link in that home before the guard throws', async () => {
+    const r = await underStandIns('./fixtures/throwaway/guarded-after');
+    expect(String(r.thrown)).toMatch(/DATA_DIR/);
+    expect(r.made).toContain('.dorothy');
   });
 
   it.skipIf(process.platform === 'win32')('G5. a link inside it that points outside is refused', () => {
