@@ -2,7 +2,7 @@ import { hasClaudeHooks } from './end-of-turn';
 import type { AgentPermissionMode, AgentProvider } from '../types';
 import { ptyProcesses, type MessageSender } from './pty-manager';
 import { cliRunningIn } from './agent-pty';
-import { dialogOnScreen, rowsSinceLaunch } from './terminal-mirror';
+import { dialogOnScreen, endLaunchLog, rowsSinceLaunch } from './terminal-mirror';
 import { getProvider } from '../providers';
 import { lastInterruptAt } from '../services/agent-truth';
 
@@ -208,6 +208,8 @@ export function sessionStarting(agent: StartingAgent): boolean {
   if (!booting || sessionUp(agent, launch)) {
     launchesUnderWay.delete(agent.id);
     if (!booting && terminal && cliRunningIn(terminal)) sayGivenUpOnScreen(agent, terminal);
+    // The launch is over, up or given up: its log goes with it, read first above (terminal-mirror.ts, endLaunchLog).
+    endLaunchLog(terminal);
     return false;
   }
   return true;
