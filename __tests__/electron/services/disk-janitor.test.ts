@@ -1,7 +1,9 @@
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
+import { execFileSync, spawn } from 'child_process';
+import { createRequire, syncBuiltinESMExports } from 'node:module';
 import { scanJanitor, approveJanitor, type JanitorWorld, type JanitorOps } from '../../../electron/services/janitor-rules';
 import { shortIdOf } from '../../../electron/services/agent-tmp';
 import { pinPlatform } from '../providers/win-fake-disk';
@@ -72,6 +74,16 @@ import { pinPlatform } from '../providers/win-fake-disk';
  *      the janitor reaches other volumes today, and their trashes are not on the list: /Volumes/<v>/.Trashes on
  *      macOS, <mount>/.Trash-<uid> and <mount>/.Trash/<uid> on Linux, <drive>\$Recycle.Bin on Windows. A project in
  *      one has an item proposed.
+ * And from the Audit's two hardening Infos on #605 at af2ee8be2, written before the code:
+ * J28. (I-1) The uv.toml is checked by its path, then read by its path, so a file swapped in between is read all the
+ *      same: a FIFO blocks the main process on its open (forever, with no writer), and a file grown past 64 KiB is
+ *      read whole and its cache-dir taken. The open itself must never block on a FIFO, in place or swapped in, and
+ *      what is checked must be what is read. A uv.toml that is a link to a file must still be read: uv 0.13.1 follows
+ *      it (measured, bench uv-never/probe-uv-link.txt), and dotfile managers make them.
+ * J29. (I-2) A cache-dir that hides everything, which any process of the user can write: "/", a drive root, the home,
+ *      or an ancestor of the home (compared by real path, so a link to the home too) put on the never list empties
+ *      every proposal. It must be ignored, with one line logged saying so, and a cache-dir inside the home still
+ *      taken.
  */
 
 const DAY = 86_400_000;
@@ -381,8 +393,11 @@ describe('the never list where the tools really put things, from the environment
     }
   });
 
-  /** What is proposed of a project in `dir` with an idle worktree, and of a listed project whose .worktrees links into it (as J16). */
-  async function proposedIn(dir: string, label: string) {
+  /**
+   * What is proposed of a project in `dir` with an idle worktree, and of a listed project whose .worktrees links into
+   * it (as J16). `before` runs right before the scan.
+   */
+  async function proposedIn(dir: string, label: string, before?: () => void) {
     const inside = path.join(dir, 'git-v0', 'checkouts', label);
     mk(path.join(inside, '.worktrees', 'idle', '.next'));
     old(path.join(inside, '.worktrees', 'idle'), 10);
@@ -392,6 +407,7 @@ describe('the never list where the tools really put things, from the environment
     const w = world();
     w.projects = [inside, linked];
     w.worktrees = async (p) => [{ path: path.join(p, '.worktrees', 'idle'), branch: 'b/done', locked: false }];
+    before?.();
     return (await scanJanitor(w)).filter(i => i.path && (i.path.startsWith(dir) || i.path.includes(`linked-${label}`))).map(keyOf);
   }
 
@@ -486,6 +502,104 @@ describe('the never list where the tools really put things, from the environment
     expect(await proposedIn(path.join(root, 'media', 'ext', '.Trash-1000', 'files'), 'linux-volume')).toEqual([]);
     expect(await proposedIn(path.join(root, 'media', 'shared', '.Trash', '1000', 'files'), 'linux-shared')).toEqual([]);
     expect(await proposedIn(path.join(root, 'D', '$Recycle.Bin', 'S-1-5-21-1'), 'windows-drive')).toEqual([]);
+  });
+
+  const userToml = () => path.join(home, '.config', 'uv', 'uv.toml');
+  const nodeFs = createRequire(import.meta.url)('fs') as typeof fs;
+  /** Runs `act` once, right after the first check of `file` by its path (statSync), or of a descriptor (fstatSync). */
+  function afterTheCheck(file: string, act: () => void): () => void {
+    const { statSync, fstatSync } = nodeFs;
+    let acted = false;
+    const once = () => { if (!acted) { acted = true; act(); } };
+    nodeFs.statSync = ((p: fs.PathLike, ...rest: unknown[]) => {
+      const st = (statSync as (...a: unknown[]) => fs.Stats)(p, ...rest);
+      if (String(p) === file) once();
+      return st;
+    }) as typeof fs.statSync;
+    nodeFs.fstatSync = ((fd: number, ...rest: unknown[]) => {
+      const st = (fstatSync as (...a: unknown[]) => fs.Stats)(fd, ...rest);
+      once();
+      return st;
+    }) as typeof fs.fstatSync;
+    syncBuiltinESMExports();
+    return () => { nodeFs.statSync = statSync; nodeFs.fstatSync = fstatSync; syncBuiltinESMExports(); };
+  }
+  /**
+   * A writer that opens `fifo` after `ms`, then every 250 ms, and closes it: a reader blocked on its open is let go (it
+   * reads an end of file), so a blocking open costs `ms` rather than hanging the run.
+   */
+  const releaseAfter = (fifo: string, ms: number) => spawn(process.execPath, ['-e', `
+    const fs = require('fs'); let tries = 0;
+    const go = () => { try { fs.closeSync(fs.openSync(${JSON.stringify(fifo)}, fs.constants.O_WRONLY | fs.constants.O_NONBLOCK)); } catch { if (++tries < 80) setTimeout(go, 250); } };
+    setTimeout(go, ${ms});`], { stdio: 'ignore' });
+
+  it('J28. a uv.toml grown past 64 KiB after its check is not read whole, nor taken', async () => {
+    uvToml(userToml(), `cache-dir = "${path.join(root, 'grown')}"\n`);
+    let undo = () => {};
+    try {
+      const proposed = await proposedIn(path.join(root, 'grown'), 'grown', () => {
+        undo = afterTheCheck(userToml(), () => fs.appendFileSync(userToml(), '# padding\n'.repeat(7000)));
+      });
+      expect(proposed, 'the grown file was read whole and its cache-dir taken').not.toEqual([]);
+    } finally {
+      undo();
+    }
+  });
+
+  it.skipIf(process.platform === 'win32')('J28. a FIFO swapped in after the check: nothing blocks, and what was checked is what is read', async () => {
+    uvToml(userToml(), `cache-dir = "${path.join(root, 'from-checked')}"\n`);
+    const releaser = releaseAfter(userToml(), 3000);
+    let undo = () => {};
+    const started = Date.now();
+    try {
+      const proposed = await proposedIn(path.join(root, 'from-checked'), 'swapped', () => {
+        undo = afterTheCheck(userToml(), () => { fs.renameSync(userToml(), `${userToml()}.checked`); execFileSync('mkfifo', [userToml()]); });
+      });
+      expect(Date.now() - started, 'the open blocked on the FIFO swapped in').toBeLessThan(1500);
+      expect(proposed, 'what was read is not what was checked').toEqual([]);
+    } finally {
+      undo();
+      releaser.kill();
+    }
+  });
+
+  it.skipIf(process.platform === 'win32')('J28. a uv.toml that is a FIFO: its open does not block', async () => {
+    fs.mkdirSync(path.dirname(userToml()), { recursive: true });
+    execFileSync('mkfifo', [userToml()]);
+    const releaser = releaseAfter(userToml(), 3000);
+    const started = Date.now();
+    try {
+      expect(await proposedIn(path.join(root, 'elsewhere-fifo'), 'fifo')).not.toEqual([]);
+      expect(Date.now() - started, 'the open blocked on the FIFO').toBeLessThan(1500);
+    } finally {
+      releaser.kill();
+    }
+  });
+
+  it('J28. a uv.toml that is a link to a file is read, as uv reads it', async () => {
+    uvToml(path.join(root, 'dotfiles', 'uv.toml'), `cache-dir = "${path.join(root, 'from-linked')}"\n`);
+    fs.mkdirSync(path.dirname(userToml()), { recursive: true });
+    fs.symlinkSync(path.join(root, 'dotfiles', 'uv.toml'), userToml());
+    expect(await proposedIn(path.join(root, 'from-linked'), 'linked-toml')).toEqual([]);
+  });
+
+  it('J29. a cache-dir of "/", the home, an ancestor of it or a link to it is ignored, and said once; one inside the home is taken', async () => {
+    fs.symlinkSync(home, path.join(root, 'home-link'));
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    try {
+      for (const [n, value] of ['/', home, path.dirname(home), path.join(root, 'home-link')].entries()) {
+        uvToml(userToml(), `cache-dir = "${value}"\n`);
+        warn.mockClear();
+        expect(await proposedIn(path.join(root, `elsewhere-wide-${n}`), `wide-${n}`), `cache-dir = "${value}" hid every proposal`).not.toEqual([]);
+        const said = warn.mock.calls.map(c => c.join(' ')).filter(l => l.includes(userToml()));
+        expect(said, `cache-dir = "${value}" ignored without a word, or said more than once`).toHaveLength(1);
+        expect(said[0]).toContain(value);
+      }
+      uvToml(userToml(), `cache-dir = "${path.join(home, 'my-uv-cache')}"\n`);
+      expect(await proposedIn(path.join(home, 'my-uv-cache'), 'inside-home'), 'a cache-dir inside the home was ignored').toEqual([]);
+    } finally {
+      warn.mockRestore();
+    }
   });
 });
 
