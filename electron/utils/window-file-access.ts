@@ -5,7 +5,7 @@ import { DATA_DIR, PRIVATE_DIR, VAULT_DIR } from '../constants';
 import { isUnder, samePath } from '../platform/path-compare';
 import { coversHome } from './home-root';
 import { isHardLinkInto, isWithinDir } from './path-identity';
-import { inCredentialPlace, landsUnderSafeRoot, realTarget } from './real-target';
+import { inCredentialPlace, inCredentialPlaceByName, landsUnderSafeRoot, realTarget } from './real-target';
 
 /**
  * What the window may read, write, and have local-file:// serve (the Audit's
@@ -80,15 +80,22 @@ const projectRoots = (projects: string[]) => projects.filter((p) => typeof p ===
 /** The CLIs' folders the window reads by their default paths: a project may be one, or lie in one. */
 const CLI_FOLDERS = ['.claude', '.codex', '.gemini', '.grok'];
 
+/**
+ * The name of the home's folder `p` is in or is, under the home as spelled or where it really lies: none for the home
+ * itself or a path outside it. Outside is `..` and what is under it, never a folder whose name starts with two dots.
+ */
+function homeFolderNames(p: string): string[] {
+  const homes = [home(), realTarget(home())].filter((h): h is string => !!h);
+  return homes.flatMap((h) => {
+    const rel = path.relative(h, p);
+    if (!rel || rel === '..' || rel.startsWith('..' + path.sep) || path.isAbsolute(rel)) return [];
+    return [rel.split(path.sep)[0]];
+  });
+}
+
 /** `p` is in a folder of the home whose name starts with a dot, other than the four CLI folders, or is one. */
 function inOtherDotFolderOfHome(p: string): boolean {
-  const homes = [home(), realTarget(home())].filter((h): h is string => !!h);
-  return homes.some((h) => {
-    const rel = path.relative(h, p);
-    if (!rel || rel.startsWith('..') || path.isAbsolute(rel)) return false;
-    const first = rel.split(path.sep)[0];
-    return first.startsWith('.') && !CLI_FOLDERS.includes(first.toLowerCase());
-  });
+  return homeFolderNames(p).some((first) => first.startsWith('.') && !CLI_FOLDERS.includes(first.toLowerCase()));
 }
 
 /**
@@ -102,10 +109,26 @@ function inOtherDotFolderOfHome(p: string): boolean {
 export function projectRefusal(p: unknown): string | undefined {
   if (typeof p !== 'string' || !p) return 'A project is a folder named by its full path.';
   const resolved = path.resolve(p);
+  return refusalOf(resolved, () => realTarget(resolved), inCredentialPlace);
+}
+
+/**
+ * projectRefusal for fs:list-projects, which runs on the main thread for every project at each listing: the project is
+ * followed asynchronously, and the places are then told by their names, the project's real path against the places'
+ * own (inCredentialPlaceByName). A place reached under another name may go untold here; each use still judges the
+ * project with projectRefusal, by identity too.
+ */
+export async function projectRefusalAsync(p: string): Promise<string | undefined> {
+  const resolved = path.resolve(p);
+  const real = projectRoots([resolved]).length > 0 ? await fs.promises.realpath(resolved).catch(() => undefined) : undefined;
+  return refusalOf(resolved, () => real, inCredentialPlaceByName);
+}
+
+function refusalOf(resolved: string, realOf: () => string | undefined, credential: (spelled: string, real: string) => boolean): string | undefined {
   if (projectRoots([resolved]).length === 0) return "Tars's own folders cannot be a project.";
-  const real = realTarget(resolved);
+  const real = realOf();
   if (!real) return 'This folder cannot be followed to where it really lies.';
-  if (inCredentialPlace(resolved, real)) {
+  if (credential(resolved, real)) {
     return 'A folder of credentials, or an application folder of the home (~/Library, AppData), cannot be a project.';
   }
   if (inOtherDotFolderOfHome(resolved) || inOtherDotFolderOfHome(real)) {
@@ -196,11 +219,7 @@ export function windowMaySearch(root: unknown, projects: string[]): boolean {
 
 /** `p` is in a folder of the home whose name starts with a dot (a CLI's settings, a credential place), or is one. */
 function inDotFolderOfHome(p: string): boolean {
-  const homes = [home(), realTarget(home())].filter((h): h is string => !!h);
-  return homes.some((h) => {
-    const rel = path.relative(h, p);
-    return !!rel && !rel.startsWith('..') && !path.isAbsolute(rel) && rel.split(path.sep)[0].startsWith('.');
-  });
+  return homeFolderNames(p).some((first) => first.startsWith('.'));
 }
 
 /**

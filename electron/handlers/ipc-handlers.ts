@@ -41,7 +41,7 @@ import { projectFolders } from '../services/project-index';
 import { marketplaceListing } from '../services/skills-marketplace';
 import { skillsProblem } from '../utils/skill-name';
 import { resolveWorktreePath } from '../utils/worktree-path';
-import { landsUnderSafeRoot } from '../utils/real-target';
+import { inCredentialPlace, landsUnderSafeRoot, realTarget } from '../utils/real-target';
 import { writeAtomicSync } from '../utils/secret-file';
 import { getProvider, getAllProviders } from '../providers';
 import { planModeRefusal } from '../providers/plan-mode';
@@ -86,7 +86,7 @@ import { probeVersion } from '../core/version-probe';
 import { readCodexModels } from '../providers/codex-cli';
 import { cliKeyStates, withCliKey } from '../services/cli-keys';
 import { keepSecrets, secretStates, setSecret, settingsForWindow, type SecretField } from '../services/settings-secrets';
-import { isSecretFile, projectRefusal, projectRootsFor, windowMayRead, windowMayReadUnder, windowMaySearch, windowMayWrite } from '../utils/window-file-access';
+import { isSecretFile, projectRefusal, projectRefusalAsync, projectRootsFor, windowMayRead, windowMayReadUnder, windowMaySearch, windowMayWrite } from '../utils/window-file-access';
 import { rememberPicked } from '../utils/picked-files';
 import { mcpConfigPathFor } from '../services/mcp-roles';
 import { registerFirstRunHandlers } from './first-run-handlers';
@@ -2322,7 +2322,7 @@ function registerFileSystemHandlers(deps: IpcHandlerDependencies): void {
         seen.add(p);
         if (!await fs.promises.access(p).then(() => true, () => false)) return;
         // One the project rule now refuses stays listed, with why: the window reads nothing of it (2.0.7).
-        const refused = projectRefusal(p);
+        const refused = await projectRefusalAsync(p);
         projects.push({ id, path: p, name: path.basename(p), ...(custom ? { custom: true } : {}), ...(refused ? { refused } : {}) });
       };
 
@@ -2410,9 +2410,12 @@ function registerFileSystemHandlers(deps: IpcHandlerDependencies): void {
 
     // Skills can be symlinks out of ~/.claude/skills, so allow the real paths
     // the app resolved rather than only the directory they are linked from.
+    // Those and the plugins' paths come from folders and a file agents write,
+    // so they are judged as the projects are (2.0.7); one in ~/.claude or
+    // ~/.agents lies under a root above already.
     try {
       for (const skill of await getClaudeSkills()) {
-        if (skill?.path) roots.push(skill.path);
+        if (skill?.path) projects.push(skill.path);
       }
     } catch { /* skills unreadable, skip */ }
 
@@ -2445,7 +2448,10 @@ function registerFileSystemHandlers(deps: IpcHandlerDependencies): void {
           // really lands: a link in the base or in `rel` may lead out of every
           // root, except one file link to a markdown file (utils/real-target.ts).
           // Never a secret, whatever folder it is asked of (2.0.4).
+          // Nor anything in a folder of credentials, as spelled or where it
+          // really lies, as fs:read-text-file judges a target (2.0.7).
           if (fs.existsSync(target) && fs.statSync(target).isFile() && !isSecretFile(target)
+            && !inCredentialPlace(target, realTarget(target) ?? null)
             && landsUnderSafeRoot(target, projectRootsFor(target, fixed, projects), (root, t) => t === root || t.startsWith(root + path.sep), { linkedMarkdown: true })) {
             out[target] = fs.readFileSync(target, 'utf-8');
           }

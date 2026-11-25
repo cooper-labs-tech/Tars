@@ -804,8 +804,10 @@ and every `.env.*`, `.netrc`, a key), no CLI settings that hold a key (Claude
 Code's `settings.json` and `settings.local.json`, whose `env` may set one, Grok
 CLI's `user-settings.json`), and nothing in a folder of credentials (`~/.ssh`,
 `~/.gnupg`, `~/.aws`, `~/.config`, `~/.kube`, `~/.docker`, and since 2.0.7 the
-home's application folders, `~/Library` but for its documents folders,
-`Mobile Documents` and `CloudStorage`, and `AppData`), as spelled or where
+home's application folders, `~/Library` but for iCloud Drive's own folder
+(`Mobile Documents/com~apple~CloudDocs`), Obsidian's folder in it
+(`Mobile Documents/iCloud~md~obsidian/Documents`) and the cloud drives
+(`CloudStorage`), and `AppData`), as spelled or where
 it really lies, whatever names that folder as a project: a page could add any
 folder as a project and then read it, GitHub's token in `~/.config/gh` or a
 cluster's in `~/.kube` (the Audit's L1 on #466). `fs:add-custom-project` refuses
@@ -815,7 +817,14 @@ Since the projects' list lives in `~/.tars`, which every agent can write, each
 read judges its own target as well, and each use judges the projects the target
 lies in: a project the rule now refuses is read (`fs:read-text-file`,
 `fs:read-project-files`), written and searched by nothing, and
-`fs:list-projects` lists it with why.
+`fs:list-projects` lists it with why. `fs:read-project-files` judges the same
+way the folders it takes from the skills (`~/.claude/skills`, `~/.agents/skills`)
+and the plugins' list (`~/.claude/plugins/installed_plugins.json`), which agents
+write too. `fs:list-projects` follows each project without blocking the window
+and tells the places by their names; the uses judge them by identity as well. A
+limit: an `AppData` that Windows folder redirection moved to a share is not
+under the home, and is not a folder of credentials to these rules. It is not
+looked up, since every read would then ask the share.
 
 Since 2.0.7 the list holds seven more, with the rules of the same file:
 - `obsidian:addVault`, `obsidian:readFile`, `obsidian:writeFile` and `obsidian:scan`. A vault is refused when it is

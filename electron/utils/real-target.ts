@@ -3,6 +3,7 @@ import * as os from 'os';
 import * as path from 'path';
 import { DATA_DIR_NAME, PRIVATE_DIR_NAME } from '../constants';
 import { LEGACY_DATA_DIR_NAME } from '../core/data-dir-move';
+import { isUnder, samePath } from '../platform/path-compare';
 import { isWithinDir } from './path-identity';
 import { fileId, isUnderSafeRoot, withoutHomeCover, type HomeRootDeps } from './home-root';
 
@@ -125,9 +126,14 @@ function blockedPlaces(home: string): string[] {
   ].map(name => path.join(home, name));
 }
 
-/** Inside ~/Library, the folders of the user's own documents, not of an application's: iCloud Drive, the cloud drives. */
+/**
+ * Inside ~/Library, the folders of the user's own documents, not of an application's: iCloud Drive's own folder,
+ * Obsidian's folder in iCloud Drive (where Obsidian keeps every vault it syncs through iCloud), and the cloud drives.
+ * The rest of Mobile Documents is applications' iCloud storage, as Application Support is their local one.
+ */
 function userDocuments(home: string): string[] {
-  return [path.join(home, 'Library', 'Mobile Documents'), path.join(home, 'Library', 'CloudStorage')];
+  const icloud = path.join(home, 'Library', 'Mobile Documents');
+  return [path.join(icloud, 'com~apple~CloudDocs'), path.join(icloud, 'iCloud~md~obsidian', 'Documents'), path.join(home, 'Library', 'CloudStorage')];
 }
 
 const underPlace = (p: string, place: string) => p === place || p.startsWith(place + path.sep) || isWithinDir(p, place);
@@ -150,6 +156,21 @@ export function inCredentialPlace(target: string, real: string | null, deps: { h
   const own = new Set(['.claude', DATA_DIR_NAME, PRIVATE_DIR_NAME].map(name => path.join(home, name)));
   const docs = userDocuments(home);
   return blockedPlaces(home).filter(place => !own.has(place)).some(place => [target, real].some(p => !!p && inBlocked(p, place, docs)));
+}
+
+/**
+ * inCredentialPlace told by names only, for a caller that followed `real` itself without blocking (fs:list-projects):
+ * each place as spelled under the home and under the home's real path, compared as the system compares paths. It looks
+ * at no disk but the home's, so a place reached under another name goes untold; the uses judge by identity too.
+ */
+export function inCredentialPlaceByName(target: string, real: string, deps: { home?: string } = {}): boolean {
+  const home = deps.home ?? os.homedir();
+  const homes = [...new Set([home, realPath(home) ?? home])];
+  const own = new Set(['.claude', DATA_DIR_NAME, PRIVATE_DIR_NAME]);
+  const places = homes.flatMap(h => blockedPlaces(h).filter(place => !own.has(path.basename(place))));
+  const docs = homes.flatMap(h => userDocuments(h));
+  const under = (p: string, place: string) => samePath(p, place) || isUnder(p, place);
+  return places.some(place => [target, real].some(p => under(p, place) && !docs.some(d => under(p, d))));
 }
 
 const MARKDOWN = /\.(md|markdown|mdx)$/i;
