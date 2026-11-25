@@ -14,6 +14,13 @@ interface UseAgentDialogTerminalOptions {
   skipHistoricalOutput: boolean;
 }
 
+/** A field holds the focus: an input, a textarea, a select or an editable element, xterm's own textarea aside. */
+function fieldHasFocus(): boolean {
+  const el = document.activeElement;
+  if (!(el instanceof HTMLElement) || el.classList.contains('xterm-helper-textarea')) return false;
+  return el.isContentEditable || el instanceof HTMLInputElement || el instanceof HTMLTextAreaElement || el instanceof HTMLSelectElement;
+}
+
 export function useAgentDialogTerminal({
   open,
   agent,
@@ -50,6 +57,18 @@ export function useAgentDialogTerminal({
     setIsAtBottom(true);
 
     let cancelled = false;
+
+    // The terminal takes the focus a moment after it starts, but never over the user: a key typed or a click since the
+    // window opened, or a field of the window holding the focus, and the focus stays where the user put it. Before,
+    // keys typed into a field in that moment went to the agent, a running one's prompt included.
+    let userMoved = false;
+    const noteMove = () => { userMoved = true; };
+    document.addEventListener('keydown', noteMove, true);
+    document.addEventListener('pointerdown', noteMove, true);
+    const stopNoting = () => {
+      document.removeEventListener('keydown', noteMove, true);
+      document.removeEventListener('pointerdown', noteMove, true);
+    };
 
     const initTerminal = async () => {
       await new Promise((resolve) => setTimeout(resolve, 150));
@@ -128,7 +147,11 @@ export function useAgentDialogTerminal({
         // window would not have closed it (a lone Escape no longer wakes it,
         // #322). A click in the terminal is how to type there. Frame: `Agent
         // asleep · and how it wakes`.
-        setTimeout(() => { fitAndResize(); if (agent.status !== 'asleep') term.focus(); }, 350);
+        setTimeout(() => {
+          fitAndResize();
+          stopNoting();
+          if (agent.status !== 'asleep' && !userMoved && !fieldHasFocus()) term.focus();
+        }, 350);
 
         // Keys that reach no terminal (an idle agent has none since #164) are
         // said so in the panel rather than dropped. See keySender.
@@ -200,6 +223,7 @@ export function useAgentDialogTerminal({
 
     return () => {
       cancelled = true;
+      stopNoting();
       if (xtermRef.current) {
         const term = xtermRef.current;
         xtermRef.current = null;
