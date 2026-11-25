@@ -616,19 +616,30 @@ const RENDERING_ARGS = ['--lang=fr-FR', ...(onWindows ? ['--disable-lcd-text'] :
  * unless the spec's env names another, or none with ''. PATH is the sandbox's
  * own (sandboxPath): its four stand-in CLIs, and nothing of the account's home,
  * unless the spec's env names another. git has an identity of the sandbox's
- * own (writeSandboxGitIdentity), unless the spec wrote one.
+ * own (writeSandboxGitIdentity), unless the spec wrote one. XDG_CONFIG_HOME is
+ * the sandbox's `.config`, unless the spec's env names another: a runner's own
+ * reached the app, and through it git's config and the CLIs' (the Audit's I-1
+ * on #643).
+ *
+ * The HOME must lie inside a folder the specs make their sandboxes in, judged
+ * as removeHome judges it, or nothing is written there and no app is started
+ * (the Audit's I-2 on #643): every write above goes into it.
  *
  * `profile` names the profile folder in the sandbox, `electron-profile` unless
  * given: Tars is one instance per profile (core/desktop-lifecycle.ts), so a
  * spec that runs two Tars on one home gives the second a profile of its own.
  */
 export async function launchSandboxed(electron, sandboxHome, { env = {}, profile = 'electron-profile', ...options } = {}) {
+  const sandbox = underRoots(sandboxHome, sandboxRoots());
+  if (!sandbox.inside) {
+    throw new Error(`launchSandboxed: ${sandboxHome} is not inside a folder the specs make their sandboxes in (${sandbox.real.join(', ')}): nothing was written there and no app was started`);
+  }
   writeSandboxGitIdentity(sandboxHome);
   const app = await electron.launch({
     ...options,
     // A packed app (executablePath, e2e/sandbox-build.packed.spec.ts) runs its own code: no '.' to name it.
     args: [...(options.executablePath ? [] : ['.']), `--user-data-dir=${path.join(sandboxHome, profile)}`, ...RENDERING_ARGS],
-    env: withSandboxPath({ ...inheritable(process.env), PATH: sandboxPath(sandboxHome), DOROTHY_TAILSCALE_BIN: writeFakeTailscale(sandboxHome), ...env, ...windowsHome(sandboxHome), HOME: sandboxHome, CFFIXED_USER_HOME: sandboxHome }, env),
+    env: withSandboxPath({ ...inheritable(process.env), PATH: sandboxPath(sandboxHome), DOROTHY_TAILSCALE_BIN: writeFakeTailscale(sandboxHome), XDG_CONFIG_HOME: path.join(sandboxHome, '.config'), ...env, ...windowsHome(sandboxHome), HOME: sandboxHome, CFFIXED_USER_HOME: sandboxHome }, env),
   });
   // What the app inherited, checked the way its folders are below: a run
   // started by an agent inside Tars carries that agent's CLAUDE_MGR_API_URL
@@ -900,6 +911,24 @@ function landing(p) {
 }
 
 /**
+ * Whether `dir` lies strictly under one of `roots`, judged by where it lands
+ * through its links and its `..` (a root itself is not under it), and the
+ * roots as they land, for the refusal's words. removeHome's judgement, which
+ * launchSandboxed makes before it writes into a HOME.
+ */
+function underRoots(dir, roots) {
+  const where = landing(dir);
+  const real = roots.flatMap((root) => {
+    try {
+      return [fs.realpathSync.native(root)];
+    } catch {
+      return [];
+    }
+  });
+  return { inside: real.some((root) => where.startsWith(root + path.sep)), real };
+}
+
+/**
  * Removes a spec's sandbox HOME once its app has closed. A process the app
  * started can still be writing there: `amp --version`'s log, a hook's, and
  * until #383 a `claude auth status` that outlived the quit and wrote
@@ -915,15 +944,8 @@ function landing(p) {
  * deleting (the Audit's L1 on #385). Tests: __tests__/e2e-remove-home.test.ts.
  */
 export async function removeHome(dir, roots = sandboxRoots()) {
-  const where = landing(dir);
-  const real = roots.flatMap((root) => {
-    try {
-      return [fs.realpathSync.native(root)];
-    } catch {
-      return [];
-    }
-  });
-  if (!real.some((root) => where.startsWith(root + path.sep))) {
+  const { inside, real } = underRoots(dir, roots);
+  if (!inside) {
     throw new Error(`removeHome: ${dir} is not inside a folder the specs make their sandboxes in (${real.join(', ')}): nothing was removed`);
   }
   for (let attempt = 1; ; attempt++) {
