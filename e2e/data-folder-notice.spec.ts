@@ -11,7 +11,7 @@ import { DEV_URL, apiPort } from './ports.mjs';
  * light copy). The real app on a sandbox HOME where Tars cannot settle on ~/.tars, Finder stood in for in the main
  * process. Asserted, once with the classic shell and once with the new interface:
  * 1. Two data folders, ~/.tars empty and ~/.dorothy holding the agents and settings: the line across the top of the
- *    main column says main's notice, that Tars uses ~/.dorothy; show folder opens that folder; dismiss hides it.
+ *    main column says main's notice, that Tars uses ~/.dorothy; show folder shows that folder; dismiss hides it.
  * 2. A file standing at ~/.tars: Tars could not move ~/.dorothy there, goes on from it, and says it tries again.
  * Red on 71cf07f2 (#473's head, the window before this): no line at all.
  * The artefact: values.json (the lines read, what Tars would have opened), the screenshots, and with E2E_TRACE=on the
@@ -37,6 +37,8 @@ async function standInForFinder(app: ElectronApplication) {
     const g = globalThis as unknown as { __e2eOpened: string[] };
     g.__e2eOpened = [];
     shell.openPath = (async (p: string) => { g.__e2eOpened.push(p); return ''; }) as typeof shell.openPath;
+    // Since 2.0.7 a folder is shown in its folder, never opened (shell:reveal): stood in for as well.
+    shell.showItemInFolder = ((p: string) => { g.__e2eOpened.push(p); }) as typeof shell.showItemInFolder;
   });
 }
 const opened = (app: ElectronApplication) => app.evaluate(() => (globalThis as unknown as { __e2eOpened: string[] }).__e2eOpened);
