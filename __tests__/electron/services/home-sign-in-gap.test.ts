@@ -32,13 +32,19 @@ import { homeSignInGap } from '../../../electron/services/home-sign-in-gap';
  *
  * Written before the code, on the Audit's read of d69fb357f (25/11):
  * 4. (I-1) gemini-credentials.json counted where gemini does not read it: with encrypted storage off, gemini reads
- *    oauth_creds.json only; under its file storage, gemini-credentials.json only.
+ *    oauth_creds.json only (under its file storage it reads both, 9).
  * 6. (L1) The storage read wrong from the variables: encrypted on is the keychain, unless file storage is forced too;
  *    file storage forced alone, or any value but "true", is the plain file.
  * 7. (L1) At a launch, encrypted storage on in Tars's environment, or only in the login shell (an rc file), not taken
  *    for the keychain: a line then claims Tars's home is not signed in.
  * 8. (I-2) A login shell started before the cheap checks: a key from Settings, Tars's home signed in, or the keychain
  *    possible by Tars's own environment each settle it with none.
+ *
+ * Written before the code, on the Audit's read of e2b9af494 (its L1, 25/11): with encrypted storage on and its store
+ * empty, gemini 0.70.0 moves an existing .gemini/oauth_creds.json into the store (loadCredentials falls back to
+ * migrateFromFileStorage, read in its bundle), so under its file storage either file is a sign-in.
+ * 9. An oauth_creds.json alone, under file storage, not counted: a line claims a home signed in is not, or none is
+ *    said where Tars's home holds only that file and the shell's home is signed in.
  */
 
 let root: string;
@@ -98,12 +104,14 @@ describe("gemini's encrypted storage (4, 5)", () => {
     expect(await withStorage(tars, theirs, 'file')).toBeUndefined(); // Tars's home holds it
   });
 
-  it("4. under its file storage, an oauth_creds.json alone is not gemini's sign-in", async () => {
+  it('9. under its file storage, an oauth_creds.json alone is a sign-in too: gemini moves it into its empty store', async () => {
     const tars = path.join(root, 'tars-home');
     const theirs = path.join(root, 'own-home');
     signIn('gemini', theirs);
-    expect(await withStorage(tars, theirs, 'file')).toBeUndefined();
+    expect(await withStorage(tars, theirs, 'file')).toContain('~/own-home');
     expect(await withStorage(tars, theirs, 'plain')).toContain('~/own-home');
+    signIn('gemini', tars);
+    expect(await withStorage(tars, theirs, 'file')).toBeUndefined(); // Tars's home holds it: nothing to say
   });
 
   it('5. with the keychain possible, nothing is claimed, said by Tars\'s environment or only as the CLI runs', async () => {
