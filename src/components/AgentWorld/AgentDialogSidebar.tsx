@@ -57,6 +57,8 @@ interface AgentDialogSidebarProps {
   customSecondaryPath: string;
   onCustomSecondaryPathChange: (value: string) => void;
   onSetSecondaryProject: (path: string | null) => void;
+  /** Why the last folder was not set: main's refusal word for word, or the failed call's message. */
+  secondaryError?: string | null;
   onBrowseFolder?: () => Promise<string | null>;
   // Settings
   editPermissionMode: AgentPermissionMode;
@@ -83,6 +85,7 @@ export const AgentDialogSidebar = memo(function AgentDialogSidebar({
   customSecondaryPath,
   onCustomSecondaryPathChange,
   onSetSecondaryProject,
+  secondaryError,
   onBrowseFolder,
   editPermissionMode,
   isSavingSettings,
@@ -175,6 +178,7 @@ export const AgentDialogSidebar = memo(function AgentDialogSidebar({
             customSecondaryPath={customSecondaryPath}
             onCustomPathChange={onCustomSecondaryPathChange}
             onSetSecondaryProject={onSetSecondaryProject}
+            error={secondaryError}
             onBrowseFolder={onBrowseFolder}
           />
         </div>

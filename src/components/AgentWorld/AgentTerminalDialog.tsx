@@ -169,22 +169,32 @@ export default function AgentTerminalDialog({
     setExpandedPanels(prev => new Set(prev).add(panel));
   }, []);
 
+  /** Why the last folder was not set: main's refusal word for word, or the failed call's message, under the field. */
+  const [secondaryError, setSecondaryError] = useState<string | null>(null);
+
   const handleSetSecondaryProject = useCallback(async (path: string | null) => {
-    if (!agent) return;
-    if (path && window.electronAPI?.agent?.sendInput) {
+    if (!agent || !window.electronAPI?.agent?.setSecondaryProject) return;
+    // Main answers first: a folder it refuses (one its CLI would never see) keeps the field filled, says why under it,
+    // and is never typed into the terminal.
+    let result: Awaited<ReturnType<typeof window.electronAPI.agent.setSecondaryProject>>;
+    try {
+      result = await window.electronAPI.agent.setSecondaryProject({ id: agent.id, secondaryProjectPath: path });
+    } catch (err) {
+      setSecondaryError(err instanceof Error ? err.message : String(err));
+      return;
+    }
+    if (!result.success) {
+      setSecondaryError(result.error || 'The folder was not set.');
+      return;
+    }
+    setSecondaryError(null);
+    setCustomSecondaryPath('');
+    if (result.agent && onAgentUpdated) onAgentUpdated(result.agent);
+    if (path && window.electronAPI.agent.sendInput) {
       try {
         await window.electronAPI.agent.sendInput({ id: agent.id, input: `/add-dir ${path}\r` });
       } catch (err) {
         console.error('Failed to send /add-dir command:', err);
-      }
-    }
-    if (window.electronAPI?.agent?.setSecondaryProject) {
-      try {
-        const result = await window.electronAPI.agent.setSecondaryProject({ id: agent.id, secondaryProjectPath: path });
-        if (result.success && result.agent && onAgentUpdated) onAgentUpdated(result.agent);
-        if (result.success) setCustomSecondaryPath('');
-      } catch (err) {
-        console.error('Failed to set secondary project:', err);
       }
     }
   }, [agent, onAgentUpdated]);
@@ -347,6 +357,7 @@ export default function AgentTerminalDialog({
                 customSecondaryPath={customSecondaryPath}
                 onCustomSecondaryPathChange={setCustomSecondaryPath}
                 onSetSecondaryProject={handleSetSecondaryProject}
+                secondaryError={secondaryError}
                 onBrowseFolder={onBrowseFolder}
                 editPermissionMode={editPermissionMode}
                 isSavingSettings={isSavingSettings}
