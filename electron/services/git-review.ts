@@ -1,6 +1,7 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import { safeGit } from '../utils/safe-git';
+import { windowMayReadUnder } from '../utils/window-file-access';
 
 /**
  * What an agent actually changed.
@@ -420,10 +421,18 @@ export async function fileDiff(repoPath: string, file: string, baseBranch?: stri
     return '';
   }
   if (!within(fs.realpathSync(repoPath), folder)) throw new Error('invalid path');
+  // What is read off the disk is judged as the window's other reads are (2.0.7). A link is not read, only shown below.
+  let link = false;
+  try {
+    link = fs.lstatSync(full).isSymbolicLink();
+  } catch { /* gone: answered below */ }
+  if (!link && !windowMayReadUnder(full, repoPath)) {
+    throw new Error('This file is not shown: it is named like a credential, or lies in a folder of credentials.');
+  }
   // A generated bundle can be megabytes, and nobody reviews that in a panel.
   try {
     // A link is shown as git shows one, its target path: never what it points to.
-    if (fs.lstatSync(full).isSymbolicLink()) return `--- /dev/null\n+++ b/${file}\n+${fs.readlinkSync(full)}`;
+    if (link) return `--- /dev/null\n+++ b/${file}\n+${fs.readlinkSync(full)}`;
     if (fs.statSync(full).size > MAX_FILE_PATCH_BYTES) {
       return `+++ b/${file}\n… file is too large to show (${Math.round(fs.statSync(full).size / 1024)} KB)`;
     }

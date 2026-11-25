@@ -601,7 +601,13 @@ agent's folder. `review:diff`, `review:file` and `review:repo` took any path the
 window named, and ran git there. The scan of a project follows no link, so a
 link to the home in a project brings none of its repositories in, and reads no
 file outside git; the search matches names and paths Tars already holds, so a
-query is text, never an option or a pattern.
+query is text, never an option or a pattern. Since 2.0.7 a project and a
+repository are judged by the window's project rule where they are used: a
+project it refuses is neither scanned nor searched (`review:repositories`
+answers its reason under the code `refused_project`), and a repository in such
+a folder is refused with the reason. The file `review:file` reads off the disk,
+an untracked one, is judged as the window's other reads are, so no file named
+like a credential is shown, ignored by git or not.
 
 ## 5. What is where on disk
 

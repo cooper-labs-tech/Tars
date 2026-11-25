@@ -4,6 +4,7 @@ import * as path from 'path';
 import { DATA_DIR } from '../constants';
 import { agents } from '../core/agent-manager';
 import { broadcastToAllWindows } from '../utils/broadcast';
+import { projectRefusal, projectRefusalAsync } from '../utils/window-file-access';
 import {
   scanProject, repositoryState, searchRepositories, mayReview,
   type ProjectScan, type RepositoryState,
@@ -16,6 +17,9 @@ import {
  * agent's own folder (the Audit's R2.4). What a scan finds, and what a search
  * matches, come back as events, as they are found, under the id the call
  * answered; each project's last scan is kept, and read again on Refresh.
+ * Both lists are files agents write, so a project, and a repository, is judged
+ * by the window's project rule where it is used (2.0.7): only that one is looked
+ * at, so a project on a share nobody answers for holds nothing else up.
  */
 
 /** The projects Tars knows: its list and its agents'. */
@@ -46,7 +50,10 @@ export function reviewablePaths(): Set<string> {
 
 /** The refusal Review's older channels answer for a path Tars did not find. */
 export function refuseUnknownRepository(repoPath: unknown): { success: false; error: string } | null {
-  return mayReview(repoPath, reviewablePaths()) ? null : { success: false, error: 'Not a repository Tars found in a project or an agent\'s folder.' };
+  if (!mayReview(repoPath, reviewablePaths())) return { success: false, error: 'Not a repository Tars found in a project or an agent\'s folder.' };
+  // The rule's places hold what is under them: a repository in a refused project is refused by its own path.
+  const refusal = projectRefusal(repoPath);
+  return refusal ? { success: false, error: refusal } : null;
 }
 
 const running = new Map<string, AbortController>();
@@ -103,6 +110,8 @@ export function registerReviewHandlers(): void {
   ipcMain.handle('review:repositories', async (_e, p: { projectPath?: unknown; refresh?: unknown } = {}) => {
     const projectPath = typeof p.projectPath === 'string' ? p.projectPath : '';
     if (!knownProjects().includes(projectPath)) return { error: 'Not a project Tars knows.', code: 'unknown_project' };
+    const refusal = await projectRefusalAsync(projectPath);
+    if (refusal) return { error: refusal, code: 'refused_project' };
     const last = kept.get(projectPath);
     const cached = last ? { state: last.scan.state, skipped: last.scan.skipped, repositories: [...last.states.values()] } : undefined;
     if (last && p.refresh !== true) return { cached };
@@ -132,6 +141,7 @@ export function registerReviewHandlers(): void {
       const entries: Array<{ project: string; repos: RepositoryState[] }> = [];
       for (const project of knownProjects()) {
         if (controller.signal.aborted) break;
+        if (await projectRefusalAsync(project)) continue;
         const k = kept.get(project) ?? await scanAndRead(project, `${searchId}-scan`, controller.signal);
         entries.push({ project, repos: [...k.states.values()] });
       }
