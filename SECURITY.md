@@ -808,7 +808,25 @@ it really lies, whatever names that folder as a project: a page could add any
 folder as a project and then read it, GitHub's token in `~/.config/gh` or a
 cluster's in `~/.kube` (the Audit's L1 on #466). `fs:add-custom-project` refuses
 such a folder, and since the projects' list lives in `~/.tars`, which every
-agent can write, each read judges its own target as well. `app:getSettings` and `settings:updated` carry no secret: a
+agent can write, each read judges its own target as well.
+
+Since 2.0.7 the list holds seven more, with the rules of the same file:
+- `obsidian:addVault`, `obsidian:readFile`, `obsidian:writeFile` and `obsidian:scan`. A vault is refused when it is
+  the home or a folder above it, a folder `fs:add-custom-project` refuses, or a folder of the home whose name starts
+  with a dot (a CLI's settings, a credential place). It is judged when added and at every use, since
+  `obsidianVaultPaths` lives in `~/.tars/app-settings.json`, which every agent can write: a stored vault so refused is
+  used by nothing, and `obsidian:scan` and `obsidian:getVaultInfo` name it with why. A read takes no secret, no file
+  with a second name, and follows no link out of the vault; a write is a markdown note whose real path is in the vault,
+  no dotfile and nothing in a dot folder; `obsidian:scan` lists no link and previews no note a read refuses.
+- `project:list-files`, `project:search-files` and `project:search-content` (the Code panel) take a root only when it
+  is, or lies in, a project Tars knows (added by hand, an agent's folder or worktree), where it really lies, and none
+  that is the home or above it. The walk follows no link, and each file `project:search-content` reads is judged as
+  `fs:read-project-files` judges one.
+- `vault:attachFile` copies only a file the user picked in Tars's own open dialog this run (`dialog:open-files`, kept
+  in the main process), and no secret nor anything in a folder of credentials: the copy lands in
+  `~/.tars/vault/attachments`, which every agent reads.
+
+`app:getSettings` and `settings:updated` carry no secret: a
 set one is a mask of bullets and `secretsSet` says which are set; `secrets:set`
 sets or clears one and answers whether it is set. Settings puts no mask in a
 field (`components/Settings/SecretRow.tsx`): a set secret reads set, replace

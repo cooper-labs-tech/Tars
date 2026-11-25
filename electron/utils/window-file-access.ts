@@ -3,6 +3,7 @@ import * as os from 'os';
 import * as path from 'path';
 import { DATA_DIR, PRIVATE_DIR, VAULT_DIR } from '../constants';
 import { isUnder, samePath } from '../platform/path-compare';
+import { coversHome } from './home-root';
 import { isHardLinkInto, isWithinDir } from './path-identity';
 import { inCredentialPlace, landsUnderSafeRoot, realTarget } from './real-target';
 
@@ -120,6 +121,112 @@ export function windowMayWrite(target: string, projects: string[]): boolean {
   // Followed as the write follows it: what it really writes is a markdown file.
   const real = realTarget(resolved);
   return !!real && real.toLowerCase().endsWith('.md');
+}
+
+/**
+ * A file under `root` the window may read: never a secret, in no credential place, and where it really lies, inside
+ * `root` itself, so a link in it leads nowhere out (strict: not even the markdown exception). What the Code panel's
+ * search and the Obsidian vaults read (2.0.7).
+ */
+export function windowMayReadUnder(target: string, root: string): boolean {
+  const resolved = path.resolve(target);
+  if (isSecretFile(resolved)) return false;
+  const real = realTarget(resolved);
+  if (!real || inCredentialPlace(resolved, real)) return false;
+  return landsUnderSafeRoot(resolved, [path.resolve(root)], inside);
+}
+
+/**
+ * A folder the Code panel may list and search (project:list-files, search-files, search-content): one a project
+ * Tars knows is, or lies in, where it really lies. `projects` are those added by hand and the agents' folders and
+ * worktrees; ~/.tars/projects.json is every agent's to write, so each is judged as a project is (mayBeProject),
+ * and none that is the home or above it opens anything (landsUnderSafeRoot).
+ */
+export function windowMaySearch(root: unknown, projects: string[]): boolean {
+  if (typeof root !== 'string' || !root || !path.isAbsolute(root)) return false;
+  const resolved = path.resolve(root);
+  const real = realTarget(resolved);
+  if (!real || isWithinDir(real, DATA_DIR) || inCredentialPlace(resolved, real)) return false;
+  return landsUnderSafeRoot(resolved, projectRoots(projects).filter(mayBeProject), inside);
+}
+
+/** `p` is in a folder of the home whose name starts with a dot (a CLI's settings, a credential place), or is one. */
+function inDotFolderOfHome(p: string): boolean {
+  const homes = [home(), realTarget(home())].filter((h): h is string => !!h);
+  return homes.some((h) => {
+    const rel = path.relative(h, p);
+    return !!rel && !rel.startsWith('..') && !path.isAbsolute(rel) && rel.split(path.sep)[0].startsWith('.');
+  });
+}
+
+/**
+ * Why a folder may not be an Obsidian vault the window reads and writes, or undefined when it may (2.0.7). Judged
+ * at every use too, not only when added: the vaults live in ~/.tars/app-settings.json, which every agent can write.
+ */
+export function vaultRefusal(p: unknown): string | undefined {
+  if (typeof p !== 'string' || !p || !path.isAbsolute(p)) return 'A vault is a folder named by its full path.';
+  const resolved = path.resolve(p);
+  const real = realTarget(resolved);
+  if (!real) return 'This folder cannot be followed to where it really lies.';
+  if (coversHome(resolved) || coversHome(real)) {
+    return 'The home folder, or a folder above it, cannot be a vault: every file in the home would be open to the window.';
+  }
+  if (!mayBeProject(resolved)) return "Tars's own folders and folders of credentials cannot be a vault.";
+  if (inDotFolderOfHome(resolved) || inDotFolderOfHome(real)) {
+    return "A folder of the home whose name starts with a dot (a CLI's settings, credentials) cannot be a vault.";
+  }
+  return undefined;
+}
+
+export const mayBeVault = (p: unknown): boolean => vaultRefusal(p) === undefined;
+
+/** A file with a second name may be that of anything (SECURITY.md §5): one with no name but its own, or none yet. */
+function oneName(real: string): boolean {
+  try {
+    return fs.statSync(real).nlink < 2;
+  } catch {
+    return true;
+  }
+}
+
+/** A file of a vault the window may read (obsidian:readFile, the previews of obsidian:scan). */
+export function windowMayReadInVault(target: string, vault: string): boolean {
+  if (!mayBeVault(vault) || !windowMayReadUnder(target, vault)) return false;
+  const real = realTarget(path.resolve(target));
+  return !!real && oneName(real);
+}
+
+/**
+ * A file of a vault the window may write (obsidian:writeFile): a markdown note, as spelled and where it really lies,
+ * inside the vault, and no dotfile nor anything in a dot folder (.obsidian's own files, a CLI's settings), as spelled
+ * and as it lies.
+ */
+export function windowMayWriteInVault(target: string, vault: string): boolean {
+  if (!windowMayReadInVault(target, vault)) return false;
+  const resolved = path.resolve(target);
+  const real = realTarget(resolved);
+  const realVault = realTarget(path.resolve(vault));
+  if (!real || !realVault) return false;
+  if (!resolved.toLowerCase().endsWith('.md') || !real.toLowerCase().endsWith('.md')) return false;
+  const dotted = (p: string, root: string) => path.relative(root, p).split(path.sep).some((part) => part.startsWith('.'));
+  return !dotted(resolved, path.resolve(vault)) && !dotted(real, realVault);
+}
+
+/**
+ * A file the window may copy into the vault's attachments (vault:attachFile), once the user picked it in the dialog
+ * (utils/picked-files.ts): a regular file, never a secret, nothing in a folder of credentials, as spelled or where it
+ * really lies. The copy lands in ~/.tars, which every agent reads (2.0.7).
+ */
+export function windowMayAttach(target: string): boolean {
+  const resolved = path.resolve(target);
+  if (isSecretFile(resolved)) return false;
+  const real = realTarget(resolved);
+  if (!real || inCredentialPlace(resolved, real)) return false;
+  try {
+    return fs.statSync(real).isFile();
+  } catch {
+    return false;
+  }
 }
 
 export function localFileServes(target: string): boolean {

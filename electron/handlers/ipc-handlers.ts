@@ -86,7 +86,8 @@ import { probeVersion } from '../core/version-probe';
 import { readCodexModels } from '../providers/codex-cli';
 import { cliKeyStates, withCliKey } from '../services/cli-keys';
 import { keepSecrets, secretStates, setSecret, settingsForWindow, type SecretField } from '../services/settings-secrets';
-import { isSecretFile, mayBeProject, windowMayRead, windowMayWrite } from '../utils/window-file-access';
+import { isSecretFile, mayBeProject, windowMayRead, windowMayReadUnder, windowMaySearch, windowMayWrite } from '../utils/window-file-access';
+import { rememberPicked } from '../utils/picked-files';
 import { mcpConfigPathFor } from '../services/mcp-roles';
 import { registerFirstRunHandlers } from './first-run-handlers';
 import { setFirstTask, spendFirstTask, withFirstTask } from '../core/first-task';
@@ -2495,6 +2496,8 @@ function registerFileSystemHandlers(deps: IpcHandlerDependencies): void {
         { name: 'Documents', extensions: ['pdf', 'doc', 'docx', 'txt', 'md'] },
       ],
     });
+    // What the user picked here is what vault:attachFile may copy, and nothing else (utils/picked-files.ts).
+    rememberPicked(result.filePaths || []);
     return result.filePaths || [];
   });
 
@@ -2742,7 +2745,7 @@ function registerOllamaHandlers(deps: IpcHandlerDependencies): void {
 // ============== Shell IPC Handlers ==============
 
 function registerShellHandlers(deps: IpcHandlerDependencies): void {
-  const { quickPtyProcesses, getMainWindow } = deps;
+  const { quickPtyProcesses, getMainWindow, agents } = deps;
 
   /**
    * Open a directory in a terminal: Terminal.app on macOS, the first one installed on Linux.
@@ -2806,6 +2809,8 @@ function registerShellHandlers(deps: IpcHandlerDependencies): void {
       for (const entry of entries) {
         if (out.length >= limit) return;
         if (entry.name.startsWith('.') && entry.name !== '.env.example') continue;
+        // No link is followed, listed or read (2.0.7).
+        if (entry.isSymbolicLink()) continue;
         const full = path.join(dir, entry.name);
         if (entry.isDirectory()) {
           if (IGNORED_DIRS.has(entry.name)) continue;
@@ -2821,13 +2826,27 @@ function registerShellHandlers(deps: IpcHandlerDependencies): void {
     return out.sort();
   }
 
+  /**
+   * A folder these three may take: a project Tars knows (added by hand, an agent's folder or worktree) or one in it,
+   * as utils/window-file-access.ts judges it (windowMaySearch, 2.0.7).
+   */
+  const searchable = (root: unknown): root is string => {
+    if (typeof root !== 'string' || !root || !fs.existsSync(root)) return false;
+    const known = [...readCustomProjects(), ...[...agents.values()].flatMap((a) => [a.projectPath, a.worktreePath])]
+      .filter((p): p is string => typeof p === 'string' && !!p && path.isAbsolute(p));
+    return windowMaySearch(root, known);
+  };
+  const NOT_A_PROJECT = 'Only a project Tars knows, or a folder in one, is listed or searched from here';
+
   ipcMain.handle('project:list-files', async (_event, { root, maxDepth }: { root: string; maxDepth?: number }) => {
     if (!root || !fs.existsSync(root)) return { success: false as const, error: 'no such directory' };
+    if (!searchable(root)) return { success: false as const, error: NOT_A_PROJECT };
     return { success: true as const, files: walkProject(root, Math.min(maxDepth ?? 3, 6), 300) };
   });
 
   ipcMain.handle('project:search-files', async (_event, { root, query }: { root: string; query: string }) => {
     if (!root || !fs.existsSync(root) || !query) return { success: false as const, error: 'root and query are required' };
+    if (!searchable(root)) return { success: false as const, error: NOT_A_PROJECT };
     const needle = query.toLowerCase();
     return { success: true as const, files: walkProject(root, 6, 50, name => name.toLowerCase().includes(needle)) };
   });
@@ -2837,6 +2856,7 @@ function registerShellHandlers(deps: IpcHandlerDependencies): void {
     { root, query }: { root: string; query: string },
   ) => {
     if (!root || !fs.existsSync(root) || !query) return { success: false as const, error: 'root and query are required' };
+    if (!searchable(root)) return { success: false as const, error: NOT_A_PROJECT };
     const exts = new Set(['.ts', '.tsx', '.js', '.jsx', '.json', '.css', '.md']);
     const needle = query.toLowerCase();
     const hits: { path: string; line: number; text: string }[] = [];
@@ -2845,6 +2865,8 @@ function registerShellHandlers(deps: IpcHandlerDependencies): void {
       if (hits.length >= 50) break;
       const full = path.join(root, rel);
       if (!withinRoot(root, full)) continue;
+      // Never a secret, and where it really lies, inside the root (utils/window-file-access.ts).
+      if (!windowMayReadUnder(full, root)) continue;
       let content: string;
       try {
         if (fs.statSync(full).size > 512_000) continue;
