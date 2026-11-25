@@ -402,7 +402,24 @@ again and the agent's first start continues its session, then answers a second t
 npx tsc -p electron/tsconfig.json && (cd mcp-orchestrator && npm run build)
 TARS_HARNESS_KIMI_CODE=/path/to/kimi npx playwright test e2e/harness-conformance.spec.ts -g kimi-code
 TARS_HARNESS_CODEX=/path/to/codex TARS_HARNESS_PI=/path/to/pi npx playwright test e2e/harness-conformance.spec.ts
+TARS_HARNESS_GEMINI=/path/to/gemini TARS_HARNESS_GROK=/path/to/grok npx playwright test e2e/harness-conformance.spec.ts -g 'gemini|grok'
 ```
+
+gemini and grok take no endpoint of Tars's: gemini runs on the stand-in of Gemini's API (`e2e/stand-in-gemini-endpoint.mjs`,
+through `GOOGLE_GEMINI_BASE_URL`, its key set from the window), grok on the OpenAI stand-in as a custom model of its own
+`config.toml`, both written into the sandbox as a user leaves them. Their tool round is a call to Tars's own `whoami`,
+answered only when it reached Tars with the agent's own identity, and they pass three steps more: no question of their
+own at start (folder trust, sign-in), the agent at rest once its task is answered, and, for grok, a hook of the user's
+own in `~/.claude/settings.json` never run in its session (its Claude compatibility off) and one SessionStart per start.
+Their restart step also expects the session the first run ended on, under its own id: grok carries a past session's
+words into a new one, so its history alone does not tell a resume from a fresh start. Tars's MCP servers are registered
+with the binary under test, first on the app's PATH while they are (`<cli> mcp add`), never a gemini or a grok of the
+machine's, and the app's log must say so; that holds on macOS and Linux only. On Windows the pin is not made (the
+resolver takes no extensionless link, a symlink needs a privilege, and a `.cmd` shim of `gemini.js` would be code no run
+has measured), so there the registration resolves the name from the app's PATH as Tars does. gemini's and grok's homes
+are the sandbox's whatever the runner exports: `GEMINI_CLI_HOME`, `GROK_HOME` and `GROK_CONFIG_PATH` (an empty overlay
+there) are set for the app and for every run of the binary, and the runner's own, when exported, are checked unchanged.
+`TARS_HARNESS_GEMINI` names gemini's own `bundle/gemini.js` (its npm package, unpacked, `#!/usr/bin/env node`).
 
 Opt-in: a harness whose `TARS_HARNESS_<ID>` names no binary is skipped and says so. Install each binary pinned, from
 its own registry or release, into a folder of its own, never over the user's own CLI. Each run leaves `values.json`,
