@@ -35,6 +35,14 @@ import { writeFakeClis } from './fake-clis.mjs';
  *    ([data-secondary-project-error]), word for word the same as main's answer in 1, the field keeps the path, and the
  *    agent keeps no folder.
  * Red on 6970bc906: the dialog dropped the answer, and no line showed. The artefact adds refused-on-screen.png.
+ * And, after 1 to 3 (the Audit's L1 on #636 at e4d550b48, and main typing the folder itself since 3a6dc22b8):
+ * 0b. editing the path clears the line;
+ * 0c. the plain folder added there is taken, the window types nothing into the agent (agent:input, which main's own
+ *     typing does not go through), and the line under the field ([data-secondary-project-note]) says it applies at the
+ *     agent's next start, as main answers for a gemini agent not running;
+ * 0d. refused again, then the dialog opened on another agent: the line is gone.
+ * Red on 3a6dc22b8: the window typed `/add-dir` itself, said nothing of when, and the line stayed through the edit
+ * and the other agent. The artefact adds next-start-on-screen.png.
  *
  * The second test: a folder set while the agent's CLI runs, typed by main as that CLI's own command, and only where
  * one was measured to take it (the Audit's point on #636 at 6970bc906: the window typed `/add-dir <path>` into every
@@ -77,6 +85,18 @@ test('a gemini agent is refused a secondary folder whose name holds a comma, wit
   const app: ElectronApplication = await launchSandboxed(electron, home, {
     env: { NODE_ENV: 'development', DOROTHY_DEV_URL: DEV_URL, DOROTHY_API_PORT: apiPort(31379), DOROTHY_E2E: '1' },
   });
+  // What the window types into an agent (agent:input); main's own /add-dir goes through writeProgrammaticInput instead.
+  await app.evaluate(({ ipcMain }) => {
+    const handlers = (ipcMain as unknown as { _invokeHandlers: Map<string, (...a: unknown[]) => unknown> })._invokeHandlers;
+    const input = handlers.get('agent:input')!;
+    const g = globalThis as unknown as { windowInputs: string[] };
+    g.windowInputs = [];
+    handlers.set('agent:input', async (event: unknown, ...args: unknown[]) => {
+      g.windowInputs.push(String((args[0] as { input?: unknown } | undefined)?.input ?? ''));
+      return input(event, ...args);
+    });
+  });
+  const windowInputs = () => app.evaluate(() => (globalThis as unknown as { windowInputs: string[] }).windowInputs.slice());
   try {
     const page = await app.firstWindow();
     await page.goto(`${DEV_URL}/agents`, { waitUntil: 'domcontentloaded' });
@@ -109,6 +129,32 @@ test('a gemini agent is refused a secondary folder whose name holds a comma, wit
     const taken = await setTo(plain);
     const afterTaken = await read();
     keep({ set, afterSet: afterSet?.secondaryProjectPath ?? null, updated, afterUpdate: afterUpdate?.secondaryProjectPath ?? null, taken, afterTaken: afterTaken?.secondaryProjectPath ?? null });
+
+    // 0b. Editing the path clears the line.
+    const add = () => field.locator('xpath=..').getByRole('button', { name: 'Add', exact: true }).click();
+    await field.fill(plain);
+    const errorAfterEdit = await line.count();
+    // 0c. The plain folder, added there: taken, nothing typed by the window, and when it applies said under the field.
+    const typedBefore = (await windowInputs()).length;
+    await add();
+    const note = page.locator('[data-secondary-project-note]');
+    await expect.soft(note, 'when the folder applies').toBeVisible({ timeout: 10_000 });
+    const noteShown = (await note.textContent({ timeout: 1_000 }).catch(() => null)) ?? null;
+    await page.screenshot({ path: test.info().outputPath('next-start-on-screen.png') });
+    const windowTyped = (await windowInputs()).slice(typedBefore);
+    // 0d. Refused again, then the dialog on another agent: the line goes.
+    await field.fill(comma);
+    await add();
+    await expect.soft(line, 'refused again').toBeVisible({ timeout: 10_000 });
+    await page.getByRole('button', { name: 'close', exact: true }).first().click();
+    await page.locator('[data-agent-card="cla"]').click({ position: { x: 24, y: 14 } });
+    await page.getByRole('radiogroup', { name: 'Agent rail' }).getByRole('radio', { name: /Memory/ }).click();
+    const errorOnOtherAgent = await line.count();
+    keep({ errorAfterEdit, noteShown, windowTyped, errorOnOtherAgent });
+    expect.soft(errorAfterEdit, 'the line gone once the path is edited').toBe(0);
+    expect.soft(noteShown ?? '', 'the folder applies at the agent\'s next start').toMatch(/next start/);
+    expect.soft(windowTyped, 'nothing typed by the window').toEqual([]);
+    expect.soft(errorOnOtherAgent, 'the line gone on another agent').toBe(0);
 
     // 1. setSecondaryProject.
     expect.soft(set.success, JSON.stringify(set)).toBe(false);
