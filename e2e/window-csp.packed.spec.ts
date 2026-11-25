@@ -25,8 +25,9 @@ import { apiPort } from './ports.mjs';
 
 const APP = process.env.TARS_PACKED_APP;
 
+// Not serial: on the build without the policy the first test fails, and the witness must still run, on the
+// fresh launch Playwright's next worker makes.
 test.skip(!APP || process.platform !== 'darwin', 'TARS_PACKED_APP names the app npm run electron:pack built (macOS)');
-test.describe.configure({ mode: 'serial' });
 
 type Violation = { directive: string; blocked: string; sample: string; source: string; line: number };
 type Surface = { name: string; route: string; clickText?: string; clickText2?: string; clickRole?: 'radio'; settle?: number };
