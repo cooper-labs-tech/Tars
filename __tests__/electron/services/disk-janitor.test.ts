@@ -50,7 +50,8 @@ import { pinPlatform } from '../providers/win-fake-disk';
  * J21. (M1) Every path of every process is resolved again for each candidate folder: about 8 s of synchronous work
  *      on the main thread per scan (545 processes, 8,628 paths). The world gives the paths resolved once, and the
  *      rules compare strings: a scan over thousands of processes stays well under a second.
- * And from the Audit's read of #605 at 3d110db14 (confirmed by QA, uv 0.13.1 measured), written before the code:
+ * And from the Audit's I-2 on #643 at 7fed2c3e1, about main's janitor-rules.ts:145 (confirmed by QA, uv 0.13.1
+ * measured), written before the code:
  * J22. The uv cache is only ~/.cache/uv and ~/Library/Caches/uv on the never list, where uv puts it at $UV_CACHE_DIR,
  *      else $XDG_CACHE_HOME/uv, else ~/.cache/uv (on Windows %LOCALAPPDATA%\uv\cache): a project in a uv cache either
  *      variable moved, or a .worktrees linked into one, has an item proposed.
@@ -58,6 +59,19 @@ import { pinPlatform } from '../providers/win-fake-disk';
  *      trash) is $XDG_DATA_HOME/Trash, else ~/.local/share/Trash: a project there has an item proposed.
  * J24. An empty or relative variable taken for a folder: '' is Tars's own working folder ('/' when the Finder started
  *      it), and the never list would hold the whole disk, so nothing would ever be proposed.
+ * And from the Audit's Infos on #605 at 5297b7bc2 (reports/audit-605.md), written before the code:
+ * J25. (I-1) uv's own config moves the cache for every uv, the agents' included: `cache-dir` in the user-level uv.toml,
+ *      $XDG_CONFIG_HOME/uv/uv.toml (absolute) else ~/.config/uv/uv.toml (both measured on uv 0.13.1, which reads no
+ *      ~/Library/Application Support/uv), and %APPDATA%\uv\uv.toml on Windows, is not read: a project in that cache
+ *      has an item proposed. And it is read wrong: only an absolute value names a folder (uv 0.13.1 takes `~`, `$HOME`
+ *      and a relative value as written, relative to the folder it runs in: measured), and a file uv cannot parse
+ *      (uv refuses it), or one past 64 KiB, which no config is, must change nothing.
+ * J26. (I-2) On Windows with LOCALAPPDATA unset or empty, the uv cache has no place on the list: the literal
+ *      <home>\AppData\Local\uv\cache is missing.
+ * J27. (I-3) A trash of another volume: projects.json names any folder, a project on a volume of its own included, so
+ *      the janitor reaches other volumes today, and their trashes are not on the list: /Volumes/<v>/.Trashes on
+ *      macOS, <mount>/.Trash-<uid> and <mount>/.Trash/<uid> on Linux, <drive>\$Recycle.Bin on Windows. A project in
+ *      one has an item proposed.
  */
 
 const DAY = 86_400_000;
@@ -347,7 +361,7 @@ describe('the Audit\'s gate of #542, and the window\'s details', () => {
 });
 
 describe('the never list where the tools really put things, from the environment Tars runs in (J22-J24)', () => {
-  const VARS = ['HOME', 'UV_CACHE_DIR', 'XDG_CACHE_HOME', 'XDG_DATA_HOME', 'LOCALAPPDATA'] as const;
+  const VARS = ['HOME', 'UV_CACHE_DIR', 'XDG_CACHE_HOME', 'XDG_DATA_HOME', 'XDG_CONFIG_HOME', 'LOCALAPPDATA', 'APPDATA'] as const;
   let saved: Record<string, string | undefined>;
   let cwd: string;
   let unpin = () => {};
@@ -423,6 +437,55 @@ describe('the never list where the tools really put things, from the environment
     process.env.XDG_DATA_HOME = 'data';
     process.env.LOCALAPPDATA = '';
     expect(await proposedIn(path.join(root, 'elsewhere'), 'empty')).not.toEqual([]);
+  });
+
+  const uvToml = (file: string, text: string) => { fs.mkdirSync(path.dirname(file), { recursive: true }); fs.writeFileSync(file, text); };
+
+  it('J25. the cache-dir of $XDG_CONFIG_HOME/uv/uv.toml', async () => {
+    process.env.XDG_CONFIG_HOME = path.join(root, 'xdg-config');
+    uvToml(path.join(root, 'xdg-config', 'uv', 'uv.toml'), `cache-dir = "${path.join(root, 'from-xdg-toml')}"\n`);
+    expect(await proposedIn(path.join(root, 'from-xdg-toml'), 'xdg-toml')).toEqual([]);
+  });
+
+  it('J25. the cache-dir of ~/.config/uv/uv.toml, among the other keys of the file', async () => {
+    uvToml(path.join(home, '.config', 'uv', 'uv.toml'), `# mine\nnative-tls = true\ncache-dir = "${path.join(root, 'from-home-toml')}"\n\n[[index]]\nurl = "https://example.org/simple"\n`);
+    expect(await proposedIn(path.join(root, 'from-home-toml'), 'home-toml')).toEqual([]);
+  });
+
+  it('J25. on Windows, the cache-dir of %APPDATA%\\uv\\uv.toml', async () => {
+    unpin = pinPlatform('win32');
+    process.env.APPDATA = path.join(root, 'appdata-roaming');
+    uvToml(path.join(root, 'appdata-roaming', 'uv', 'uv.toml'), `cache-dir = '${path.join(root, 'from-appdata-toml')}'\n`);
+    expect(await proposedIn(path.join(root, 'from-appdata-toml'), 'appdata-toml')).toEqual([]);
+  });
+
+  it('J25. a relative, `~` or `$HOME` value, a file uv cannot parse, one past 64 KiB: each changes nothing', async () => {
+    const file = path.join(home, '.config', 'uv', 'uv.toml');
+    process.chdir(root);
+    uvToml(file, 'cache-dir = "elsewhere-rel"\n');
+    expect(await proposedIn(path.join(root, 'elsewhere-rel'), 'rel'), 'a relative value').not.toEqual([]);
+    uvToml(file, 'cache-dir = "~/elsewhere-tilde"\n');
+    expect(await proposedIn(path.join(home, 'elsewhere-tilde'), 'tilde'), 'a `~` value').not.toEqual([]);
+    uvToml(file, 'cache-dir = "$HOME/elsewhere-env"\n');
+    expect(await proposedIn(path.join(home, 'elsewhere-env'), 'env'), 'a `$HOME` value').not.toEqual([]);
+    uvToml(file, `cache-dir = "${path.join(root, 'elsewhere-bad')}",\n`);
+    expect(await proposedIn(path.join(root, 'elsewhere-bad'), 'bad'), 'a file uv cannot parse').not.toEqual([]);
+    uvToml(file, `cache-dir = "${path.join(root, 'elsewhere-big')}"\n${'# padding\n'.repeat(7000)}`);
+    expect(await proposedIn(path.join(root, 'elsewhere-big'), 'big'), 'a file past 64 KiB').not.toEqual([]);
+  });
+
+  it('J26. on Windows with LOCALAPPDATA unset or empty, <home>\\AppData\\Local\\uv\\cache', async () => {
+    unpin = pinPlatform('win32');
+    expect(await proposedIn(path.join(home, 'AppData', 'Local', 'uv', 'cache'), 'win-unset')).toEqual([]);
+    process.env.LOCALAPPDATA = '';
+    expect(await proposedIn(path.join(home, 'AppData', 'Local', 'uv', 'cache', 'x'), 'win-empty')).toEqual([]);
+  });
+
+  it('J27. the trash of another volume: .Trashes, .Trash-<uid>, .Trash/<uid>, $Recycle.Bin', async () => {
+    expect(await proposedIn(path.join(root, 'Volumes', 'ext', '.Trashes', '501'), 'mac-volume')).toEqual([]);
+    expect(await proposedIn(path.join(root, 'media', 'ext', '.Trash-1000', 'files'), 'linux-volume')).toEqual([]);
+    expect(await proposedIn(path.join(root, 'media', 'shared', '.Trash', '1000', 'files'), 'linux-shared')).toEqual([]);
+    expect(await proposedIn(path.join(root, 'D', '$Recycle.Bin', 'S-1-5-21-1'), 'windows-drive')).toEqual([]);
   });
 });
 
