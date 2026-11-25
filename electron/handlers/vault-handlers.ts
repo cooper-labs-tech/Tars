@@ -5,7 +5,7 @@ import { v4 as uuidv4 } from 'uuid';
 import { getVaultDb, ftsSearch } from '../services/vault-db';
 import { VAULT_DIR } from '../constants';
 import { unlinkRetryingSync } from '../platform/rename-replacing';
-import { wasPicked } from '../utils/picked-files';
+import { consumePicked, wasPicked } from '../utils/picked-files';
 import { windowMayAttach } from '../utils/window-file-access';
 
 // Types
@@ -313,6 +313,8 @@ export function registerVaultHandlers(deps: VaultHandlerDependencies): void {
       if (!windowMayAttach(params.file_path)) {
         return { success: false, error: 'A secret, or a file in a folder of credentials, is not copied into the vault' };
       }
+      // Good for this attach only: pick it again to attach it again.
+      consumePicked(params.file_path);
 
       const id = uuidv4();
       const filename = path.basename(params.file_path);

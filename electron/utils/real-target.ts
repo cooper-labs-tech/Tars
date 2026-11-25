@@ -119,22 +119,37 @@ function blockedPlaces(home: string): string[] {
   return [
     '.ssh', '.gnupg', '.aws', '.claude', '.env', DATA_DIR_NAME, LEGACY_DATA_DIR_NAME, PRIVATE_DIR_NAME,
     '.config', '.kube', '.docker', '.netrc', '.git-credentials',
+    // The home's application folders (2.0.7): macOS's ~/Library and Windows's AppData keep applications' settings
+    // and sign-ins, gh's and gcloud's among them.
+    'Library', 'AppData',
   ].map(name => path.join(home, name));
 }
 
+/** Inside ~/Library, the folders of the user's own documents, not of an application's: iCloud Drive, the cloud drives. */
+function userDocuments(home: string): string[] {
+  return [path.join(home, 'Library', 'Mobile Documents'), path.join(home, 'Library', 'CloudStorage')];
+}
+
+const underPlace = (p: string, place: string) => p === place || p.startsWith(place + path.sep) || isWithinDir(p, place);
+
+/** `p` is in `place`, and not in one of the user's documents folders inside it. */
+const inBlocked = (p: string, place: string, docs: string[]) => underPlace(p, place) && !docs.some(d => underPlace(p, d));
+
 /**
  * Whether `target` is in a folder of credentials (~/.ssh, ~/.gnupg, ~/.aws,
- * ~/.config, ~/.kube, ~/.docker...) or is one, as spelled or where it really
- * lies (`real`, its real path, when it has one): the window reads none of
- * them, whatever names it as a project (the Audit's L1 on #466). ~/.claude,
+ * ~/.config, ~/.kube, ~/.docker..., and since 2.0.7 the application folders
+ * ~/Library and ~/AppData, but for the documents folders in ~/Library) or is
+ * one, as spelled or where it really lies (`real`, its real path, when it has
+ * one): the window reads none of them, whatever names it as a project (the
+ * Audit's L1 on #466). ~/.claude,
  * ~/.tars and ~/.tars-private, also blocked to a link, have rules of their
  * own (window-file-access.ts).
  */
 export function inCredentialPlace(target: string, real: string | null, deps: { home?: string } = {}): boolean {
   const home = deps.home ?? os.homedir();
   const own = new Set(['.claude', DATA_DIR_NAME, PRIVATE_DIR_NAME].map(name => path.join(home, name)));
-  return blockedPlaces(home).filter(place => !own.has(place)).some(place => [target, real].some(p => !!p
-    && (p === place || p.startsWith(place + path.sep) || isWithinDir(p, place))));
+  const docs = userDocuments(home);
+  return blockedPlaces(home).filter(place => !own.has(place)).some(place => [target, real].some(p => !!p && inBlocked(p, place, docs)));
 }
 
 const MARKDOWN = /\.(md|markdown|mdx)$/i;
@@ -159,8 +174,8 @@ export function linkedFileAllowed(realFile: string, deps: { home?: string } = {}
   } catch {
     return false;
   }
-  return !blockedPlaces(home).some(place =>
-    realFile === place || realFile.startsWith(place + path.sep) || isWithinDir(realFile, place));
+  const docs = userDocuments(home);
+  return !blockedPlaces(home).some(place => inBlocked(realFile, place, docs));
 }
 
 export interface LandsOptions extends HomeRootDeps {

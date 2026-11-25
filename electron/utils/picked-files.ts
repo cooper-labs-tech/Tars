@@ -14,3 +14,8 @@ export function rememberPicked(paths: readonly string[]): void {
 export function wasPicked(p: unknown): p is string {
   return typeof p === 'string' && !!p && picked.has(path.resolve(p));
 }
+
+/** A pick is good for one attach: taken off the list when it is used (2.0.7). */
+export function consumePicked(p: string): void {
+  picked.delete(path.resolve(p));
+}

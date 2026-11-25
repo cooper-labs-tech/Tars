@@ -803,12 +803,19 @@ file named as one (the settings and their copies, `api-token`, the Hermes files,
 and every `.env.*`, `.netrc`, a key), no CLI settings that hold a key (Claude
 Code's `settings.json` and `settings.local.json`, whose `env` may set one, Grok
 CLI's `user-settings.json`), and nothing in a folder of credentials (`~/.ssh`,
-`~/.gnupg`, `~/.aws`, `~/.config`, `~/.kube`, `~/.docker`), as spelled or where
+`~/.gnupg`, `~/.aws`, `~/.config`, `~/.kube`, `~/.docker`, and since 2.0.7 the
+home's application folders, `~/Library` but for its documents folders,
+`Mobile Documents` and `CloudStorage`, and `AppData`), as spelled or where
 it really lies, whatever names that folder as a project: a page could add any
 folder as a project and then read it, GitHub's token in `~/.config/gh` or a
 cluster's in `~/.kube` (the Audit's L1 on #466). `fs:add-custom-project` refuses
-such a folder, and since the projects' list lives in `~/.tars`, which every
-agent can write, each read judges its own target as well.
+such a folder, and since 2.0.7 any folder of the home whose name starts with a
+dot but `~/.claude`, `~/.codex`, `~/.gemini` and `~/.grok`, with the reason.
+Since the projects' list lives in `~/.tars`, which every agent can write, each
+read judges its own target as well, and each use judges the projects the target
+lies in: a project the rule now refuses is read (`fs:read-text-file`,
+`fs:read-project-files`), written and searched by nothing, and
+`fs:list-projects` lists it with why.
 
 Since 2.0.7 the list holds seven more, with the rules of the same file:
 - `obsidian:addVault`, `obsidian:readFile`, `obsidian:writeFile` and `obsidian:scan`. A vault is refused when it is
@@ -823,8 +830,13 @@ Since 2.0.7 the list holds seven more, with the rules of the same file:
   that is the home or above it. The walk follows no link, and each file `project:search-content` reads is judged as
   `fs:read-project-files` judges one.
 - `vault:attachFile` copies only a file the user picked in Tars's own open dialog this run (`dialog:open-files`, kept
-  in the main process), and no secret nor anything in a folder of credentials: the copy lands in
+  in the main process), once per pick, and no secret nor anything in a folder of credentials: the copy lands in
   `~/.tars/vault/attachments`, which every agent reads.
+
+What these rules bind is the one call that reads or writes a file, and the files agents write that a channel takes
+as a place (the projects' list, the vaults). They do not stand between a page that runs script and the disk: a page
+that holds the preload also holds the terminals (`pty:create` and `pty:write`, `shell:startPty` and
+`shell:writePty`), which run what they are given as the user.
 
 `app:getSettings` and `settings:updated` carry no secret: a
 set one is a mask of bullets and `secretsSet` says which are set; `secrets:set`

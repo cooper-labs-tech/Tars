@@ -29,6 +29,12 @@ import { createRequire, syncBuiltinESMExports } from 'node:module';
  * 7. A project the target is not under is looked at on the disk anyway: one
  *    project on a share nobody answers for would freeze every read and write
  *    of every other project, on the main thread.
+ * Added before its code after the Audit's L3 on #648 (2026-11-26):
+ * 8. fs:read-project-files reads a file of a folder the project rule refuses
+ *    (a folder of credentials, an application folder of the home, a dot
+ *    folder of the home but the four CLI folders), held as a project in
+ *    ~/.tars/projects.json or as an agent's folder; or, over-correcting, no
+ *    longer reads ~/.agents or a project in iCloud Drive.
  */
 
 vi.mock('node-pty', () => ({ spawn: vi.fn() }));
@@ -159,6 +165,27 @@ describe('fs:read-project-files', () => {
   it('6. still reads a project under the home', async () => {
     customProjects([project, home]);
     expect(Object.values((await readProject(project, 'CLAUDE.md')).files)).toEqual(['a project file']);
+  });
+
+  it('8. reads nothing of a folder the project rule refuses, held as a project or as an agent\'s folder', async () => {
+    const held = [path.join(home, '.config', 'gh'), path.join(home, 'Library', 'Application Support', 'gcloud'), path.join(home, '.azure')];
+    for (const place of held) {
+      fs.mkdirSync(place, { recursive: true });
+      fs.writeFileSync(path.join(place, 'hosts.yml'), 'oauth_token: x');
+    }
+    customProjects(held.slice(0, 2));
+    agents.set('a1', { id: 'a1', projectPath: held[2] } as AgentStatus);
+    for (const place of held) expect((await readProject(place, 'hosts.yml')).files, place).toEqual({});
+    // Still read: ~/.agents, and a project in iCloud Drive.
+    const agentsDir = path.join(home, '.agents');
+    const cloud = path.join(home, 'Library', 'Mobile Documents', 'com~apple~CloudDocs', 'work');
+    for (const dir of [agentsDir, cloud]) {
+      fs.mkdirSync(dir, { recursive: true });
+      fs.writeFileSync(path.join(dir, 'AGENTS.md'), 'kept');
+    }
+    customProjects([cloud]);
+    expect(Object.values((await readProject(agentsDir, 'AGENTS.md')).files)).toEqual(['kept']);
+    expect(Object.values((await readProject(cloud, 'AGENTS.md')).files)).toEqual(['kept']);
   });
 });
 
