@@ -32,6 +32,8 @@ export interface CLIPaths {
   gemini: string;
   grok: string;
   qwencode: string;
+  /** Kimi Code's binary, kimi (2.0.7). */
+  kimi: string;
   opencode: string;
   amp: string;
   pi: string;

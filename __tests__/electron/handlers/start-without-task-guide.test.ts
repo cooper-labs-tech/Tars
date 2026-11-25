@@ -16,7 +16,10 @@ import { EventEmitter } from 'node:events';
  * 1. a start without a task hands the CLI a prompt: the section, the project's
  *    memory, or the skills line alone (six providers wrapped an empty prompt in
  *    "[IMPORTANT: Use these skills ...]" before 2.0.4), and the CLI runs a turn,
- *    or runs once and exits;
+ *    or runs once and exits; for a CLI whose task is typed in after its launch
+ *    (amp and kimi-code, core/typed-task.ts), that prompt is typed in once it is
+ *    up, never on its line, so the line alone says nothing of it (the Audit's L1
+ *    on #607, written before the fix);
  * 2. such a session never learns how Tars works, nor its memory: nothing gives
  *    it the section afterwards;
  * 3. it gets the section with every message Tars types in, not with the first
@@ -128,6 +131,7 @@ import { resetAgentWatch } from '../../../electron/services/agent-watch';
 import { registerAgentRoutes } from '../../../electron/services/api-routes/agent-routes';
 import { agentGuideSection } from '../../../electron/services/agent-guide';
 import { readCodexFlags } from '../../../electron/providers/codex-cli';
+import { TUI_SETTLE_MS } from '../../../electron/core/typed-task';
 import { projectFilesDir } from '../../../electron/utils/project-files';
 import type { RouteApp, RouteContext, RouteRequest } from '../../../electron/services/api-routes/types';
 import type { AgentStatus, AppSettings } from '../../../electron/types';
@@ -152,6 +156,9 @@ const SECTION = '## How Tars works';
 const MEMORY = 'NOTE-7731 the build runs on Node 22';
 // Every CLI whose config folder is not Claude's, so with no SessionStart hook.
 const NO_HOOK = ['opencode', 'amp', 'codex', 'gemini', 'grok', 'pi'] as const;
+/** And Kimi Code, whose folder (~/.kimi-code) is not Claude's either: it has no hook at all, its turns read from its
+ *  session log, and it is up once its input box is drawn (startedFromWindow draws it). */
+const NO_HOOK_AND_KIMI = [...NO_HOOK, 'kimi-code'] as const;
 
 function deps(): IpcHandlerDependencies {
   const fixed: Record<string, unknown> = {
@@ -213,6 +220,11 @@ async function startedFromWindow(prompt: string, fields: Partial<AgentStatus> = 
   // node-pty names the CLI once it runs in the terminal's foreground.
   terminal.process = agent.provider ?? 'opencode';
   terminal.write.mockClear();
+  // kimi-code is up once its input box is drawn (Kimi Code 2.6.3, KimiCodeProvider.upOnScreen): it draws it, as the
+  // terminal's own listeners receive it, the mirror's among them.
+  if (agent.provider === 'kimi-code') {
+    for (const [listener] of terminal.onData.mock.calls) listener('╭──────────╮\r\n│ >        │\r\n╰──────────╯\r\n');
+  }
   return { agent, terminal, command };
 }
 
@@ -300,13 +312,22 @@ afterEach(async () => {
 });
 
 describe('a CLI without Claude\'s hook started from the window with no task', () => {
-  it.each(NO_HOOK)('%s starts on no prompt: no section, no memory, no skills line (1)', async (provider) => {
-    const { agent, command } = await startedFromWindow('', { provider });
+  it.each(NO_HOOK_AND_KIMI)('%s starts on no prompt: no section, no memory, no skills line (1)', async (provider) => {
+    const { agent, terminal, command } = await startedFromWindow('', { provider });
     expect(count(command), command).toBe(0);
     expect(command).not.toContain(MEMORY);
     expect(command).not.toContain('Use these skills');
     if (provider === 'opencode') expect(command).not.toMatch(/ run '/);
     if (provider === 'amp') expect(command).not.toMatch(/ -x '/);
+    // amp and kimi-code take their task typed in once up (typeLaunchTask), never on their line: past that settle,
+    // nothing was typed in either.
+    if (provider === 'amp' || provider === 'kimi-code') {
+      await vi.advanceTimersByTimeAsync(TUI_SETTLE_MS + 500);
+      const typed = typedInto(terminal);
+      expect(count(typed), typed).toBe(0);
+      expect(typed).not.toContain(MEMORY);
+      expect(typed).not.toContain('Use these skills');
+    }
     // And Tars shows it as what it is: at its prompt.
     expect(agent.status).toBe('idle');
   });
@@ -382,7 +403,7 @@ describe('a CLI launched again into a terminal that still owes the section', () 
 });
 
 describe("whose session it is (10)", () => {
-  it.each(NO_HOOK)("%s: the first task typed in says whose session it is, once, and the next message does not", async (provider) => {
+  it.each(NO_HOOK_AND_KIMI)("%s: the first task typed in says whose session it is, once, and the next message does not", async (provider) => {
     const { agent, terminal } = await startedFromWindow('', { provider });
     const identity = `[Tars: you are agent "${agent.name}" (id ${agent.id}),`;
     await dispatch(agent.id, 'FIRST>> rebase onto main');

@@ -42,7 +42,9 @@ import { DEV_URL, apiPort } from './ports.mjs';
 const STAND_IN = String.raw`
 const fs = require('fs'), path = require('path'), crypto = require('crypto');
 const argv = process.argv.slice(2);
-if (['mcp', '--version', 'version', 'login', 'auth', 'config'].includes(argv[0])) { process.stdout.write('ok\n'); process.exit(0); }
+// The --help Tars reads before a codex launch (#608) answers and leaves, as registration calls do: a stand-in that held
+// it open delayed the codex agent's own session past the spec's read.
+if (['mcp', '--version', 'version', '--help', 'login', 'auth', 'config'].includes(argv[0])) { process.stdout.write('ok\n'); process.exit(0); }
 const keys = Object.keys(process.env).filter((k) => /(_API_KEY|_KEY|_AUTH_TOKEN)$/.test(k) && process.env[k]).sort();
 const hashes = Object.fromEntries(keys.map((k) => [k, crypto.createHash('sha256').update(process.env[k]).digest('hex')]));
 fs.appendFileSync(path.join(process.env.HOME, 'stand-in.jsonl'), JSON.stringify({ agent: process.env.CLAUDE_AGENT_ID || null, keys, hashes }) + '\n');
