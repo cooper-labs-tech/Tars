@@ -11,7 +11,7 @@ export const CHANGELOG: Release[] = [
     version: '2.0.7',
     date: '2026-11-25',
     updates: [
-      'Tars\'s window no longer reads the sign-in files the coding CLIs keep, Gemini CLI\'s and Grok\'s MCP tokens among them, nor a file named like one in a project: the Code panel now answers "Path outside allowed roots" for a project\'s secrets.json, secrets.yaml, oauth.json or mcp-auth.json, as it does for .env.',
+      'The Brain and the Code panel no longer open the sign-in files the coding CLIs keep, Gemini CLI\'s and Grok\'s MCP tokens among them, nor a project\'s file named like one: the Code panel now shows "Path outside allowed roots" for a project\'s secrets.json, secrets.yaml, oauth.json or mcp-auth.json.',
     ],
   },
   {
