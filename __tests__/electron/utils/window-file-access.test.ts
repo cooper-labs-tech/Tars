@@ -68,6 +68,16 @@ import * as path from 'node:path';
  *      <key>-tokens.json and <key>-client.json).
  *  W13. Over-correction: a project's design-tokens.json, a src/credentials/
  *      folder of code, or a .kimi-code file outside its credentials, refused.
+ * Added before their code after the Audit's two Lows on #647 at af1d921cf
+ * (reports/audit-647.md):
+ *  W14. (L1) qwen-code 0.28.4, the version #636 measures, keeps an OAuth access
+ *      token in ~/.qwen/subscription_credentials.json (read in its package, never
+ *      run), which 0.25.2 did not have: read.
+ *  W15. (L2) The legacy Kimi CLI's credentials, ~/.kimi/credentials/*.json (or
+ *      under KIMI_SHARE_DIR), which kimi-code 2.6.3 migrates from and leaves in
+ *      place: read, since the rule wants .kimi-code. And, over-correcting, the
+ *      legacy .kimi/config.toml, which holds no key (kimi-code's own schema of
+ *      it has none), refused.
  */
 
 import { windowMayRead, windowMayWrite, localFileServes, mayBeProject, isSecretFile } from '../../../electron/utils/window-file-access';
@@ -79,7 +89,7 @@ const put = (file: string, text = 'x') => { fs.mkdirSync(path.dirname(file), { r
 let project: string;
 
 beforeEach(() => {
-  for (const d of ['.tars', '.tars-private', '.claude', '.codex', '.gemini', '.grok', '.kimi-code', '.ssh', '.gnupg', '.aws', '.config', '.kube', '.docker', 'proj', 'kube-link']) fs.rmSync(at(d), { recursive: true, force: true });
+  for (const d of ['.tars', '.tars-private', '.claude', '.codex', '.gemini', '.grok', '.kimi-code', '.kimi', '.qwen', '.ssh', '.gnupg', '.aws', '.config', '.kube', '.docker', 'proj', 'kube-link']) fs.rmSync(at(d), { recursive: true, force: true });
   project = at('proj');
   fs.mkdirSync(project, { recursive: true });
 });
@@ -232,6 +242,23 @@ describe('the CLIs\' credential files (the Audit, the end of audit-645.md)', () 
     for (const f of [path.join(project, 'design-tokens.json'), path.join(project, 'src', 'credentials', 'index.ts'), path.join(project, '.kimi-code', 'config.toml')]) {
       expect(windowMayRead(put(f), [project]), f).toBe(true);
     }
+  });
+
+  it('W14. qwen-code 0.28.4\'s subscription_credentials.json, in its folder or anywhere', () => {
+    for (const f of [at('.qwen', 'subscription_credentials.json'), path.join(project, '.qwen', 'subscription_credentials.json')]) {
+      put(f, '{"clientId":"c","tokens":{"access_token":"t"}}');
+      expect(isSecretFile(f), f).toBe(true);
+    }
+    expect(windowMayRead(path.join(project, '.qwen', 'subscription_credentials.json'), [project])).toBe(false);
+  });
+
+  it('W15. the legacy Kimi CLI\'s credentials, and still its config.toml', () => {
+    for (const f of [at('.kimi', 'credentials', 'kimi-code.json'), path.join(project, '.kimi', 'credentials', 'kimi-code.json')]) {
+      put(f, '{"access_token":"t"}');
+      expect(isSecretFile(f), f).toBe(true);
+    }
+    expect(windowMayRead(path.join(project, '.kimi', 'credentials', 'kimi-code.json'), [project])).toBe(false);
+    expect(windowMayRead(put(path.join(project, '.kimi', 'config.toml')), [project])).toBe(true);
   });
 });
 
