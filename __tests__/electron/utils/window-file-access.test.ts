@@ -51,9 +51,36 @@ import * as path from 'node:path';
  *  W10. A CLI's settings that hold a key read: ~/.claude/settings.json and
  *      settings.local.json (their env), a project's .claude/settings.local.json,
  *      Grok CLI's ~/.grok/user-settings.json.
+ * Added before their code after the Audit's read of #645 (reports/audit-645.md,
+ * its end, 2026-11-25), each CLI's package read at the version Tars measured:
+ *  W11. A CLI's credential file the list does not name, read. In the window's
+ *      own folders: gemini's ~/.gemini/mcp-oauth-tokens.json, gemini-credentials.json
+ *      and a2a-oauth-tokens.json (0.70.0, its own SENSITIVE_SETTINGS_FILENAMES),
+ *      grok's ~/.grok/mcp_credentials.json (1.0.92). And wherever they are (a
+ *      project, an agent's folder): qwen-code's mcp-oauth-tokens-v2.json and
+ *      extension-secrets-v1.json (0.25.2, encrypted with a key made of the host
+ *      and user names), pi's and opencode's mcp-auth.json and pi's legacy
+ *      oauth.json (pi 1.3.0, opencode 1.19.3), cline's secrets.json (3.0.74),
+ *      goose's secrets.yaml (1.60.1, with the keyring off), gcloud's
+ *      application_default_credentials.json, which gemini and others read.
+ *  W12. kimi-code's credentials (2.6.3), which have no fixed name: every file of
+ *      a .kimi-code/credentials folder (its OAuth token, an MCP server's
+ *      <key>-tokens.json and <key>-client.json).
+ *  W13. Over-correction: a project's design-tokens.json, a src/credentials/
+ *      folder of code, or a .kimi-code file outside its credentials, refused.
+ * Added before their code after the Audit's two Lows on #647 at af1d921cf
+ * (reports/audit-647.md):
+ *  W14. (L1) qwen-code 0.28.4, the version #636 measures, keeps an OAuth access
+ *      token in ~/.qwen/subscription_credentials.json (read in its package, never
+ *      run), which 0.25.2 did not have: read.
+ *  W15. (L2) The legacy Kimi CLI's credentials, ~/.kimi/credentials/*.json (or
+ *      under KIMI_SHARE_DIR), which kimi-code 2.6.3 migrates from and leaves in
+ *      place: read, since the rule wants .kimi-code. And, over-correcting, the
+ *      legacy .kimi/config.toml, which holds no key (kimi-code's own schema of
+ *      it has none), refused.
  */
 
-import { windowMayRead, windowMayWrite, localFileServes, mayBeProject } from '../../../electron/utils/window-file-access';
+import { windowMayRead, windowMayWrite, localFileServes, mayBeProject, isSecretFile } from '../../../electron/utils/window-file-access';
 import { DATA_DIR, PRIVATE_DIR } from '../../../electron/constants';
 
 const home = () => os.homedir();
@@ -62,7 +89,7 @@ const put = (file: string, text = 'x') => { fs.mkdirSync(path.dirname(file), { r
 let project: string;
 
 beforeEach(() => {
-  for (const d of ['.tars', '.tars-private', '.claude', '.codex', '.gemini', '.grok', '.ssh', '.gnupg', '.aws', '.config', '.kube', '.docker', 'proj', 'kube-link']) fs.rmSync(at(d), { recursive: true, force: true });
+  for (const d of ['.tars', '.tars-private', '.claude', '.codex', '.gemini', '.grok', '.kimi-code', '.kimi', '.qwen', '.ssh', '.gnupg', '.aws', '.config', '.kube', '.docker', 'proj', 'kube-link']) fs.rmSync(at(d), { recursive: true, force: true });
   project = at('proj');
   fs.mkdirSync(project, { recursive: true });
 });
@@ -184,6 +211,54 @@ describe('credentials, whatever the project (the Audit\'s L1 on #466)', () => {
     for (const f of [at('.claude', 'settings.json'), at('.claude', 'settings.local.json'), path.join(project, '.claude', 'settings.local.json'), at('.grok', 'user-settings.json')]) {
       expect(windowMayRead(put(f, '{"env":{"ANTHROPIC_API_KEY":"k"}}'), [project]), f).toBe(false);
     }
+  });
+});
+
+describe('the CLIs\' credential files (the Audit, the end of audit-645.md)', () => {
+  it('W11. none read, in the window\'s own folders or anywhere it reads', () => {
+    const inTheirFolders = [
+      at('.gemini', 'mcp-oauth-tokens.json'), at('.gemini', 'gemini-credentials.json'), at('.gemini', 'a2a-oauth-tokens.json'),
+      at('.grok', 'mcp_credentials.json'),
+    ];
+    // Their own folders are not the window's: the same names in a project, where the window reads, or an agent's.
+    const anywhere = ['mcp-oauth-tokens-v2.json', 'extension-secrets-v1.json', 'mcp-auth.json', 'oauth.json', 'secrets.json', 'secrets.yaml',
+      'application_default_credentials.json'].map((name) => path.join(project, '.cli', name));
+    for (const f of [...inTheirFolders, ...anywhere]) {
+      expect(windowMayRead(put(f, '{"access_token":"t"}'), [project]), f).toBe(false);
+      expect(isSecretFile(f), f).toBe(true);
+    }
+  });
+
+  it('W12. no file of a .kimi-code/credentials folder, whatever its name', () => {
+    for (const f of [at('.kimi-code', 'credentials', 'kimi-code.json'), path.join(project, '.kimi-code', 'credentials', 'mcp-docs-tokens.json'),
+      path.join(project, '.kimi-code', 'credentials', 'mcp-docs-client.json')]) {
+      put(f, '{"access_token":"t"}');
+      expect(isSecretFile(f), f).toBe(true);
+    }
+    expect(windowMayRead(path.join(project, '.kimi-code', 'credentials', 'mcp-docs-tokens.json'), [project])).toBe(false);
+  });
+
+  it('W13. what only looks like one is still read', () => {
+    for (const f of [path.join(project, 'design-tokens.json'), path.join(project, 'src', 'credentials', 'index.ts'), path.join(project, '.kimi-code', 'config.toml')]) {
+      expect(windowMayRead(put(f), [project]), f).toBe(true);
+    }
+  });
+
+  it('W14. qwen-code 0.28.4\'s subscription_credentials.json, in its folder or anywhere', () => {
+    for (const f of [at('.qwen', 'subscription_credentials.json'), path.join(project, '.qwen', 'subscription_credentials.json')]) {
+      put(f, '{"clientId":"c","tokens":{"access_token":"t"}}');
+      expect(isSecretFile(f), f).toBe(true);
+    }
+    expect(windowMayRead(path.join(project, '.qwen', 'subscription_credentials.json'), [project])).toBe(false);
+  });
+
+  it('W15. the legacy Kimi CLI\'s credentials, and still its config.toml', () => {
+    for (const f of [at('.kimi', 'credentials', 'kimi-code.json'), path.join(project, '.kimi', 'credentials', 'kimi-code.json')]) {
+      put(f, '{"access_token":"t"}');
+      expect(isSecretFile(f), f).toBe(true);
+    }
+    expect(windowMayRead(path.join(project, '.kimi', 'credentials', 'kimi-code.json'), [project])).toBe(false);
+    expect(windowMayRead(put(path.join(project, '.kimi', 'config.toml')), [project])).toBe(true);
   });
 });
 

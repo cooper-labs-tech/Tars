@@ -34,6 +34,12 @@ import { DEV_URL, apiPort } from './ports.mjs';
  *    .env.local, while its source still is;
  * 7. (the Audit's M1) with ~/.tars-private not writable and a key still in app-settings.json, Tars starts, its
  *    window opens, and the key reads as set: it stopped on Electron's error box at its first 2.0.4 launch.
+ * 8. (the Audit's read of #645, the end of audit-645.md) the window reads none of the CLIs' credential files in its
+ *    own folders: fs.readTextFile of ~/.gemini/mcp-oauth-tokens.json, gemini-credentials.json and
+ *    a2a-oauth-tokens.json (gemini 0.70.0) and ~/.grok/mcp_credentials.json (grok 1.0.92) is refused, while
+ *    ~/.gemini/GEMINI.md is still read. Red on main 58f2863b4: all four were read. Nor, in a project, qwen-code
+ *    0.28.4's .qwen/subscription_credentials.json or the legacy Kimi CLI's .kimi/credentials/kimi-code.json (the
+ *    Audit's L1 and L2 on #647): red on af1d921cf, both read.
  * Red on main f53cef0c: the keys stay in app-settings.json, which appSettings.get returns, and fs.readTextFile reads.
  * The artefact: values.json (what each call answered, the files scanned, the stand-ins' records), with E2E_TRACE=on
  * the app's trace.
@@ -240,6 +246,20 @@ for (const newInterface of [false, true]) {
       expect.soft(added.success, 'a folder of credentials added as a project').toBe(false);
       expect.soft(reads6.kube.content).not.toContain('e2e-kube-token');
       expect.soft(reads6.envLocal.content).not.toContain('e2e-env-local');
+
+      // 8. None of the CLIs' credential files in the window's own folders; their instructions still read.
+      // And in a project, where the Code panel opens what it lists (the Audit's L1 and L2 on #647): qwen-code 0.28.4's
+      // subscription token, the legacy Kimi CLI's credentials.
+      const cliSecrets = [path.join(home, '.gemini', 'mcp-oauth-tokens.json'), path.join(home, '.gemini', 'gemini-credentials.json'),
+        path.join(home, '.gemini', 'a2a-oauth-tokens.json'), path.join(home, '.grok', 'mcp_credentials.json'),
+        path.join(project, '.qwen', 'subscription_credentials.json'), path.join(project, '.kimi', 'credentials', 'kimi-code.json')];
+      cliSecrets.forEach((f, i) => { fs.mkdirSync(path.dirname(f), { recursive: true }); fs.writeFileSync(f, `{"access_token":"e2e-cli-token-${i}"}`); });
+      fs.writeFileSync(path.join(home, '.gemini', 'GEMINI.md'), '# e2e gemini instructions\n');
+      const reads8: Record<string, { content: string; error?: string }> = {};
+      for (const f of [...cliSecrets, path.join(home, '.gemini', 'GEMINI.md')]) reads8[f] = await api((a, p) => a.fs.readTextFile(p as string), f);
+      keep({ reads8 });
+      for (const f of cliSecrets) expect.soft(reads8[f].content, `read ${f}`).not.toContain('e2e-cli-token');
+      expect.soft(reads8[path.join(home, '.gemini', 'GEMINI.md')].content, 'the window no longer reads gemini\'s instructions').toContain('e2e gemini instructions');
     } finally {
       await app.close().catch(() => undefined);
       await removeHome(home);

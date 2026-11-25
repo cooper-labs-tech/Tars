@@ -35,8 +35,26 @@ import { inCredentialPlace, landsUnderSafeRoot, realTarget } from './real-target
 const SECRET_NAMES = new Set([
   'app-settings.json', 'settings-secrets.json', 'api-token', 'hermes-connection.json', 'hermes-session.json',
   'hermes-token', 'hermes-webhook-secret', 'sentry-token',
-  // The CLIs' own: Claude Code's on Linux, codex's, gemini's.
+  // The CLIs' own: Claude Code's on Linux, codex's (0.163.0: auth.json, and .credentials.json for its MCP servers),
+  // gemini's.
   '.credentials.json', 'auth.json', 'oauth_creds.json', 'google_accounts.json',
+  // Read in each CLI's package at the version Tars measured (the Audit's read of #645, 25/11), never run:
+  // - gemini 0.70.0, the three its own SENSITIVE_SETTINGS_FILENAMES names beside the two above (mcp-oauth-tokens.json
+  //   plain JSON by default); qwen-code 0.25.2 keeps the first too;
+  'gemini-credentials.json', 'mcp-oauth-tokens.json', 'a2a-oauth-tokens.json',
+  // - qwen-code 0.25.2, in ~/.qwen, encrypted with a key made of the host and user names, so readable as plain; and
+  //   0.28.4's subscription_credentials.json, an OAuth access token with its client id (the Audit's L1 on #647);
+  'mcp-oauth-tokens-v2.json', 'extension-secrets-v1.json', 'subscription_credentials.json',
+  // - grok 1.0.92, its MCP servers' OAuth tokens beside auth.json in ~/.grok;
+  'mcp_credentials.json',
+  // - pi 1.3.0 (~/.pi/agent) and opencode 1.19.3 (its data folder), their MCP servers' credentials, and pi's
+  //   oauth.json, which it migrates into auth.json and may still be there;
+  'mcp-auth.json', 'oauth.json',
+  // - cline 3.0.74, <dataDir>/secrets.json; goose 1.60.1, secrets.yaml in its config folder with the keyring off;
+  'secrets.json', 'secrets.yaml',
+  // - gcloud's, which gemini, qwen-code, pi, opencode, cline and grok read for Google's sign-in.
+  'application_default_credentials.json',
+  // kilo 7.8.27 keeps auth.json, and kimi-code 2.6.3 a folder of its own (kimiCredential).
   '.env', '.netrc', '.git-credentials', '.npmrc', '.pypirc', '.pgpass', 'credentials', 'credentials.json', 'id_rsa', 'id_ed25519',
 ]);
 
@@ -60,12 +78,24 @@ const cliSettingsWithKey = (p: string) => {
     || (dir === '.grok' && name === 'user-settings.json');
 };
 
+/**
+ * kimi-code's credentials (2.6.3): every file of its `credentials` folder ($KIMI_CODE_HOME, else ~/.kimi-code), which
+ * have no fixed name: its OAuth token, an MCP server's `<key>-tokens.json` and `<key>-client.json`. And the legacy Kimi
+ * CLI's, ~/.kimi/credentials (or under KIMI_SHARE_DIR), which kimi-code migrates from and leaves in place (the Audit's
+ * L2 on #647). By the folder's two names, so a project's `src/credentials` stays readable; a KIMI_CODE_HOME or
+ * KIMI_SHARE_DIR of another name is not known here.
+ */
+const KIMI_HOMES = new Set(['.kimi-code', '.kimi']);
+const kimiCredential = (p: string) => path.basename(path.dirname(p)).toLowerCase() === 'credentials'
+  && KIMI_HOMES.has(path.basename(path.dirname(path.dirname(p))).toLowerCase());
+
 /** A file the window must never get, judged as spelled, where it really lies, and by inode. */
 export function isSecretFile(target: string): boolean {
   const resolved = path.resolve(target);
   const real = realTarget(resolved);
   if (!real) return true;
-  if (nameIsSecret(resolved) || nameIsSecret(real) || cliSettingsWithKey(resolved) || cliSettingsWithKey(real)) return true;
+  if (nameIsSecret(resolved) || nameIsSecret(real) || cliSettingsWithKey(resolved) || cliSettingsWithKey(real)
+    || kimiCredential(resolved) || kimiCredential(real)) return true;
   if (isUnder(resolved, PRIVATE_DIR) || samePath(resolved, PRIVATE_DIR) || isWithinDir(real, PRIVATE_DIR)) return true;
   return isHardLinkInto(real, PRIVATE_DIR);
 }
@@ -100,6 +130,8 @@ export function windowMayRead(target: string, projects: string[]): boolean {
   // The target's own place, never the list's: a project on a mount gone
   // offline is not looked at to read another (fs-roots-home.test.ts, 7).
   if (inCredentialPlace(resolved, real)) return false;
+  // The CLIs' folders by their default paths only: a home GEMINI_CLI_HOME or GROK_HOME moves (#645) is no root here,
+  // so the window reads none of it unless it lies in a project, where the names above still hold.
   const roots = [path.join(home(), '.claude'), path.join(home(), '.codex'), path.join(home(), '.gemini'), path.join(home(), '.grok'), ...projectRoots(projects)];
   return landsUnderSafeRoot(resolved, roots, inside, { linkedMarkdown: true });
 }

@@ -723,14 +723,25 @@ Since 2.0.4 (the Audit's Holes 1 and 2, `electron/utils/window-file-access.ts`)
 the projects, `statusline.sh` (which Claude Code runs every turn) and
 `bin/tars-mcp-node` (which every Tars MCP server runs on) included, so one call
 from a compromised page ran code in every agent. `fs:read-text-file` reads the
-CLIs' folders and the projects, and of `~/.tars` only its `CLAUDE.md`;
+CLIs' folders (`~/.claude`, `~/.codex`, `~/.gemini`, `~/.grok`, by their default
+paths only: a home `GEMINI_CLI_HOME` or `GROK_HOME` moves is not one of them)
+and the projects, and of `~/.tars` only its `CLAUDE.md`;
 `local-file://`, which no page uses in 2.0.4, serves the vault's attachments,
 the project-files folders and Claude Code's memory folders. None of them, nor
 `fs:read-project-files`, hands the window a secret: nothing under
 `~/.tars-private`, by spelling, by real path or by a hard link into it, and no
 file named as one (the settings and their copies, `api-token`, the Hermes files,
 `.credentials.json`, codex's `auth.json`, gemini's `oauth_creds.json`, `.env`
-and every `.env.*`, `.netrc`, a key), no CLI settings that hold a key (Claude
+and every `.env.*`, `.netrc`, a key), none of the CLIs' credential files, read
+in each one's package at the version Tars measured (gemini 0.70.0's
+`gemini-credentials.json`, `mcp-oauth-tokens.json` and `a2a-oauth-tokens.json`,
+qwen-code 0.25.2's `mcp-oauth-tokens-v2.json` and `extension-secrets-v1.json`
+and 0.28.4's `subscription_credentials.json`,
+grok 1.0.92's `mcp_credentials.json`, pi 1.3.0's and opencode 1.19.3's
+`mcp-auth.json` and pi's `oauth.json`, cline 3.0.74's `secrets.json`, goose
+1.60.1's `secrets.yaml`, gcloud's `application_default_credentials.json`, and
+every file of kimi-code 2.6.3's `.kimi-code/credentials` and of the legacy Kimi
+CLI's `.kimi/credentials`, which it migrates from), no CLI settings that hold a key (Claude
 Code's `settings.json` and `settings.local.json`, whose `env` may set one, Grok
 CLI's `user-settings.json`), and nothing in a folder of credentials (`~/.ssh`,
 `~/.gnupg`, `~/.aws`, `~/.config`, `~/.kube`, `~/.docker`), as spelled or where
