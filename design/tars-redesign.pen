@@ -826127,7 +826127,7 @@
               "id": "Y1DYJ",
               "name": "title",
               "fill": "$text-primary",
-              "content": "An agent’s window: a secondary folder Tars refuses",
+              "content": "An agent’s window: a secondary folder, refused or taken",
               "lineHeight": 1.1,
               "fontFamily": "$font-display",
               "fontSize": 28,
@@ -826140,7 +826140,7 @@
               "fill": "$text-secondary",
               "textGrowth": "fixed-width",
               "width": 946,
-              "content": "The Memory tab adds a folder to the agent’s workspace: one of your projects, or a path of your own. When Tars refuses it (Gemini and Qwen Code split their folders at commas, so a folder with a comma in it, or ending in a space, never reaches them), its reason shows under the field, word for word, in the error ink of the window’s notes, and the field keeps the path so you can change it. A call that fails is said the same way. Nothing is typed into the terminal for a folder Tars did not take.",
+              "content": "The Memory tab adds a folder to the agent’s workspace: one of your projects, or a path of your own. When Tars refuses it (gemini and Qwen Code split their folders at commas, so a folder with a comma in it, or ending in a space, never reaches them), its reason shows under the field, word for word, in the error ink of the window’s notes, and the field keeps the path so you can change it. A call that fails is said in main’s own words, without Electron’s. A folder taken while Claude Code runs is typed into it by Tars as its own /add-dir; any other CLI, or an agent not running, sees it from its next start, and the line under the field says so. Opening another agent, or editing the path, clears the line.",
               "lineHeight": 1.4,
               "fontFamily": "$font-ui",
               "fontSize": 12.5,
@@ -826170,7 +826170,7 @@
                   "fill": "$text-secondary",
                   "textGrowth": "fixed-width",
                   "width": 392,
-                  "content": "ADDED: THE FOLDER IS IN THE AGENT’S CONTEXT, THE FIELD EMPTIED",
+                  "content": "ADDED WHILE CLAUDE CODE RUNS: TARS TYPED IT, THE FIELD EMPTIED",
                   "lineHeight": 1.2,
                   "fontFamily": "$font-ui",
                   "fontSize": 10,
@@ -826459,7 +826459,7 @@
                           "fill": "$status-error",
                           "textGrowth": "fixed-width",
                           "width": 342,
-                          "content": "Gemini splits the folders it is given at commas and trims each piece, so /Users/me/Q3, Q4 is not in this agent’s workspace: rename the folder, or give the agent another",
+                          "content": "gemini splits the folders it is given at commas and trims each piece, so /Users/me/Q3, Q4 is not in this agent’s workspace: rename the folder, or give the agent another",
                           "lineHeight": 1.45,
                           "fontFamily": "$font-ui",
                           "fontSize": 11,
@@ -826486,7 +826486,7 @@
                   "fill": "$text-secondary",
                   "textGrowth": "fixed-width",
                   "width": 392,
-                  "content": "NOT REACHED: THE CALL FAILED, SAID THE SAME WAY",
+                  "content": "NOT REACHED: THE CALL FAILED, SAID IN MAIN’S OWN WORDS",
                   "lineHeight": 1.2,
                   "fontFamily": "$font-ui",
                   "fontSize": 10,
@@ -826594,7 +826594,345 @@
                           "fill": "$status-error",
                           "textGrowth": "fixed-width",
                           "width": 342,
-                          "content": "Error invoking remote method ‘agent:setSecondaryProject’: Error: the agent is gone",
+                          "content": "ENOSPC: no space left on device, write",
+                          "lineHeight": 1.45,
+                          "fontFamily": "$font-ui",
+                          "fontSize": 11,
+                          "fontWeight": "normal"
+                        }
+                      ]
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "type": "frame",
+          "id": "zkHNW",
+          "name": "states at the next start",
+          "width": "fill_container",
+          "gap": 24,
+          "children": [
+            {
+              "type": "frame",
+              "id": "gRqI4",
+              "name": "state ADDED, ANY OTHER CLI OR THE AGENT NOT RUNNING: IT APPLIES AT ITS NEXT START",
+              "width": 392,
+              "layout": "vertical",
+              "gap": 8,
+              "children": [
+                {
+                  "type": "text",
+                  "id": "NvjjE",
+                  "name": "caption",
+                  "fill": "$text-secondary",
+                  "textGrowth": "fixed-width",
+                  "width": 392,
+                  "content": "ADDED, ANY OTHER CLI OR THE AGENT NOT RUNNING: IT APPLIES AT ITS NEXT START",
+                  "lineHeight": 1.2,
+                  "fontFamily": "$font-ui",
+                  "fontSize": 10,
+                  "fontWeight": "normal",
+                  "letterSpacing": 0.8
+                },
+                {
+                  "type": "frame",
+                  "id": "d90q86",
+                  "name": "context tab",
+                  "width": "fill_container",
+                  "fill": "$surface",
+                  "stroke": "$border",
+                  "strokeWidth": 1,
+                  "layout": "vertical",
+                  "gap": 12,
+                  "padding": 12,
+                  "children": [
+                    {
+                      "type": "frame",
+                      "id": "rhxjr",
+                      "name": "active context",
+                      "width": "fill_container",
+                      "layout": "vertical",
+                      "gap": 6,
+                      "children": [
+                        {
+                          "type": "text",
+                          "id": "v6oYS",
+                          "fill": "$text-muted",
+                          "content": "ACTIVE CONTEXT",
+                          "lineHeight": 1.2,
+                          "fontFamily": "$font-ui",
+                          "fontSize": 10,
+                          "fontWeight": "normal",
+                          "letterSpacing": 0.8
+                        },
+                        {
+                          "type": "frame",
+                          "id": "W5vv9T",
+                          "name": "folder",
+                          "width": "fill_container",
+                          "height": 26,
+                          "fill": "$surface-raised",
+                          "stroke": "$status-waiting",
+                          "strokeWidth": 1,
+                          "padding": [
+                            0,
+                            8
+                          ],
+                          "justifyContent": "space_between",
+                          "alignItems": "center",
+                          "children": [
+                            {
+                              "type": "text",
+                              "id": "D93vyx",
+                              "fill": "$status-waiting",
+                              "content": "Q3 reports",
+                              "lineHeight": 1.4,
+                              "fontFamily": "$font-mono",
+                              "fontSize": 11,
+                              "fontWeight": "normal"
+                            },
+                            {
+                              "type": "text",
+                              "id": "XOsQZ",
+                              "fill": "$status-waiting",
+                              "content": "x",
+                              "lineHeight": 1.4,
+                              "fontFamily": "$font-mono",
+                              "fontSize": 11,
+                              "fontWeight": "normal"
+                            }
+                          ]
+                        }
+                      ]
+                    },
+                    {
+                      "type": "frame",
+                      "id": "oglh9",
+                      "name": "custom path",
+                      "width": "fill_container",
+                      "layout": "vertical",
+                      "gap": 6,
+                      "children": [
+                        {
+                          "type": "text",
+                          "id": "n91Dak",
+                          "fill": "$text-muted",
+                          "content": "CUSTOM PATH",
+                          "lineHeight": 1.2,
+                          "fontFamily": "$font-ui",
+                          "fontSize": 10,
+                          "fontWeight": "normal",
+                          "letterSpacing": 0.8
+                        },
+                        {
+                          "type": "frame",
+                          "id": "hAOeX",
+                          "name": "row",
+                          "width": "fill_container",
+                          "gap": 6,
+                          "alignItems": "center",
+                          "children": [
+                            {
+                              "type": "frame",
+                              "id": "az8ft",
+                              "name": "field",
+                              "width": "fill_container",
+                              "height": 26,
+                              "fill": "$bg",
+                              "stroke": "$border",
+                              "strokeWidth": 1,
+                              "padding": [
+                                0,
+                                8
+                              ],
+                              "alignItems": "center",
+                              "children": [
+                                {
+                                  "type": "text",
+                                  "id": "H5xGll",
+                                  "fill": "$text-muted",
+                                  "content": "/path/to/project...",
+                                  "lineHeight": 1.4,
+                                  "fontFamily": "$font-mono",
+                                  "fontSize": 11,
+                                  "fontWeight": "normal"
+                                }
+                              ]
+                            },
+                            {
+                              "type": "frame",
+                              "id": "O3USy",
+                              "name": "b Add",
+                              "height": 26,
+                              "fill": "$surface-raised",
+                              "stroke": "$status-waiting",
+                              "strokeWidth": 1,
+                              "padding": [
+                                0,
+                                11
+                              ],
+                              "alignItems": "center",
+                              "children": [
+                                {
+                                  "type": "text",
+                                  "id": "JyuRn",
+                                  "fill": "$status-waiting",
+                                  "content": "Add",
+                                  "lineHeight": 1.4,
+                                  "fontFamily": "$font-mono",
+                                  "fontSize": 11,
+                                  "fontWeight": "normal"
+                                }
+                              ]
+                            }
+                          ]
+                        },
+                        {
+                          "type": "text",
+                          "id": "R7TnCA",
+                          "name": "next start",
+                          "fill": "$text-muted",
+                          "textGrowth": "fixed-width",
+                          "width": 342,
+                          "content": "added: the agent sees it from its next start",
+                          "lineHeight": 1.45,
+                          "fontFamily": "$font-ui",
+                          "fontSize": 11,
+                          "fontWeight": "normal"
+                        }
+                      ]
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "type": "frame",
+              "id": "eg6rj",
+              "name": "state REMOVED: THE AGENT STOPS SEEING IT AT ITS NEXT START",
+              "width": 392,
+              "layout": "vertical",
+              "gap": 8,
+              "children": [
+                {
+                  "type": "text",
+                  "id": "qk2BF",
+                  "name": "caption",
+                  "fill": "$text-secondary",
+                  "textGrowth": "fixed-width",
+                  "width": 392,
+                  "content": "REMOVED: THE AGENT STOPS SEEING IT AT ITS NEXT START",
+                  "lineHeight": 1.2,
+                  "fontFamily": "$font-ui",
+                  "fontSize": 10,
+                  "fontWeight": "normal",
+                  "letterSpacing": 0.8
+                },
+                {
+                  "type": "frame",
+                  "id": "pBiDZ",
+                  "name": "context tab",
+                  "width": "fill_container",
+                  "fill": "$surface",
+                  "stroke": "$border",
+                  "strokeWidth": 1,
+                  "layout": "vertical",
+                  "gap": 12,
+                  "padding": 12,
+                  "children": [
+                    {
+                      "type": "frame",
+                      "id": "k5n3Ro",
+                      "name": "custom path",
+                      "width": "fill_container",
+                      "layout": "vertical",
+                      "gap": 6,
+                      "children": [
+                        {
+                          "type": "text",
+                          "id": "bbT8A",
+                          "fill": "$text-muted",
+                          "content": "CUSTOM PATH",
+                          "lineHeight": 1.2,
+                          "fontFamily": "$font-ui",
+                          "fontSize": 10,
+                          "fontWeight": "normal",
+                          "letterSpacing": 0.8
+                        },
+                        {
+                          "type": "frame",
+                          "id": "UTYQT",
+                          "name": "row",
+                          "width": "fill_container",
+                          "gap": 6,
+                          "alignItems": "center",
+                          "children": [
+                            {
+                              "type": "frame",
+                              "id": "v3AMY7",
+                              "name": "field",
+                              "width": "fill_container",
+                              "height": 26,
+                              "fill": "$bg",
+                              "stroke": "$border",
+                              "strokeWidth": 1,
+                              "padding": [
+                                0,
+                                8
+                              ],
+                              "alignItems": "center",
+                              "children": [
+                                {
+                                  "type": "text",
+                                  "id": "EeCuQ",
+                                  "fill": "$text-muted",
+                                  "content": "/path/to/project...",
+                                  "lineHeight": 1.4,
+                                  "fontFamily": "$font-mono",
+                                  "fontSize": 11,
+                                  "fontWeight": "normal"
+                                }
+                              ]
+                            },
+                            {
+                              "type": "frame",
+                              "id": "Z7ARZ",
+                              "name": "b Add",
+                              "height": 26,
+                              "fill": "$surface-raised",
+                              "stroke": "$status-waiting",
+                              "strokeWidth": 1,
+                              "padding": [
+                                0,
+                                11
+                              ],
+                              "alignItems": "center",
+                              "children": [
+                                {
+                                  "type": "text",
+                                  "id": "ggJcd",
+                                  "fill": "$status-waiting",
+                                  "content": "Add",
+                                  "lineHeight": 1.4,
+                                  "fontFamily": "$font-mono",
+                                  "fontSize": 11,
+                                  "fontWeight": "normal"
+                                }
+                              ]
+                            }
+                          ]
+                        },
+                        {
+                          "type": "text",
+                          "id": "w3cr4I",
+                          "name": "next start",
+                          "fill": "$text-muted",
+                          "textGrowth": "fixed-width",
+                          "width": 342,
+                          "content": "removed: the agent stops seeing it at its next start",
                           "lineHeight": 1.45,
                           "fontFamily": "$font-ui",
                           "fontSize": 11,
@@ -826643,7 +826981,7 @@
               "id": "F9ux6k",
               "name": "title",
               "fill": "$text-primary",
-              "content": "An agent’s window: a secondary folder Tars refuses",
+              "content": "An agent’s window: a secondary folder, refused or taken",
               "lineHeight": 1.1,
               "fontFamily": "$font-display",
               "fontSize": 28,
@@ -826656,7 +826994,7 @@
               "fill": "$text-secondary",
               "textGrowth": "fixed-width",
               "width": 946,
-              "content": "The Memory tab adds a folder to the agent’s workspace: one of your projects, or a path of your own. When Tars refuses it (Gemini and Qwen Code split their folders at commas, so a folder with a comma in it, or ending in a space, never reaches them), its reason shows under the field, word for word, in the error ink of the window’s notes, and the field keeps the path so you can change it. A call that fails is said the same way. Nothing is typed into the terminal for a folder Tars did not take.",
+              "content": "The Memory tab adds a folder to the agent’s workspace: one of your projects, or a path of your own. When Tars refuses it (gemini and Qwen Code split their folders at commas, so a folder with a comma in it, or ending in a space, never reaches them), its reason shows under the field, word for word, in the error ink of the window’s notes, and the field keeps the path so you can change it. A call that fails is said in main’s own words, without Electron’s. A folder taken while Claude Code runs is typed into it by Tars as its own /add-dir; any other CLI, or an agent not running, sees it from its next start, and the line under the field says so. Opening another agent, or editing the path, clears the line.",
               "lineHeight": 1.4,
               "fontFamily": "$font-ui",
               "fontSize": 12.5,
@@ -826686,7 +827024,7 @@
                   "fill": "$text-secondary",
                   "textGrowth": "fixed-width",
                   "width": 392,
-                  "content": "ADDED: THE FOLDER IS IN THE AGENT’S CONTEXT, THE FIELD EMPTIED",
+                  "content": "ADDED WHILE CLAUDE CODE RUNS: TARS TYPED IT, THE FIELD EMPTIED",
                   "lineHeight": 1.2,
                   "fontFamily": "$font-ui",
                   "fontSize": 10,
@@ -826975,7 +827313,7 @@
                           "fill": "$status-error",
                           "textGrowth": "fixed-width",
                           "width": 342,
-                          "content": "Gemini splits the folders it is given at commas and trims each piece, so /Users/me/Q3, Q4 is not in this agent’s workspace: rename the folder, or give the agent another",
+                          "content": "gemini splits the folders it is given at commas and trims each piece, so /Users/me/Q3, Q4 is not in this agent’s workspace: rename the folder, or give the agent another",
                           "lineHeight": 1.45,
                           "fontFamily": "$font-ui",
                           "fontSize": 11,
@@ -827002,7 +827340,7 @@
                   "fill": "$text-secondary",
                   "textGrowth": "fixed-width",
                   "width": 392,
-                  "content": "NOT REACHED: THE CALL FAILED, SAID THE SAME WAY",
+                  "content": "NOT REACHED: THE CALL FAILED, SAID IN MAIN’S OWN WORDS",
                   "lineHeight": 1.2,
                   "fontFamily": "$font-ui",
                   "fontSize": 10,
@@ -827110,7 +827448,345 @@
                           "fill": "$status-error",
                           "textGrowth": "fixed-width",
                           "width": 342,
-                          "content": "Error invoking remote method ‘agent:setSecondaryProject’: Error: the agent is gone",
+                          "content": "ENOSPC: no space left on device, write",
+                          "lineHeight": 1.45,
+                          "fontFamily": "$font-ui",
+                          "fontSize": 11,
+                          "fontWeight": "normal"
+                        }
+                      ]
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "type": "frame",
+          "id": "MvR6B",
+          "name": "states at the next start",
+          "width": "fill_container",
+          "gap": 24,
+          "children": [
+            {
+              "type": "frame",
+              "id": "lv4UJ",
+              "name": "state ADDED, ANY OTHER CLI OR THE AGENT NOT RUNNING: IT APPLIES AT ITS NEXT START",
+              "width": 392,
+              "layout": "vertical",
+              "gap": 8,
+              "children": [
+                {
+                  "type": "text",
+                  "id": "ndkIO",
+                  "name": "caption",
+                  "fill": "$text-secondary",
+                  "textGrowth": "fixed-width",
+                  "width": 392,
+                  "content": "ADDED, ANY OTHER CLI OR THE AGENT NOT RUNNING: IT APPLIES AT ITS NEXT START",
+                  "lineHeight": 1.2,
+                  "fontFamily": "$font-ui",
+                  "fontSize": 10,
+                  "fontWeight": "normal",
+                  "letterSpacing": 0.8
+                },
+                {
+                  "type": "frame",
+                  "id": "K65qRD",
+                  "name": "context tab",
+                  "width": "fill_container",
+                  "fill": "$surface",
+                  "stroke": "$border",
+                  "strokeWidth": 1,
+                  "layout": "vertical",
+                  "gap": 12,
+                  "padding": 12,
+                  "children": [
+                    {
+                      "type": "frame",
+                      "id": "oP4Fg",
+                      "name": "active context",
+                      "width": "fill_container",
+                      "layout": "vertical",
+                      "gap": 6,
+                      "children": [
+                        {
+                          "type": "text",
+                          "id": "SnTYc",
+                          "fill": "$text-muted",
+                          "content": "ACTIVE CONTEXT",
+                          "lineHeight": 1.2,
+                          "fontFamily": "$font-ui",
+                          "fontSize": 10,
+                          "fontWeight": "normal",
+                          "letterSpacing": 0.8
+                        },
+                        {
+                          "type": "frame",
+                          "id": "P2gHLU",
+                          "name": "folder",
+                          "width": "fill_container",
+                          "height": 26,
+                          "fill": "$surface-raised",
+                          "stroke": "$status-waiting",
+                          "strokeWidth": 1,
+                          "padding": [
+                            0,
+                            8
+                          ],
+                          "justifyContent": "space_between",
+                          "alignItems": "center",
+                          "children": [
+                            {
+                              "type": "text",
+                              "id": "iqaBP",
+                              "fill": "$status-waiting",
+                              "content": "Q3 reports",
+                              "lineHeight": 1.4,
+                              "fontFamily": "$font-mono",
+                              "fontSize": 11,
+                              "fontWeight": "normal"
+                            },
+                            {
+                              "type": "text",
+                              "id": "l9Mun",
+                              "fill": "$status-waiting",
+                              "content": "x",
+                              "lineHeight": 1.4,
+                              "fontFamily": "$font-mono",
+                              "fontSize": 11,
+                              "fontWeight": "normal"
+                            }
+                          ]
+                        }
+                      ]
+                    },
+                    {
+                      "type": "frame",
+                      "id": "Yl7O8",
+                      "name": "custom path",
+                      "width": "fill_container",
+                      "layout": "vertical",
+                      "gap": 6,
+                      "children": [
+                        {
+                          "type": "text",
+                          "id": "CvKJm",
+                          "fill": "$text-muted",
+                          "content": "CUSTOM PATH",
+                          "lineHeight": 1.2,
+                          "fontFamily": "$font-ui",
+                          "fontSize": 10,
+                          "fontWeight": "normal",
+                          "letterSpacing": 0.8
+                        },
+                        {
+                          "type": "frame",
+                          "id": "BKqWF",
+                          "name": "row",
+                          "width": "fill_container",
+                          "gap": 6,
+                          "alignItems": "center",
+                          "children": [
+                            {
+                              "type": "frame",
+                              "id": "dJFP6",
+                              "name": "field",
+                              "width": "fill_container",
+                              "height": 26,
+                              "fill": "$bg",
+                              "stroke": "$border",
+                              "strokeWidth": 1,
+                              "padding": [
+                                0,
+                                8
+                              ],
+                              "alignItems": "center",
+                              "children": [
+                                {
+                                  "type": "text",
+                                  "id": "aZkv5",
+                                  "fill": "$text-muted",
+                                  "content": "/path/to/project...",
+                                  "lineHeight": 1.4,
+                                  "fontFamily": "$font-mono",
+                                  "fontSize": 11,
+                                  "fontWeight": "normal"
+                                }
+                              ]
+                            },
+                            {
+                              "type": "frame",
+                              "id": "PVHpm",
+                              "name": "b Add",
+                              "height": 26,
+                              "fill": "$surface-raised",
+                              "stroke": "$status-waiting",
+                              "strokeWidth": 1,
+                              "padding": [
+                                0,
+                                11
+                              ],
+                              "alignItems": "center",
+                              "children": [
+                                {
+                                  "type": "text",
+                                  "id": "LJ1Um",
+                                  "fill": "$status-waiting",
+                                  "content": "Add",
+                                  "lineHeight": 1.4,
+                                  "fontFamily": "$font-mono",
+                                  "fontSize": 11,
+                                  "fontWeight": "normal"
+                                }
+                              ]
+                            }
+                          ]
+                        },
+                        {
+                          "type": "text",
+                          "id": "BY8Oj",
+                          "name": "next start",
+                          "fill": "$text-muted",
+                          "textGrowth": "fixed-width",
+                          "width": 342,
+                          "content": "added: the agent sees it from its next start",
+                          "lineHeight": 1.45,
+                          "fontFamily": "$font-ui",
+                          "fontSize": 11,
+                          "fontWeight": "normal"
+                        }
+                      ]
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "type": "frame",
+              "id": "zLdoc",
+              "name": "state REMOVED: THE AGENT STOPS SEEING IT AT ITS NEXT START",
+              "width": 392,
+              "layout": "vertical",
+              "gap": 8,
+              "children": [
+                {
+                  "type": "text",
+                  "id": "AjFxM",
+                  "name": "caption",
+                  "fill": "$text-secondary",
+                  "textGrowth": "fixed-width",
+                  "width": 392,
+                  "content": "REMOVED: THE AGENT STOPS SEEING IT AT ITS NEXT START",
+                  "lineHeight": 1.2,
+                  "fontFamily": "$font-ui",
+                  "fontSize": 10,
+                  "fontWeight": "normal",
+                  "letterSpacing": 0.8
+                },
+                {
+                  "type": "frame",
+                  "id": "T2BgSa",
+                  "name": "context tab",
+                  "width": "fill_container",
+                  "fill": "$surface",
+                  "stroke": "$border",
+                  "strokeWidth": 1,
+                  "layout": "vertical",
+                  "gap": 12,
+                  "padding": 12,
+                  "children": [
+                    {
+                      "type": "frame",
+                      "id": "fUSiy",
+                      "name": "custom path",
+                      "width": "fill_container",
+                      "layout": "vertical",
+                      "gap": 6,
+                      "children": [
+                        {
+                          "type": "text",
+                          "id": "j3FqI",
+                          "fill": "$text-muted",
+                          "content": "CUSTOM PATH",
+                          "lineHeight": 1.2,
+                          "fontFamily": "$font-ui",
+                          "fontSize": 10,
+                          "fontWeight": "normal",
+                          "letterSpacing": 0.8
+                        },
+                        {
+                          "type": "frame",
+                          "id": "QO3KL",
+                          "name": "row",
+                          "width": "fill_container",
+                          "gap": 6,
+                          "alignItems": "center",
+                          "children": [
+                            {
+                              "type": "frame",
+                              "id": "vnbnw",
+                              "name": "field",
+                              "width": "fill_container",
+                              "height": 26,
+                              "fill": "$bg",
+                              "stroke": "$border",
+                              "strokeWidth": 1,
+                              "padding": [
+                                0,
+                                8
+                              ],
+                              "alignItems": "center",
+                              "children": [
+                                {
+                                  "type": "text",
+                                  "id": "EVIch",
+                                  "fill": "$text-muted",
+                                  "content": "/path/to/project...",
+                                  "lineHeight": 1.4,
+                                  "fontFamily": "$font-mono",
+                                  "fontSize": 11,
+                                  "fontWeight": "normal"
+                                }
+                              ]
+                            },
+                            {
+                              "type": "frame",
+                              "id": "kmBfF",
+                              "name": "b Add",
+                              "height": 26,
+                              "fill": "$surface-raised",
+                              "stroke": "$status-waiting",
+                              "strokeWidth": 1,
+                              "padding": [
+                                0,
+                                11
+                              ],
+                              "alignItems": "center",
+                              "children": [
+                                {
+                                  "type": "text",
+                                  "id": "gqwSH",
+                                  "fill": "$status-waiting",
+                                  "content": "Add",
+                                  "lineHeight": 1.4,
+                                  "fontFamily": "$font-mono",
+                                  "fontSize": 11,
+                                  "fontWeight": "normal"
+                                }
+                              ]
+                            }
+                          ]
+                        },
+                        {
+                          "type": "text",
+                          "id": "uRzC8",
+                          "name": "next start",
+                          "fill": "$text-muted",
+                          "textGrowth": "fixed-width",
+                          "width": 342,
+                          "content": "removed: the agent stops seeing it at its next start",
                           "lineHeight": 1.45,
                           "fontFamily": "$font-ui",
                           "fontSize": 11,
