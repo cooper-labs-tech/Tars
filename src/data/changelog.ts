@@ -22,7 +22,7 @@ export const CHANGELOG: Release[] = [
       'Projects: a project\'s panel has a Traces switch, its consent for its agents to record, and says how many of them record and whether their sessions are uploaded.',
       'Traces: a new page lists the recorded sessions, filtered by project, harness and date, and opens one with its turns and each request\'s exchange. You can export sessions to a JSONL file or delete them. Storage shows the cap and the retention, and makes, rotates or revokes the reader token, which is shown once. Who may be traced holds your CLI and model pairs: add one, remove one with an undo, or import a list from a file.',
       'Traces, Upload: the back-office address, the notice of what leaves this computer, a session previewed exactly as it would be sent, your consent, the upload\'s state, and "Delete everything" with what follows it: in progress, waiting for the back-office to confirm, given up, or cleared. A call that fails says why where you made it.',
-      'Where "not saved yet" shows: on Traces, Upload, until the change is saved, and beside the control you used until it is saved or you leave that view.',
+      'When Tars cannot save a change that takes something away from sharing, it says so on Traces, Upload until the change is saved, and beside the control you used until then or until you leave that view.',
     ],
   },
   {
