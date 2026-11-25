@@ -42,8 +42,9 @@ const SECRET_NAMES = new Set([
   // - gemini 0.70.0, the three its own SENSITIVE_SETTINGS_FILENAMES names beside the two above (mcp-oauth-tokens.json
   //   plain JSON by default); qwen-code 0.25.2 keeps the first too;
   'gemini-credentials.json', 'mcp-oauth-tokens.json', 'a2a-oauth-tokens.json',
-  // - qwen-code 0.25.2, in ~/.qwen, encrypted with a key made of the host and user names, so readable as plain;
-  'mcp-oauth-tokens-v2.json', 'extension-secrets-v1.json',
+  // - qwen-code 0.25.2, in ~/.qwen, encrypted with a key made of the host and user names, so readable as plain; and
+  //   0.28.4's subscription_credentials.json, an OAuth access token with its client id (the Audit's L1 on #647);
+  'mcp-oauth-tokens-v2.json', 'extension-secrets-v1.json', 'subscription_credentials.json',
   // - grok 1.0.92, its MCP servers' OAuth tokens beside auth.json in ~/.grok;
   'mcp_credentials.json',
   // - pi 1.3.0 (~/.pi/agent) and opencode 1.19.3 (its data folder), their MCP servers' credentials, and pi's
@@ -79,11 +80,14 @@ const cliSettingsWithKey = (p: string) => {
 
 /**
  * kimi-code's credentials (2.6.3): every file of its `credentials` folder ($KIMI_CODE_HOME, else ~/.kimi-code), which
- * have no fixed name: its OAuth token, an MCP server's `<key>-tokens.json` and `<key>-client.json`. By the folder's
- * two names, so a project's `src/credentials` stays readable; a KIMI_CODE_HOME of another name is not known here.
+ * have no fixed name: its OAuth token, an MCP server's `<key>-tokens.json` and `<key>-client.json`. And the legacy Kimi
+ * CLI's, ~/.kimi/credentials (or under KIMI_SHARE_DIR), which kimi-code migrates from and leaves in place (the Audit's
+ * L2 on #647). By the folder's two names, so a project's `src/credentials` stays readable; a KIMI_CODE_HOME or
+ * KIMI_SHARE_DIR of another name is not known here.
  */
+const KIMI_HOMES = new Set(['.kimi-code', '.kimi']);
 const kimiCredential = (p: string) => path.basename(path.dirname(p)).toLowerCase() === 'credentials'
-  && path.basename(path.dirname(path.dirname(p))).toLowerCase() === '.kimi-code';
+  && KIMI_HOMES.has(path.basename(path.dirname(path.dirname(p))).toLowerCase());
 
 /** A file the window must never get, judged as spelled, where it really lies, and by inode. */
 export function isSecretFile(target: string): boolean {

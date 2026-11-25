@@ -735,11 +735,13 @@ file named as one (the settings and their copies, `api-token`, the Hermes files,
 and every `.env.*`, `.netrc`, a key), none of the CLIs' credential files, read
 in each one's package at the version Tars measured (gemini 0.70.0's
 `gemini-credentials.json`, `mcp-oauth-tokens.json` and `a2a-oauth-tokens.json`,
-qwen-code 0.25.2's `mcp-oauth-tokens-v2.json` and `extension-secrets-v1.json`,
+qwen-code 0.25.2's `mcp-oauth-tokens-v2.json` and `extension-secrets-v1.json`
+and 0.28.4's `subscription_credentials.json`,
 grok 1.0.92's `mcp_credentials.json`, pi 1.3.0's and opencode 1.19.3's
 `mcp-auth.json` and pi's `oauth.json`, cline 3.0.74's `secrets.json`, goose
 1.60.1's `secrets.yaml`, gcloud's `application_default_credentials.json`, and
-every file of kimi-code 2.6.3's `.kimi-code/credentials`), no CLI settings that hold a key (Claude
+every file of kimi-code 2.6.3's `.kimi-code/credentials` and of the legacy Kimi
+CLI's `.kimi/credentials`, which it migrates from), no CLI settings that hold a key (Claude
 Code's `settings.json` and `settings.local.json`, whose `env` may set one, Grok
 CLI's `user-settings.json`), and nothing in a folder of credentials (`~/.ssh`,
 `~/.gnupg`, `~/.aws`, `~/.config`, `~/.kube`, `~/.docker`), as spelled or where
