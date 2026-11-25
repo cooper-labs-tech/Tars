@@ -39,6 +39,9 @@ import * as path from 'node:path';
  * 6. A cleared folder answered as anything but the next start.
  * 7. ~/.tars-private, a folder inside it or one holding it, taken by agent:setSecondaryProject, or stored by the
  *    window's agent:create, as agent:update refuses it.
+ * 8. An id no provider has (a record from an older or newer Tars), or `local`, answered by its name rather than by the
+ *    provider Tars runs for it: getProvider falls back to claude, whose line hands the folder (the Audit's I-2 on #636
+ *    at 5a2c458b4).
  */
 
 const { tmpHome } = vi.hoisted(() => ({
@@ -197,6 +200,15 @@ describe("the answer agrees with each provider's own launch line (4, 5)", () => 
   it('5. every registered provider is in one list', () => {
     const listed = new Set<string>([...HANDED, ...NOT_HANDED]);
     expect(getAllProviders().map((p) => p.id).filter((id) => !listed.has(id))).toEqual([]);
+  });
+
+  it.each(['no-such-cli', 'local'])('8. %s answers as the provider Tars runs for it, claude, whose line hands the folder', async (id) => {
+    const { agent } = agentOn(id as AgentProvider, { cli: false });
+    const answer = await setFolder(agent.id, folder);
+    const line = getProvider(id as AgentProvider).buildInteractiveCommand({ agentId: agent.id, binaryPath: '/opt/bin/cli', prompt: 'go', secondaryProjectPath: folder } as never);
+    expect(getProvider(id as AgentProvider).id).toBe('claude');
+    expect(line).toContain(folder);
+    expect(answer.appliesAt).toBe('next-start');
   });
 });
 
