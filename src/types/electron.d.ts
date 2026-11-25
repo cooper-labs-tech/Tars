@@ -1279,7 +1279,9 @@ export interface OrphanFolder {
 /** One item the disk janitor proposes, as the window reads it (electron/services/janitor-state.ts). */
 export interface JanitorItem {
   id: string;
-  kind: 'next-cache' | 'test-artefacts' | 'closed-worktree' | 'npx-cache' | 'docker-image' | 'docker-vm-trim' | 'agent-tmp';
+  kind: 'next-cache' | 'test-artefacts' | 'closed-worktree' | 'npx-cache' | 'docker-image' | 'docker-vm-trim' | 'agent-tmp'
+    /** 2.0.7: an ended session's folder, an old entry of a live agent's temporary folders, a release/, an idle worktree's node_modules. */
+    | 'session-scratchpad' | 'agent-tmp-entry' | 'release-folder' | 'worktree-node-modules';
   /** A folder's exact absolute path; for Docker, the image or the VM by name. */
   path: string;
   label: string;
@@ -1314,7 +1316,64 @@ export interface JanitorState {
   log: Array<{ at: number; what: string; bytes: number | null }>;
   /** The scans agents asked for (each answered with its own project's items), newest last. */
   requests: Array<{ at: number; by: string; project: string; items: number }>;
+  /**
+   * The cleanups agents asked the owner for (2.0.7, POST /api/janitor/request, disk_cleanup_request), newest last:
+   * items of the last scan in the asker's project, with why. Nothing goes until the owner approves one in one click
+   * (`approveRequest`), each item checked again as for any approval.
+   */
+  cleanupRequests: JanitorCleanupRequest[];
+  /** What agents leave behind, per project and per agent, made after each scan, every 6 hours at least (2.0.7). */
+  report: DiskReport | null;
   error: string | null;
+}
+
+/** An agent's cleanup request, as the window shows it. */
+export interface JanitorCleanupRequest {
+  id: string;
+  at: number;
+  /** The agent that asked, by name, and its id. */
+  by: string;
+  byId: string;
+  project: string;
+  /** The janitor items it names (JanitorItem.id), all in its project. */
+  ids: string[];
+  /**
+   * Each of those items as the window shows it: what it is, its size, the rule it matched, and, once this request's
+   * approval has processed it, its outcome (deleted and its bytes, kept or failed and why), kept past later scans.
+   * Absent while the request waits, and when the owner approved the same item from the scan's list instead.
+   */
+  items: Array<Pick<JanitorItem, 'id' | 'kind' | 'label' | 'path' | 'bytes' | 'rule' | 'outcome'>>;
+  bytes: number;
+  /** What this request's approval freed, the bytes of its items deleted; 0 until the owner approves it. */
+  freedBytes: number;
+  why: string;
+  state: 'waiting' | 'approved';
+  approvedAt?: number;
+}
+
+/** What agents leave behind on the disk (electron/services/disk-report.ts). */
+export interface DiskReport {
+  at: number;
+  /** As measured; null when nothing measured it (no health sample yet). */
+  machine: { diskFreeBytes: number | null; swapUsedMb: number | null; swapGrowthMbPerMin: number | null };
+  projects: Array<{
+    project: string;
+    bytes: number;
+    worktrees: Array<{
+      path: string;
+      name: string;
+      /** The fleet agent working in it, else the agent the worktree tool's registry names. */
+      agent: string | null;
+      branch: string | null;
+      idleDays: number;
+      /** null: not there, or (node_modules) in use and not measured. */
+      bytes: { next: number | null; release: number | null; testArtefacts: number | null; nodeModules: number | null };
+      /** The janitor items in it: approve them to free its row. */
+      itemIds: string[];
+    }>;
+  }>;
+  agents: Array<{ id: string; name: string; project: string; status: string | null; tmpBytes: number; itemIds: string[] }>;
+  proposedBytes: number;
 }
 
 /** One process of an agent's tree. */
@@ -2910,6 +2969,8 @@ export interface ElectronAPI {
     state: () => Promise<JanitorState>;
     scan: () => Promise<{ success: boolean; error?: string }>;
     approve: (ids: string[]) => Promise<{ success: boolean; error?: string }>;
+    /** The owner's one click on an agent's cleanup request (2.0.7): its items approved, as `approve` would. */
+    approveRequest: (id: string) => Promise<{ success: boolean; error?: string }>;
     onChanged: (callback: (state: JanitorState) => void) => () => void;
   };
 

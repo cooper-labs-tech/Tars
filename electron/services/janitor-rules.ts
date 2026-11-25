@@ -1,6 +1,7 @@
 import { createHash } from 'crypto';
 import * as fs from 'fs';
 import * as path from 'path';
+import { parse as parseToml } from 'smol-toml';
 import { shortIdOf } from './agent-tmp';
 
 /**
@@ -19,13 +20,27 @@ import { shortIdOf } from './agent-tmp';
  * - docker-image: an image no container uses, a stopped one included (`docker image rm`, never -f, never a volume);
  * - docker-vm-trim: a trim of the Docker VM (colima), which gives the disk back what the VM freed;
  * - agent-tmp: the temporary folders (~/.tars/tmp/<id>) of an agent no longer in the fleet.
- * Never, whatever matches: ~/.tars-private, ~/Documents, the uv cache, the Trash, ~/Library/Developer (Xcode, the iOS
- * runtimes and simulators), a Docker volume, a project's own folder, anything inside a worktree a fleet agent works
+ * And what agents leave behind (2.0.7; an orchestrator's report of 19/11: 5.4 GB in live agents' temporary folders
+ * on the owner's Mac, 475 MB in an electron-builder release/, none of it proposed):
+ * - session-scratchpad: an ended session's folder in a live agent's Claude Code temporary folder
+ *   (~/.tars/tmp/<id>/c/<user>/<project>/<session>, neither its current nor its resumable session), untouched 3 days;
+ * - agent-tmp-entry: an entry of a live agent's TMPDIR (t/) or of its current session's scratchpad, untouched 7 days;
+ * - release-folder: the release/ of a project or a worktree (electron-builder's output), untouched 3 days, holding
+ *   every entry of a build's kind (artefacts and their .blockmap, latest*.yml, builder-*.yml, the unpacked apps), its
+ *   marker (builder-debug.yml, builder-effective-config.yaml) and a second sign of a build (an update manifest
+ *   latest*.yml, or an artefact beside its .blockmap), no file git tracks in it, and ignored by git (at a
+ *   project's root) or ignored or untracked (in a worktree): a user's own release/ is never proposed;
+ * - worktree-node-modules: the node_modules of a worktree nothing changed in for 7 days (caches aside).
+ * None of these when a report names it or a process works in it. A temporary item carries its agent's project.
+ * Never, whatever matches: ~/.tars-private, ~/Documents, the uv cache (wherever uv puts it, from the variables Tars runs
+ * with and uv's user-level config: never()), the Trash (the Finder's, Linux's, and each volume's), ~/Library/Developer
+ * (Xcode, the iOS runtimes and simulators), a Docker volume, a project's own folder, anything inside a worktree a fleet agent works
  * in, one with uncommitted work, or one a process works in. When the processes cannot be read (no lsof, Windows),
  * nothing that needs "nothing runs in it" is proposed.
  */
 
-export type JanitorKind = 'next-cache' | 'test-artefacts' | 'closed-worktree' | 'npx-cache' | 'docker-image' | 'docker-vm-trim' | 'agent-tmp';
+export type JanitorKind = 'next-cache' | 'test-artefacts' | 'closed-worktree' | 'npx-cache' | 'docker-image' | 'docker-vm-trim' | 'agent-tmp'
+  | 'session-scratchpad' | 'agent-tmp-entry' | 'release-folder' | 'worktree-node-modules';
 
 export type JanitorItem = {
   id: string;
@@ -52,7 +67,11 @@ export interface JanitorWorld {
   privateDir: string;
   now: number;
   projects: string[];
-  fleet: Array<{ id: string; projectPath: string; worktreePath?: string }>;
+  /**
+   * The fleet's agents: their project and worktree, and, for the report and the temporary folders' rules, their
+   * name, status and the sessions they hold (current and resumable).
+   */
+  fleet: Array<{ id: string; projectPath: string; worktreePath?: string; name?: string; status?: string; sessions?: string[] }>;
   /**
    * Every process, with its command line and the paths it is in, resolved: its working folder, its executable, and on
    * Linux the files it holds open (the Audit's M1 on #542: six servers ran from an npx entry with their working folder
@@ -72,6 +91,11 @@ export interface JanitorWorld {
   named(folder: string): boolean;
   docker: { images(): Promise<Array<{ id: string; repo: string; sizeBytes: number; used: boolean }> | null>; vm: boolean };
   sizeOf(p: string): Promise<number>;
+  /**
+   * What git says of a folder (2.0.7, the Audit's M1 on #605): `tracked` when it holds a file git tracks, else
+   * `ignored` or `untracked`; null when git cannot say. Absent: nothing that needs it is proposed.
+   */
+  tracking?(dir: string): Promise<'tracked' | 'ignored' | 'untracked' | null>;
 }
 
 export interface JanitorOps {
@@ -92,6 +116,16 @@ const DAY = 86_400_000;
 const CACHE_IDLE_DAYS = 3;
 const WORKTREE_IDLE_DAYS = 1;
 const NPX_IDLE_DAYS = 14;
+const SESSION_IDLE_DAYS = 3;
+const TMP_ENTRY_IDLE_DAYS = 7;
+const RELEASE_IDLE_DAYS = 3;
+const NODE_MODULES_IDLE_DAYS = 7;
+/**
+ * How deep an npx entry is walked for its last change: the entry, its node_modules, each package's folder. The whole
+ * walk read every file of every entry: 38.8 s of a 57 s scan on the owner's Mac (19/11), under load past the 30 s an
+ * MCP call waits. npm writes the folders it installs, and node_modules/.package-lock.json, at those depths.
+ */
+const NPX_DEPTH = 2;
 /** Past this many entries the newest change is not looked for further, and the folder reads as just touched. */
 const WALK_MAX = 20_000;
 
@@ -116,47 +150,166 @@ const isCache = (rel: string) => CACHES.some(c => c.test(rel));
  * The newest change in a folder, links not followed; `now` past WALK_MAX entries (as if just touched). Asynchronous:
  * the main process keeps answering. With `cachesAside`, the rebuildable caches are not walked.
  */
-async function newestChange(dir: string, now: number, cachesAside = false): Promise<number> {
+async function newestChange(dir: string, now: number, cachesAside = false, maxDepth = Infinity): Promise<number> {
   let newest = 0;
   let seen = 0;
-  const stack = [dir];
+  const stack: Array<[string, number]> = [[dir, 0]];
   while (stack.length) {
-    const at = stack.pop()!;
+    const [at, depth] = stack.pop()!;
     let st: fs.Stats;
     try { st = await fs.promises.lstat(at); } catch { continue; }
     newest = Math.max(newest, st.mtimeMs);
     if (++seen > WALK_MAX) return now;
-    if (!st.isDirectory()) continue;
+    if (!st.isDirectory() || depth >= maxDepth) continue;
     let names: string[] = [];
     try { names = await fs.promises.readdir(at); } catch { continue; }
     for (const n of names) {
       const child = path.join(at, n);
       if (cachesAside && isCache(path.relative(dir, child).split(path.sep).join('/'))) continue;
-      stack.push(child);
+      stack.push([child, depth + 1]);
     }
   }
   return newest;
 }
 
-/** The never list: folders nothing is ever proposed in. */
-function never(world: JanitorWorld): string[] {
-  const h = world.home;
-  return [
-    world.privateDir, path.join(h, 'Documents'), path.join(h, '.cache', 'uv'), path.join(h, 'Library', 'Caches', 'uv'),
-    path.join(h, '.Trash'), path.join(h, 'Library', 'Developer'), '/Library/Developer',
-  ].map(real);
+/**
+ * A folder a tool takes from an environment variable of Tars's own: the variable set and absolute, else none. An empty
+ * one is unset to the tool, and a relative one would be Tars's working folder (`/` when the Finder started it), which
+ * would put the whole disk on the never list.
+ */
+function fromEnv(name: string, ...under: string[]): string[] {
+  const value = process.env[name];
+  return value && path.isAbsolute(value) ? [path.join(value, ...under)] : [];
 }
+
+/** Past this a uv.toml is no config, and is not read. */
+const UV_TOML_MAX = 64 * 1024;
+
+/**
+ * The text of a small regular file, or undefined, checked and read on one descriptor, so what is checked is what is
+ * read (the Audit's I-1 on #605 at af2ee8be2: checked by path then read by path, a file swapped in between was read):
+ * - opened non-blocking: a FIFO in its place, put there at any moment, never blocks the main process on its open;
+ * - its fstat refuses anything that is no regular file;
+ * - at most UV_TOML_MAX + 1 bytes are read from it, so a file grown since its check is not read whole.
+ * A link is followed, as uv 0.13.1 follows it (measured), so no O_NOFOLLOW. On Windows O_NONBLOCK is not defined: a
+ * path in the home is no named pipe there (those live under \\.\pipe\), and the fstat and the bounded read hold alike.
+ */
+function readSmallFile(file: string): string | undefined {
+  const fd = fs.openSync(file, fs.constants.O_RDONLY | (fs.constants.O_NONBLOCK ?? 0));
+  try {
+    if (!fs.fstatSync(fd).isFile()) return undefined;
+    const buf = Buffer.alloc(UV_TOML_MAX + 1);
+    let n = 0;
+    while (n < buf.length) {
+      const got = fs.readSync(fd, buf, n, buf.length - n, n);
+      if (got === 0) break;
+      n += got;
+    }
+    return n > UV_TOML_MAX ? undefined : buf.toString('utf-8', 0, n);
+  } finally {
+    fs.closeSync(fd);
+  }
+}
+
+/**
+ * A cache-dir that would hide what the janitor proposes, by real path: the filesystem's root (a drive's on Windows),
+ * the home or an ancestor of it (the Audit's I-2 on #605), or a folder that is or holds a project of the world, Tars's
+ * data folder, or a fleet agent's worktree or project (its I-1 at 86848e87c). Any process of the user, an agent
+ * included, can write one into the user's uv.toml. A volume mounted below the root (/Volumes/<v>, /mnt/<d>) is no
+ * root here: mount points are not read, so a cache-dir naming one is taken unless it holds one of these.
+ */
+function hidesEverything(dir: string, world: JanitorWorld): boolean {
+  const at = real(dir);
+  const held = [world.home, world.dataDir, ...world.projects, ...world.fleet.flatMap(a => [a.projectPath, a.worktreePath ?? ''])];
+  return at === path.parse(at).root || held.some(p => p !== '' && inside(real(p), at));
+}
+
+/**
+ * The `cache-dir` of a uv.toml, as uv 0.13.1 reads it (measured): a folder only when absolute, since uv takes `~`,
+ * `$HOME` and a relative value as written, relative to the folder it runs in. None when the file is missing, is no
+ * regular file, is past UV_TOML_MAX, or is no TOML (uv refuses it too), and none, said in one line, when it would hide
+ * every proposal (hidesEverything).
+ */
+function uvTomlCacheDir(file: string, world: JanitorWorld): string[] {
+  let value: unknown;
+  try {
+    const text = readSmallFile(file);
+    if (text === undefined) return [];
+    value = (parseToml(text) as Record<string, unknown>)['cache-dir'];
+  } catch {
+    return [];
+  }
+  if (typeof value !== 'string' || !path.isAbsolute(value)) return [];
+  if (hidesEverything(value, world)) {
+    // The value as uv.toml holds it may carry a newline or an escape character, and run to 64 KiB (the Audit's I-3).
+    const shown = JSON.stringify(value).slice(0, 200);
+    console.warn(`[janitor] ${file}: cache-dir ${shown} ignored: it is the root, the home or above it, or holds a project, Tars's data folder or an agent's worktree, and would hide what the janitor proposes there`);
+    return [];
+  }
+  return [value];
+}
+
+/**
+ * A volume's trash, by the name of its folder: /Volumes/<v>/.Trashes on macOS, <mount>/.Trash-<uid> and
+ * <mount>/.Trash/<uid> on Linux, <drive>\$Recycle.Bin on Windows. The janitor reaches other volumes, since
+ * projects.json names any folder, so a project on a volume of its own included.
+ */
+const TRASH_FOLDER = /^(\.Trashes|\.Trash|\.Trash-\d+|\$Recycle\.Bin)$/i;
+const inATrash = (p: string) => p.split(/[\\/]/).some(s => TRASH_FOLDER.test(s));
+
+const neverOf = new WeakMap<JanitorWorld, string[]>();
+
+/**
+ * The never list: folders nothing is ever proposed in, made once for a world (it reads uv's config files).
+ * - The uv cache, wherever uv may put it (uv 0.13.1, measured), whichever of these uv would take:
+ *   - the variables: $UV_CACHE_DIR, $XDG_CACHE_HOME/uv, %LOCALAPPDATA%\uv\cache on Windows;
+ *   - the `cache-dir` of the user-level uv.toml, which moves it for every uv: $XDG_CONFIG_HOME/uv/uv.toml, else
+ *     ~/.config/uv/uv.toml, and %APPDATA%\uv\uv.toml on Windows;
+ *   - the literals ~/.cache/uv, <home>\AppData\Local\uv\cache, and the ~/Library/Caches/uv of older versions.
+ * - The Trash: the Finder's ~/.Trash, Linux's freedesktop.org trash ($XDG_DATA_HOME/Trash or ~/.local/share/Trash),
+ *   and each volume's (inATrash).
+ * Not seen here:
+ * - variables a shell sets for the uv it starts: those read are the ones Tars runs with;
+ * - a project's own uv.toml or [tool.uv] of its pyproject.toml: uv takes it from the nearest one above the folder it
+ *   runs in, which can be any folder of any project;
+ * - the system-level uv.toml (/etc/uv/uv.toml, %PROGRAMDATA%\uv\uv.toml) and a file named by UV_CONFIG_FILE;
+ * - a mount point as a cache-dir: hidesEverything ignores one that is the filesystem's root or a Windows drive's, not
+ *   one that is a volume mounted below the root (/Volumes/<v>, /mnt/<d>, /media/<user>/<d>), since mount points are
+ *   not read. Such a value is taken unless it holds the home, a project, the data folder or a fleet agent's worktree,
+ *   and hides what is proposed on that volume.
+ */
+function never(world: JanitorWorld): string[] {
+  const made = neverOf.get(world);
+  if (made) return made;
+  const h = world.home;
+  const uvConfigs = [
+    ...fromEnv('XDG_CONFIG_HOME', 'uv', 'uv.toml'), path.join(h, '.config', 'uv', 'uv.toml'),
+    ...fromEnv('APPDATA', 'uv', 'uv.toml'), path.join(h, 'AppData', 'Roaming', 'uv', 'uv.toml'),
+  ];
+  const list = [
+    world.privateDir, path.join(h, 'Documents'),
+    ...fromEnv('UV_CACHE_DIR'), ...fromEnv('XDG_CACHE_HOME', 'uv'), ...fromEnv('LOCALAPPDATA', 'uv', 'cache'),
+    ...uvConfigs.flatMap(file => uvTomlCacheDir(file, world)),
+    path.join(h, '.cache', 'uv'), path.join(h, 'Library', 'Caches', 'uv'), path.join(h, 'AppData', 'Local', 'uv', 'cache'),
+    path.join(h, '.Trash'), ...fromEnv('XDG_DATA_HOME', 'Trash'), path.join(h, '.local', 'share', 'Trash'),
+    path.join(h, 'Library', 'Developer'), '/Library/Developer',
+  ].map(real);
+  neverOf.set(world, list);
+  return list;
+}
+
+/** On the never list, or under a folder of it, or in a volume's trash. */
+const isNever = (world: JanitorWorld, at: string) => inATrash(at) || never(world).some(n => inside(at, n));
 
 /** A folder on the never list, or under one (a project in ~/Documents, a .worktrees linked into it). */
 function onNeverList(world: JanitorWorld, p: string): boolean {
-  const at = real(p);
-  return never(world).some(n => inside(at, n));
+  return isNever(world, real(p));
 }
 
 /** Why a folder is not the janitor's to propose, or undefined. */
 function kept(world: JanitorWorld, p: string, worktree?: string): string | undefined {
   const at = real(p);
-  if (never(world).some(n => inside(at, n))) return 'it is on the never list';
+  if (isNever(world, at)) return 'it is on the never list';
   if (world.processes === null) return 'the processes cannot be read';
   const folder = worktree ? real(worktree) : at;
   // In it by its working folder, its executable or an open file, or named on its command line (M1). The paths come
@@ -169,10 +322,95 @@ function kept(world: JanitorWorld, p: string, worktree?: string): string | undef
 
 type Progress = (p: { what: string; done: number; total: number; foundBytes: number }) => void;
 
-async function scanWorktrees(world: JanitorWorld, out: JanitorItem[], step: (what: string) => void): Promise<void> {
+/**
+ * Where a scan looks: everywhere, or, for an approved item's re-check, its own kind in its own place (2.0.7): the
+ * re-check ran the whole scan for each item, Docker and every project included, and four items behind a Docker that
+ * answered in 40 s took four whole scans.
+ */
+export type ScanScope = { kinds: JanitorKind[]; project?: string; agentTmp?: string };
+const WORKTREE_KINDS: readonly JanitorKind[] = ['next-cache', 'test-artefacts', 'closed-worktree', 'release-folder', 'worktree-node-modules'];
+const looksAt = (scope: ScanScope | undefined, kinds: readonly JanitorKind[]) => !scope || kinds.some(k => scope.kinds.includes(k));
+
+/**
+ * What electron-builder writes into its output folder, measured in the Tars checkout's release/ (builder-debug.yml),
+ * and the Audit's other marker: a release/ holding neither is a user's own folder (the Audit's M1 on #605).
+ */
+const BUILDER_MARKERS = ['builder-debug.yml', 'builder-effective-config.yaml'];
+const isFile = (p: string) => { try { return fs.lstatSync(p).isFile(); } catch { return false; } };
+/** The update manifests electron-builder writes beside its artefacts (latest.yml, latest-mac.yml, latest-linux.yml...). */
+const UPDATE_MANIFEST = /^latest(-[a-z0-9]+)?\.yml$/;
+
+/**
+ * A second sign of a build beside the marker, which an injected agent could plant alone in an ignored folder of the
+ * owner's (the Audit's Info on #605): an update manifest, or an artefact beside its .blockmap (measured in the Tars
+ * checkout's release/: latest-mac.yml, the .dmg and the .zip each with theirs). A .blockmap alone is none.
+ */
+/**
+ * The entries a build leaves, and nothing else (the Audit's stronger form at 142a60c53: this rule deletes files):
+ * artefacts and their .blockmap, electron-builder's manifests and logs, the unpacked apps, Finder's .DS_Store. One
+ * other entry, a file or a folder of the owner's, keeps the folder out, whatever was planted beside it.
+ */
+const BUILD_FILE = /(\.(dmg|zip|exe|appimage|deb|rpm|snap|msi|pkg|7z)(\.blockmap)?|^latest(-[a-z0-9]+)?\.yml|^builder-[a-z0-9-]+\.ya?ml|^\.ds_store)$/i;
+/**
+ * electron-builder's own unpacked folders, by its arch names and no other (the Audit's L1 at b8d8539c7: mac-<any word>
+ * admitted an owner's mac-signing/). A mac one holds .app bundles only (Finder's .DS_Store aside): anything else in it
+ * is the owner's; a win or linux one holds the unpacked app itself.
+ */
+const MAC_DIRS = new Set(['mac', 'mac-arm64', 'mac-universal', 'mac-x64']);
+const UNPACKED_DIRS = new Set(['win-unpacked', 'win-arm64-unpacked', 'win-ia32-unpacked', 'linux-unpacked', 'linux-arm64-unpacked', 'linux-armv7l-unpacked', 'linux-ia32-unpacked']);
+const onlyAppBundles = (dir: string): boolean => {
+  let names: string[] = [];
+  try { names = fs.readdirSync(dir); } catch { return false; }
+  return names.every(n => n === '.DS_Store' || (n.endsWith('.app') && isDir(path.join(dir, n))));
+};
+const ofABuild = (dir: string, name: string): boolean => {
+  let st: fs.Stats;
+  try { st = fs.lstatSync(path.join(dir, name)); } catch { return false; }
+  if (st.isFile()) return BUILD_FILE.test(name);
+  if (!st.isDirectory()) return false;
+  if (MAC_DIRS.has(name)) return onlyAppBundles(path.join(dir, name));
+  return UNPACKED_DIRS.has(name);
+};
+
+function builtHere(dir: string): boolean {
+  let names: string[] = [];
+  try { names = fs.readdirSync(dir); } catch { return false; }
+  if (!names.every(n => ofABuild(dir, n))) return false;
+  if (!BUILDER_MARKERS.some(m => names.includes(m) && isFile(path.join(dir, m)))) return false;
+  return names.some(n => (UPDATE_MANIFEST.test(n) && isFile(path.join(dir, n)))
+    || (n.endsWith('.blockmap') && names.includes(n.slice(0, -'.blockmap'.length)) && isFile(path.join(dir, n.slice(0, -'.blockmap'.length)))));
+}
+
+/**
+ * The release/ of a folder (a project or a worktree), when it is electron-builder's output by its own evidence (its
+ * marker, no file git tracks, ignored by git, or untracked in a worktree: at a project's root that is uncommitted
+ * work), old, and nothing works in it.
+ */
+async function releaseItem(world: JanitorWorld, folder: string, label: string, project: string, atRoot: boolean): Promise<JanitorItem | undefined> {
+  const p = path.join(folder, 'release');
+  if (!isDir(p) || !builtHere(p) || kept(world, p) || world.named(p)) return undefined;
+  const git = world.tracking ? await world.tracking(p) : null;
+  if (git !== 'ignored' && !(git === 'untracked' && !atRoot)) return undefined;
+  const changed = await newestChange(p, world.now);
+  if (changed > world.now - RELEASE_IDLE_DAYS * DAY) return undefined;
+  return {
+    id: idOf('release-folder', p), kind: 'release-folder', path: p, project, label: `${label}/release`, sizeBytes: await world.sizeOf(p),
+    rule: `electron-builder's output, every entry a build's (its artefacts and their .blockmap, latest*.yml, builder-*.yml, its own mac, win and linux folders, a mac one holding only .app bundles), with its builder-debug.yml and its update manifest or an artefact beside its .blockmap, git tracking nothing in it, untouched for ${RELEASE_IDLE_DAYS} days, nothing running in it`,
+    why: `last changed ${day(changed)}`,
+  };
+}
+
+async function scanWorktrees(world: JanitorWorld, out: JanitorItem[], step: (what: string) => void, scope?: ScanScope): Promise<void> {
+  const wants = (k: JanitorKind) => !scope || scope.kinds.includes(k);
   for (const project of world.projects) {
     step(`the worktrees of ${path.basename(project)}`);
+    if (scope && (!scope.project || real(scope.project) !== real(project))) continue;
     if (onNeverList(world, project)) continue;
+    // The project's own release/: a build output, not its source.
+    if (wants('release-folder')) {
+      const own = await releaseItem(world, project, path.basename(project), project, true);
+      if (own) out.push(own);
+    }
     const list = await world.worktrees(project);
     if (!list) continue;
     const base = real(path.join(project, '.worktrees'));
@@ -188,7 +426,7 @@ async function scanWorktrees(world: JanitorWorld, out: JanitorItem[], step: (wha
       const details = { branch: w.branch ?? null, merged, idleDays: Math.floor((world.now - idleSince) / DAY), clean: true };
       for (const [kind, dirName] of [['next-cache', '.next'], ['test-artefacts', 'test-results'], ['test-artefacts', 'playwright-report']] as const) {
         const p = path.join(wt, dirName);
-        if (!isDir(p)) continue;
+        if (!wants(kind) || !isDir(p)) continue;
         const changed = await newestChange(p, world.now);
         if (changed > world.now - CACHE_IDLE_DAYS * DAY) continue;
         if (kind === 'test-artefacts' && world.named(p)) continue;
@@ -200,7 +438,22 @@ async function scanWorktrees(world: JanitorWorld, out: JanitorItem[], step: (wha
             : `test artefacts of a worktree nothing runs in, untouched for ${CACHE_IDLE_DAYS} days, named by no report`,
         });
       }
-      if (w.locked || merged !== true) continue;
+      if (wants('release-folder')) {
+        const release = await releaseItem(world, wt, name, wt, false);
+        if (release) out.push(release);
+      }
+      // Its node_modules, by the worktree's idleness: one of more than 20,000 entries reads as just touched when walked.
+      const modules = path.join(wt, 'node_modules');
+      if (wants('worktree-node-modules') && isDir(modules) && !world.named(modules)
+        && idleSince <= world.now - NODE_MODULES_IDLE_DAYS * DAY && (await fs.promises.lstat(modules)).mtimeMs <= world.now - NODE_MODULES_IDLE_DAYS * DAY) {
+        out.push({
+          id: idOf('worktree-node-modules', modules), kind: 'worktree-node-modules', path: modules, project: wt, label: `${name}/node_modules`,
+          sizeBytes: await world.sizeOf(modules), details,
+          rule: `the node_modules of a worktree nothing changed in for ${NODE_MODULES_IDLE_DAYS} days, nothing running in it; a clone of another worktree's (scripts/worktree.mjs) shares most of its blocks and frees less than its size`,
+          why: `the worktree last changed ${day(idleSince)}`,
+        });
+      }
+      if (!wants('closed-worktree') || w.locked || merged !== true) continue;
       if (idleSince > world.now - WORKTREE_IDLE_DAYS * DAY) continue;
       // As scripts/worktree.mjs refuses (the Audit's M2): ignored files but the caches, and an operation under way.
       const ignored = await world.ignored(wt);
@@ -215,21 +468,99 @@ async function scanWorktrees(world: JanitorWorld, out: JanitorItem[], step: (wha
   }
 }
 
-async function scanFolders(world: JanitorWorld, out: JanitorItem[], step: (what: string) => void): Promise<void> {
+async function scanFolders(world: JanitorWorld, out: JanitorItem[], step: (what: string) => void, scope?: ScanScope): Promise<void> {
   step('the npx cache');
+  if (!scope || scope.kinds.includes('npx-cache')) await scanNpx(world, out);
+  step('the temporary folders of agents gone');
+  if (!scope || scope.kinds.includes('agent-tmp')) await scanGoneTmp(world, out);
+  for (const item of await scanLiveTmp(world, step, scope)) out.push(item);
+}
+
+/** How deep a temporary folder's entry is walked for its last change: a run's output can hold tens of thousands of files. */
+const TMP_DEPTH = 4;
+const subdirs = (dir: string) => { try { return fs.readdirSync(dir).filter(n => isDir(path.join(dir, n))); } catch { return []; } };
+
+/**
+ * What a live agent leaves in its temporary folders (services/agent-tmp.ts: t is its TMPDIR, c Claude Code's, where
+ * each session keeps its scratchpad and its background tasks' output): an ended session's folder, and old entries of
+ * the current session's scratchpad and of t/. Each carries the agent's project, so its orchestrator is shown it.
+ */
+async function scanLiveTmp(world: JanitorWorld, step: (what: string) => void, scope?: ScanScope): Promise<JanitorItem[]> {
+  step('the temporary folders of agents');
+  const sessionsToo = !scope || scope.kinds.includes('session-scratchpad');
+  const entriesToo = !scope || scope.kinds.includes('agent-tmp-entry');
+  const items: JanitorItem[] = [];
+  if (!sessionsToo && !entriesToo) return items;
+  for (const agent of world.fleet) {
+    const short = shortIdOf(agent.id);
+    const root = path.join(world.dataDir, 'tmp', short);
+    if (scope?.agentTmp && real(scope.agentTmp) !== real(root)) continue;
+    if (!isDir(root) || onNeverList(world, root)) continue;
+    const who = agent.name || agent.id;
+    const old = async (p: string, days: number) => {
+      if (kept(world, p) || world.named(p)) return null;
+      const changed = await newestChange(p, world.now, false, TMP_DEPTH);
+      return changed <= world.now - days * DAY ? changed : null;
+    };
+    const entry = async (p: string, label: string) => {
+      const changed = await old(p, TMP_ENTRY_IDLE_DAYS);
+      if (changed === null) return;
+      items.push({
+        id: idOf('agent-tmp-entry', p), kind: 'agent-tmp-entry', path: p, project: agent.projectPath, label, sizeBytes: await world.sizeOf(p),
+        rule: `an entry of a live agent's temporary folder or of its current session's scratchpad, untouched for ${TMP_ENTRY_IDLE_DAYS} days, named by no report, nothing running in it`,
+        why: `${who}'s, last changed ${day(changed)}`,
+      });
+    };
+    if (entriesToo) for (const n of subdirs(path.join(root, 't'))) await entry(path.join(root, 't', n), `${who}: t/${n}`);
+    // c/<user>/<project>/<session>: the agent's own sessions, its current and resumable ones held; with none known,
+    // its newest is.
+    const sessions: Array<{ dir: string; id: string; changed: number }> = [];
+    for (const user of subdirs(path.join(root, 'c'))) {
+      for (const proj of subdirs(path.join(root, 'c', user))) {
+        for (const sid of subdirs(path.join(root, 'c', user, proj))) {
+          const dir = path.join(root, 'c', user, proj, sid);
+          sessions.push({ dir, id: sid, changed: await newestChange(dir, world.now, false, TMP_DEPTH) });
+        }
+      }
+    }
+    const held = new Set(agent.sessions?.length ? agent.sessions : sessions.length ? [sessions.reduce((a, b) => (b.changed > a.changed ? b : a)).id] : []);
+    for (const session of sessions) {
+      if (held.has(session.id)) {
+        if (!entriesToo) continue;
+        const pad = path.join(session.dir, 'scratchpad');
+        for (const n of subdirs(pad)) await entry(path.join(pad, n), `${who}: scratchpad/${n}`);
+        continue;
+      }
+      if (!sessionsToo || session.changed > world.now - SESSION_IDLE_DAYS * DAY || kept(world, session.dir) || world.named(session.dir)) continue;
+      items.push({
+        id: idOf('session-scratchpad', session.dir), kind: 'session-scratchpad', path: session.dir, project: agent.projectPath,
+        label: `${who}: session ${session.id.slice(0, 8)}`, sizeBytes: await world.sizeOf(session.dir),
+        rule: `an ended session's folder in a live agent's temporary folder (its scratchpad, its tasks' output), untouched for ${SESSION_IDLE_DAYS} days, named by no report, nothing running in it`,
+        why: `${who}'s session ${session.id}, which it no longer holds, last changed ${day(session.changed)}`,
+      });
+    }
+  }
+  return items;
+}
+
+async function scanNpx(world: JanitorWorld, out: JanitorItem[]): Promise<void> {
   const npx = real(path.join(world.home, '.npm', '_npx'));
   let names: string[] = [];
   try { names = fs.readdirSync(npx); } catch { /* none */ }
   for (const n of names) {
     const p = path.join(npx, n);
     if (!isDir(p) || kept(world, p)) continue;
-    const changed = await newestChange(p, world.now);
+    const changed = await newestChange(p, world.now, false, NPX_DEPTH);
     if (changed > world.now - NPX_IDLE_DAYS * DAY) continue;
     out.push({ id: idOf('npx-cache', p), kind: 'npx-cache', path: p, label: `~/.npm/_npx/${n}`, sizeBytes: await world.sizeOf(p), rule: `an npx cache entry untouched for ${NPX_IDLE_DAYS} days`, why: `last used ${day(changed)}` });
   }
-  step('the temporary folders of agents gone');
+}
+
+/** The temporary folders of agents no longer in the fleet. */
+async function scanGoneTmp(world: JanitorWorld, out: JanitorItem[]): Promise<void> {
   const tmp = real(path.join(world.dataDir, 'tmp'));
   const live = new Set(world.fleet.map(a => shortIdOf(a.id)));
+  let names: string[] = [];
   try { names = fs.readdirSync(tmp); } catch { names = []; }
   for (const n of names) {
     const p = path.join(tmp, n);
@@ -238,8 +569,9 @@ async function scanFolders(world: JanitorWorld, out: JanitorItem[], step: (what:
   }
 }
 
-async function scanDocker(world: JanitorWorld, out: JanitorItem[], step: (what: string) => void): Promise<void> {
+async function scanDocker(world: JanitorWorld, out: JanitorItem[], step: (what: string) => void, scope?: ScanScope): Promise<void> {
   step('Docker');
+  if (!looksAt(scope, ['docker-image', 'docker-vm-trim'])) return;
   const images = await world.docker.images();
   for (const i of images ?? []) {
     if (i.used) continue;
@@ -251,19 +583,29 @@ async function scanDocker(world: JanitorWorld, out: JanitorItem[], step: (what: 
 }
 
 /** What the janitor proposes now. Reads only: nothing is deleted. */
-export async function scanJanitor(world: JanitorWorld, onProgress?: Progress): Promise<JanitorItem[]> {
+export async function scanJanitor(world: JanitorWorld, onProgress?: Progress, scope?: ScanScope): Promise<JanitorItem[]> {
   const out: JanitorItem[] = [];
-  const total = world.projects.length + 3;
+  const total = world.projects.length + 4;
   let done = -1;
   const found = () => out.reduce((sum, i) => sum + i.sizeBytes, 0);
   const step = (what: string) => { done++; onProgress?.({ what, done, total, foundBytes: found() }); };
-  await scanWorktrees(world, out, step);
-  await scanFolders(world, out, step);
-  await scanDocker(world, out, step);
+  if (looksAt(scope, WORKTREE_KINDS)) await scanWorktrees(world, out, step, scope);
+  await scanFolders(world, out, step, scope);
+  await scanDocker(world, out, step, scope);
   done = total - 1;
   step('done');
-  last = new Map(out.map(i => [i.id, i]));
+  // A re-check's scope is not a scan the owner was shown.
+  if (!scope) last = new Map(out.map(i => [i.id, i]));
   return out;
+}
+
+/** Where an approved item is checked again: its kind, in its own project or its agent's temporary folder. */
+function scopeOf(item: JanitorItem, world: JanitorWorld): ScanScope {
+  const at = item.path ? real(item.path) : undefined;
+  const project = at ? world.projects.find(p => inside(at, real(p))) : undefined;
+  const tmpRoot = real(path.join(world.dataDir, 'tmp'));
+  const agentTmp = at && inside(at, tmpRoot) ? path.join(tmpRoot, path.relative(tmpRoot, at).split(path.sep)[0]) : undefined;
+  return { kinds: [item.kind], ...(project ? { project } : {}), ...(agentTmp ? { agentTmp } : {}) };
 }
 
 /** The last scan's items, by id: only these can be approved. */
@@ -286,9 +628,8 @@ export async function approveJanitor(ids: string[], worldNow: () => JanitorWorld
       ops.done?.(id, { kind, why });
     };
     if (!asked) { keep(id, 'it is not in the scan the window showed'); continue; }
-    const saved = last;
-    const now = await scanJanitor(await worldNow());
-    last = saved;
+    const world = await worldNow();
+    const now = await scanJanitor(world, undefined, scopeOf(asked, world));
     const item = now.find(i => i.id === id);
     if (!item) { keep(`${asked.kind} ${asked.label}`, 'it no longer matches its rule (something runs in it, it was touched, an agent took it, or it has uncommitted work)'); continue; }
     ops.beforeDelete?.(item);

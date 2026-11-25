@@ -1,9 +1,12 @@
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
+import { execFileSync, spawn } from 'child_process';
+import { createRequire, syncBuiltinESMExports } from 'node:module';
 import { scanJanitor, approveJanitor, type JanitorWorld, type JanitorOps } from '../../../electron/services/janitor-rules';
 import { shortIdOf } from '../../../electron/services/agent-tmp';
+import { pinPlatform } from '../providers/win-fake-disk';
 
 /**
  * A disk janitor on a strict list, approved by the owner (2.0.5, lot 3 item H; brief lot3-disk-janitor-2810.md, the
@@ -49,6 +52,45 @@ import { shortIdOf } from '../../../electron/services/agent-tmp';
  * J21. (M1) Every path of every process is resolved again for each candidate folder: about 8 s of synchronous work
  *      on the main thread per scan (545 processes, 8,628 paths). The world gives the paths resolved once, and the
  *      rules compare strings: a scan over thousands of processes stays well under a second.
+ * And from the Audit's I-2 on #643 at 7fed2c3e1, about main's janitor-rules.ts:145 (confirmed by QA, uv 0.13.1
+ * measured), written before the code:
+ * J22. The uv cache is only ~/.cache/uv and ~/Library/Caches/uv on the never list, where uv puts it at $UV_CACHE_DIR,
+ *      else $XDG_CACHE_HOME/uv, else ~/.cache/uv (on Windows %LOCALAPPDATA%\uv\cache): a project in a uv cache either
+ *      variable moved, or a .worktrees linked into one, has an item proposed.
+ * J23. The same trap in the other entries: the Trash is only the Finder's ~/.Trash, where Linux's (the freedesktop.org
+ *      trash) is $XDG_DATA_HOME/Trash, else ~/.local/share/Trash: a project there has an item proposed.
+ * J24. An empty or relative variable taken for a folder: '' is Tars's own working folder ('/' when the Finder started
+ *      it), and the never list would hold the whole disk, so nothing would ever be proposed.
+ * And from the Audit's Infos on #605 at 5297b7bc2 (reports/audit-605.md), written before the code:
+ * J25. (I-1) uv's own config moves the cache for every uv, the agents' included: `cache-dir` in the user-level uv.toml,
+ *      $XDG_CONFIG_HOME/uv/uv.toml (absolute) else ~/.config/uv/uv.toml (both measured on uv 0.13.1, which reads no
+ *      ~/Library/Application Support/uv), and %APPDATA%\uv\uv.toml on Windows, is not read: a project in that cache
+ *      has an item proposed. And it is read wrong: only an absolute value names a folder (uv 0.13.1 takes `~`, `$HOME`
+ *      and a relative value as written, relative to the folder it runs in: measured), and a file uv cannot parse
+ *      (uv refuses it), or one past 64 KiB, which no config is, must change nothing.
+ * J26. (I-2) On Windows with LOCALAPPDATA unset or empty, the uv cache has no place on the list: the literal
+ *      <home>\AppData\Local\uv\cache is missing.
+ * J27. (I-3) A trash of another volume: projects.json names any folder, a project on a volume of its own included, so
+ *      the janitor reaches other volumes today, and their trashes are not on the list: /Volumes/<v>/.Trashes on
+ *      macOS, <mount>/.Trash-<uid> and <mount>/.Trash/<uid> on Linux, <drive>\$Recycle.Bin on Windows. A project in
+ *      one has an item proposed.
+ * And from the Audit's two hardening Infos on #605 at af2ee8be2, written before the code:
+ * J28. (I-1) The uv.toml is checked by its path, then read by its path, so a file swapped in between is read all the
+ *      same: a FIFO blocks the main process on its open (forever, with no writer), and a file grown past 64 KiB is
+ *      read whole and its cache-dir taken. The open itself must never block on a FIFO, in place or swapped in, and
+ *      what is checked must be what is read. A uv.toml that is a link to a file must still be read: uv 0.13.1 follows
+ *      it (measured, bench uv-never/probe-uv-link.txt), and dotfile managers make them.
+ * J29. (I-2) A cache-dir that hides everything, which any process of the user can write: "/", a drive root, the home,
+ *      or an ancestor of the home (compared by real path, so a link to the home too) put on the never list empties
+ *      every proposal. It must be ignored, with one line logged saying so, and a cache-dir inside the home still
+ *      taken.
+ * And from the Audit's three Infos on #605 at 86848e87c, written before the code:
+ * J30. (I-1) A cache-dir inside the home that is or holds what the janitor proposes in still hides it: the folder of
+ *      every project (~/code), a project, Tars's data folder (~/.tars, the agents' temporary folders), or a fleet
+ *      agent's worktree with its project's other worktrees beside it. Each must be ignored, by real path, with the
+ *      same line; a cache-dir inside a project, which holds none of them, stays taken and unsaid.
+ * J31. (I-3) The line prints the value as uv.toml holds it: a newline or an escape character goes to the log as
+ *      such, and up to about 64 KiB of it. It must go through JSON.stringify, cut to 200 characters.
  */
 
 const DAY = 86_400_000;
@@ -334,6 +376,306 @@ describe('the Audit\'s gate of #542, and the window\'s details', () => {
     } finally {
       (fs.realpathSync as unknown as { native: typeof realpath }).native = realpath;
     }
+  });
+});
+
+describe('the never list where the tools really put things, from the environment Tars runs in (J22-J24)', () => {
+  const VARS = ['HOME', 'UV_CACHE_DIR', 'XDG_CACHE_HOME', 'XDG_DATA_HOME', 'XDG_CONFIG_HOME', 'LOCALAPPDATA', 'APPDATA'] as const;
+  let saved: Record<string, string | undefined>;
+  let cwd: string;
+  let unpin = () => {};
+  beforeEach(() => {
+    saved = Object.fromEntries(VARS.map(k => [k, process.env[k]]));
+    for (const k of VARS) delete process.env[k];
+    process.env.HOME = home;
+    cwd = process.cwd();
+  });
+  afterEach(() => {
+    unpin();
+    unpin = () => {};
+    process.chdir(cwd);
+    for (const k of VARS) {
+      if (saved[k] === undefined) delete process.env[k];
+      else process.env[k] = saved[k];
+    }
+  });
+
+  /**
+   * What is proposed of a project in `dir` with an idle worktree, and of a listed project whose .worktrees links into
+   * it (as J16). `before` runs right before the scan. With `linkedOnly`, the project in `dir` is not one of the world's:
+   * a uv.toml cache-dir that holds a project is ignored (J30), so its cases see `dir` through the link alone.
+   */
+  async function proposedIn(dir: string, label: string, { before, linkedOnly = false }: { before?: () => void; linkedOnly?: boolean } = {}) {
+    const inside = path.join(dir, 'git-v0', 'checkouts', label);
+    mk(path.join(inside, '.worktrees', 'idle', '.next'));
+    old(path.join(inside, '.worktrees', 'idle'), 10);
+    const linked = path.join(home, 'projects', `linked-${label}`);
+    fs.mkdirSync(linked, { recursive: true });
+    fs.symlinkSync(path.join(inside, '.worktrees'), path.join(linked, '.worktrees'));
+    const w = world();
+    w.projects = linkedOnly ? [linked] : [inside, linked];
+    w.worktrees = async (p) => [{ path: path.join(p, '.worktrees', 'idle'), branch: 'b/done', locked: false }];
+    before?.();
+    return (await scanJanitor(w)).filter(i => i.path && (i.path.startsWith(dir) || i.path.includes(`linked-${label}`))).map(keyOf);
+  }
+
+  it('the same project anywhere else is proposed: the cases below prove something', async () => {
+    process.env.UV_CACHE_DIR = path.join(root, 'uv-elsewhere');
+    process.env.XDG_CACHE_HOME = path.join(root, 'xdg-cache');
+    process.env.XDG_DATA_HOME = path.join(root, 'xdg-data');
+    expect(await proposedIn(path.join(root, 'elsewhere'), 'control')).not.toEqual([]);
+  });
+
+  it('J22. the uv cache at $UV_CACHE_DIR', async () => {
+    process.env.UV_CACHE_DIR = path.join(root, 'uv-elsewhere');
+    expect(await proposedIn(path.join(root, 'uv-elsewhere'), 'uv-dir')).toEqual([]);
+  });
+
+  it('J22. the uv cache at $XDG_CACHE_HOME/uv', async () => {
+    process.env.XDG_CACHE_HOME = path.join(root, 'xdg-cache');
+    expect(await proposedIn(path.join(root, 'xdg-cache', 'uv'), 'xdg-uv')).toEqual([]);
+  });
+
+  it('J22. the uv cache at ~/.cache/uv and ~/Library/Caches/uv, still, with no variable', async () => {
+    expect(await proposedIn(path.join(home, '.cache', 'uv'), 'home-uv')).toEqual([]);
+    expect(await proposedIn(path.join(home, 'Library', 'Caches', 'uv'), 'mac-uv')).toEqual([]);
+  });
+
+  it('J22. on Windows, the uv cache at %LOCALAPPDATA%\\uv\\cache', async () => {
+    unpin = pinPlatform('win32');
+    process.env.LOCALAPPDATA = path.join(root, 'appdata-local');
+    expect(await proposedIn(path.join(root, 'appdata-local', 'uv', 'cache'), 'win-uv')).toEqual([]);
+  });
+
+  it('J23. Linux\'s Trash at $XDG_DATA_HOME/Trash, and at ~/.local/share/Trash with no variable', async () => {
+    process.env.XDG_DATA_HOME = path.join(root, 'xdg-data');
+    expect(await proposedIn(path.join(root, 'xdg-data', 'Trash', 'files'), 'xdg-trash')).toEqual([]);
+    delete process.env.XDG_DATA_HOME;
+    expect(await proposedIn(path.join(home, '.local', 'share', 'Trash', 'files'), 'home-trash')).toEqual([]);
+  });
+
+  it('J24. an empty or relative variable is no folder: the never list does not take in Tars\'s working folder', async () => {
+    process.chdir(root);
+    process.env.UV_CACHE_DIR = '';
+    process.env.XDG_CACHE_HOME = '';
+    process.env.XDG_DATA_HOME = 'data';
+    process.env.LOCALAPPDATA = '';
+    expect(await proposedIn(path.join(root, 'elsewhere'), 'empty')).not.toEqual([]);
+  });
+
+  const uvToml = (file: string, text: string) => { fs.mkdirSync(path.dirname(file), { recursive: true }); fs.writeFileSync(file, text); };
+
+  it('J25. the cache-dir of $XDG_CONFIG_HOME/uv/uv.toml', async () => {
+    process.env.XDG_CONFIG_HOME = path.join(root, 'xdg-config');
+    uvToml(path.join(root, 'xdg-config', 'uv', 'uv.toml'), `cache-dir = "${path.join(root, 'from-xdg-toml')}"\n`);
+    expect(await proposedIn(path.join(root, 'from-xdg-toml'), 'xdg-toml', { linkedOnly: true })).toEqual([]);
+  });
+
+  it('J25. the cache-dir of ~/.config/uv/uv.toml, among the other keys of the file', async () => {
+    uvToml(path.join(home, '.config', 'uv', 'uv.toml'), `# mine\nnative-tls = true\ncache-dir = "${path.join(root, 'from-home-toml')}"\n\n[[index]]\nurl = "https://example.org/simple"\n`);
+    expect(await proposedIn(path.join(root, 'from-home-toml'), 'home-toml', { linkedOnly: true })).toEqual([]);
+  });
+
+  it('J25. on Windows, the cache-dir of %APPDATA%\\uv\\uv.toml', async () => {
+    unpin = pinPlatform('win32');
+    process.env.APPDATA = path.join(root, 'appdata-roaming');
+    uvToml(path.join(root, 'appdata-roaming', 'uv', 'uv.toml'), `cache-dir = '${path.join(root, 'from-appdata-toml')}'\n`);
+    expect(await proposedIn(path.join(root, 'from-appdata-toml'), 'appdata-toml', { linkedOnly: true })).toEqual([]);
+  });
+
+  it('J25. a relative, `~` or `$HOME` value, a file uv cannot parse, one past 64 KiB: each changes nothing', async () => {
+    const file = path.join(home, '.config', 'uv', 'uv.toml');
+    process.chdir(root);
+    uvToml(file, 'cache-dir = "elsewhere-rel"\n');
+    const linkedOnly = true;
+    expect(await proposedIn(path.join(root, 'elsewhere-rel'), 'rel', { linkedOnly }), 'a relative value').not.toEqual([]);
+    uvToml(file, 'cache-dir = "~/elsewhere-tilde"\n');
+    expect(await proposedIn(path.join(home, 'elsewhere-tilde'), 'tilde', { linkedOnly }), 'a `~` value').not.toEqual([]);
+    uvToml(file, 'cache-dir = "$HOME/elsewhere-env"\n');
+    expect(await proposedIn(path.join(home, 'elsewhere-env'), 'env', { linkedOnly }), 'a `$HOME` value').not.toEqual([]);
+    uvToml(file, `cache-dir = "${path.join(root, 'elsewhere-bad')}",\n`);
+    expect(await proposedIn(path.join(root, 'elsewhere-bad'), 'bad', { linkedOnly }), 'a file uv cannot parse').not.toEqual([]);
+    uvToml(file, `cache-dir = "${path.join(root, 'elsewhere-big')}"\n${'# padding\n'.repeat(7000)}`);
+    expect(await proposedIn(path.join(root, 'elsewhere-big'), 'big', { linkedOnly }), 'a file past 64 KiB').not.toEqual([]);
+  });
+
+  it('J26. on Windows with LOCALAPPDATA unset or empty, <home>\\AppData\\Local\\uv\\cache', async () => {
+    unpin = pinPlatform('win32');
+    expect(await proposedIn(path.join(home, 'AppData', 'Local', 'uv', 'cache'), 'win-unset')).toEqual([]);
+    process.env.LOCALAPPDATA = '';
+    expect(await proposedIn(path.join(home, 'AppData', 'Local', 'uv', 'cache', 'x'), 'win-empty')).toEqual([]);
+  });
+
+  it('J27. the trash of another volume: .Trashes, .Trash-<uid>, .Trash/<uid>, $Recycle.Bin', async () => {
+    expect(await proposedIn(path.join(root, 'Volumes', 'ext', '.Trashes', '501'), 'mac-volume')).toEqual([]);
+    expect(await proposedIn(path.join(root, 'media', 'ext', '.Trash-1000', 'files'), 'linux-volume')).toEqual([]);
+    expect(await proposedIn(path.join(root, 'media', 'shared', '.Trash', '1000', 'files'), 'linux-shared')).toEqual([]);
+    expect(await proposedIn(path.join(root, 'D', '$Recycle.Bin', 'S-1-5-21-1'), 'windows-drive')).toEqual([]);
+  });
+
+  const userToml = () => path.join(home, '.config', 'uv', 'uv.toml');
+  const nodeFs = createRequire(import.meta.url)('fs') as typeof fs;
+  /** Runs `act` once, right after the first check of `file` by its path (statSync), or of a descriptor (fstatSync). */
+  function afterTheCheck(file: string, act: () => void): () => void {
+    const { statSync, fstatSync } = nodeFs;
+    let acted = false;
+    const once = () => { if (!acted) { acted = true; act(); } };
+    nodeFs.statSync = ((p: fs.PathLike, ...rest: unknown[]) => {
+      const st = (statSync as (...a: unknown[]) => fs.Stats)(p, ...rest);
+      if (String(p) === file) once();
+      return st;
+    }) as typeof fs.statSync;
+    nodeFs.fstatSync = ((fd: number, ...rest: unknown[]) => {
+      const st = (fstatSync as (...a: unknown[]) => fs.Stats)(fd, ...rest);
+      once();
+      return st;
+    }) as typeof fs.fstatSync;
+    syncBuiltinESMExports();
+    return () => { nodeFs.statSync = statSync; nodeFs.fstatSync = fstatSync; syncBuiltinESMExports(); };
+  }
+  /**
+   * A writer that opens `fifo` after `ms`, then every 250 ms, and closes it: a reader blocked on its open is let go (it
+   * reads an end of file), so a blocking open costs `ms` rather than hanging the run.
+   */
+  const releaseAfter = (fifo: string, ms: number) => spawn(process.execPath, ['-e', `
+    const fs = require('fs'); let tries = 0;
+    const go = () => { try { fs.closeSync(fs.openSync(${JSON.stringify(fifo)}, fs.constants.O_WRONLY | fs.constants.O_NONBLOCK)); } catch { if (++tries < 80) setTimeout(go, 250); } };
+    setTimeout(go, ${ms});`], { stdio: 'ignore' });
+
+  it('J28. a uv.toml grown past 64 KiB after its check is not read whole, nor taken', async () => {
+    uvToml(userToml(), `cache-dir = "${path.join(root, 'grown')}"\n`);
+    let undo = () => {};
+    try {
+      const proposed = await proposedIn(path.join(root, 'grown'), 'grown', {
+        linkedOnly: true,
+        before: () => { undo = afterTheCheck(userToml(), () => fs.appendFileSync(userToml(), '# padding\n'.repeat(7000))); },
+      });
+      expect(proposed, 'the grown file was read whole and its cache-dir taken').not.toEqual([]);
+    } finally {
+      undo();
+    }
+  });
+
+  it.skipIf(process.platform === 'win32')('J28. a FIFO swapped in after the check: nothing blocks, and what was checked is what is read', async () => {
+    uvToml(userToml(), `cache-dir = "${path.join(root, 'from-checked')}"\n`);
+    const releaser = releaseAfter(userToml(), 3000);
+    let undo = () => {};
+    const started = Date.now();
+    try {
+      const proposed = await proposedIn(path.join(root, 'from-checked'), 'swapped', {
+        linkedOnly: true,
+        before: () => {
+          undo = afterTheCheck(userToml(), () => { fs.renameSync(userToml(), `${userToml()}.checked`); execFileSync('mkfifo', [userToml()]); });
+        },
+      });
+      expect(Date.now() - started, 'the open blocked on the FIFO swapped in').toBeLessThan(1500);
+      expect(proposed, 'what was read is not what was checked').toEqual([]);
+    } finally {
+      undo();
+      releaser.kill();
+    }
+  });
+
+  it.skipIf(process.platform === 'win32')('J28. a uv.toml that is a FIFO: its open does not block', async () => {
+    fs.mkdirSync(path.dirname(userToml()), { recursive: true });
+    execFileSync('mkfifo', [userToml()]);
+    const releaser = releaseAfter(userToml(), 3000);
+    const started = Date.now();
+    try {
+      expect(await proposedIn(path.join(root, 'elsewhere-fifo'), 'fifo')).not.toEqual([]);
+      expect(Date.now() - started, 'the open blocked on the FIFO').toBeLessThan(1500);
+    } finally {
+      releaser.kill();
+    }
+  });
+
+  it('J28. a uv.toml that is a link to a file is read, as uv reads it', async () => {
+    uvToml(path.join(root, 'dotfiles', 'uv.toml'), `cache-dir = "${path.join(root, 'from-linked')}"\n`);
+    fs.mkdirSync(path.dirname(userToml()), { recursive: true });
+    fs.symlinkSync(path.join(root, 'dotfiles', 'uv.toml'), userToml());
+    expect(await proposedIn(path.join(root, 'from-linked'), 'linked-toml', { linkedOnly: true })).toEqual([]);
+  });
+
+  it('J29. a cache-dir of "/", the home, an ancestor of it or a link to it is ignored, and said once; one inside the home is taken', async () => {
+    fs.symlinkSync(home, path.join(root, 'home-link'));
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    try {
+      for (const [n, value] of ['/', home, path.dirname(home), path.join(root, 'home-link')].entries()) {
+        uvToml(userToml(), `cache-dir = "${value}"\n`);
+        warn.mockClear();
+        expect(await proposedIn(path.join(root, `elsewhere-wide-${n}`), `wide-${n}`, { linkedOnly: true }), `cache-dir = "${value}" hid every proposal`).not.toEqual([]);
+        const said = warn.mock.calls.map(c => c.join(' ')).filter(l => l.includes(userToml()));
+        expect(said, `cache-dir = "${value}" ignored without a word, or said more than once`).toHaveLength(1);
+        expect(said[0]).toContain(value);
+      }
+      uvToml(userToml(), `cache-dir = "${path.join(home, 'my-uv-cache')}"\n`);
+      expect(await proposedIn(path.join(home, 'my-uv-cache'), 'inside-home', { linkedOnly: true }), 'a cache-dir inside the home was ignored').toEqual([]);
+    } finally {
+      warn.mockRestore();
+    }
+  });
+
+  /** The lines that name the user's uv.toml, while `run` runs. */
+  async function saidOf(run: () => Promise<unknown>): Promise<string[]> {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    try {
+      await run();
+      return warn.mock.calls.map(c => c.join(' ')).filter(l => l.includes(userToml()));
+    } finally {
+      warn.mockRestore();
+    }
+  }
+
+  it('J30. a cache-dir that is or holds the projects, a project or Tars\'s data folder is ignored, and said', async () => {
+    for (const [what, value, item] of [
+      ['the folder of every project', path.join(home, 'projects'), 'next-cache projects/harbor/.worktrees/open/.next'],
+      ['a project', project, 'next-cache projects/harbor/.worktrees/open/.next'],
+      ['Tars\'s data folder', path.join(home, '.tars'), `agent-tmp .tars/tmp/${shortIdOf('agent-gone')}`],
+    ] as const) {
+      uvToml(userToml(), `cache-dir = "${value}"\n`);
+      let keys: string[] = [];
+      const said = await saidOf(async () => { keys = (await scanJanitor(world())).map(keyOf); });
+      expect(keys, `a cache-dir of ${what} hid its proposals`).toContain(item);
+      expect(said, `a cache-dir of ${what} ignored without a word, or said more than once`).toHaveLength(1);
+    }
+  });
+
+  it('J30. a cache-dir that holds a fleet agent\'s worktree, and its project\'s other worktrees beside it, is ignored', async () => {
+    // The project's .worktrees is a link to a folder of its own (as J16's): the cache-dir holds the worktrees, by real
+    // path, and not the project.
+    const place = path.join(root, 'worktrees-of-docks');
+    mk(path.join(place, 'idle', '.next'));
+    old(path.join(place, 'idle'), 10);
+    fs.mkdirSync(path.join(place, 'agents'), { recursive: true });
+    const docks = path.join(home, 'projects', 'docks');
+    fs.mkdirSync(docks, { recursive: true });
+    fs.symlinkSync(place, path.join(docks, '.worktrees'));
+    const w = world({ fleet: [{ id: 'agent-live', projectPath: docks, worktreePath: path.join(docks, '.worktrees', 'agents') }] });
+    w.projects = [docks];
+    w.worktrees = async () => ['idle', 'agents'].map(n => ({ path: path.join(docks, '.worktrees', n), branch: `b/${n}`, locked: false }));
+    uvToml(userToml(), `cache-dir = "${place}"\n`);
+    let keys: string[] = [];
+    const said = await saidOf(async () => { keys = (await scanJanitor(w)).map(keyOf); });
+    // An item names its worktree by its real path, through the link.
+    expect(keys.filter(k => k.includes('worktrees-of-docks/idle')), 'the worktrees beside the fleet agent\'s were hidden').not.toEqual([]);
+    expect(said).toHaveLength(1);
+  });
+
+  it('J30. a cache-dir inside a project, holding none of them, is taken and not said', async () => {
+    uvToml(userToml(), `cache-dir = "${path.join(project, '.uv-cache')}"\n`);
+    expect(await saidOf(() => scanJanitor(world()))).toEqual([]);
+  });
+
+  it.skipIf(process.platform === 'win32')('J31. the line prints the value through JSON.stringify, cut to 200 characters', async () => {
+    const odd = path.join(root, `home\nlink\u001b[2J${'x'.repeat(240)}`);
+    fs.symlinkSync(home, odd);
+    uvToml(userToml(), `cache-dir = ${JSON.stringify(odd)}\n`);
+    const said = await saidOf(() => scanJanitor(world()));
+    expect(said).toHaveLength(1);
+    expect(said[0], 'a newline went to the log as such').not.toContain('\n');
+    expect(said[0], 'an escape character went to the log as such').not.toContain('\u001b');
+    expect(said[0]).toContain(JSON.stringify(odd).slice(0, 200));
+    expect(said[0], 'the value was not cut to 200 characters').not.toContain(JSON.stringify(odd).slice(0, 201));
   });
 });
 
