@@ -1,5 +1,6 @@
 'use client';
 
+import { RetunePanel } from '@/components/Retune/RetuneParts';
 import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import type { AgentStatus } from '@/types/electron';
 import { BrandSpinner, DialogShell, SegmentedControl } from '@/components/ui';
@@ -327,6 +328,8 @@ export default function AgentTerminalDialog({
             className="shrink-0 border-l border-border bg-card flex flex-col overflow-hidden"
             style={{ width: RAIL_WIDTH }}
           >
+            {/* Its last retune by another agent, with an undo (2.0.7). Frame: `Agents · retuned by an agent`, the panel. */}
+            {agent && !isSuperAgentMode && <RetunePanel agent={agent} />}
             {isSuperAgentMode ? (
               <AgentDialogSuperAgentSidebar agentId={agent?.id} agents={agents} projects={projects} />
             ) : (

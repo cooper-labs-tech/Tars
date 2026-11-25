@@ -7,6 +7,7 @@ import NewSidebar from './NewSidebar';
 import { PageCard } from './PageCard';
 import { MORE_PAGES, type MorePageId } from './more-pages';
 import { DataFolderNotice } from '@/components/DataFolderNotice';
+import { RetuneNotices } from '@/components/Retune/RetuneParts';
 
 /**
  * The new shell (plan 2.0.0), while Settings, Preferences, "New interface" is
@@ -32,6 +33,7 @@ export default function NewShell({ children }: { children: ReactNode }) {
       <NewSidebar onOpenPage={setOpen} />
       <main className="min-h-screen ml-[240px] px-[26px] pb-[22px] pt-[22px]">
         <DataFolderNotice className="-mx-[26px] -mt-[22px] mb-[22px]" />
+        <RetuneNotices className="mb-[22px]" />
         {children}
       </main>
       {page && <PageCard page={page} onClose={close} />}

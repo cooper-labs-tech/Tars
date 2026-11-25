@@ -60,6 +60,7 @@ export const SECTION_GROUPS: SettingsGroup[] = [
       { id: 'claude-accounts', label: 'Claude accounts', description: 'Several Claude subscriptions, and when your agents move between them.', icon: Users },
       { id: 'cli', label: 'CLI Paths', description: 'Where each command line tool lives on this machine.', icon: Terminal },
       { id: 'permissions', label: 'Permissions', description: 'How far an agent may go before it asks you.', icon: Shield },
+      { id: 'cross-project', label: 'Across projects', description: 'What the agents of one project may do in another, granted by you only.', icon: Users },
     ],
   },
   {
