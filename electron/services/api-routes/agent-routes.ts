@@ -491,7 +491,7 @@ async function spawnAgentSessionInSlot(
       env: start.env,
     });
   } catch (err) {
-    launchAbandoned(agent.id, launch);
+    launchAbandoned(agent, launch);
     // No terminal left on the machine: the agent says why, as the 503 does (core/no-terminal.ts).
     markNoTerminal(agent, err, saveAgents);
     throw err;
@@ -575,7 +575,7 @@ async function spawnAgentSessionInSlot(
   ptyProcess.onExit(({ exitCode }) => {
     // A CLI that exits before its session came up is not coming up: nobody
     // waits the rest of CLI_BOOT_MS for it.
-    launchAbandoned(agent.id, launch);
+    launchAbandoned(agent, launch);
     // Remove from the live map IMMEDIATELY: node-pty write() on a dead PTY is
     // a silent no-op, so leaving it registered lets /dispatch and /message
     // "successfully" type a task into a corpse during the status-delay below.

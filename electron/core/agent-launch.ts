@@ -176,10 +176,17 @@ export function launchBegins(agentId: string, opts: { withTask?: boolean } = {})
   return launch;
 }
 
-/** That launch failed or was refused: nothing is coming up. */
-export function launchAbandoned(agentId: string, launch: object): void {
-  if (launchesUnderWay.get(agentId) !== launch) return;
-  launchesUnderWay.delete(agentId);
+/**
+ * That launch failed or was refused: nothing is coming up. Its log goes with it, as with a launch up or given up
+ * (sessionStarting): never read again, it would stay until the next launch, the terminal's end or 1 MiB (the Audit's
+ * I-1 on #641 at 984fc5eeb). Given the agent, with its terminal, that log is let go; given its id alone, as before, the
+ * log is left to the next launch or the terminal's end.
+ */
+export function launchAbandoned(agent: string | { id: string; ptyId?: string }, launch: object): void {
+  const id = typeof agent === 'string' ? agent : agent.id;
+  if (launchesUnderWay.get(id) !== launch) return;
+  launchesUnderWay.delete(id);
+  if (typeof agent !== 'string' && agent.ptyId) endLaunchLog(ptyProcesses.get(agent.ptyId));
   launchListener?.();
 }
 

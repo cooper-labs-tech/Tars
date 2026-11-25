@@ -971,10 +971,10 @@ function registerAgentHandlers(deps: IpcHandlerDependencies): void {
     try {
       // Making its terminal ready, until its line is typed: no other start meanwhile.
       const result = await whilePreparing(id, () => launchInTerminal(id, prompt, options));
-      if (!result.success) launchAbandoned(id, launch);
+      if (!result.success) launchAbandoned(agents.get(id) ?? { id }, launch);
       return result;
     } catch (err) {
-      launchAbandoned(id, launch);
+      launchAbandoned(agents.get(id) ?? { id }, launch);
       throw err;
     }
   };
