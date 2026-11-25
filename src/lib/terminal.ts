@@ -371,3 +371,32 @@ export function connectionLine(name: string, live: boolean): string {
     ? `\x1b[36m● Connected to ${name}\x1b[0m`
     : `\x1b[90m○ ${name} is not running. Start it to type here.\x1b[0m`;
 }
+
+/**
+ * The user's own moves from now on, for a terminal that takes the focus a moment after it is built: a key, a click,
+ * text from any input method (dictation, the Character Viewer, Paste from the Edit menu, which come with no key or
+ * click, only `beforeinput`), or the focus put somewhere, xterm's own textarea aside. Such a terminal takes the focus
+ * only when `moved()` is false, so it never takes keys meant for a field of the window. Listen from the moment the
+ * window or panel is built, after its early returns, and `stop()` when the terminal's moment has passed and in the
+ * effect's cleanup.
+ */
+export function noteUserMoves(): { moved: () => boolean; stop: () => void } {
+  let moved = false;
+  const note = () => { moved = true; };
+  const noteFocus = (e: FocusEvent) => {
+    if (!(e.target instanceof HTMLElement && e.target.classList.contains('xterm-helper-textarea'))) moved = true;
+  };
+  const kinds = ['keydown', 'pointerdown', 'beforeinput'] as const;
+  for (const kind of kinds) document.addEventListener(kind, note, true);
+  document.addEventListener('focusin', noteFocus, true);
+  let stopped = false;
+  return {
+    moved: () => moved,
+    stop: () => {
+      if (stopped) return;
+      stopped = true;
+      for (const kind of kinds) document.removeEventListener(kind, note, true);
+      document.removeEventListener('focusin', noteFocus, true);
+    },
+  };
+}

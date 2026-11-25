@@ -166,7 +166,8 @@ export default function AgentTerminalDialog({
   const handleRailTab = useCallback((tab: RailTab) => {
     setRailTab(tab);
     const { panel } = RAIL_TABS.find(t => t.value === tab)!;
-    setExpandedPanels(prev => new Set(prev).add(panel));
+    // The same set when the panel is already open: a new one rebuilt the quick shell, which then took the focus again.
+    setExpandedPanels(prev => (prev.has(panel) ? prev : new Set(prev).add(panel)));
   }, []);
 
   const handleSetSecondaryProject = useCallback(async (path: string | null) => {

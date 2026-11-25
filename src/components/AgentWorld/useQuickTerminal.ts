@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { isElectron } from '@/hooks/useElectron';
-import { attachShiftEnterHandler, disposeTerminalSafely, passWheelToProgram, stripTerminalReplies, suppressMouseTracking } from '@/lib/terminal';
+import { attachShiftEnterHandler, disposeTerminalSafely, noteUserMoves, passWheelToProgram, stripTerminalReplies, suppressMouseTracking } from '@/lib/terminal';
 import { createXtermTheme, getTerminalFontFamily, useTerminalTheme } from '@/lib/terminal-theme';
 // The main process's own trim logic for agent.output, imported rather than
 // copied: it has no dependency outside itself.
@@ -48,6 +48,12 @@ export function useQuickTerminal({
     if (quickXtermRef.current && quickPtyIdRef.current) return;
 
     let cancelled = false;
+    // The shell takes the focus a moment after it is built, but never over the user (noteUserMoves). It is built again
+    // with every window it is open in: it used to take keys typed into the window's fields, and an Enter then ran them
+    // as a command in the project folder.
+    const userMoves = noteUserMoves();
+    /** The fits and the focus, cleared with the effect so none acts on a shell already disposed. */
+    const timers: ReturnType<typeof setTimeout>[] = [];
 
     const init = async () => {
       await new Promise((resolve) => setTimeout(resolve, 150));
@@ -96,8 +102,15 @@ export function useQuickTerminal({
 
         fitAddon.fit();
         term.scrollToBottom();
-        setTimeout(() => { fitAddon.fit(); term.scrollToBottom(); }, 100);
-        setTimeout(() => { fitAddon.fit(); term.scrollToBottom(); term.focus(); }, 250);
+        timers.push(
+          setTimeout(() => { fitAddon.fit(); term.scrollToBottom(); }, 100),
+          setTimeout(() => {
+            fitAddon.fit();
+            term.scrollToBottom();
+            userMoves.stop();
+            if (!userMoves.moved()) term.focus();
+          }, 250),
+        );
 
         const existing = persistentTerminals.get(agentId);
 
@@ -147,6 +160,8 @@ export function useQuickTerminal({
 
     return () => {
       cancelled = true;
+      userMoves.stop();
+      timers.forEach(clearTimeout);
       if (quickXtermRef.current) {
         const term = quickXtermRef.current;
         quickXtermRef.current = null;
