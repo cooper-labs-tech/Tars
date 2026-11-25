@@ -19,13 +19,20 @@ import { DEV_URL, apiPort } from './ports.mjs';
  * 2. agent.update with that folder as its secondary folder answers no the same way, and changes nothing;
  * 3. a folder with no comma is taken, so the refusal is the comma's.
  * Red on aef730f1c: both calls took the folder.
+ *
+ * Judged on the move, not on what is sent (the Audit's M1 on #636 at 20c062cd3): the window's edit sends the agent's
+ * provider every time, with its name, model, mode and skills, and never its secondary folder or vaults.
+ * 4. a gemini agent already holding a comma folder and a comma vault saves the window's rename: its folders are said at
+ *    its launch, and the dialog has no field to clear them;
+ * 5. a claude agent holding a comma folder, moved to gemini, is refused, and stays claude.
+ * Red on 20c062cd3: the rename was refused.
  * The artefact: values.json (each answer, the agent before and after).
  */
 
 type Api = { electronAPI: { agent: {
   setSecondaryProject(p: { id: string; secondaryProjectPath: string | null }): Promise<{ success: boolean; error?: string }>;
   update(p: Record<string, unknown>): Promise<{ success: boolean; error?: string }>;
-  get(id: string): Promise<{ secondaryProjectPath?: string } | null>;
+  get(id: string): Promise<{ secondaryProjectPath?: string; name?: string; provider?: string } | null>;
 } } };
 
 test('a gemini agent is refused a secondary folder whose name holds a comma, with words the window shows', async () => {
@@ -36,10 +43,14 @@ test('a gemini agent is refused a secondary folder whose name holds a comma, wit
   const comma = path.join(home, 'Acme, Inc');
   const plain = path.join(home, 'Acme Inc');
   for (const d of [project, dir, comma, plain]) fs.mkdirSync(d, { recursive: true });
-  fs.writeFileSync(path.join(dir, 'agents.json'), JSON.stringify([{
-    id: 'gem', name: 'Gemini Agent', character: 'robot', provider: 'gemini', status: 'idle', role: 'worker', projectPath: project,
-    skills: [], permissionMode: 'normal', createdAt: '2026-11-25T08:00:00.000Z', lastActivity: '2026-11-25T08:00:00.000Z',
-  }], null, 2));
+  const vault = path.join(home, 'Notes, 2026');
+  fs.mkdirSync(vault, { recursive: true });
+  const at = { status: 'idle', role: 'worker', projectPath: project, skills: [], permissionMode: 'normal', createdAt: '2026-11-25T08:00:00.000Z', lastActivity: '2026-11-25T08:00:00.000Z' };
+  fs.writeFileSync(path.join(dir, 'agents.json'), JSON.stringify([
+    { id: 'gem', name: 'Gemini Agent', character: 'robot', provider: 'gemini', ...at },
+    { id: 'held', name: 'Gemini Held', character: 'robot', provider: 'gemini', secondaryProjectPath: comma, obsidianVaultPaths: [vault], ...at },
+    { id: 'cla', name: 'Claude Held', character: 'robot', provider: 'claude', secondaryProjectPath: comma, ...at },
+  ], null, 2));
   fs.writeFileSync(path.join(dir, 'projects.json'), JSON.stringify([project]));
   fs.writeFileSync(path.join(dir, 'app-settings.json'), JSON.stringify({ autoStartAgentsOnLaunch: false, ollamaBaseUrl: 'http://127.0.0.1:9', geminiEnabled: true }));
   const values: Record<string, unknown> = {};
@@ -75,6 +86,25 @@ test('a gemini agent is refused a secondary folder whose name holds a comma, wit
     // 3. A folder with no comma.
     expect.soft(taken.success, JSON.stringify(taken)).toBe(true);
     expect.soft(afterTaken?.secondaryProjectPath).toBe(plain);
+
+    // 4 and 5, as the window's edit sends them (NewChatModal's commitAgent): the provider, never the folders.
+    const edit = (id: string, fields: Record<string, unknown>) => page.evaluate(
+      ({ i, f }) => (window as unknown as Api).electronAPI.agent.update({ id: i, ...f }),
+      { i: id, f: { projectPath: project, skills: [], permissionMode: 'normal', character: 'robot', model: null, savedPrompt: null, role: 'worker', cliPath: null, ...fields } },
+    );
+    const readOf = (id: string) => page.evaluate((i) => (window as unknown as Api).electronAPI.agent.get(i), id);
+    const renamed = await edit('held', { name: 'Gemini Renamed', provider: 'gemini' });
+    const afterRename = await readOf('held');
+    const moved = await edit('cla', { name: 'Claude Held', provider: 'gemini' });
+    const afterMove = await readOf('cla');
+    keep({ renamed, afterRename: { name: afterRename?.name, provider: afterRename?.provider }, moved, afterMove: { name: afterMove?.name, provider: afterMove?.provider } });
+    // 4. The rename of an agent already holding such folders is saved.
+    expect.soft(renamed.success, JSON.stringify(renamed)).toBe(true);
+    expect.soft(afterRename?.name).toBe('Gemini Renamed');
+    // 5. A move to gemini with such a folder is refused, and the agent stays claude.
+    expect.soft(moved.success, JSON.stringify(moved)).toBe(false);
+    expect.soft(moved.error ?? '').toMatch(/comma/);
+    expect.soft(afterMove?.provider ?? 'claude').toBe('claude');
   } finally {
     await app.close();
     await removeHome(home);

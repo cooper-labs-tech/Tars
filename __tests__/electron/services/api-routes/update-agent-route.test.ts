@@ -44,6 +44,20 @@ import { EventEmitter } from 'events';
  *     what agents are never handed (the Audit's L1 on #480).
  * 12c. The same folder is taken by the window's agent:update, which calls
  *     core/agent-update.ts without the route's check (the Audit's L4 on #480).
+ * A folder the agent's CLI could never see (providers/added-folders.ts),
+ * judged on the move, not on what is sent (the Audit's M1 on #636 at
+ * 20c062cd3; written before the code, 25/11):
+ * 12d. An edit that touches neither the CLI nor the folders is refused: the
+ *     window's edit sends the agent's provider every time, with its name,
+ *     model, mode and skills, so a gemini or Qwen Code agent already holding a
+ *     comma folder or vault could save nothing, and the dialog has no field
+ *     that clears one (a vault none at all).
+ * 12e. Clearing or changing one folder is refused for another the agent holds
+ *     and the update does not touch.
+ * 12f. A move to gemini or Qwen Code keeping such a folder, or such a folder
+ *     sent, is taken: the agent then works without it.
+ * 12g. A grok agent refused a secondary folder: grok 1.0.92 takes --add-dir.
+ *     Tars does not hand it one yet, and says so at its launch.
  *
  * When it applies (a running turn is never cut)
  * 13. A change of provider or CLI path while a CLI runs, or starts, in the
@@ -418,6 +432,60 @@ describe('the folder handed besides the project', () => {
       expect(recordOf('w2'), folder).toEqual(before);
     }
     expect(saveAgents).not.toHaveBeenCalled();
+  });
+});
+
+describe("a folder the agent's CLI could never see, judged on the move", () => {
+  const comma = '/home/me/Acme, Inc';
+  const vault = '/home/me/Notes, 2026';
+  beforeEach(() => {
+    agents.set('g1', agent({ id: 'g1', name: 'Gem', role: 'worker', provider: 'gemini', secondaryProjectPath: comma, obsidianVaultPaths: [vault] }));
+    agents.set('q1', agent({ id: 'q1', name: 'Qwen', role: 'worker', provider: 'qwen-code', secondaryProjectPath: comma }));
+    agents.set('c1', agent({ id: 'c1', name: 'Held', role: 'worker', provider: 'claude', secondaryProjectPath: comma }));
+    agents.set('k1', agent({ id: 'k1', name: 'Grok', role: 'worker', provider: 'grok' }));
+  });
+
+  it("12d. the window's edit of an agent already holding one, its provider sent as it is, is saved; and update_agent's", async () => {
+    const window = await updateAgent({ id: 'g1', provider: 'gemini', name: 'Gem 2', skills: [], permissionMode: 'normal', model: null });
+    expect(window.success, JSON.stringify(window)).toBe(true);
+    expect(agents.get('g1')!.name).toBe('Gem 2');
+    const qwen = await updateAgent({ id: 'q1', provider: 'qwen-code', name: 'Qwen 2', skills: [] });
+    expect(qwen.success, JSON.stringify(qwen)).toBe(true);
+    const { answer, status } = await update('g1', { provider: 'gemini', name: 'Gem 3' });
+    expect(status, JSON.stringify(answer)).toBe(200);
+    expect(agents.get('g1')!.name).toBe('Gem 3');
+  });
+
+  it('12e. clearing the secondary folder is taken, whatever vault the agent holds', async () => {
+    const result = await updateAgent({ id: 'g1', secondaryProjectPath: null });
+    expect(result.success, JSON.stringify(result)).toBe(true);
+    expect(agents.get('g1')!.secondaryProjectPath ?? null).toBeNull();
+  });
+
+  it('12f. a move to gemini or Qwen Code keeping one, or one sent, is refused, and writes nothing', async () => {
+    for (const provider of ['gemini', 'qwen-code'] as const) {
+      const before = recordOf('c1');
+      const result = await updateAgent({ id: 'c1', provider });
+      expect(result.success, provider).toBe(false);
+      expect(result.success ? '' : result.error, provider).toMatch(/comma/);
+      expect(recordOf('c1'), provider).toEqual(before);
+    }
+    const before = recordOf('g1');
+    const sent = await updateAgent({ id: 'g1', obsidianVaultPaths: [vault, '/home/me/Other, Co'] });
+    expect(sent.success).toBe(false);
+    expect(recordOf('g1')).toEqual(before);
+    const { answer, status } = await update('c1', { provider: 'gemini' });
+    expect(status).toBe(400);
+    expect(String(answer.error)).toMatch(/comma/);
+    expect(saveAgents).not.toHaveBeenCalled();
+  });
+
+  it('12g. a grok agent takes a secondary folder, set or kept across a move to grok', async () => {
+    const set = await updateAgent({ id: 'k1', secondaryProjectPath: '/home/me/other' });
+    expect(set.success, JSON.stringify(set)).toBe(true);
+    const moved = await updateAgent({ id: 'w2', provider: 'grok', secondaryProjectPath: '/home/me/other' });
+    expect(moved.success, JSON.stringify(moved)).toBe(true);
+    expect(agents.get('w2')!.provider).toBe('grok');
   });
 });
 

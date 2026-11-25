@@ -9,16 +9,24 @@ import * as path from 'path';
  *
  * Read in their bundles: gemini 0.70.0 (coerceCommaSeparated) and Qwen Code 0.28.4 (its own coerce) split every
  * --include-directories value at commas and trim each piece, with no escape, so a folder named "Acme, Inc" reaches
- * either as two other folders. grok 1.0.92 has no flag for a secondary folder at all, and is handed none.
+ * either as two other folders. grok 1.0.92 takes `--add-dir <DIR>` (its help, measured isolated on 25/11), which Tars
+ * does not hand it yet: its secondary folder is said at its launch.
  *
  * How it fails, written before the code (25/11):
  * 1. A gemini or Qwen Code agent's secondary folder or vault whose path holds a comma, or ends in a space, accepted
  *    where it is set: the agent then works without it, its tools refuse paths there, and nothing the window shows says
  *    why.
- * 2. A grok agent given a secondary folder, accepted: grok never sees it.
+ * 2. A grok agent refused a secondary folder (the Audit's M2 on #636 at 20c062cd3): grok takes one; Tars does not hand
+ *    it yet.
  * 3. A folder any of them can take refused, or a CLI that takes such a folder whole refused one.
  * 4. An agent already holding such a folder told only in Tars's log: its launch says it in the agent's own output.
+ *    grok's says Tars does not hand its secondary folder yet, never that grok takes none.
  * 5. Qwen Code's line handing the folder anyway, as gemini's did before aef730f1c.
+ * 6. An edit that touches neither the CLI nor the folders refused (the Audit's M1 on #636 at 20c062cd3): judged on the
+ *    move, in update-agent-route.test.ts 12d to 12g, and e2e/comma-folder-refused.spec.ts.
+ * 7. The sentence of a folder ending in a space says only "at commas", which is not why (the Audit's Info).
+ * 8. Qwen Code's line, built with no agent to tell, leaving the folder off with nothing said anywhere (the Audit's
+ *    Info): said once per run in Tars's log, as gemini's.
  */
 
 const notices: Array<[string, string]> = [];
@@ -45,11 +53,16 @@ describe('a folder its CLI can never see is refused where it is set (1 to 3)', (
     expect(addedFolderRefusal(provider, { secondary: '/home/me/Acme Inc', vaults: ['/home/me/notes'] })).toBeNull();
   });
 
-  it('2. grok: any secondary folder, which grok has no flag for', async () => {
+  it('2. grok: a secondary folder is taken, grok 1.0.92 having --add-dir', async () => {
     const { addedFolderRefusal } = await import('../../../electron/providers/added-folders');
-    expect(addedFolderRefusal('grok', { secondary: '/home/me/other' })).toMatch(/grok/i);
-    expect(addedFolderRefusal('grok', { secondary: null })).toBeNull();
+    expect(addedFolderRefusal('grok', { secondary: '/home/me/other' })).toBeNull();
+    expect(addedFolderRefusal('grok', { secondary: '/home/me/Acme, Inc' })).toBeNull();
     expect(addedFolderRefusal('grok', {})).toBeNull();
+  });
+
+  it('7. the sentence says the pieces are trimmed, which is why a trailing space is lost', async () => {
+    const { addedFolderRefusal } = await import('../../../electron/providers/added-folders');
+    expect(addedFolderRefusal('gemini', { secondary: '/home/me/space ' })).toMatch(/at commas and trims each piece/);
   });
 
   it('3. a CLI that takes a folder whole, and no folder at all', async () => {
@@ -73,10 +86,31 @@ describe("an agent already holding one is told at its launch, in its own output 
     expect(notices.filter(([id, line]) => id === 'q1' && line.includes(secondary))).toHaveLength(1);
   });
 
-  it('4. grok says the secondary folder it is not handed', async () => {
+  it('4. grok says the secondary folder it is not handed, as Tars not handing it yet', async () => {
     await sinkNotices();
     const { GrokProvider } = await import('../../../electron/providers/grok-provider');
-    new GrokProvider().buildInteractiveCommand({ agentId: 'k1', binaryPath: '/opt/bin/grok', prompt: 'go', secondaryProjectPath: path.join(root, 'other') } as never);
-    expect(notices.filter(([id, line]) => id === 'k1' && /secondary folder/.test(line))).toHaveLength(1);
+    const other = path.join(root, 'other');
+    new GrokProvider().buildInteractiveCommand({ agentId: 'k1', binaryPath: '/opt/bin/grok', prompt: 'go', secondaryProjectPath: other } as never);
+    const said = notices.filter(([id]) => id === 'k1').map(([, line]) => line);
+    expect(said).toHaveLength(1);
+    expect(said[0]).toMatch(/Tars does not hand grok its secondary folder yet/);
+    expect(said[0]).toContain(other);
+    expect(said[0]).not.toMatch(/takes no secondary folder|no flag/);
+  });
+
+  it('8. Qwen Code with no agent to tell says the folder once per run in Tars\'s log', async () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    try {
+      const secondary = path.join(root, 'Beta, Ltd');
+      fs.mkdirSync(secondary);
+      const { QwenCodeProvider } = await import('../../../electron/providers/qwen-code-provider');
+      const provider = new QwenCodeProvider();
+      for (let i = 0; i < 2; i++) {
+        expect(provider.buildInteractiveCommand({ binaryPath: '/opt/bin/qwen', prompt: 'go', secondaryProjectPath: secondary } as never)).not.toContain('Beta, Ltd');
+      }
+      expect(warn.mock.calls.filter((call) => String(call[0]).includes(secondary))).toHaveLength(1);
+    } finally {
+      warn.mockRestore();
+    }
   });
 });
