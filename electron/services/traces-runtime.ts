@@ -150,7 +150,8 @@ function persistSettings(): boolean {
   try {
     deps.writeSettings(deps.getSettings());
   } catch (err) {
-    const reason = settingsNotWritten(err, 'Tars tries again every minute');
+    const then = consentHeldForRevoke ? 'sharing is stopped until they are, and Tars tries again every minute' : 'Tars tries again every minute';
+    const reason = settingsNotWritten(err, then);
     console.error(`[traces] ${reason}`);
     if (unsaved !== reason) { unsaved = reason; deps.emit('traces:changed'); }
     if (!persistRetry) {
@@ -160,7 +161,47 @@ function persistSettings(): boolean {
     return false;
   }
   if (unsaved) { unsaved = undefined; deps.emit('traces:changed'); }
+  if (consentHeldForRevoke) restoreHeldConsent();
   return true;
+}
+
+/**
+ * The consent whose file a revoke not yet written dropped (holdRevoke), to be put back once the settings hold: the
+ * user's own consent, still in the settings, never a new one.
+ */
+let consentHeldForRevoke: string | undefined;
+
+function restoreHeldConsent(): void {
+  const at = consentHeldForRevoke;
+  consentHeldForRevoke = undefined;
+  if (!deps || !at || traceSettingsOf(deps.getSettings()).uploadConsentAt !== at) return;
+  try {
+    recordConsent(at);
+  } catch (err) {
+    console.error(`[traces] the settings hold now, and the consent's file could not be written back (${describeSecretFileError(err)}): sharing stays off until consent is given again`);
+  }
+  deps.emit('traces:changed');
+}
+
+/**
+ * A revoke of sharing (a project opted out, a pair removed, closed models left out, an endpoint's traces turned off
+ * or the endpoint removed): held in memory at once, so the uploader holds back what it covers from now, then written,
+ * and tried again every minute until it holds, the window told (`unsaved`). While it does not hold, the consent's
+ * file is dropped, which needs no free space (dropConsentFile), so that a start before the write holds reads the old
+ * settings with no consent and takes it for a deletion: it fails closed. Meanwhile nothing is shared at all; the file
+ * is put back once the settings hold. Undefined when written, else the window's note.
+ */
+export function holdRevoke(settings: AppSettings): string | undefined {
+  if (!deps) return 'Tars is not ready.';
+  deps.setSettings(settings);
+  if (persistSettings()) return undefined;
+  const at = traceSettingsOf(settings).uploadConsentAt;
+  if (at && !consentHeldForRevoke && consentStands(settings) && dropConsentFile()) {
+    consentHeldForRevoke = at;
+    // Once more, so the note says sharing is stopped.
+    persistSettings();
+  }
+  return unsaved;
 }
 
 /**
@@ -321,7 +362,18 @@ export function traceUploader(): TraceUploader {
         deps.emit('traces:changed');
       },
       // Opted in now, not only when the session was recorded: a project or an agent switched off since is not sent.
-      eligible: (q) => traceSettingsOf(deps?.getSettings()).projects.includes(q.projectPath) && agentOf(q.agentId)?.traces === true,
+      // The trace gate as it is now, so a revoke made since the session was recorded holds it back too.
+      eligible: (q) => {
+        const settings = deps?.getSettings();
+        const t = traceSettingsOf(settings);
+        const endpoint = (settings?.inferenceEndpoints ?? []).find(e => e.id === q.endpointId);
+        return traceDecision({
+          provider: q.harness, model: q.model,
+          endpoint: endpoint ? { allowTraces: endpoint.allowTraces === true, approved: endpoint.approved === true && endpoint.approvedBaseUrl === endpoint.baseUrl } : undefined,
+          projectOptedIn: t.projects.includes(q.projectPath), agentOptedIn: agentOf(q.agentId)?.traces === true, pairs: t.pairs,
+          excludeClosedModels: t.excludeClosedModels,
+        }).traced;
+      },
       scrubContext: (projectPath) => scrubContextFor(projectPath),
       client: { name: 'tars', version: deps?.clientVersion ?? 'unknown', platform: process.platform },
       // After "delete everything sent": no upload again until the user consents again, a restart included.
@@ -417,6 +469,8 @@ export function stopTracesRuntime(): void {
   uploadSoon = null;
   if (persistRetry) clearTimeout(persistRetry);
   persistRetry = null;
+  // A consent dropped for a revoke not yet written stays dropped: the next start reads closed.
+  consentHeldForRevoke = undefined;
   uploader = null;
   store?.close();
   store = null;

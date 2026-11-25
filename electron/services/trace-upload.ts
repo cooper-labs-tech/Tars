@@ -37,8 +37,12 @@ export interface UploaderDeps {
    * for, not yet confirmed by the back-office).
    */
   setDeletion(d: { owed: boolean; since?: number }): void;
-  /** Whether a session may be sent now: its project and its agent opted in at this moment. */
-  eligible(session: { projectPath: string; agentId: string }): boolean;
+  /**
+   * Whether a session may be sent now: the trace gate as it is at this moment (trace-gate.ts), so a revoke made after
+   * the session was recorded (its project or agent opted out, its pair removed, closed models left out, its
+   * endpoint's traces off or the endpoint gone) holds it back.
+   */
+  eligible(session: { projectPath: string; agentId: string; harness: string; model: string; endpointId: string }): boolean;
   scrubContext(projectPath: string): ScrubContext;
   client: { name: string; version: string; platform: string };
   /**
@@ -62,10 +66,10 @@ export interface UploadStateView {
   consentAt?: string;
   registered: boolean;
   /**
-   * The sessions a pass would send now, by its own rule: a change not sent yet, the project and the agent opted in
-   * at this moment, and started after the latest deletion's moment. No closed-model rule applies at sending: the gate
-   * decided that when the session was recorded (trace-gate.ts), and one it left out was never recorded. A session
-   * held back by the consent, the address or an owed deletion still counts here: those stop every session alike.
+   * The sessions a pass would send now, by its own rule: a change not sent yet, the trace gate as it is at this
+   * moment (the project and the agent opted in, the endpoint there, approved and allowing traces, the pair on the
+   * list, closed models left out when that is on), and started after the latest deletion's moment. A session held
+   * back by the consent, the address or an owed deletion still counts here: those stop every session alike.
    */
   pendingSessions: number;
   /** The sessions sent and still on the back-office: those started after the latest deletion's moment. */
@@ -196,7 +200,7 @@ export class TraceUploader {
   }
 
   /** Whether a pass would send this session now: opted in now, and started after the latest deletion's moment. */
-  private sendable(q: { projectPath: string; agentId: string; startedAt: number }, since: number | undefined): boolean {
+  private sendable(q: { projectPath: string; agentId: string; startedAt: number; harness: string; model: string; endpointId: string }, since: number | undefined): boolean {
     return this.deps.eligible(q) && (since === undefined || q.startedAt > since);
   }
 

@@ -2874,12 +2874,14 @@ export interface ElectronAPI {
     /** From the window: approved by the act. */
     /** `allowPlainHttp`: the owner allows plain http to a public address (refused without it; private addresses
      *  need none). An agent's change of address takes the endpoint's key away (set it again). */
-    save: (e: { id?: string; name: string; baseUrl: string; allowTraces: boolean; holdMaxSeconds?: number; sendSessionHeaders?: boolean; allowPlainHttp?: boolean }) => Promise<{ ok: true; endpoint: EndpointView } | { ok: false; error: string }>;
+    /** Traces turned off applies at once: ok, with `unsaved` while it is not written yet. */
+    save: (e: { id?: string; name: string; baseUrl: string; allowTraces: boolean; holdMaxSeconds?: number; sendSessionHeaders?: boolean; allowPlainHttp?: boolean }) => Promise<{ ok: true; endpoint: EndpointView; unsaved?: string } | { ok: false; error: string }>;
     approve: (id: string) => Promise<{ ok: true; endpoint: EndpointView } | { ok: false; error: string }>;
     /** Write-only: no channel returns a key. null clears it. */
     setKey: (id: string, key: string | null) => Promise<{ ok: true } | { ok: false; error: string }>;
     /** Refused while agents run on it (`agents` names them). */
-    remove: (id: string) => Promise<{ ok: true } | { ok: false; error: string; agents?: string[] }>;
+    /** Applies at once: ok, with `unsaved` while it is not written yet. */
+    remove: (id: string) => Promise<{ ok: true; unsaved?: string } | { ok: false; error: string; agents?: string[] }>;
     refreshModels: (id: string) => Promise<{ ok: true; models: string[] } | { ok: false; error: string }>;
     /** A /v1/models probe: status, latency, time. */
     check: (id: string) => Promise<EndpointHealth>;
@@ -2896,12 +2898,15 @@ export interface ElectronAPI {
     settings: () => Promise<TraceSettingsView>;
     /** `uploadUrl`: the back-office address any user may point at their own server, '' for none. A new address
      *  clears the consent: the notice is shown again. */
-    setSettings: (s: { projects?: string[]; capBytes?: number; retentionDays?: number; excludeClosedModels?: boolean; uploadUrl?: string; uploadAllowPlainHttp?: boolean }) => Promise<{ ok: true; settings: TraceSettingsView } | { ok: false; error: string }>;
+    /** A change that takes away from sharing (projects opted out, closed models left out) applies at once: ok, with
+     *  `unsaved` while it is not written yet (Tars tries again every minute, and shares nothing meanwhile). */
+    setSettings: (s: { projects?: string[]; capBytes?: number; retentionDays?: number; excludeClosedModels?: boolean; uploadUrl?: string; uploadAllowPlainHttp?: boolean }) => Promise<{ ok: true; settings: TraceSettingsView; unsaved?: string } | { ok: false; error: string }>;
     /** The harness and model pairs that may be traced (empty as Tars ships), and the closed-model default with the
      *  warning to show beside its switch. */
     pairs: () => Promise<TracePairsView>;
     addPair: (pair: TracePair) => Promise<({ ok: true } & TracePairsView) | { ok: false; error: string }>;
-    removePair: (pair: { harness: string; models: string }) => Promise<({ ok: true } & TracePairsView) | { ok: false; error: string }>;
+    /** Applies at once: ok, with `unsaved` while it is not written yet. */
+    removePair: (pair: { harness: string; models: string }) => Promise<({ ok: true; unsaved?: string } & TracePairsView) | { ok: false; error: string }>;
     /** Adds the pairs of a JSON file the owner picks (an array of { harness, models, note? }); `added` new ones. */
     importPairs: () => Promise<({ ok: true; added: number } & TracePairsView) | { ok: false; error: string; cancelled?: true }>;
     /** What leaves the machine on upload, what stays, and what the scrubbing catches and cannot: the first-time notice. */
@@ -3046,10 +3051,10 @@ export interface UploadState {
   consentAt?: string;
   /** The install is registered with the back-office (its token is in the private folder). */
   registered: boolean;
-  /** Opted-in sessions with something not yet sent. */
-  /** The sessions an upload pass would send now: a change not sent, the project and the agent opted in now, started
-   *  after the latest deletion's moment (no closed-model rule applies at sending). Still counted while the consent,
-   *  the address or an owed deletion stops every session. */
+  /** The sessions an upload pass would send now: a change not sent, the trace gate as it is now (project and agent
+   *  opted in, the endpoint there and allowing traces, the pair on the list, closed models left out when that is on),
+   *  started after the latest deletion's moment. Still counted while the consent, the address or an owed deletion
+   *  stops every session. */
   pendingSessions: number;
   /** The sessions sent and still on the back-office: those started after the latest deletion's moment. */
   sentSessions: number;
