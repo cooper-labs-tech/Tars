@@ -909198,8 +909198,8 @@
                       "type": "frame",
                       "id": "vtYpW",
                       "name": "state not saved",
+                      "width": "fill_container",
                       "gap": 6,
-                      "alignItems": "center",
                       "children": [
                         {
                           "type": "rectangle",
@@ -909213,7 +909213,9 @@
                           "type": "text",
                           "id": "fDabW",
                           "fill": "$status-waiting",
-                          "content": "Tars could not save the settings (EACCES): Tars tries again every minute.",
+                          "textGrowth": "fixed-width",
+                          "width": 480,
+                          "content": "Tars could not save the settings (EACCES): sharing is stopped until they are, and Tars tries again every minute.",
                           "lineHeight": 1.4,
                           "fontFamily": "$font-mono",
                           "fontSize": 10.5,
@@ -914052,8 +914054,8 @@
                       "type": "frame",
                       "id": "W8ByL",
                       "name": "state not saved",
+                      "width": "fill_container",
                       "gap": 6,
-                      "alignItems": "center",
                       "children": [
                         {
                           "type": "rectangle",
@@ -914067,7 +914069,9 @@
                           "type": "text",
                           "id": "WfN6m",
                           "fill": "$status-waiting",
-                          "content": "Tars could not save the settings (EACCES): Tars tries again every minute.",
+                          "textGrowth": "fixed-width",
+                          "width": 480,
+                          "content": "Tars could not save the settings (EACCES): sharing is stopped until they are, and Tars tries again every minute.",
                           "lineHeight": 1.4,
                           "fontFamily": "$font-mono",
                           "fontSize": 10.5,
