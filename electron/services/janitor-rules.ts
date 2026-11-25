@@ -212,12 +212,16 @@ function readSmallFile(file: string): string | undefined {
 }
 
 /**
- * A cache-dir that would hide every proposal: the root of its volume, the home, or an ancestor of the home, by real
- * path. Any process of the user, an agent included, can write one into the user's uv.toml (the Audit's I-2 on #605).
+ * A cache-dir that would hide what the janitor proposes, by real path: the filesystem's root (a drive's on Windows),
+ * the home or an ancestor of it (the Audit's I-2 on #605), or a folder that is or holds a project of the world, Tars's
+ * data folder, or a fleet agent's worktree or project (its I-1 at 86848e87c). Any process of the user, an agent
+ * included, can write one into the user's uv.toml. A volume mounted below the root (/Volumes/<v>, /mnt/<d>) is no
+ * root here: mount points are not read, so a cache-dir naming one is taken unless it holds one of these.
  */
-function hidesEverything(dir: string, home: string): boolean {
+function hidesEverything(dir: string, world: JanitorWorld): boolean {
   const at = real(dir);
-  return at === path.parse(at).root || inside(real(home), at);
+  const held = [world.home, world.dataDir, ...world.projects, ...world.fleet.flatMap(a => [a.projectPath, a.worktreePath ?? ''])];
+  return at === path.parse(at).root || held.some(p => p !== '' && inside(real(p), at));
 }
 
 /**
@@ -226,7 +230,7 @@ function hidesEverything(dir: string, home: string): boolean {
  * regular file, is past UV_TOML_MAX, or is no TOML (uv refuses it too), and none, said in one line, when it would hide
  * every proposal (hidesEverything).
  */
-function uvTomlCacheDir(file: string, home: string): string[] {
+function uvTomlCacheDir(file: string, world: JanitorWorld): string[] {
   let value: unknown;
   try {
     const text = readSmallFile(file);
@@ -236,8 +240,10 @@ function uvTomlCacheDir(file: string, home: string): string[] {
     return [];
   }
   if (typeof value !== 'string' || !path.isAbsolute(value)) return [];
-  if (hidesEverything(value, home)) {
-    console.warn(`[janitor] ${file}: cache-dir "${value}" ignored: it is the root, the home or above the home, and would hide every proposal`);
+  if (hidesEverything(value, world)) {
+    // The value as uv.toml holds it may carry a newline or an escape character, and run to 64 KiB (the Audit's I-3).
+    const shown = JSON.stringify(value).slice(0, 200);
+    console.warn(`[janitor] ${file}: cache-dir ${shown} ignored: it is the root, the home or above it, or holds a project, Tars's data folder or an agent's worktree, and would hide what the janitor proposes there`);
     return [];
   }
   return [value];
@@ -266,7 +272,11 @@ const neverOf = new WeakMap<JanitorWorld, string[]>();
  * - variables a shell sets for the uv it starts: those read are the ones Tars runs with;
  * - a project's own uv.toml or [tool.uv] of its pyproject.toml: uv takes it from the nearest one above the folder it
  *   runs in, which can be any folder of any project;
- * - the system-level uv.toml (/etc/uv/uv.toml, %PROGRAMDATA%\uv\uv.toml) and a file named by UV_CONFIG_FILE.
+ * - the system-level uv.toml (/etc/uv/uv.toml, %PROGRAMDATA%\uv\uv.toml) and a file named by UV_CONFIG_FILE;
+ * - a mount point as a cache-dir: hidesEverything ignores one that is the filesystem's root or a Windows drive's, not
+ *   one that is a volume mounted below the root (/Volumes/<v>, /mnt/<d>, /media/<user>/<d>), since mount points are
+ *   not read. Such a value is taken unless it holds the home, a project, the data folder or a fleet agent's worktree,
+ *   and hides what is proposed on that volume.
  */
 function never(world: JanitorWorld): string[] {
   const made = neverOf.get(world);
@@ -279,7 +289,7 @@ function never(world: JanitorWorld): string[] {
   const list = [
     world.privateDir, path.join(h, 'Documents'),
     ...fromEnv('UV_CACHE_DIR'), ...fromEnv('XDG_CACHE_HOME', 'uv'), ...fromEnv('LOCALAPPDATA', 'uv', 'cache'),
-    ...uvConfigs.flatMap(file => uvTomlCacheDir(file, h)),
+    ...uvConfigs.flatMap(file => uvTomlCacheDir(file, world)),
     path.join(h, '.cache', 'uv'), path.join(h, 'Library', 'Caches', 'uv'), path.join(h, 'AppData', 'Local', 'uv', 'cache'),
     path.join(h, '.Trash'), ...fromEnv('XDG_DATA_HOME', 'Trash'), path.join(h, '.local', 'share', 'Trash'),
     path.join(h, 'Library', 'Developer'), '/Library/Developer',
