@@ -199,14 +199,18 @@ describe("the CODEX_HOME the user's shell sets", () => {
     ].join('\n'), { mode: 0o755 });
     const alive = (pid: number) => { try { process.kill(pid, 0); return true; } catch { return false; } };
 
+    // Its time is long enough for the shell to reach its `wait` under load: at its time the whole process group is
+    // killed (SIGKILL), and a shell cut before its echo line never writes the pids this reads (ENOENT at a load of
+    // 12.8, 25/11). Still well inside the bound below, which is what says it was ended at its time and not waited for.
     const asked = Date.now();
-    expect(await loginShellCodexHome(shell, 'darwin', 2_000)).toBeUndefined();
+    expect(await loginShellCodexHome(shell, 'darwin', 6_000)).toBeUndefined();
     expect(Date.now() - asked).toBeLessThan(10_000);
+    await expect.poll(() => fs.existsSync(pids), { timeout: 5_000, message: 'the shell wrote its pid and its child\'s' }).toBe(true);
     const [shellPid, rcPid] = fs.readFileSync(pids, 'utf8').trim().split('\n')[0].split(' ').map(Number);
     await expect.poll(() => alive(shellPid), { timeout: 3_000 }).toBe(false);
     await expect.poll(() => alive(rcPid), { timeout: 3_000 }).toBe(false);
 
-    expect(await loginShellCodexHome(shell, 'darwin', 2_000)).toBeUndefined();
+    expect(await loginShellCodexHome(shell, 'darwin', 6_000)).toBeUndefined();
     expect(fs.readFileSync(runs, 'utf8').trim().split('\n')).toHaveLength(2);
   }, 45_000);
 });
