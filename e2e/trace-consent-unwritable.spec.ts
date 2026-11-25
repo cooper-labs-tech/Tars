@@ -35,6 +35,11 @@ import { DEV_URL, apiPort } from './ports.mjs';
  * a retry holds. At the next start the deletion is owed again, a consent is refused until the DELETE is asked again
  * and holds, and after a new consent only a session started since is sent: pre-1 and pre-2 never go again. Until this
  * fix the start withdrew the consent and nothing else, so the new consent sent pre-2 and no DELETE was asked again.
+ * And two revokes on the 0500 folder (the fourth test, the Audit's L1 and L2 at 1e9571eab). The reader token is
+ * revoked: it must open /api/traces/ no more, at once and after a restart. The back-office address is emptied to stop
+ * sharing: the consent must go at once, and an upload pass then sends nothing, before and after a restart. Until
+ * this fix the revoke threw on the unlink and the old token kept opening the route, and the emptied address left the
+ * consent and the old address in memory, where the uploader kept sending.
  * The artefact: values.json with each answer, the back-office's request log, a screenshot per launch.
  */
 
@@ -44,6 +49,8 @@ type Traces = {
   giveUploadConsent(): Promise<{ ok: boolean; error?: string; at?: string }>;
   deleteEverywhere(): Promise<{ ok: boolean; error?: string }>;
   uploadState(): Promise<{ unsaved?: string }>;
+  rotateReaderToken(): Promise<{ token?: string; ok?: boolean; error?: string }>;
+  revokeReaderToken(): Promise<{ ok: boolean; error?: string }>;
 };
 const traces = (app: ElectronApplication) => app.firstWindow().then(page => ({
   page,
@@ -317,6 +324,84 @@ test('a deletion whose bookkeeping cannot be written survives a quit: owed again
     expect(batchesOf(restartedAt, 'pre-2'), 'pre-2, recorded before the deletion, is never sent').toEqual([]);
     expect(requests.slice(restartedAt).filter(r => r.method === 'DELETE').length, 'the DELETE is asked again').toBeGreaterThan(0);
     expect(batchesOf(restartedAt, 'post-1').length, 'a session started since is sent').toBeGreaterThan(0);
+  } finally {
+    if (app) await app.close().catch(() => {});
+    fs.writeFileSync(test.info().outputPath('back-office-requests.json'), JSON.stringify(requests, null, 2));
+    await new Promise<void>(resolve => backOffice.close(() => resolve()));
+    if (fs.existsSync(privateDir)) fs.chmodSync(privateDir, 0o700);
+    await removeHome(home);
+  }
+});
+
+test('a reader token revoked and an address emptied on a folder that cannot be written: both apply at once and never come back', async () => {
+  test.skip(process.platform === 'win32', 'the private folder is made unwritable with POSIX permissions');
+  test.setTimeout(240_000);
+  const home = fs.mkdtempSync(path.join(os.tmpdir(), 'dorothy-e2e-trace-revokes-'));
+  const privateDir = path.join(home, '.tars-private');
+  const requests: Array<{ method?: string; url?: string; at: string }> = [];
+  const backOffice = http.createServer((req, res) => {
+    requests.push({ method: req.method, url: req.url, at: new Date().toISOString() });
+    res.writeHead(503, { 'content-type': 'application/json' });
+    res.end('{"error":"stand-in"}');
+  });
+  await new Promise<void>(resolve => backOffice.listen(0, '127.0.0.1', resolve));
+  const uploadUrl = `http://127.0.0.1:${(backOffice.address() as { port: number }).port}`;
+  const port = apiPort(31950);
+  const values: Record<string, unknown> = { uploadUrl };
+  const keep = (more: Record<string, unknown>) => { Object.assign(values, more); recordValues(values); };
+  const dist = path.resolve('electron', 'dist');
+  const launch = () => launchSandboxed(electron, home, {
+    env: { NODE_ENV: 'development', DOROTHY_DEV_URL: DEV_URL, DOROTHY_API_PORT: port, DOROTHY_E2E: '1' },
+  });
+  const read = async (token: string) => (await fetch(`http://127.0.0.1:${port}/api/traces/sessions`, { headers: { Authorization: `Bearer ${token}` } })).status;
+  // The uploader's pass run now (in place of its 5-minute timer): with no consent it asks nothing of the back-office.
+  const pass = (a: ElectronApplication) => a.evaluate((_e, d) => process.mainModule!.require(`${d}/services/traces-runtime.js`).traceUploader().runOnce(), dist);
+  // An answer, or the error a call threw (the old build threw out of the revoke), kept as the value seen.
+  const tried = async <T>(run: () => Promise<T>) => { try { return await run(); } catch (err) { return { threw: String(err) }; } };
+
+  let app: ElectronApplication | null = null;
+  try {
+    app = await launch();
+    let w = await traces(app);
+    await w.page.waitForLoadState('domcontentloaded');
+    expect(await w.call<{ ok: boolean }>('setSettings', { uploadUrl })).toMatchObject({ ok: true });
+    expect(await w.call<{ ok: boolean }>('giveUploadConsent')).toMatchObject({ ok: true });
+    const rotated = await w.call<{ token?: string }>('rotateReaderToken');
+    const token = String(rotated.token);
+    expect(await read(token), 'the new token reads the traces').toBe(200);
+
+    fs.chmodSync(privateDir, 0o500);
+    try {
+      const revoked = await tried(() => w.call<{ ok: boolean; error?: string }>('revokeReaderToken'));
+      const readAfterRevoke = await read(token);
+      const emptied = await tried(() => w.call<{ ok: boolean; error?: string }>('setSettings', { uploadUrl: '' }));
+      const settingsAfter = await w.call<{ uploadUrl?: string; uploadConsentAt?: string }>('settings');
+      const before = requests.length;
+      await pass(app);
+      keep({ revoked, readAfterRevoke, emptied, consentAfterEmptying: settingsAfter.uploadConsentAt ?? null, requestsAfterEmptying: requests.slice(before) });
+      await stepShot(w.page, '01-revoked-and-emptied');
+      expect.soft(readAfterRevoke, 'the revoked token opens the traces no more').toBe(401);
+      expect.soft(settingsAfter.uploadConsentAt, 'the consent goes with the address').toBeUndefined();
+      expect(requests.slice(before), 'nothing is sent after the address was emptied').toEqual([]);
+    } finally {
+      fs.chmodSync(privateDir, 0o700);
+    }
+    await app.close();
+    app = null;
+
+    // A restart: the token still opens nothing, and nothing is sent.
+    app = await launch();
+    w = await traces(app);
+    await w.page.waitForLoadState('domcontentloaded');
+    const before = requests.length;
+    await pass(app);
+    const readAfterRestart = await read(token);
+    const afterRestart = await w.call<{ uploadConsentAt?: string }>('settings');
+    keep({ readAfterRestart, consentAfterRestart: afterRestart.uploadConsentAt ?? null, requestsAfterRestart: requests.slice(before) });
+    await stepShot(w.page, '02-restarted');
+    expect(readAfterRestart, 'the revoked token opens nothing after a restart').toBe(401);
+    expect(afterRestart.uploadConsentAt, 'no consent after a restart').toBeUndefined();
+    expect(requests.slice(before), 'nothing is sent after a restart').toEqual([]);
   } finally {
     if (app) await app.close().catch(() => {});
     fs.writeFileSync(test.info().outputPath('back-office-requests.json'), JSON.stringify(requests, null, 2));

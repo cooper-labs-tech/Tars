@@ -88,21 +88,30 @@ export function recordConsent(at: string): void {
   fs.writeFileSync(TRACES_CONSENT_FILE, at, { mode: 0o600 });
 }
 
+/**
+ * A file of the private folder gone, or emptied, which reads as nothing: a full volume takes the unlink, and a folder
+ * that may not be written takes the truncate. Null once one holds, else the reason, which the log says too.
+ */
+function dropPrivateFile(file: string, what: string): string | null {
+  try {
+    fs.unlinkSync(file);
+    return null;
+  } catch (err) {
+    if ((err as NodeJS.ErrnoException).code === 'ENOENT') return null;
+  }
+  try {
+    fs.truncateSync(file, 0);
+    return null;
+  } catch (err) {
+    const reason = describeSecretFileError(err);
+    console.error(`[traces] ${what} could be neither removed nor emptied: ${reason}`);
+    return reason;
+  }
+}
+
 /** The consent's file gone or emptied: true when it no longer says any consent. */
 export function dropConsentFile(): boolean {
-  try {
-    fs.unlinkSync(TRACES_CONSENT_FILE);
-    return true;
-  } catch (err) {
-    if ((err as NodeJS.ErrnoException).code === 'ENOENT') return true;
-  }
-  try {
-    fs.truncateSync(TRACES_CONSENT_FILE, 0);
-    return true;
-  } catch (err) {
-    console.error(`[traces] the consent's file could be neither removed nor emptied: ${describeSecretFileError(err)}`);
-    return false;
-  }
+  return dropPrivateFile(TRACES_CONSENT_FILE, "the consent's file") === null;
 }
 
 /** Whether the settings' consent stands: its file holds the very same time. */
@@ -159,14 +168,20 @@ function persistSettings(): boolean {
  * so nothing uploads from now, then off the disk, its file first, which needs no free space, then the settings.
  * `persisted` when a restart cannot bring it back: the file is gone or empty, or the settings say no consent.
  */
-export function withdrawUploadConsent(deletion?: { owed: boolean; since?: number }): { persisted: boolean } {
+export function withdrawUploadConsent(deletion?: { owed: boolean; since?: number; by?: 'you' | 'start' }): { persisted: boolean } {
   if (!deps) return { persisted: false };
   const t = traceSettingsOf(deps.getSettings());
   const { uploadConsentAt: _gone, ...kept } = t;
-  // A deletion's moment and owed mark go in with the withdrawal, in the same write (the Audit's I-1 at 965cfced0).
-  const { uploadDeletedAt: _at, uploadDeletionOwed: _owed, ...unmarked } = kept;
+  // A deletion's moment, owed mark and origin go in with the withdrawal, in the same write (the Audit's I-1 at
+  // 965cfced0, and its I-3 on #599 for the origin).
+  const { uploadDeletedAt: _at, uploadDeletionOwed: _owed, uploadDeletionBy: _by, ...unmarked } = kept;
   const rest = deletion
-    ? { ...unmarked, ...(deletion.since !== undefined ? { uploadDeletedAt: deletion.since } : {}), ...(deletion.owed ? { uploadDeletionOwed: true } : {}) }
+    ? {
+      ...unmarked,
+      ...(deletion.since !== undefined ? { uploadDeletedAt: deletion.since } : {}),
+      ...(deletion.owed ? { uploadDeletionOwed: true } : {}),
+      ...(deletion.by ? { uploadDeletionBy: deletion.by } : {}),
+    }
     : kept;
   deps.setSettings({ ...deps.getSettings(), traces: rest });
   const dropped = dropConsentFile();
@@ -209,7 +224,7 @@ export function reconcileConsent(): void {
     console.error(`[traces] the trace store could not be read at start (${describeSecretFileError(err)}): the deletion's moment is this start`);
   }
   const since = Math.max(t.uploadDeletedAt ?? 0, Date.now(), newest ?? 0);
-  withdrawUploadConsent({ owed: t.uploadDeletionOwed === true || installHeld(), since });
+  withdrawUploadConsent({ owed: t.uploadDeletionOwed === true || installHeld(), since, by: 'start' });
 }
 
 /** An agent being created, whose terminal is spawned before its record is in the fleet (agent:create). */
@@ -243,6 +258,7 @@ export function traceSettingsOf(settings: Partial<AppSettings> | undefined): Tra
     ...(t?.uploadAllowPlainHttp === true ? { uploadAllowPlainHttp: true } : {}),
     ...(typeof t?.uploadDeletedAt === 'number' ? { uploadDeletedAt: t.uploadDeletedAt } : {}),
     ...(t?.uploadDeletionOwed === true ? { uploadDeletionOwed: true } : {}),
+    ...(t?.uploadDeletionBy === 'you' || t?.uploadDeletionBy === 'start' ? { uploadDeletionBy: t.uploadDeletionBy } : {}),
   };
 }
 
@@ -293,7 +309,7 @@ export function traceUploader(): TraceUploader {
         const t = traceSettingsOf(deps?.getSettings());
         const allowed = !t.uploadUrl || transportOf(t.uploadUrl) !== 'http-public' || t.uploadAllowPlainHttp === true;
         // The consent only while it stands (its file says it too): one the settings kept after a withdrawal is none.
-        return { url: allowed ? t.uploadUrl : '', consentAt: uploadConsentAt(), since: t.uploadDeletedAt, deletionOwed: t.uploadDeletionOwed === true };
+        return { url: allowed ? t.uploadUrl : '', consentAt: uploadConsentAt(), since: t.uploadDeletedAt, deletionOwed: t.uploadDeletionOwed === true, deletionBy: t.uploadDeletionBy };
       },
       // In memory at once, then written, and tried again until it holds (persistSettings).
       setDeletion: (d) => {
@@ -574,26 +590,50 @@ function readReaderToken(): string {
 export function readerTokenStatus(): { exists: boolean; createdAt?: string; lastUsedAt?: string; route: string; listen: 'loopback' } {
   let createdAt: string | undefined;
   try { createdAt = fs.statSync(TRACES_READER_TOKEN_FILE).mtime.toISOString(); } catch { /* none */ }
-  return { exists: !!readReaderToken(), createdAt, lastUsedAt: readerLastUsedAt, route: '/api/traces/', listen: 'loopback' };
+  const held = readReaderToken();
+  return { exists: !!held && !revokedReaderTokens.has(held), createdAt, lastUsedAt: readerLastUsedAt, route: '/api/traces/', listen: 'loopback' };
 }
 
-/** A new reader token, shown once: the one before opens nothing from now on. */
-export function rotateReaderToken(): string {
-  const token = `trd_${randomBytes(32).toString('hex')}`;
-  writeSecretFileSync(TRACES_READER_TOKEN_FILE, token);
+/**
+ * Reader tokens revoked in this run: refused at once, whatever their file still says (the Audit's L1 at 1e9571eab).
+ * A revoke applies first, then the file goes, unlinked or else emptied, which reads as no token at the next start.
+ */
+const revokedReaderTokens = new Set<string>();
+
+/** The reader token refused now and off the disk: null once the file says no token, else the reason. */
+function dropReaderToken(): string | null {
+  const held = readReaderToken();
+  if (held) revokedReaderTokens.add(held);
   readerLastUsedAt = undefined;
+  return dropPrivateFile(TRACES_READER_TOKEN_FILE, 'the reader token');
+}
+
+/**
+ * A new reader token, shown once: the one before opens nothing from now on. The old one goes first, so a new write
+ * that fails (a full disk) leaves no token rather than the old one. Throws the reason when either step fails.
+ */
+export function rotateReaderToken(): string {
+  const kept = dropReaderToken();
+  if (kept) throw new Error(`Tars could not remove the reader token (${kept}): it opens nothing until Tars quits, and no new one was made.`);
+  const token = `trd_${randomBytes(32).toString('hex')}`;
+  try {
+    writeSecretFileSync(TRACES_READER_TOKEN_FILE, token);
+  } catch (err) {
+    throw new Error(`Tars could not save a new reader token (${describeSecretFileError(err)}): the old one opens nothing, and there is none now.`);
+  }
   return token;
 }
 
+/** The reader token revoked: refused at once, and off the disk. Throws the reason when its file stays. */
 export function revokeReaderToken(): void {
-  fs.rmSync(TRACES_READER_TOKEN_FILE, { force: true });
-  readerLastUsedAt = undefined;
+  const kept = dropReaderToken();
+  if (kept) throw new Error(`Tars could not remove the reader token (${kept}): it opens nothing until Tars quits, but would again after a restart.`);
 }
 
 /** Whether this is the reader token, compared whole and in constant time. */
 export function isReaderToken(presented: string): boolean {
   const held = readReaderToken();
-  if (!presented || !held) return false;
+  if (!presented || !held || revokedReaderTokens.has(held)) return false;
   const a = Buffer.from(presented);
   const b = Buffer.from(held);
   const same = a.length === b.length && timingSafeEqual(a, b);

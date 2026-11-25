@@ -72,6 +72,12 @@ import { hasPosixModes } from '../setup/platform-limits';
  *     abandonDeletion, the deletion still owed, and the window gets no answer.
  * 34. (Added before its code, 24/11.) A trace store whose read throws: "delete everything" reads the newest session
  *     before it withdraws, so it throws first, and the user cannot revoke on a broken store.
+ * Added before their code after the Frontend's read for #599 and the Audit's I-2 there (24/11): the window shows the
+ * counts as main sends them.
+ * 35. The pending count counts every session with a change not sent: those of a project or an agent not opted in, and
+ *     those recorded before a deletion, which will never be sent.
+ * 36. After a deletion whose progress could not be forgotten (a full disk), the sent count still counts the sessions
+ *     sent before it, which the back-office deleted.
  */
 
 type Seen = { method: string; url: string; headers: http.IncomingHttpHeaders; body: Buffer };
@@ -163,8 +169,8 @@ let settings: { url: string; consentAt?: string; projects: string[]; agentsTrace
 let withdrawn = 0;
 let deletion: { owed: boolean; since?: number } = { owed: false };
 
-function seed(traceId: string, text: string, startedAt = 1000) {
-  store.openTrace({ traceId, projectPath: PROJECT, agentId: 'agent-1', agentName: 'Q', harness: 'qwen-code', endpointId: 'ep-000001', endpointName: 'Remote host', endpointBaseUrl: 'http://192.0.2.10:9000/v1', model: 'open-coder-1', startedAt });
+function seed(traceId: string, text: string, startedAt = 1000, projectPath = PROJECT) {
+  store.openTrace({ traceId, projectPath, agentId: 'agent-1', agentName: 'Q', harness: 'qwen-code', endpointId: 'ep-000001', endpointName: 'Remote host', endpointBaseUrl: 'http://192.0.2.10:9000/v1', model: 'open-coder-1', startedAt });
   const req = Buffer.from(JSON.stringify({ model: 'open-coder-1', messages: [{ role: 'system', content: `You work in ${PROJECT}` }, { role: 'user', content: text }], tools: [{ type: 'function', function: { name: 'bash' } }] }));
   const resp = Buffer.from(JSON.stringify({ choices: [{ message: { role: 'assistant', content: `done, key ${SECRET}` }, finish_reason: 'stop' }], usage: { prompt_tokens: 5, completion_tokens: 1 } }));
   store.noteTypedInput({ agentId: 'agent-1', at: startedAt - 1, author: 'orchestrator', authorDetail: 'Lead (claude)', text, closed: true });
@@ -643,6 +649,45 @@ describe('forgetting the progress after a DELETE that went through, on a full di
     try {
       await expect(u.deleteEverywhere()).resolves.toMatchObject({ ok: true });
       expect(deletion.owed).toBe(false);
+    } finally {
+      vi.restoreAllMocks();
+    }
+  });
+
+  it('35: pending counts only what would be sent: opted in now, started after the deletion, a change not sent', async () => {
+    seed('in', 'opted in', 9000);
+    seed('other-project', 'not opted in', 9000, path.join(HOME, 'projects', 'project-b'));
+    seed('before', 'before the deletion', 2000);
+    deletion = { owed: false, since: 5000 };
+    const u = uploader();
+    expect(u.state().pendingSessions).toBe(1);
+    // The agent switched off: nothing of it would go.
+    settings.agentsTraced.clear();
+    expect(u.state().pendingSessions).toBe(0);
+    settings.agentsTraced.add('agent-1');
+    // What the pass sends is what the count said.
+    expect((await u.runOnce()).sent).toBe(1);
+    expect(u.state().pendingSessions).toBe(0);
+  });
+
+  it('36: after a deletion whose progress could not be forgotten, sent counts only what went after it', async () => {
+    seed('t1', 'first', 1000);
+    const u = uploader();
+    await u.runOnce();
+    expect(u.state().sentSessions).toBe(1);
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+    // The disk stays full: forgetting the progress fails at the deletion, and again at the next registration.
+    vi.spyOn(store, 'resetUploads').mockImplementation(() => { throw Object.assign(new Error('database or disk is full'), { code: 'SQLITE_FULL' }); });
+    try {
+      expect(await u.deleteEverywhere()).toMatchObject({ ok: true });
+      expect(u.state().sentSessions, 'nothing is on the back-office after its deletion').toBe(0);
+      // Consent again, and one session started after the deletion goes, once the registration's retry is due.
+      settings.consentAt = '2026-11-19T06:00:00Z';
+      seed('t2', 'after', (deletion.since ?? clock) + 1000);
+      expect((await u.runOnce()).failed).toBe(1);
+      clock += 60_000;
+      expect((await u.runOnce()).sent).toBe(1);
+      expect(u.state().sentSessions).toBe(1);
     } finally {
       vi.restoreAllMocks();
     }

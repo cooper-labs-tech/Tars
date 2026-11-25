@@ -2936,8 +2936,12 @@ export interface ElectronAPI {
     remove: (sel: { traceIds: string[] } | { filter: TraceFilter }) => Promise<{ deleted: number; bytesFreed: number }>;
     readerToken: () => Promise<{ exists: boolean; createdAt?: string; lastUsedAt?: string; route: string; listen: 'loopback' }>;
     /** Shown once: the one before opens nothing from now on. */
-    rotateReaderToken: () => Promise<{ token: string }>;
-    revokeReaderToken: () => Promise<{ ok: true }>;
+    /** A new reader token, shown once; the old one opens nothing from now on. ok:false with the reason when it could
+     *  not be saved: the old one then opens nothing either, and there is no token. */
+    rotateReaderToken: () => Promise<{ token: string } | { ok: false; error: string }>;
+    /** ok once the token opens nothing and its file says no token; else the reason (it still opens nothing until
+     *  Tars quits). */
+    revokeReaderToken: () => Promise<{ ok: true } | { ok: false; error: string }>;
     /** Throttled to once a second. */
     onChanged: (cb: () => void) => () => void;
   };
@@ -3023,6 +3027,9 @@ export interface TraceSettingsView {
   uploadDeletedAt?: number;
   /** A deletion not confirmed yet: consent is refused until it is. */
   uploadDeletionOwed?: boolean;
+  /** Whose the latest deletion is: 'you', the user's "delete everything"; 'start', a start that found a withdrawal
+   *  Tars could not write down and took it for a deletion. */
+  uploadDeletionBy?: 'you' | 'start';
 }
 
 export interface UploadNotice {
@@ -3040,7 +3047,11 @@ export interface UploadState {
   /** The install is registered with the back-office (its token is in the private folder). */
   registered: boolean;
   /** Opted-in sessions with something not yet sent. */
+  /** The sessions an upload pass would send now: a change not sent, the project and the agent opted in now, started
+   *  after the latest deletion's moment (no closed-model rule applies at sending). Still counted while the consent,
+   *  the address or an owed deletion stops every session. */
   pendingSessions: number;
+  /** The sessions sent and still on the back-office: those started after the latest deletion's moment. */
   sentSessions: number;
   lastUploadAt?: number;
   lastError?: string;
@@ -3062,6 +3073,8 @@ export interface UploadState {
   deletionCleared: boolean;
   /** A deletion asked for and not confirmed by the back-office: sharing stays off; offer "delete again". */
   deletionOwed: boolean;
+  /** Whose the latest deletion is, while there is one: 'you' or 'start' (TraceSettings.uploadDeletionBy). */
+  deletionBy?: 'you' | 'start';
 }
 
 export interface TraceStats {

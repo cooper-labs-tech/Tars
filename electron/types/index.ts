@@ -1042,4 +1042,9 @@ export interface TraceSettings {
   uploadDeletedAt?: number;
   /** A deletion asked for and not confirmed by the back-office yet: sharing stays off until it is. */
   uploadDeletionOwed?: boolean;
+  /**
+   * Whose the latest deletion is, written with its moment: 'you', the user's "delete everything"; 'start', a start
+   * that found a consent its file no longer held, a withdrawal Tars could not write down, taken for a deletion.
+   */
+  uploadDeletionBy?: 'you' | 'start';
 }

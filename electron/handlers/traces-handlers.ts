@@ -8,6 +8,7 @@ import {
 } from '../services/inference-endpoints';
 import {
   endpointWaits, readerTokenStatus, revokeReaderToken, rotateReaderToken, sweepTraces, traceSettingsOf, traceStore,
+  withdrawUploadConsent,
 } from '../services/traces-runtime';
 import type { TraceFilter } from '../services/trace-store';
 import { traceExportLines } from '../services/trace-export';
@@ -54,7 +55,8 @@ export function registerTracesHandlers(deps: TracesHandlerDeps): void {
   // Written first, then held in memory, where the uploader and the proxy read them: a setting main could not write
   // was answered ok and held for the rest of the run (a consent to upload on a full disk, the Audit's L2 on #599).
   // The reason when it could not, for the window to show; null when it was written and applied.
-  const apply = (settings: AppSettings): string | null => {
+  // `then`: what the failure left, when something already held before the write (a withdrawal).
+  const apply = (settings: AppSettings, then?: string): string | null => {
     try {
       deps.writeAppSettings(settings);
     } catch (err) {
@@ -62,7 +64,7 @@ export function registerTracesHandlers(deps: TracesHandlerDeps): void {
       // A key the failed save left on disk is held in memory too, or the next save would write the old one back.
       const kept = withKeptKeys(deps.getAppSettings(), err);
       if (kept) deps.setAppSettings(kept);
-      return settingsNotWritten(err);
+      return settingsNotWritten(err, then);
     }
     deps.setAppSettings(settings);
     return null;
@@ -180,7 +182,12 @@ export function registerTracesHandlers(deps: TracesHandlerDeps): void {
     if (next.uploadUrl && transportOf(next.uploadUrl) === 'http-public' && !next.uploadAllowPlainHttp) {
       return { ok: false, error: 'A public back-office address takes https. Plain http goes to loopback and private networks only, unless you allow it.' };
     }
-    const unsaved = apply({ ...deps.getAppSettings(), traces: next });
+    // A consent is given for one address: emptying or changing it takes the consent back at once, in memory and off
+    // the disk, before the rest is written, so a write that fails never leaves sharing on (the Audit's L2 at
+    // 1e9571eab). Settings that never hold then: the next start takes it for a deletion, which fails closed.
+    const dropsConsent = !!current.uploadConsentAt && !next.uploadConsentAt;
+    if (dropsConsent) withdrawUploadConsent();
+    const unsaved = apply({ ...deps.getAppSettings(), traces: next }, dropsConsent ? 'sharing stopped at once, and the address was not saved' : undefined);
     if (unsaved) return { ok: false, error: unsaved };
     sweepTraces();
     return { ok: true, settings: next };
@@ -364,6 +371,20 @@ export function registerTracesHandlers(deps: TracesHandlerDeps): void {
   });
 
   ipcMain.handle('traces:readerToken', () => readerTokenStatus());
-  ipcMain.handle('traces:rotateReaderToken', () => ({ token: rotateReaderToken() }));
-  ipcMain.handle('traces:revokeReaderToken', () => { revokeReaderToken(); return { ok: true }; });
+  // Ok only once the old token opens nothing and its file says no token (the Audit's L1 at 1e9571eab).
+  ipcMain.handle('traces:rotateReaderToken', () => {
+    try {
+      return { token: rotateReaderToken() };
+    } catch (err) {
+      return { ok: false, error: (err as Error).message };
+    }
+  });
+  ipcMain.handle('traces:revokeReaderToken', () => {
+    try {
+      revokeReaderToken();
+      return { ok: true };
+    } catch (err) {
+      return { ok: false, error: (err as Error).message };
+    }
+  });
 }

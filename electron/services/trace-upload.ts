@@ -30,7 +30,7 @@ export interface UploaderDeps {
   store: TraceStore;
   /** `~/.tars-private/traces-install.json` (0600). */
   installFile: string;
-  settings(): { url: string; consentAt?: string; since?: number; deletionOwed?: boolean };
+  settings(): { url: string; consentAt?: string; since?: number; deletionOwed?: boolean; deletionBy?: 'you' | 'start' };
   /**
    * What a deletion leaves behind, kept in the settings: `since`, the moment of the user's deletion (only sessions
    * started after it are sent again: the deletion is the user's word), and whether a DELETE is still owed (asked
@@ -48,7 +48,7 @@ export interface UploaderDeps {
    * them, either the consent standing with a deletion owed or no consent and no moment of the deletion (the Audit's
    * I-1 at 965cfced0).
    */
-  withdrawConsent(deletion?: { owed: boolean; since?: number }): void;
+  withdrawConsent(deletion?: { owed: boolean; since?: number; by?: 'you' | 'start' }): void;
   /** A batch's body, compressed, at most (4 MiB: half the back-office's 8 MiB, the margin it advises). */
   maxBatchBytes?: number;
   fetch?: typeof fetch;
@@ -61,7 +61,14 @@ export interface UploadStateView {
   configured: boolean;
   consentAt?: string;
   registered: boolean;
+  /**
+   * The sessions a pass would send now, by its own rule: a change not sent yet, the project and the agent opted in
+   * at this moment, and started after the latest deletion's moment. No closed-model rule applies at sending: the gate
+   * decided that when the session was recorded (trace-gate.ts), and one it left out was never recorded. A session
+   * held back by the consent, the address or an owed deletion still counts here: those stop every session alike.
+   */
   pendingSessions: number;
+  /** The sessions sent and still on the back-office: those started after the latest deletion's moment. */
   sentSessions: number;
   lastUploadAt?: number;
   lastError?: string;
@@ -77,6 +84,8 @@ export interface UploadStateView {
   deletionCleared: boolean;
   /** A deletion asked for and not yet confirmed by the back-office: sharing stays off until it is done. */
   deletionOwed: boolean;
+  /** Whose the latest deletion is, while there is one: 'you' or 'start' (TraceSettings.uploadDeletionBy). */
+  deletionBy?: 'you' | 'start';
 }
 
 class HttpError extends Error {
@@ -186,17 +195,25 @@ export class TraceUploader {
     this.clearedUnsaid = false;
   }
 
+  /** Whether a pass would send this session now: opted in now, and started after the latest deletion's moment. */
+  private sendable(q: { projectPath: string; agentId: string; startedAt: number }, since: number | undefined): boolean {
+    return this.deps.eligible(q) && (since === undefined || q.startedAt > since);
+  }
+
   state(): UploadStateView {
     const owed = this.owed();
     const s = this.deps.settings();
-    const counts = this.deps.store.uploadCounts();
+    const counts = this.deps.store.uploadCounts(s.since);
+    // What the pass would send, by the pass's own rule: every session with a change not sent, read in full.
+    const pending = this.deps.store.uploadQueue(Number.MAX_SAFE_INTEGER).filter(q => this.sendable(q, s.since)).length;
     const install = this.readInstall();
     return {
       configured: !!s.url, consentAt: s.consentAt, registered: !!install && install.url === s.url,
-      pendingSessions: counts.pending, sentSessions: counts.sent, lastUploadAt: counts.lastAt,
+      pendingSessions: pending, sentSessions: counts.sent, lastUploadAt: counts.lastAt,
       lastError: this.lastError, nextTryAt: this.nextTryAt, ...(this.notice ? { notice: this.notice } : {}),
       deletionCleared: this.clearedUnsaid,
       deletionOwed: owed,
+      ...(s.since !== undefined && s.deletionBy ? { deletionBy: s.deletionBy } : {}),
     };
   }
 
@@ -271,7 +288,7 @@ export class TraceUploader {
       for (let round = 0; round < 40; round++) {
         const since = this.deps.settings().since;
         const queue = this.deps.store.uploadQueue(5000)
-          .filter(q => this.deps.eligible(q) && (since === undefined || q.startedAt > since))
+          .filter(q => this.sendable(q, since))
           .slice(0, BATCH_SESSIONS);
         if (!queue.length) break;
         for (const q of queue) {
@@ -505,7 +522,7 @@ export class TraceUploader {
         console.error(`[traces] the trace store could not be read at the deletion (${describeSecretFileError(err)}): its moment is now`);
       }
       const since = Math.max(this.now(), newest ?? 0);
-      this.deps.withdrawConsent(this.readInstall() ? { owed: true, since } : undefined);
+      this.deps.withdrawConsent(this.readInstall() ? { owed: true, since, by: 'you' } : undefined);
       this.abort?.abort();
       await this.pass?.catch(() => undefined);
       return await this.deleteNow();

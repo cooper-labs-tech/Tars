@@ -1,5 +1,8 @@
-import { describe, it, expect, beforeEach } from 'vitest';
+import { describe, it, expect, beforeEach, vi } from 'vitest';
 import * as fs from 'node:fs';
+import * as path from 'node:path';
+import { DATA_DIR, PRIVATE_DIR } from '../../../electron/constants';
+import { assertThrowaway } from '../../setup/throwaway-dirs';
 import { getApiToken, resolveCaller } from '../../../electron/services/api-server';
 import { isReaderToken, readerTokenStatus, revokeReaderToken, rotateReaderToken, TRACES_READER_TOKEN_FILE } from '../../../electron/services/traces-runtime';
 import { mintAgentToken } from '../../../electron/core/agent-tokens';
@@ -16,9 +19,37 @@ import { hasPosixModes } from '../../setup/platform-limits';
  * 3. A rotated token still opens the routes; a revoked one does.
  * 4. The token file is readable by others.
  * 5. The status says the token.
+ * Added before their code after the Audit's re-read of #596 at 1e9571eab (its L1, 24/11): revoking must apply first
+ * and never come back, whatever the disk does.
+ * 6. A private folder that refuses an unlink (0500, measured on macOS 26): the revoke throws, and the old token still
+ *    opens the routes, now and after a restart.
+ * 7. A rotation whose new write fails (a full disk): it throws before it touches the old token, which still opens the
+ *    routes, now and after a restart.
  */
 
-beforeEach(() => { revokeReaderToken(); });
+assertThrowaway({ DATA_DIR, PRIVATE_DIR });
+
+// 7: the new token's write lands on a full volume.
+const fullDisk = vi.hoisted(() => ({ on: false }));
+vi.mock('../../../electron/utils/secret-file', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('../../../electron/utils/secret-file')>();
+  return {
+    ...actual,
+    writeSecretFileSync: (file: string, contents: string) => {
+      if (fullDisk.on && file.endsWith('traces-reader-token')) throw Object.assign(new Error('no space left on device'), { code: 'ENOSPC' });
+      return actual.writeSecretFileSync(file, contents);
+    },
+  };
+});
+
+const posix = process.platform !== 'win32';
+const onDisk = () => { try { return fs.readFileSync(TRACES_READER_TOKEN_FILE, 'utf8').trim(); } catch { return ''; } };
+
+beforeEach(() => {
+  fullDisk.on = false;
+  if (posix && fs.existsSync(path.dirname(TRACES_READER_TOKEN_FILE))) fs.chmodSync(path.dirname(TRACES_READER_TOKEN_FILE), 0o700);
+  revokeReaderToken();
+});
 
 describe("the trace reader's token", () => {
   it('1: opens the traces routes, and nothing else', () => {
@@ -59,5 +90,32 @@ describe("the trace reader's token", () => {
     expect(status).toMatchObject({ exists: true, route: '/api/traces/', listen: 'loopback' });
     expect(status.lastUsedAt).toBeDefined();
     expect(JSON.stringify(status)).not.toContain(token);
+  });
+
+  it.skipIf(!posix)('6: a revoke in a folder that refuses the unlink: the old token opens nothing, now or after a restart', () => {
+    const token = rotateReaderToken();
+    const folder = path.dirname(TRACES_READER_TOKEN_FILE);
+    fs.chmodSync(folder, 0o500);
+    try {
+      try { revokeReaderToken(); } catch { /* the old build throws here; what counts is what the token opens */ }
+      expect(isReaderToken(token)).toBe(false);
+      expect(resolveCaller({ authorization: `Bearer ${token}` }, '/api/traces/sessions')).toMatchObject({ ok: false, status: 401 });
+      // A restart reads the file: it says no token.
+      expect(onDisk()).toBe('');
+      expect(readerTokenStatus().exists).toBe(false);
+    } finally {
+      fs.chmodSync(folder, 0o700);
+    }
+  });
+
+  it('7: a rotation whose write fails: the old token opens nothing, now or after a restart, and the failure is said', () => {
+    const token = rotateReaderToken();
+    fullDisk.on = true;
+    let thrown: unknown;
+    try { rotateReaderToken(); } catch (err) { thrown = err; } finally { fullDisk.on = false; }
+    expect(isReaderToken(token)).toBe(false);
+    expect(resolveCaller({ authorization: `Bearer ${token}` }, '/api/traces/sessions')).toMatchObject({ ok: false, status: 401 });
+    expect(onDisk()).toBe('');
+    expect(String(thrown)).toMatch(/ENOSPC/);
   });
 });

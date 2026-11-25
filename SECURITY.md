@@ -1127,7 +1127,12 @@ else.
 - `resolveCaller` reads it only on those paths, as it reads a Hermes gateway's secret only on its webhook.
 - No other credential opens those paths: not an agent's token (one agent would read every other's sessions), not the
   shared token, not a gateway's secret.
-- It is rotated or revoked in the window, and shown once when made.
+- It is rotated or revoked in the window, and shown once when made. A revoke applies first: the token is refused in
+  memory at once, then its file is unlinked, or else emptied, which reads as no token at the next start, and the
+  window is answered ok only once one of the two holds. A rotation drops the old token the same way before it writes
+  the new one, so a write that fails (a full disk) leaves no token, never the old one.
+- Emptying or changing the back-office address takes the upload consent back first, in memory and off the disk, then
+  writes the rest: on settings that cannot be written, sharing has still stopped, and the window is told so.
 - The API listens on loopback. Offering the routes to a host on a tailnet is not built; it is the owner's call. It
   would take a second listener bound to the tailnet address alone, serving these routes and nothing else, behind a
   switch that is off by default. A port forward would carry every route of the API, leaving the token as the only
