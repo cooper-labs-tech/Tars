@@ -83,6 +83,15 @@ import { CLI_HOMES, homesOutside, inheritable, launchSandboxed } from '../e2e/fi
  *     - and XDG_BIN_HOME, where an installer run in the sandbox (uv's) puts what it installs.
  *     Each family must be left out whole, and the folders among them judged as homes: a spec may name one only
  *     inside its sandbox. A key or a config given as text is never judged as a path.
+ * 14. (the orchestrator's word of 25/11, before the fix) grok 1.0.92 also sends its telemetry where OpenTelemetry's
+ *     own variables say: OTEL_EXPORTER_OTLP_ENDPOINT and the logs', metrics' and traces' endpoints, with
+ *     OTEL_EXPORTER_OTLP_HEADERS and a client certificate and key (OTEL_EXPORTER_OTLP_CLIENT_CERTIFICATE,
+ *     OTEL_EXPORTER_OTLP_CLIENT_KEY). A runner's collector would receive a test's grok telemetry. Left out whole, never
+ *     judged; the product keeps handing the user's own environment to the agents.
+ * 15. (the Audit's I-1 on #643 at 839589f31, before the fix) a family's file goes unjudged: a spec naming GROK_AUTH_PATH,
+ *     GROK_LOG_FILE, GEMINI_CLI_TRUSTED_FOLDERS_PATH, GEMINI_DEBUG_LOG_FILE, PI_SESSION_FILE or PI_TUI_WRITE_LOG outside
+ *     its sandbox is not refused, and the CLI reads or writes there. A family value that is an absolute path is judged
+ *     as a home is; a key, a switch, an endpoint or a config as text never.
  */
 
 const accountHome = os.userInfo().homedir;
@@ -238,6 +247,35 @@ describe('the whole families of the CLIs Tars drives, and their keys (13)', () =
       expect(homesOutside({ [name]: path.join(home, `.${name.toLowerCase()}`) }, home)).toEqual([]);
     }
     expect(homesOutside({ GEMINI_API_KEY: 'AIza-not-a-folder', XAI_API_KEY: 'xai-not-a-folder', CODEX_AUTH: '{"token":"x"}', GROK_CONFIG: '{"models":{}}' }, home)).toEqual([]);
+  });
+
+  it('14. leaves out the caller\'s OpenTelemetry exporter settings, and never judges an endpoint or a header', () => {
+    const OTLP = ['OTEL_EXPORTER_OTLP_ENDPOINT', 'OTEL_EXPORTER_OTLP_TRACES_ENDPOINT', 'OTEL_EXPORTER_OTLP_LOGS_ENDPOINT', 'OTEL_EXPORTER_OTLP_METRICS_ENDPOINT',
+      'OTEL_EXPORTER_OTLP_HEADERS', 'OTEL_EXPORTER_OTLP_CLIENT_CERTIFICATE', 'OTEL_EXPORTER_OTLP_CLIENT_KEY', 'OTEL_EXPORTER_OTLP_PROTOCOL'];
+    expect(inheritable({ PATH: '/usr/bin', ...Object.fromEntries(OTLP.map(name => [name, 'http://127.0.0.1:4318'])) })).toEqual({ PATH: '/usr/bin' });
+    // An endpoint, a header and a protocol are no path; a certificate or a key file is one, judged as case 15 says.
+    expect(homesOutside({ OTEL_EXPORTER_OTLP_ENDPOINT: 'http://127.0.0.1:4318', OTEL_EXPORTER_OTLP_HEADERS: 'authorization=x', OTEL_EXPORTER_OTLP_PROTOCOL: 'grpc' }, sandbox())).toEqual([]);
+  });
+
+  it('15. judges a family\'s file as a home: refused outside the sandbox, taken inside, and a value that is no path never', () => {
+    const FILES = ['GROK_AUTH_PATH', 'GROK_LOG_FILE', 'GEMINI_CLI_TRUSTED_FOLDERS_PATH', 'GEMINI_DEBUG_LOG_FILE', 'PI_SESSION_FILE', 'PI_TUI_WRITE_LOG'];
+    const home = sandbox();
+    for (const name of FILES) {
+      expect(homesOutside({ [name]: theOwners(name) }, home), `${name} outside`).toEqual([[name, theOwners(name)]]);
+      expect(homesOutside({ [name]: path.join(home, `${name.toLowerCase()}.file`) }, home), `${name} inside`).toEqual([]);
+    }
+    expect(homesOutside({ OTEL_EXPORTER_OTLP_ENDPOINT: 'http://127.0.0.1:4318', XAI_API_KEY: 'xai-not-a-path', GROK_CONFIG: '{"a":1}', GEMINI_CLI_IDE_SERVER_PORT: '3000' }, home)).toEqual([]);
+  });
+
+  it('15. refuses the launch on a spec\'s grok log outside the sandbox, before the app starts', async () => {
+    const home = sandbox();
+    let launched = 0;
+    const electron = { launch: async () => { launched++; throw new Error('the app was started'); } };
+
+    const refusal = await launchSandboxed(electron, home, { env: { GROK_LOG_FILE: theOwners('GROK_LOG_FILE') } }).then(() => null, (error: Error) => error);
+
+    expect(launched).toBe(0);
+    expect(refusal?.message).toContain(`GROK_LOG_FILE: ${theOwners('GROK_LOG_FILE')}`);
   });
 
   it('13. refuses the launch on a spec\'s gemini or grok home outside the sandbox, before the app starts', async () => {
