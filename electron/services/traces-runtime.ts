@@ -150,9 +150,10 @@ function persistSettings(): boolean {
   try {
     deps.writeSettings(deps.getSettings());
   } catch (err) {
-    const then = consentHeldForRevoke ? 'sharing is stopped until they are, and Tars tries again every minute'
-      : revokeComesBack ? 'what you stopped is stopped for now, but a restart before they are saved would share it again; Tars tries again every minute'
-      : 'Tars tries again every minute';
+    // The window shows these words as they are. The last try is stopTracesRuntime's.
+    const then = consentHeldForRevoke ? 'sharing is stopped until they are, and Tars tries again every minute and once more as it quits; if none of these holds, the next start takes your consent as withdrawn, and nothing recorded before it is ever sent'
+      : revokeComesBack ? 'what you stopped is stopped for now, but a restart before they are saved would share it again; Tars tries again every minute and once more as it quits'
+      : 'Tars tries again every minute and once more as it quits';
     const reason = settingsNotWritten(err, then);
     console.error(`[traces] ${reason}`);
     if (unsaved !== reason) { unsaved = reason; deps.emit('traces:changed'); }
