@@ -29,6 +29,7 @@
  *   and whatever it started (endAuthCommands), the check fails rather than
  *   reading as signed out, and one asked for during the quit is not started.
  */
+import '../../setup/home-guard';
 import { vi, describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { claudeAccountsNotPorted } from '../../setup/platform-limits';
 

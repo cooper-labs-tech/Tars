@@ -1,3 +1,4 @@
+import '../../setup/home-guard';
 import { describe, it, expect } from 'vitest';
 import { createKeepAwake, keepAwakeMode } from '../../../electron/services/keep-awake';
 import type { AgentStatus, AppSettings } from '../../../electron/types';

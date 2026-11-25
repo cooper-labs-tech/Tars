@@ -26,6 +26,7 @@
  *    read as absent, and the failure branch then deletes it: anything there,
  *    a link included, is left alone.
  */
+import '../../setup/home-guard';
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { execFileSync } from 'child_process';
 import * as fs from 'fs';

@@ -1,3 +1,4 @@
+import '../setup/home-guard';
 import { describe, expect, it } from 'vitest';
 import { allowedProjects, chipsOf, gatewayAddresses, gatewayCaption, notSavedLine, projectPicks, projectsLine } from '@/lib/hermes-gateways';
 

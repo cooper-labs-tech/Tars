@@ -1,3 +1,4 @@
+import '../../setup/home-guard';
 import { describe, it, expect, vi, beforeEach, beforeAll, afterAll } from 'vitest';
 import { claudeAccountsNotPorted } from '../../setup/platform-limits';
 import * as fs from 'fs';

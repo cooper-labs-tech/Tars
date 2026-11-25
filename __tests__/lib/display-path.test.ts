@@ -1,3 +1,4 @@
+import '../setup/home-guard';
 import { describe, it, expect } from 'vitest';
 
 import { comparablePath, isAbsolutePath, joinPath, lastPathPart, pathName, pathsNest, pathTail, splitPath, tildePath, toSlashes } from '../../src/lib/display-path';

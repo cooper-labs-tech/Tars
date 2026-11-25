@@ -1,3 +1,4 @@
+import '../../setup/home-guard';
 import { describe, it, expect, onTestFinished } from 'vitest';
 import { EventEmitter } from 'node:events';
 import { execFileSync, spawnSync } from 'node:child_process';

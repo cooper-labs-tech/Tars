@@ -3,6 +3,9 @@ import * as os from 'os';
 import * as path from 'path';
 import { execFile, execFileSync } from 'child_process';
 import { expect, test } from '@playwright/test';
+import { CLI_CONFIG_CONTENT, CLI_HOMES, GIT_OWN, homesOutside, landing } from './cli-homes.mjs';
+
+export { CLI_HOMES, homesOutside };
 
 /**
  * What the sandboxed app has in it when we photograph it.
@@ -474,7 +477,8 @@ const onWindows = process.platform === 'win32';
 /**
  * The XDG base folders, each at its default under the sandbox (the XDG spec's
  * own defaults under HOME), so a runner's exported ones never reach the app or
- * the CLIs it starts. A spec's env may still name another.
+ * the CLIs it starts. A spec's env may still name another, inside its sandbox
+ * (homesOutside refuses one outside, cli-homes.mjs).
  */
 function sandboxXdg(sandboxHome) {
   return {
@@ -648,7 +652,8 @@ const RENDERING_ARGS = ['--lang=fr-FR', ...(onWindows ? ['--disable-lcd-text'] :
  * own (sandboxPath): its four stand-in CLIs, and nothing of the account's home,
  * unless the spec's env names another. git has an identity of the sandbox's
  * own (writeSandboxGitIdentity), unless the spec wrote one. XDG_CONFIG_HOME is
- * the sandbox's `.config`, unless the spec's env names another: a runner's own
+ * the sandbox's `.config`, unless the spec's env names another inside the
+ * sandbox (a CLI home a spec names outside it is refused first): a runner's own
  * reached the app, and through it git's config and the CLIs' (the Audit's I-1
  * on #643). XDG_DATA_HOME, XDG_STATE_HOME and XDG_CACHE_HOME are the sandbox's
  * `.local/share`, `.local/state` and `.cache` the same way, where each CLI keeps
@@ -662,6 +667,10 @@ const RENDERING_ARGS = ['--lang=fr-FR', ...(onWindows ? ['--disable-lcd-text'] :
  * as removeHome judges it, or nothing is written there and no app is started
  * (the Audit's I-2 on #643): every write above goes into it.
  *
+ * GOOSE_DISABLE_KEYRING is 1, whatever the caller exported, unless the spec's env
+ * names another: goose keeps its keys in the system's keychain, outside every home
+ * a sandbox moves (#609's Audit, I-5; e2e-cli-homes.test.ts, case 12).
+ *
  * `profile` names the profile folder in the sandbox, `electron-profile` unless
  * given: Tars is one instance per profile (core/desktop-lifecycle.ts), so a
  * spec that runs two Tars on one home gives the second a profile of its own.
@@ -671,20 +680,30 @@ export async function launchSandboxed(electron, sandboxHome, { env = {}, profile
   if (!sandbox.inside) {
     throw new Error(`launchSandboxed: ${sandboxHome} is not inside a folder the specs make their sandboxes in (${sandbox.real.join(', ')}): nothing was written there and no app was started`);
   }
+  // A CLI home the spec names outside the sandbox: refused before the app, or a CLI, starts on it.
+  const strays = homesOutside(env, sandboxHome);
+  if (strays.length > 0) {
+    throw new Error(
+      `the spec hands the app a CLI home outside its sandbox ${sandboxHome}:\n`
+      + strays.map(([name, where]) => `  ${name}: ${where}`).join('\n'),
+    );
+  }
   writeSandboxGitIdentity(sandboxHome);
   const app = await electron.launch({
     ...options,
     // A packed app (executablePath, e2e/sandbox-build.packed.spec.ts) runs its own code: no '.' to name it.
     args: [...(options.executablePath ? [] : ['.']), `--user-data-dir=${path.join(sandboxHome, profile)}`, ...RENDERING_ARGS],
-    env: withSandboxPath({ ...inheritable(process.env), PATH: sandboxPath(sandboxHome), DOROTHY_TAILSCALE_BIN: writeFakeTailscale(sandboxHome), ...sandboxXdg(sandboxHome), ...sandboxCliHomes(sandboxHome), ...env, ...windowsHome(sandboxHome), HOME: sandboxHome, CFFIXED_USER_HOME: sandboxHome }, env),
+    env: withSandboxPath({ ...inheritable(process.env), PATH: sandboxPath(sandboxHome), DOROTHY_TAILSCALE_BIN: writeFakeTailscale(sandboxHome), GOOSE_DISABLE_KEYRING: '1', ...sandboxXdg(sandboxHome), ...sandboxCliHomes(sandboxHome), ...env, ...windowsHome(sandboxHome), HOME: sandboxHome, CFFIXED_USER_HOME: sandboxHome }, env),
   });
   // What the app inherited, checked the way its folders are below: a run
   // started by an agent inside Tars carries that agent's CLAUDE_MGR_API_URL
   // (the live Tars, 31415) and its token, and handed them to the app until
   // 2026-09-23. Anything of that family the app holds now came from the spec,
-  // or is the fixture's own DOROTHY_TAILSCALE_BIN, GEMINI_CLI_HOME or GROK_HOME.
+  // or is the fixture's own: DOROTHY_TAILSCALE_BIN, the four XDG folders
+  // (sandboxXdg), GEMINI_CLI_HOME and GROK_HOME (sandboxCliHomes).
+  const own = ['DOROTHY_TAILSCALE_BIN', ...Object.keys(sandboxXdg(sandboxHome)), ...Object.keys(sandboxCliHomes(sandboxHome))];
   const leaked = await app.evaluate((_electron, { allowed, pattern }) => Object.keys(process.env)
-    .filter(name => new RegExp(pattern).test(name) && !allowed.includes(name)), { allowed: [...Object.keys(env), 'DOROTHY_TAILSCALE_BIN', ...Object.keys(sandboxCliHomes(sandboxHome))], pattern: LEAKY.source });
+    .filter(name => new RegExp(pattern).test(name) && !allowed.includes(name)), { allowed: [...Object.keys(env), ...own], pattern: LEAKY.source });
   if (leaked.length > 0) {
     await app.close();
     throw new Error(`the app inherited the caller's ${leaked.join(', ')}; launchSandboxed hands it nothing of that family`);
@@ -749,7 +768,9 @@ export async function launchSandboxed(electron, sandboxHome, { env = {}, profile
  * GEMINI_CLI_SYSTEM_SETTINGS_PATH name gemini's trust and system settings, and
  * GEMINI_API_KEY is a key of the runner's.
  */
-const LEAKY = /^(CLAUDE|DOROTHY|ANTHROPIC|TARS_|GEMINI_|GROK_)|^CLAUDECODE$/;
+// The CLI homes, a CLI's config as text and git's own variables: one list with the unit tests' setup (cli-homes.mjs).
+// The caller's are never handed on, and a spec may name a home only inside its sandbox (homesOutside).
+const LEAKY = new RegExp(`^(CLAUDE|DOROTHY|ANTHROPIC|TARS_|GEMINI_|GROK_)|^CLAUDECODE$|${CLI_HOMES.source}|${CLI_CONFIG_CONTENT.source}|${GIT_OWN.source}`);
 export function inheritable(env) {
   return Object.fromEntries(Object.entries(env).filter(([name]) => !LEAKY.test(name)));
 }
@@ -938,25 +959,10 @@ function sandboxRoots() {
 }
 
 /**
- * Where a path lands, its links and its `..` resolved as the system does: for
- * a path that does not exist, where its nearest existing parent lands, and the
- * rest of the path.
- */
-function landing(p) {
-  try {
-    return fs.realpathSync.native(p);
-  } catch (error) {
-    const parent = path.dirname(p);
-    if (error.code !== 'ENOENT' || parent === p) throw error;
-    return path.join(landing(parent), path.basename(p));
-  }
-}
-
-/**
  * Whether `dir` lies strictly under one of `roots`, judged by where it lands
- * through its links and its `..` (a root itself is not under it), and the
- * roots as they land, for the refusal's words. removeHome's judgement, which
- * launchSandboxed makes before it writes into a HOME.
+ * through its links and its `..` (cli-homes.mjs's landing; a root itself is not
+ * under it), and the roots as they land, for the refusal's words. removeHome's
+ * judgement, which launchSandboxed makes before it writes into a HOME.
  */
 function underRoots(dir, roots) {
   const where = landing(dir);

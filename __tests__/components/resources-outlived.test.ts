@@ -1,3 +1,4 @@
+import '../setup/home-guard';
 import { describe, expect, it } from 'vitest';
 import { outlivedCount, outlivedNote, outlivedNotice, processName } from '@/components/Resources/outlived';
 

@@ -91,6 +91,7 @@
  *    refusal (ask your orchestrator) taken; anything else keeps it with the
  *    person.
  */
+import '../setup/home-guard';
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { createHash } from 'node:crypto';
 

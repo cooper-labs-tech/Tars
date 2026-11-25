@@ -1,3 +1,4 @@
+import '../../setup/home-guard';
 import { describe, it, expect } from 'vitest';
 import { createOneTaskQueue, type QueueSnapshot } from '../../../electron/core/one-task';
 

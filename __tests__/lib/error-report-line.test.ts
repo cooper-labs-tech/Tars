@@ -1,3 +1,4 @@
+import '../setup/home-guard';
 import { describe, expect, it } from 'vitest';
 import { lastReportLine } from '@/lib/error-report-line';
 

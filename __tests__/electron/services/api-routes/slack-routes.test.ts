@@ -1,3 +1,4 @@
+import '../../../setup/home-guard';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { registerSlackRoutes } from '../../../../electron/services/api-routes/slack-routes';
 import { RouteApp, RouteContext, RouteRequest } from '../../../../electron/services/api-routes/types';

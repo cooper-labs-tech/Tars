@@ -1,3 +1,4 @@
+import '../setup/home-guard';
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { Fragment } from 'react';
 import { mount, elements, ofType, textOf } from './hook-runtime';

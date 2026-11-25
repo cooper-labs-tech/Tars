@@ -1,3 +1,4 @@
+import '../setup/home-guard';
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { mount, settle, deferred, ofType, textOf, type Mount } from './hook-runtime';
 import { LoadingState, PanelCaption } from '../../src/components/ui';

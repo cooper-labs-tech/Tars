@@ -1,3 +1,4 @@
+import '../setup/home-guard';
 import { describe, it, expect } from 'vitest';
 import { panelAgentsKey } from '../../src/components/TerminalsView/utils/panelAgentsKey';
 import type { AgentStatus, ClaudeAccountMove } from '../../src/types/electron';

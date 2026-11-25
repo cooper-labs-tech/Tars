@@ -1,3 +1,4 @@
+import '../../setup/home-guard';
 import { describe, it, expect } from 'vitest';
 import { bornWatchPass, REPORT_AFTER_MS, type BornWatchDeps } from '../../../electron/services/born-watch';
 import type { AgentStatus } from '../../../electron/types';

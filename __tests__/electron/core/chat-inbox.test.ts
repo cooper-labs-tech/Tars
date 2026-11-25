@@ -1,3 +1,4 @@
+import '../../setup/home-guard';
 import { describe, it, expect, afterEach } from 'vitest';
 import { inboxAgentOf, setChatLookups } from '../../../electron/core/chat-inbox';
 import type { AgentStatus } from '../../../electron/types';

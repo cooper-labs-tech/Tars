@@ -1,3 +1,4 @@
+import '../../setup/home-guard';
 import { describe, it, expect } from 'vitest';
 import { spawnSync, spawn } from 'node:child_process';
 import { processExists } from '../../../electron/platform/process-exists';

@@ -1,3 +1,4 @@
+import '../setup/home-guard';
 import { describe, it, expect } from 'vitest';
 import { stopLine } from '../../src/lib/stop-line';
 import type { AgentStatus } from '../../src/types/electron';

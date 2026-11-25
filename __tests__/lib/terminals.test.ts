@@ -1,3 +1,4 @@
+import '../setup/home-guard';
 import { describe, expect, it } from 'vitest';
 import { terminalsFigure, terminalsNotice } from '@/lib/terminals';
 import { wakeRefusedReason } from '@/app/agents/constants';

@@ -1,3 +1,4 @@
+import '../setup/home-guard';
 import { describe, expect, it, vi } from 'vitest';
 import { createDetectionStore, type DetectedCliPaths } from '@/lib/cli-detection';
 

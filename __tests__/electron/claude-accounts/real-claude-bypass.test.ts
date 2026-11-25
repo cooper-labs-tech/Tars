@@ -21,6 +21,7 @@
  * suite, or TARS_REAL_CLAUDE) and python3 for a real terminal (node-pty here
  * is built for Electron). Skipped where there is none, as on CI.
  */
+import '../../setup/home-guard';
 import { describe, it, expect } from 'vitest';
 import * as fs from 'fs';
 import * as os from 'os';

@@ -1,3 +1,4 @@
+import '../../setup/home-guard';
 import { describe, it, expect, vi, afterEach } from 'vitest';
 import type { IPty } from 'node-pty';
 import { World } from '../process-world';

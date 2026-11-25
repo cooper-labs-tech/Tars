@@ -45,6 +45,7 @@
  *   from the file and from Tars's own environment, so the option can refuse
  *   to turn on while every account would in fact run on that one credential.
  */
+import '../../setup/home-guard';
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { claudeAccountsNotPorted } from '../../setup/platform-limits';
 

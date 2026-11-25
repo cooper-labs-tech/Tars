@@ -1,3 +1,4 @@
+import '../setup/home-guard';
 import { describe, it, expect } from 'vitest';
 import { spawnSync } from 'child_process';
 import * as path from 'path';

@@ -13,6 +13,7 @@
  *    of byte order; or a frame past the size cap, or cancelled by CAN/SUB, is taken; or ordinary output costs more
  *    than a check for ESC.
  */
+import '../../../setup/home-guard';
 import { describe, expect, it } from 'vitest'
 import { PROGRAM_STATUS_QUERY_REPLY, parseProgramStatusBody } from '../../../../electron/services/program-status/protocol'
 

@@ -1,3 +1,4 @@
+import '../setup/home-guard';
 import { describe, it, expect } from 'vitest';
 import { hasPlanMode, modeForProvider, noPlanReason, templateModeOf } from '../../src/lib/plan-mode';
 

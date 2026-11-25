@@ -1,3 +1,4 @@
+import '../../../setup/home-guard';
 import { describe, it, expect, vi } from 'vitest';
 import * as crypto from 'node:crypto';
 import { tarsInstanceId } from '../../../../electron/core/agent-tokens';

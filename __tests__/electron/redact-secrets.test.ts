@@ -1,3 +1,4 @@
+import '../setup/home-guard';
 import { describe, it, expect } from 'vitest';
 import { redactSecrets, containsSecret } from '../../electron/utils/redact-secrets';
 

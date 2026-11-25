@@ -1,3 +1,4 @@
+import '../setup/home-guard';
 import { describe, expect, it } from 'vitest';
 import { bytes, diskGb, gb } from '@/components/Resources/format';
 import { diskLine, sizeLabel } from '@/lib/orphan-folders';

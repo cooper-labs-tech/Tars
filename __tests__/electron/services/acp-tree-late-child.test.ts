@@ -1,3 +1,4 @@
+import '../../setup/home-guard';
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { World } from '../process-world';
 

@@ -15,6 +15,7 @@
  *
  * The handlers are the real ones; the question is held as the route holds it.
  */
+import '../../setup/home-guard';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import * as fs from 'node:fs';
 import * as path from 'node:path';

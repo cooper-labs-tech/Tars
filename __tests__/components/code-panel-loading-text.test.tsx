@@ -1,3 +1,4 @@
+import '../setup/home-guard';
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { Highlight } from 'prism-react-renderer';
 import { mount, settle, deferred, elements, ofType, type Mount } from './hook-runtime';

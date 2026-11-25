@@ -1,3 +1,4 @@
+import '../setup/home-guard';
 import { describe, it, expect } from 'vitest';
 import { followChatFeed, RETRY_MS, CHAT_PAGE_LINES } from '../../src/lib/chat-feed-follow';
 import type { ChatFeed } from '../../src/lib/chat-feed';

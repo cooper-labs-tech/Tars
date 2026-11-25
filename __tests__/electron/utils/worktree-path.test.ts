@@ -1,3 +1,4 @@
+import '../../setup/home-guard';
 import { describe, it, expect } from 'vitest';
 import * as path from 'path';
 import { isValidBranchName, resolveWorktreePath } from '../../../electron/utils/worktree-path';

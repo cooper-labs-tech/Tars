@@ -9,6 +9,7 @@
  * W3 a change of a queue (queued, moved, cancelled, dropped, paused, resumed, taken) is not told to the window, so
  *    its view goes stale; or a burst of changes is told many times over.
  */
+import '../../setup/home-guard';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
 type Handler = (event: unknown, ...args: unknown[]) => unknown;

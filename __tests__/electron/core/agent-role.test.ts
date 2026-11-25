@@ -1,3 +1,4 @@
+import '../../setup/home-guard';
 import { describe, it, expect } from 'vitest';
 import { assignRole, hasOrchestratorPowers, requestedRole, rolesOnLoad, roleFromName } from '../../../electron/core/agent-role';
 import type { AgentStatus } from '../../../electron/types';

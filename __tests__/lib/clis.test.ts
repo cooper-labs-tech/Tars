@@ -1,3 +1,4 @@
+import '../setup/home-guard';
 import { describe, it, expect } from 'vitest';
 import { CLIS, cliById, cliForProvider } from '../../src/lib/clis';
 import { PROVIDER_REGISTRY } from '../../src/lib/providers';

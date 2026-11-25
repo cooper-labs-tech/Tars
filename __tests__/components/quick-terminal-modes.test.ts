@@ -1,3 +1,4 @@
+import '../setup/home-guard';
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { mount, type Mount } from './hook-runtime';
 import { useQuickTerminal, persistentTerminals } from '../../src/components/AgentWorld/useQuickTerminal';

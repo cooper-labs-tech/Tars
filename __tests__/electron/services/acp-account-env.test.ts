@@ -18,6 +18,7 @@
  * The session is the real AcpSession, speaking to a fake agent that reports
  * the environment it was started with.
  */
+import '../../setup/home-guard';
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import * as fs from 'node:fs';
 import * as os from 'node:os';

@@ -1,3 +1,4 @@
+import './setup/home-guard';
 import { describe, it, expect } from 'vitest';
 import { applyOrder } from '../src/components/TerminalsView/hooks/useProjectTabOrder';
 

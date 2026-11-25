@@ -21,6 +21,7 @@
  * 5. The mark carries anything but the two mode words: it goes before the
  *    message, in Tars's voice.
  */
+import '../../setup/home-guard';
 import { describe, it, expect } from 'vitest';
 import { levelOf, ceilingOf, modeGapMark, type PermissionLevel } from '../../../electron/core/permission-ceiling';
 

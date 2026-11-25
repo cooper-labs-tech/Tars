@@ -13,6 +13,7 @@
  *   digits are, anything else writes no counter at all;
  * - a render without rate limits (before the first answer) wiping a counter.
  */
+import '../../setup/home-guard';
 import { describe, it, expect, beforeAll, beforeEach, afterEach } from 'vitest';
 import * as fs from 'fs';
 import * as os from 'os';

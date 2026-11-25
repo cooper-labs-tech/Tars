@@ -1,3 +1,4 @@
+import '../../setup/home-guard';
 import { describe, it, expect } from 'vitest';
 import { buildFleetResources, type FleetInput } from '../../../electron/services/fleet-resources';
 
