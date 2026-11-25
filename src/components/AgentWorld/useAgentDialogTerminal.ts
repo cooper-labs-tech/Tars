@@ -14,13 +14,6 @@ interface UseAgentDialogTerminalOptions {
   skipHistoricalOutput: boolean;
 }
 
-/** A field holds the focus: an input, a textarea, a select or an editable element, xterm's own textarea aside. */
-function fieldHasFocus(): boolean {
-  const el = document.activeElement;
-  if (!(el instanceof HTMLElement) || el.classList.contains('xterm-helper-textarea')) return false;
-  return el.isContentEditable || el instanceof HTMLInputElement || el instanceof HTMLTextAreaElement || el instanceof HTMLSelectElement;
-}
-
 export function useAgentDialogTerminal({
   open,
   agent,
@@ -58,16 +51,22 @@ export function useAgentDialogTerminal({
 
     let cancelled = false;
 
-    // The terminal takes the focus a moment after it starts, but never over the user: a key typed or a click since the
-    // window opened, or a field of the window holding the focus, and the focus stays where the user put it. Before,
-    // keys typed into a field in that moment went to the agent, a running one's prompt included.
+    // The terminal takes the focus a moment after it starts, but never over the user: a key typed, a click, or the focus
+    // put in a field since the window opened, and the focus stays where the user put it. Before, keys typed into a field
+    // in that moment went to the agent, a running one's prompt included. The footer's own autoFocus, given as the window
+    // mounts, is before these listeners and is not the user's move: the terminal still takes the focus from it.
     let userMoved = false;
     const noteMove = () => { userMoved = true; };
+    const noteFocus = (e: FocusEvent) => {
+      if (!(e.target instanceof HTMLElement && e.target.classList.contains('xterm-helper-textarea'))) userMoved = true;
+    };
     document.addEventListener('keydown', noteMove, true);
     document.addEventListener('pointerdown', noteMove, true);
+    document.addEventListener('focusin', noteFocus, true);
     const stopNoting = () => {
       document.removeEventListener('keydown', noteMove, true);
       document.removeEventListener('pointerdown', noteMove, true);
+      document.removeEventListener('focusin', noteFocus, true);
     };
 
     const initTerminal = async () => {
@@ -150,7 +149,7 @@ export function useAgentDialogTerminal({
         setTimeout(() => {
           fitAndResize();
           stopNoting();
-          if (agent.status !== 'asleep' && !userMoved && !fieldHasFocus()) term.focus();
+          if (agent.status !== 'asleep' && !userMoved) term.focus();
         }, 350);
 
         // Keys that reach no terminal (an idle agent has none since #164) are
