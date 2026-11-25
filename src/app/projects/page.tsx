@@ -51,6 +51,8 @@ export default function ProjectsPage() {
   const [selectedSession, setSelectedSession] = useState<string | null>(null);
   const [hiddenProjects, setHiddenProjects] = useState<string[]>([]);
   const [customProjects, setCustomProjects] = useState<CustomProject[]>([]);
+  /** Main's refusal of the last folder added here, word for word (frame `Projects · a project the rule refuses · states`). */
+  const [addRefused, setAddRefused] = useState<string | null>(null);
   const [gitBranch, setGitBranch] = useState<string | null>(null);
   const [gitLoading, setGitLoading] = useState(false);
   const [defaultProjectPath, setDefaultProjectPath] = useState<string>('');
@@ -192,7 +194,13 @@ export default function ProjectsPage() {
         const existsInCustom = customProjects.some(p => comparablePath(p.path) === comparablePath(normalizedPath));
         const name = lastPathPart(selectedPath) || 'Unknown Project';
         if (!existsInCustom) {
-          await window.electronAPI?.fs?.addCustomProject(normalizedPath);
+          // A folder the window's project rule refuses is not added: main's reason shows here, and no panel opens.
+          const answer = await window.electronAPI?.fs?.addCustomProject(normalizedPath);
+          if (answer && !answer.success) {
+            setAddRefused(answer.error || 'The folder was not added.');
+            return;
+          }
+          setAddRefused(null);
           setCustomProjects([...customProjects, { path: normalizedPath, name, addedAt: new Date().toISOString() }]);
         }
         // Its panel opens, so what it is offered for the team's workflow comes at once (frame `First run (2.0.7) ·
@@ -201,7 +209,7 @@ export default function ProjectsPage() {
           ?? { id: `custom-${normalizedPath}`, name, path: normalizedPath, sessions: [], lastActivity: new Date() });
       }
     } catch (err) {
-      console.error('Failed to add project:', err);
+      setAddRefused(ipcReason(err, 'The folder was not added.'));
     }
   };
 
@@ -454,6 +462,14 @@ export default function ProjectsPage() {
         ) : undefined}
       />
 
+      {addRefused && (
+        <div data-project-add-refused role="alert" className="mb-2 flex items-start gap-2.5 px-3 py-2 bg-secondary border border-danger/40">
+          <StatusSquare tone="error" className="mt-[5px] shrink-0" />
+          <p className="flex-1 min-w-0 text-[11.5px] leading-[1.45] text-foreground">{`not added: ${addRefused}`}</p>
+          <Button size="sm" className="font-mono" onClick={() => setAddRefused(null)}>close</Button>
+        </div>
+      )}
+
       {/* Projects Grid */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">
         {projects.map((project) => {
@@ -464,6 +480,8 @@ export default function ProjectsPage() {
           // None for a custom project Claude Code has not run in: no chip
           // rather than "Invalid Date".
           const lastActive = lastActiveLabel(project.lastActivity);
+          // A project Tars holds under a folder the window's project rule refuses: listed, with main's reason.
+          const refused = electronProjects.find(p => comparablePath(p.path) === comparablePath(project.path))?.refused;
 
           return (
             <div
@@ -493,6 +511,8 @@ export default function ProjectsPage() {
                 {isDefaultProject(project.path) && <MetaChip>default</MetaChip>}
                 {custom && <MetaChip>custom</MetaChip>}
               </div>
+
+              {refused && <p data-project-refused className="text-[11px] leading-snug text-danger">{refused}</p>}
 
               <div className="flex items-center gap-2 pt-0.5">
                 <Button
@@ -670,7 +690,9 @@ export default function ProjectsPage() {
                       tracked={isCustomProject(selectedProject.path) || agents.some(a => a.projectPath === selectedProject.path)}
                       onAddToTars={async () => {
                         const at = selectedProject.path;
-                        await window.electronAPI?.fs?.addCustomProject(at);
+                        // Main's refusal is said by the setup's own line, word for word.
+                        const answer = await window.electronAPI?.fs?.addCustomProject(at);
+                        if (answer && !answer.success) throw new Error(answer.error || 'The folder was not added.');
                         setCustomProjects(list => list.some(p => p.path === at)
                           ? list
                           : [...list, { path: at, name: selectedProject.name, addedAt: new Date().toISOString() }]);
@@ -917,7 +939,7 @@ export default function ProjectsPage() {
         open={showAgentDialog}
         onClose={() => setShowAgentDialog(false)}
         onSubmit={handleCreateAgent}
-        projects={electronProjects.map(p => ({ path: p.path, name: p.name }))}
+        projects={electronProjects.map(p => ({ path: p.path, name: p.name, refused: p.refused }))}
         onBrowseFolder={isElectron() ? openFolderDialog : undefined}
         installedSkills={installedSkills}
         onRefreshSkills={refreshSkills}

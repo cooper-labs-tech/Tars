@@ -411,7 +411,7 @@ export default function AgentsPage() {
         open={showNewChatModal}
         onClose={() => setShowNewChatModal(false)}
         onSubmit={handleCreateAgent}
-        projects={projects.map(p => ({ path: p.path, name: p.name }))}
+        projects={projects.map(p => ({ path: p.path, name: p.name, refused: p.refused }))}
         onBrowseFolder={isElectron() ? openFolderDialog : undefined}
         installedSkills={installedSkills}
         allInstalledSkills={claudeData?.skills || []}
@@ -428,7 +428,7 @@ export default function AgentsPage() {
         onSubmit={handleCreateAgent}
         onUpdate={handleUpdateAgent}
         editAgent={editAgentData}
-        projects={projects.map(p => ({ path: p.path, name: p.name }))}
+        projects={projects.map(p => ({ path: p.path, name: p.name, refused: p.refused }))}
         onBrowseFolder={isElectron() ? openFolderDialog : undefined}
         installedSkills={installedSkills}
         allInstalledSkills={claudeData?.skills || []}
