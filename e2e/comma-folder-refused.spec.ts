@@ -27,6 +27,13 @@ import { DEV_URL, apiPort } from './ports.mjs';
  * 5. a claude agent holding a comma folder, moved to gemini, is refused, and stays claude.
  * Red on 20c062cd3: the rename was refused.
  * The artefact: values.json (each answer, the agent before and after).
+ *
+ * And on screen, through the window's one control for a secondary folder (the Audit's L1 on #636 at 6970bc906): the
+ * agent's window, its Memory tab, the custom path field and its Add.
+ * 0. The comma folder typed there and added is refused: main's reason shows under the field
+ *    ([data-secondary-project-error]), word for word the same as main's answer in 1, the field keeps the path, and the
+ *    agent keeps no folder.
+ * Red on 6970bc906: the dialog dropped the answer, and no line showed. The artefact adds refused-on-screen.png.
  */
 
 type Api = { electronAPI: { agent: {
@@ -67,7 +74,24 @@ test('a gemini agent is refused a secondary folder whose name holds a comma, wit
     const updateTo = (folder: string) => page.evaluate((f) => (window as unknown as Api).electronAPI.agent.update({ id: 'gem', secondaryProjectPath: f }), folder);
     const read = () => page.evaluate(() => (window as unknown as Api).electronAPI.agent.get('gem'));
 
+    // 0. The window's own control: the agent's window, Memory, the custom path field and its Add.
+    await page.locator('[data-agent-card="gem"]').click({ position: { x: 24, y: 14 } });
+    await page.getByRole('radiogroup', { name: 'Agent rail' }).getByRole('radio', { name: /Memory/ }).click();
+    const field = page.getByPlaceholder('/path/to/project...');
+    await field.fill(comma);
+    await field.locator('xpath=..').getByRole('button', { name: 'Add', exact: true }).click();
+    const line = page.locator('[data-secondary-project-error]');
+    await expect.soft(line, 'the refusal under the field').toBeVisible({ timeout: 10_000 });
+    const onScreen = (await line.textContent({ timeout: 1_000 }).catch(() => null)) ?? null;
+    const fieldAfter = await field.inputValue();
+    const afterControl = await read();
+    await page.screenshot({ path: test.info().outputPath('refused-on-screen.png') });
+
     const set = await setTo(comma);
+    keep({ onScreen, fieldAfter, afterControl: afterControl?.secondaryProjectPath ?? null });
+    expect.soft(onScreen, 'main\'s reason, word for word, under the field').toBe(set.error ?? '(no answer)');
+    expect.soft(fieldAfter, 'the field keeps the path').toBe(comma);
+    expect.soft(afterControl?.secondaryProjectPath ?? null, 'no folder set from the control').toBeNull();
     const afterSet = await read();
     const updated = await updateTo(comma);
     const afterUpdate = await read();
