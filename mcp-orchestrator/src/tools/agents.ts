@@ -394,14 +394,14 @@ function deliveredResult(taskId: string, note: string | undefined): ToolResult {
  */
 async function runTask(
   id: string, prompt: string, model: string | undefined, waitSeconds: number, clientRequestId: string,
-  allowCrossProject: boolean | undefined, follow: boolean,
+  allowCrossProject: boolean | undefined, follow: boolean, gate?: boolean,
 ): Promise<ToolResult> {
   const deadline = Date.now() + waitSeconds * 1000;
   const followIt = `follow it with task_status({ clientRequestId: "${clientRequestId}" }) rather than delegating the task again`;
   // allowCrossProject as /dispatch carries it: run-task asks the same guard.
   const body = {
     task: prompt, clientRequestId, answer: "started",
-    ...(model ? { model } : {}), ...(allowCrossProject ? { allowCrossProject } : {}),
+    ...(model ? { model } : {}), ...(allowCrossProject ? { allowCrossProject } : {}), ...(gate ? { gate: true } : {}),
   };
 
   let started: RunAnswer | undefined;
@@ -926,6 +926,7 @@ const AGENT_TOOLS: Tool[] = [
       timeoutSeconds: z.number().optional().describe("Maximum time to wait in seconds (default: 300)"),
     },
     failure: "waiting for agent",
+    readOnly: true,
     async run({ id, timeoutSeconds = 300 }, extra) {
       // As delegate_task's: any timeoutSeconds is taken, and Claude Code gives up a call silent for 30 minutes
       // (the QA's F8 of the 2.0.5 final verification: the keep-alive everyone counted on was delegate_task's only).
@@ -990,14 +991,15 @@ const AGENT_TOOLS: Tool[] = [
       timeoutSeconds: z.number().optional().describe("How long this call waits for the answer, in seconds: 3600 (an hour) when omitted. The task itself is not stopped there: it goes on in the agent's terminal, and task_status reads its end."),
       allowCrossProject: z.boolean().optional().describe("Explicitly allow delegating to an agent of ANOTHER project (normally rejected)"),
       clientRequestId: z.string().optional().describe("An id of 8 to 128 characters for this delegation. Calling again with the same id answers with the first call's task (task_status reads it), and nothing is handed over twice. Omitted: one is made for this call."),
+      gate: z.boolean().optional().describe("The task is a release gate (QA's full run before a merge or a release): the agent's heavy runs for it go first in the machine's heavy-run slot. The project's orchestrator's only."),
     },
     failure: "delegating task",
-    async run({ id, prompt, model, timeoutSeconds = 3600, allowCrossProject, clientRequestId: givenId }, extra) {
+    async run({ id, prompt, model, timeoutSeconds = 3600, allowCrossProject, clientRequestId: givenId, gate }, extra) {
       // Claude Code abandons an MCP call silent for 30 minutes; a delegation
       // can last an hour. Progress while it waits keeps the caller listening.
       const stopProgress = keepCallerListening(extra);
       try {
-        return await runTask(id, prompt, model, Math.max(timeoutSeconds, 1), givenId || randomUUID(), allowCrossProject, true);
+        return await runTask(id, prompt, model, Math.max(timeoutSeconds, 1), givenId || randomUUID(), allowCrossProject, true, gate);
       } finally {
         stopProgress();
       }
@@ -1012,6 +1014,7 @@ const AGENT_TOOLS: Tool[] = [
       clientRequestId: z.string().optional().describe("The clientRequestId the delegation was sent with"),
     },
     failure: "reading the task",
+    readOnly: true,
     async run({ taskId, clientRequestId }) {
       if (!taskId && !clientRequestId) return problem("Error: taskId or clientRequestId is required.");
       const endpoint = taskId ? `/api/tasks/${encodeURIComponent(taskId)}` : `/api/tasks?clientRequestId=${encodeURIComponent(clientRequestId!)}`;

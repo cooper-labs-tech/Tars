@@ -16,7 +16,7 @@ const PERMISSION_OPTIONS: SegmentedOption<TeamPermissionMode>[] = [
  * A team's Options: no per-skills picker here, because a member's skills come
  * from the role it was started from - editing them means editing the team
  * preset, not this one deployment. What is left is bulk permission and
- * whether the brief is sent the moment the agents exist.
+ * whether the members start the moment they exist, the orchestrator last with its first task.
  */
 export function TeamOptionsBody({
   permissionOverride,
@@ -40,7 +40,7 @@ export function TeamOptionsBody({
           onChange={onPermissionOverride}
         />
       </OptionRow>
-      <OptionRow label="Start on deploy" hint="Send the brief the moment each agent is created, instead of leaving it idle.">
+      <OptionRow label="Start on deploy" hint="Start every member now, the orchestrator last with its first task, instead of leaving them idle until their first start.">
         <div className="flex justify-end">
           <Toggle enabled={startOnDeploy} onChange={onToggleStartOnDeploy} />
         </div>

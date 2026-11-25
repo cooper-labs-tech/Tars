@@ -28,6 +28,10 @@
  *   .claude.json into the home after the quit. The quit's first pass ends it
  *   and whatever it started (endAuthCommands), the check fails rather than
  *   reading as signed out, and one asked for during the quit is not started.
+ * And from QA's fresh-install report (B3) and Tars-Frontend's first run (first-run-window.md), written before the
+ * code (10/11):
+ * - a claude that is not there reads like any other failure, so the first run cannot say "install Claude Code": a
+ *   binary that does not exist fails as ClaudeCliMissing (`code: 'cli-missing'`), a broken answer does not.
  */
 import { vi, describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { claudeAccountsNotPorted } from '../../setup/platform-limits';
@@ -37,7 +41,7 @@ vi.setConfig({ testTimeout: 30_000 });
 import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
-import { accountEnv, claudeAuthStatus, claudeAuthLogout, loginCommand, endAuthCommands } from '../../../electron/services/claude-accounts/auth';
+import { accountEnv, claudeAuthStatus, claudeAuthLogout, loginCommand, endAuthCommands, ClaudeCliMissing } from '../../../electron/services/claude-accounts/auth';
 import { makeFakeClaude, signIn, type FakeClaude } from './fake-claude';
 
 let fake: FakeClaude;
@@ -102,6 +106,16 @@ describe.skipIf(claudeAccountsNotPorted())('claude auth status', () => {
     fs.writeFileSync(path.join(dirA, '.fake-broken'), '');
     await expect(claudeAuthStatus(fake.bin, dirA)).rejects.toThrow(/claude auth status/);
     await expect(claudeAuthStatus(path.join(os.tmpdir(), 'no-such-claude'), dirA)).rejects.toThrow(/claude auth status/);
+  });
+
+  it('tells a claude that is not there from one that answers badly', async () => {
+    const missing = await claudeAuthStatus(path.join(os.tmpdir(), 'no-such-claude'), dirA).catch(e => e);
+    expect(missing).toBeInstanceOf(ClaudeCliMissing);
+    expect(missing.code).toBe('cli-missing');
+    fs.writeFileSync(path.join(dirA, '.fake-broken'), '');
+    const broken = await claudeAuthStatus(fake.bin, dirA).catch(e => e);
+    expect(broken).toBeInstanceOf(Error);
+    expect(broken).not.toBeInstanceOf(ClaudeCliMissing);
   });
 
   it('runs the binary with an argument list, so a hostile directory stays one argument', async () => {

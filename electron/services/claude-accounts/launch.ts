@@ -2,7 +2,7 @@ import * as os from 'os';
 import type { AgentStatus, ClaudeAccountsSettings } from '../../types';
 import type { AccountEnv, AccountEnvPurpose } from '../../core/account-env';
 import { DEFAULT_ACCOUNT_ID, readAccountsSettings } from './registry';
-import { claudeCredentialOverrides, projectsProblem, provisionAccountDir } from './provision';
+import { accountDirProblem, claudeCredentialOverrides, projectsProblem, provisionAccountDir } from './provision';
 import { readAccountUsage } from './counters';
 import { chooseAccount, type AccountUsage, type Choice } from './choose';
 import { blockedUntil, getAuth, noteMove, recentMoves, takeMove } from './state';
@@ -103,6 +103,48 @@ export function choiceFor(agent: AgentStatus, settings: ClaudeAccountsSettings, 
     last: agent.claudeAccountId,
     now,
   });
+}
+
+/** What `claude auth status` answered for an account, as the first run reads it. */
+export type SignInAnswer = 'signed-in' | 'signed-out' | 'cli-missing' | 'unknown';
+
+interface NewAgentOptions {
+  /** claudeCredentialOverrides(), unless a test names them. */
+  overrides?: string[];
+  /** Why an account's folder cannot be used (envFor's checks), unless a test says. */
+  folderProblem?: (configDir: string) => string | null;
+}
+
+/**
+ * The accounts a new Claude agent may start on now, as its launch would choose (claudeAccountEnvFor for an agent with
+ * no pin and no account yet), in the order of the list: account 1 with the option off or a credential override; else
+ * each account the chooser can give it (enabled and signed in, account 1 until it says signed out), account 1 in the
+ * place of one whose folder cannot be used; account 1 when none can run. Reads the sign-ins the launch reads (state.ts).
+ */
+export function accountsANewAgentMayStartOn(settings: ClaudeAccountsSettings, opts: NewAgentOptions = {}): string[] {
+  if (!settings.enabled) return [DEFAULT_ACCOUNT_ID];
+  if ((opts.overrides ?? claudeCredentialOverrides()).length) return [DEFAULT_ACCOUNT_ID];
+  const problem = opts.folderProblem ?? ((dir: string) => accountDirProblem(dir) ?? projectsProblem(dir));
+  const may = settings.accounts
+    .filter(a => accountCanRun(settings, a.id))
+    .map(a => (a.id !== DEFAULT_ACCOUNT_ID && (!a.configDir || problem(a.configDir)) ? DEFAULT_ACCOUNT_ID : a.id));
+  return may.length ? [...new Set(may)] : [DEFAULT_ACCOUNT_ID];
+}
+
+/**
+ * Whether a new Claude agent would start signed in, from what each account answered just now: what teams:deploy
+ * checks its Claude members against (QA's B3; the Audit's I1 on #584: any one account signed in was taken as enough).
+ * `signedOut` names, with the option on, the accounts they may start on that are signed out.
+ */
+export function newAgentSignIn(settings: ClaudeAccountsSettings, answers: Record<string, SignInAnswer>, opts: NewAgentOptions = {}): { state: SignInAnswer; signedOut: string[] } {
+  if (Object.values(answers).includes('cli-missing')) return { state: 'cli-missing', signedOut: [] };
+  const may = accountsANewAgentMayStartOn(settings, opts);
+  const out = may.filter(id => answers[id] === 'signed-out');
+  if (out.length) {
+    const label = (id: string) => settings.accounts.find(a => a.id === id)?.label ?? id;
+    return { state: 'signed-out', signedOut: settings.enabled ? out.map(label) : [] };
+  }
+  return { state: may.every(id => answers[id] === 'signed-in') ? 'signed-in' : 'unknown', signedOut: [] };
 }
 
 export function claudeAccountEnvFor(agent: AgentStatus, ctx: LaunchContext): AccountEnv | null {

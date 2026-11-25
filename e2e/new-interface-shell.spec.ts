@@ -42,7 +42,14 @@ test('with the new interface on, the shell of the frames: the main menu, Tars fi
   const home = fs.mkdtempSync(path.join(os.tmpdir(), 'dorothy-e2e-new-shell-'));
   const dir = path.join(home, '.tars');
   fs.mkdirSync(dir, { recursive: true });
-  fs.writeFileSync(path.join(dir, 'agents.json'), '[]');
+  // One agent and no chat: since 2.0.7 a fleet with no agent at all opens the chats page on the first run (#580,
+  // frame `First run (2.0.7)`), and this shell's empty chats page is the one of a user who has agents but no chat.
+  const project = path.join(home, 'projects', 'harbor');
+  fs.mkdirSync(project, { recursive: true });
+  fs.writeFileSync(path.join(dir, 'agents.json'), JSON.stringify([{
+    id: 'w1', name: 'Harbor Worker', character: 'robot', provider: 'claude', status: 'idle', role: 'worker', projectPath: project,
+    skills: [], createdAt: '2026-11-10T08:00:00.000Z', lastActivity: '2026-11-10T08:00:00.000Z',
+  }]));
   fs.writeFileSync(path.join(dir, 'projects.json'), '[]');
   fs.writeFileSync(path.join(dir, 'hermes-connection.json'), JSON.stringify({ mode: 'local', localPort: 9, authMode: 'token' }));
   fs.writeFileSync(path.join(dir, 'app-settings.json'), JSON.stringify({ autoStartAgentsOnLaunch: false, ollamaBaseUrl: 'http://127.0.0.1:9', newInterface: true }));

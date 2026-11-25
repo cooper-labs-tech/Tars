@@ -1265,7 +1265,9 @@ agent died.
   path: it runs `$TARS_NODE $TARS_SLOT_SCRIPT`, which every agent terminal is given, with `TARS_SLOT` naming the shim
   and `~/.tars/bin` **last** on its PATH (`services/heavy-slot-cli.ts`): first, a file any agent put there would run
   instead of the command it is named after. The script is `electron/resources/tars-slot.cjs`.
-- **The queue.** `gate` (a release gate: orchestrators only; anyone else asking gets `normal`, and is told), then
+- **The queue.** `gate` (a release gate: an orchestrator, or the agent its project's orchestrator handed its current
+  work to, its live `requestedBy` link, since 2.0.7, when the orchestrator no longer runs the gate itself; anyone else
+  asking gets `normal`, and is told), then
   `normal`, then `background`, then arrival. An ask from under a holder's process (a pre-push hook inside its own
   run) is granted at once, inside that lease: a lease of the same agent only.
 - **A lease is a live process.** A pass every second while anything is held or waited for drops the leases and asks
@@ -1427,6 +1429,77 @@ Since 2.0.4 (`electron/core/one-task.ts`, after the cross-project guard):
 | a worker is answered `worker_may_not_stop` | a worker does not stop, restart or remove another agent: it asks its orchestrator, saying why |
 | a worker's message arrives as `[Note for information from ...]` after the recipient's turn | the rule, not a fault: a worker's message to another worker is a note |
 | a queued task is gone after a restart of Tars | the queue is in memory: what had not started was dropped. The asker's `delegate_task` says so (Tars restarted, never started, ask again), and `task_status` on its id answers with the time this Tars started. Delegate it again |
+
+## Orchestration: the gate loop and a worktree per task
+
+Since 2.0.7, every project gets the owner's delivery workflow without any setup (W1, W2 and W6 of the fresh-install
+report):
+
+- **The loop**, in the orchestrator's role file (`electron/resources/super-agent-instructions.md`), first in its
+  identity section on every CLI (`services/agent-guide.ts`), in the guide's `workflow` topic and in every agent's
+  instructions (`agent-instructions.md`, `~/.tars/CLAUDE.md`): each piece on its own branch; the worker delivers a
+  pull request and never merges; QA gates it, then the Audit, each a verdict first (MERGE or FIX FIRST) in the
+  project folder's `reports/`, never overwriting an earlier one, never patching; CI green (`gh pr checks`); only
+  then the merge, by the orchestrator or by the user when they said so.
+- **The built-in Full Project Team** tells each member its part: the developers their area, a PR and never a merge;
+  QA and the Audit that they are the gates. No member has a branch of its own any more. The models are the user's
+  defaults: the orchestrator at high effort, the others at their CLI's own (opus at max for every new user's
+  orchestrator, the Audit's L3 on #585, spent the team's quota where it buys least).
+- **Parallel delegation**: `delegate_task` with `timeoutSeconds: 1` to each agent, then `wait_for_agent` and
+  `task_status`. Claude Code runs the tool calls of one message one after another: measured with claude 2.1.321,
+  two waiting `delegate_task` calls in one message ran their 20 s of work in series (40 s), handed with a short
+  timeout they overlapped (`reports/workflow-runs/parallel`).
+- **A release gate**: `delegate_task` with `gate: true`, from the project's orchestrator only (`run-task` refuses it
+  from anyone else, `gate_is_the_orchestrators`). The worker's link carries it (`requestedBy.gate`), and its heavy
+  runs for that task may take `gate` in the slot; any other task's are given `normal`.
+- **Worktrees** (`services/project-worktrees.ts`, `/api/worktrees`, the tools `worktree_new`, `worktree_list`,
+  `worktree_remove`, `worktree_prune`), always in the calling agent's own project:
+  - in `<project>/.worktrees/<branch>`, kept out of git by `.git/info/exclude`, never the project's `.gitignore`;
+  - from `origin/<default>` after a fetch, as last fetched when the fetch fails (said in the answer), or the local
+    default branch with no remote. The fetch runs through `safeGit`: https, http and ssh only, no credential helper;
+  - refused under 10 GB free, past 20 per project, outside a git repository;
+  - the branch as it is (the Audit's M1 on #585): held by another worktree, the worker's, a detached checkout of its
+    head (origin's when pushed), in `.worktrees/gate/<branch>-<commit>`, which is what QA gates; a local branch,
+    itself; one only on origin, from origin; else a new branch. The answer names which (`kind`) and the commit;
+  - removed only when clean and nothing works in it: no agent (its own worktree, its terminal's folder) and no process
+    whose working directory is in it (QA's shell cd'd into its gate checkout: `/proc` on Linux, `lsof` on macOS, as
+    `scripts/worktree.mjs` reads them; on Windows, where no process's folder can be read, a rename of the folder and back,
+    which Windows refuses while a process works in it: git's own removal deletes the files first and fails only on the
+    folder, the Audit's M3 on #585; the move back is tried ten times, further apart each time, since an antivirus or an
+    indexer may hold the folder that moment, and a folder still not moved back is named where it is, kept as in use,
+    the Audit's L8; a dry run moves nothing), never forced, its branch kept;
+  - `existing: true` (QA gating a PR): a branch neither local nor on origin as last fetched is refused, never made from
+    the default branch under the PR's name (the Audit's L6 on #585). Without it, a name nowhere to be found is a new
+    branch, and a failed fetch is said;
+  - pruned before each new one, one new worktree at a time per project: clean, no agent in it, HEAD unmoved for an
+    hour, and done: a branch with a commit of its own merged into the default branch, or whose pull request GitHub
+    says is merged (`gh pr list --state merged`, on the full PATH, for a squash or a rebase), or a detached gate checkout. A branch
+    never moved since it was made (one reflog entry) is kept, however idle.
+
+### What a project is offered (W3, W5, W7)
+
+The window's channels `electronAPI.projectSetup` (`handlers/project-setup-handlers.ts`, `services/project-setup.ts`),
+IPC only: no agent's token reaches them, so a write is always the owner's yes. Each takes a project Tars knows (one
+added on the Projects page, or an agent's), never the home folder nor a root (`acceptedProject`).
+
+- `offer(projectPath)`: the CI workflow and the CLAUDE.md the project would get, or why not.
+  - CI: only for a git repository whose `origin` is on GitHub, with no `.github/workflows/*.yml` yet and a stack Tars
+    knows (`package.json` with its lock file's package manager and its `.nvmrc`, else Node 22; `pyproject.toml` or
+    `requirements.txt`; `go.mod`; `Cargo.toml`). Its steps are the project's own: the install, then typecheck (the
+    script, else `tsc --noEmit` with a `tsconfig.json`), lint, test and build, each only if the project has it. It runs on
+    pull requests to the default branch and pushes to it, nothing else. Made to pass its first run: setup-node caches
+    only with a lock file, pnpm's setup gets `version: 9` unless `packageManager` names pnpm, and pytest is installed
+    with the project.
+  - CLAUDE.md: the checks, each agent of the project's area (its role's first sentences), the gate loop.
+- `writeCi(projectPath)`: the workflow committed on `chore/ci` in a worktree of its own (`newWorktree`), the user's
+  checkout untouched; never pushed: the project's agents deliver it through the gate loop. Refused when the project has
+  a workflow or a `chore/ci` branch already. The worktrees agents work in (their own, their terminals' folders) are
+  never pruned to make it, and what was pruned is said. Commits with the user's git identity, Tars's for that commit
+  only when git lacks its name or its email. A failure once the worktree is made takes the file, the worktree and the
+  branch back, and says what it could not, so the next yes tries again.
+- `writeClaudeMd(projectPath)`: at the project's root, never over one (`wx`).
+- `setTeamPermissionMode(projectPath, mode)`: every agent of the project, never another project's nor a chat's runner
+  (whose settings are its orchestrator's), through `updateAgent`, the window's `agent:update` path.
 
 ## The disk janitor
 
@@ -1718,21 +1791,35 @@ Separate scripts from `hooks/gemini/`: `session-start.sh`, `user-prompt-submit.s
 ### A permission asked of Tars (the state mod, step 2)
 
 A claude agent that runs the state mod asks Tars, not its terminal, before a call Claude Code
-would put to its permission dialog (SPECS.md, "Permissions decided by Tars"). The agent reads
+would put to its permission dialog (SPECS.md, "Permissions decided by Tars"): since 2.0.7 from the
+dialog's own event, so a call the auto mode classifier allows (Claude in Chrome's, under the server's
+flag) never reaches the window. The agent reads
 `waiting` on a `permission` with `permissionAsk` set, its terminal shows no dialog, and the main
 process log says `[permission] <agent> asks Tars: Bash <command>`, then the answer:
 `allow (the user allowed it in Tars)`, `deny (the user refused it in Tars: <reason>)`, or
 `ask, back to its dialog`; `<agent>'s mod asks again after a failed request: <error>` when one of
 its requests (re-sent every 20 s while the question is held) failed. A typed message waits
 meanwhile, held by the terminal's writer, and goes in once the question is decided. The window
-answers with `agent:answerPermission`; nothing else can. Since 2.0.5 (fix-permission-dialogs-2810.md):
-- **Tars allows nothing by itself.** Every question waits for the owner. A shell command is shown whole, and the
-  window may allow or refuse it. A file tool (Write, Edit, MultiEdit, NotebookEdit) is asked by its path alone,
-  `withheld` (the route marks it so whatever the request says): for an agent in bypass it is held, the window may
-  refuse it but never allow it, and the delay refuses it; for an agent in any other mode it goes straight to Claude
-  Code's own dialog, as before 2.0.5. Any call the window cannot show whole (a field it does not show, past 2,000
-  characters, not text) is asked the same way, `withheld`, with `withheldWhy` naming each field left out and why.
-  Bash's timeout, background and sandbox fields are shown as words after the command, and stay allowable. The
+answers with `agent:answerPermission`; nothing else can. Ask in terminal on a chat's page (the new interface)
+then opens that orchestrator's window on its terminal, where Claude Code's dialog waits (2.0.7): the page shows no
+terminal, and the question seemed to vanish. The Dashboard's panel and an agent window already show it. Since 2.0.5 (fix-permission-dialogs-2810.md):
+- **Tars allows nothing by itself.** Every question waits for the owner, and since 2.0.7 the window can allow every
+  one of them (approve-everywhere): a shell command of any length, a file tool (Write, Edit, MultiEdit,
+  NotebookEdit) with its new content, any number of fields, one that is not text as its JSON (Claude in Chrome's
+  `tabId`, `coordinate`, `createIfEmpty` made each of its questions withheld before). The mod sends a question whole
+  up to 3 MiB a request; past it, its largest fields are withheld, and the question is asked `withheld`, with
+  `withheldWhy` naming each field left out and its size. So is a file tool that comes without its content (the route
+  marks it so whatever the request says). A withheld question is held for an agent in bypass, the window may refuse
+  it but never allow it, and the delay refuses it; for an agent in any other mode it goes straight to Claude Code's
+  own dialog. What each tick carries is a view (each field at most 2,000 characters, 32 fields, `cut` naming the
+  rest); the window asks for the question whole (`agent:permissionQuestion`) and its allow names the fingerprint it
+  read. A refused answer says why: `{ success: false, code, error }`, `code` `another-question` (the agent asked about
+  another call meanwhile), `read-first` (an allow naming no fingerprint: every allow names one since #588's audit),
+  `withheld`, `no-question` (gone) or `not-a-decision`. Proven with real claude by
+  `E2E_LIVE=1 npx playwright test e2e/approve-everywhere.live.spec.ts` (a Write of 8,692 characters, shown whole and
+  allowed, the file written byte for byte, no dialog); its negative witness runs #582's mod
+  (`E2E_STATE_MOD_DIR=<folder holding its tars-state>`), which withholds the content: the question never reaches Tars.
+  Bash's timeout, background and sandbox fields are shown as words after the command. The
   window's line names every field an allow covers (a Grep reads `BEGIN OPENSSH in /Users/x/.ssh`). A bypass
   worker's AskUserQuestion is refused at once, telling it to ask its orchestrator with `send_message`; an
   orchestrator's, or an agent's not in bypass, stays with the person.
@@ -1747,6 +1834,15 @@ answers with `agent:answerPermission`; nothing else can. Since 2.0.5 (fix-permis
 - **An orchestrator sees it**: `list_agents` gives a teammate's `waitingReason` and `permissionAsk`
   (the tool, what it runs, why Claude Code asked, since and until when); `get_agent` gives it all. Both
   mask a token or a URL's password in the command; the window, where the owner decides, shows it whole.
+- **Claude in Chrome without asking** (2.0.7, the owner's switch `chromeActsWithoutAsking` in
+  `~/.tars-private/owner-switches.json`, off by default, set only by the window's own channel; SECURITY.md
+  says what it opens). On: every claude agent starts with `CLAUDE_CHROME_CLASSIFIER_FLOOR=0` (Chrome's calls under
+  bypass, no classifier), and Tars allows any Chrome question that still reaches it, logged
+  `allow by Tars (the owner's setting chromeActsWithoutAsking)`. Until Settings has a switch: quit Tars, write
+  `{ "chromeActsWithoutAsking": true }` into `~/.tars-private/owner-switches.json`, start Tars (a key in
+  `~/.tars/app-settings.json` turns nothing on, since every agent can write that file); an agent started before keeps the
+  classifier until its next start. Proven with the owner's own extension by
+  `E2E_LIVE_CHROME=1 npx playwright test e2e/chrome-without-asking.live.spec.ts`.
 When the turn, the session or the agent ends, or the window answers `ask`, it goes back to Claude
 Code, which then shows its own dialog, and the `PermissionRequest` hook reports it as before. An agent
 waiting with no `permissionAsk` is at its terminal's dialog: the mod did not load, or the question
@@ -2116,6 +2212,11 @@ Response mirrors `/dispatch` (`{success, mode, agent}`); poll `GET /api/agents/:
 result afterwards.
 
 ### The agents' kanban
+
+Without a Hermes gateway Tars can use (`usableHermesConnection`, `services/hermes-config.ts`), there is no
+board: since 2.0.7 every agent's guide says so, and that it uses no kanban tool, the orchestrator keeping the
+split in its delegations and its report (`services/agent-guide.ts`; until then it was sent to file on a Hermes
+board that was not there, QA's fresh-install report, H3). With one, as below.
 
 The agents' kanban tools (`mcp-kanban`: `create_task`, `list_tasks`, `get_task`, `assign_task`,
 `update_task_progress`, `mark_task_done`, `move_task`, `delete_task`) work on the Hermes board,

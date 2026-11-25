@@ -125,6 +125,7 @@ import { registerReviewHandlers } from './handlers/review-handlers';
 import { registerAgentQueueHandlers } from './handlers/agent-queue-handlers';
 import { registerTemplateHandlers } from './handlers/template-handlers';
 import { registerTeamTemplateHandlers } from './handlers/team-template-handlers';
+import { registerProjectSetupHandlers } from './handlers/project-setup-handlers';
 import { registerHermesHandlers } from './handlers/hermes-handlers';
 import { registerOverseerHandlers } from './handlers/overseer-handlers';
 import { startOverseerWatch, stopOverseerWatch, migrateOverseerOutOfAgentReach } from './services/overseer';
@@ -166,6 +167,7 @@ import { installSlotShims } from './services/heavy-slot-cli';
 import { startErrorTriage, stopErrorTriage } from './services/error-triage';
 import { sentryTokenOutOf, settingsToSave } from './services/sentry-token';
 import { SECRETS_FILE, migrateSecrets, readSecrets, saveSettingsSplit } from './services/settings-secrets';
+import { loadChromeSwitch } from './services/chrome-without-asking';
 import { retireTelegramBot, withoutRetiredSettings } from './services/telegram-retired';
 import { agentStatusEmitter, emitAgentStatus } from './services/agent-events';
 import { createKeepAwake } from './services/keep-awake';
@@ -579,6 +581,9 @@ app.whenReady().then(async () => {
   // (core/pty-pool.ts ptyTestMax).
   useTestPtyMax(ptyTestMax(process.env, app.isPackaged));
 
+  // The owner's switch, Claude in Chrome acts without asking, read once here, before any agent is loaded or launched:
+  // a write to its file during the run changes nothing until the next start (services/chrome-without-asking.ts).
+  loadChromeSwitch();
   // Load agents from disk
   loadAgents();
   // And the run token folders a delegated run or a crash left behind (services/acp/run-token-file.ts).
@@ -664,6 +669,7 @@ app.whenReady().then(async () => {
   // Register agent template handlers (no deps, self-contained)
   registerTemplateHandlers();
   registerTeamTemplateHandlers();
+  registerProjectSetupHandlers();
   registerHermesHandlers();
   registerDiscordHandlers({ getAppSettings: () => appSettings });
   const claudeAccounts = registerClaudeAccountsHandlers({

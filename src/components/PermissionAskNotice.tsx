@@ -3,8 +3,10 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { KeyboardEvent } from 'react';
 import { Button, Input, StatusSquare } from '@/components/ui';
-import type { AgentStatus } from '@/types/electron';
-import { permissionAskLine } from '@/lib/permission-ask';
+import type { AgentStatus, PermissionQuestionWhole } from '@/types/electron';
+import { ANOTHER_QUESTION, lineNamesEveryField, permissionAskLine, questionFields, refusalStep } from '@/lib/permission-ask';
+import { ipcReason } from '@/lib/ipc-error';
+import { flat } from '@/lib/stop-line';
 import { TERMINAL_SURFACE_CLASS } from '@/lib/terminal-theme';
 
 const ACTION = 'font-mono lowercase';
@@ -14,6 +16,7 @@ const MAX_REASON = 200;
 
 const LATE_WHO = 'Tars no longer holds this question:';
 const LATE_REST = 'if its terminal asks, answer there.';
+const TERMINAL_TITLE = 'Claude Code\'s own dialog, for what only it offers: allowing a command for the rest of the session, for instance';
 
 type Decision = 'allow' | 'deny' | 'ask';
 /** answers: the three; reason: deny's field; sending and sent: off until the agent's next state; late: Tars held nothing. */
@@ -26,9 +29,22 @@ interface State {
   fits: boolean;
   /** The panel opened the call whole, under its header (show all). */
   shown: boolean;
+  /** The question whole, read from main (agent.permissionQuestion) when the view is cut or gives no fingerprint. */
+  whole?: PermissionQuestionWhole;
+  /** A refused answer, said in main's words (its code's sentence), and its tone. */
+  said?: { text: string; tone: 'waiting' | 'idle' | 'error' };
+  /** Refused as withheld: allow is taken away. */
+  noAllow?: boolean;
+  /** Refused as read-first: the question is read whole again before allow. */
+  mustRead?: boolean;
+  /** Why the last read of the question whole failed: said, with read again, never as a question gone. */
+  readFailed?: string;
+  /** The askedAt an allow was refused on, while the agent's copy still carries it: this state is the new question's. */
+  alias?: string;
 }
 
 const fresh = (of: string | undefined): State => ({ of, phase: 'answers', reason: '', fits: false, shown: false });
+const holds = (s: State, askedAt: string | undefined) => s.of === askedAt || (s.alias !== undefined && s.alias === askedAt);
 
 /** Whether a line holds its text whole: what it cut is wider than what it shows. */
 const holdsWhole = (el: Pick<HTMLElement, 'scrollWidth' | 'clientWidth'>) => el.scrollWidth <= el.clientWidth;
@@ -37,7 +53,7 @@ const holdsWhole = (el: Pick<HTMLElement, 'scrollWidth' | 'clientWidth'>) => el.
  * A permission question the state mod asked Tars instead of Claude Code's
  * dialog (the state mod, PR 318), and its three answers: allow runs the call, deny refuses it
  * with a reason the agent reads if one is given, ask in terminal puts it to
- * Claude Code's own dialog, which has no delay: answer it there. Nothing is
+ * Claude Code's own dialog (the quiet last answer since 2.0.7, for what only it offers). Nothing is
  * typed into the terminal. Tars never answers allow by itself (PR 538): a
  * question waits for the owner, and at the delay Tars refuses it, with its
  * reason. Frame: `Permission asked of Tars`.
@@ -60,18 +76,25 @@ const holdsWhole = (el: Pick<HTMLElement, 'scrollWidth' | 'clientWidth'>) => el.
  * show all. Tars cannot see what would be written, and refuses an allow anyway
  * (frame `Permission asked of Tars`, its withheld row).
  */
-export default function PermissionAskNotice({ agent, layout }: {
+export default function PermissionAskNotice({ agent, layout, onAskedInTerminal }: {
   agent: Pick<AgentStatus, 'id' | 'status' | 'permissionAsk'>;
   layout: 'panel' | 'window';
+  /**
+   * Tars handed the question back to Claude Code's dialog. A host that shows no terminal under the question (a
+   * chat's page) brings the agent's terminal into view, where that dialog waits (frame `Permission asked of Tars`,
+   * its row `ask in terminal from a chat`). Not called when Tars no longer held the question.
+   */
+  onAskedInTerminal?: () => void;
 }) {
-  const askedAt = agent.permissionAsk?.askedAt;
-  const withheld = agent.permissionAsk?.withheld === true;
+  const ask = agent.permissionAsk;
+  const askedAt = ask?.askedAt;
+  const withheld = ask?.withheld === true;
   /** What was withheld and why, as the state mod says it (\`command: 3,014 characters, past the 2,000 the window shows\`). */
-  const withheldWhy = withheld ? agent.permissionAsk?.withheldWhy : undefined;
+  const withheldWhy = withheld ? ask?.withheldWhy : undefined;
   const [kept, setKept] = useState<State>(() => fresh(askedAt));
-  const state: State = kept.of === askedAt ? kept : fresh(askedAt);
+  const state: State = holds(kept, askedAt) ? kept : fresh(askedAt);
   const update = useCallback(
-    (next: Partial<State>) => setKept(prev => ({ ...(prev.of === askedAt ? prev : fresh(askedAt)), ...next })),
+    (next: Partial<State>) => setKept(prev => ({ ...(holds(prev, askedAt) ? prev : fresh(askedAt)), ...next })),
     [askedAt],
   );
 
@@ -90,24 +113,100 @@ export default function PermissionAskNotice({ agent, layout }: {
     return () => observer.disconnect();
   }, [update, state.shown]);
 
-  const line = permissionAskLine(agent);
-  if (!line) return null;
+  // The question whole, when the view does not hold it (cut, or no fingerprint to name): read once per question,
+  // where it is shown whole (the window, or a panel's show all). Until then, no allow.
+  const needsWhole = !!ask && !withheld && (!!ask.cut?.length || !ask.fingerprint || !!state.mustRead);
+  const reading = needsWhole && !state.whole && !state.readFailed && (layout === 'window' || state.shown) && state.phase !== 'late';
+  const viewFingerprint = ask?.fingerprint;
+  useEffect(() => {
+    if (!reading) return;
+    let live = true;
+    const read = window.electronAPI?.agent?.permissionQuestion;
+    if (!read) { update({ readFailed: 'this window cannot ask Tars for it' }); return; }
+    read(agent.id)
+      .then(r => {
+        if (!live) return;
+        if (!r.success) { update({ readFailed: r.error }); return; }
+        const whole = r.question;
+        // Read now, it may be another question than the one shown (asked in between): shown as a new question,
+        // under its own head, said so (the Audit's L1 on #589). Withheld, it is never offered allow.
+        const other = whole.askedAt !== askedAt || (!!viewFingerprint && whole.fingerprint !== viewFingerprint);
+        if (other) {
+          setKept(prev => (holds(prev, askedAt) ? {
+            ...fresh(whole.askedAt), alias: askedAt, shown: true, whole,
+            said: { text: ANOTHER_QUESTION, tone: 'waiting' }, ...(whole.withheld ? { noAllow: true } : {}),
+          } : prev));
+        } else {
+          update({ whole, ...(whole.withheld ? { noAllow: true } : {}) });
+        }
+      })
+      .catch((err: unknown) => { if (live) update({ readFailed: ipcReason(err, 'the call failed') }); });
+    return () => { live = false; };
+  }, [reading, agent.id, askedAt, viewFingerprint, update]);
 
+  const line = permissionAskLine(agent);
+  if (!line || !ask) return null;
+
+  // What is shown, and the fingerprint every answer names: the whole question once read, else the view when it holds
+  // the question whole (main gives its fingerprint then).
+  const shown = state.whole
+    ? { fields: state.whole.fields, jsonFields: state.whole.jsonFields, fingerprint: state.whole.fingerprint }
+    : needsWhole ? null : { fields: ask.fields, jsonFields: ask.jsonFields ?? [], fingerprint: ask.fingerprint };
+  const fingerprint = shown?.fingerprint ?? ask.fingerprint;
   const busy = state.phase === 'sending' || state.phase === 'sent';
 
   const answer = async (decision: Decision, reason?: string) => {
     if (busy) return;
     update({ phase: 'sending' });
     let taken = false;
+    let refused: { code?: string; error?: string } | undefined;
     try {
-      const result = await window.electronAPI?.agent?.answerPermission?.(agent.id, decision, reason);
+      const result = await window.electronAPI?.agent?.answerPermission?.(agent.id, decision, reason, fingerprint);
       taken = result?.success === true;
+      if (result && !result.success) refused = result;
     } catch {
       taken = false;
     }
+    if (!taken) {
+      // Refused: main's code says why, and its sentence is said as it is (frame `Permission asked of Tars`, its rows
+      // `the question changed` and `a refusal, said`). Nothing is allowed by itself.
+      const next = refusalStep(refused);
+      if (next.step === 'changed') {
+        let now: PermissionQuestionWhole | null = null;
+        let readError: string | undefined;
+        try {
+          const r = await window.electronAPI?.agent?.permissionQuestion?.(agent.id);
+          if (r?.success) now = r.question; else readError = r?.error;
+        } catch (err) { readError = ipcReason(err, 'the call failed'); }
+        if (now) {
+          const whole = now;
+          setKept(prev => (holds(prev, askedAt) ? {
+            ...fresh(whole.askedAt), alias: askedAt, shown: true, whole, said: { text: next.say, tone: next.tone },
+            ...(whole.withheld ? { noAllow: true } : {}),
+          } : prev));
+          return;
+        }
+        // The new question could not be read: said so, with read again, never that Tars holds none (the Audit's L2
+        // on #589). Nothing is allowed until it is read.
+        setKept(prev => (holds(prev, askedAt) ? {
+          ...prev, phase: 'answers', shown: true, whole: undefined, mustRead: true,
+          said: { text: next.say, tone: next.tone }, readFailed: readError ?? 'the call failed',
+        } : prev));
+        return;
+      } else if (next.step !== 'late') {
+        const said = { text: next.say, tone: next.tone };
+        setKept(prev => (holds(prev, askedAt) ? {
+          ...prev, phase: 'answers', shown: true, said,
+          ...(next.step === 'read' ? { whole: undefined, mustRead: true } : {}),
+          ...(next.step === 'no-allow' ? { noAllow: true } : {}),
+        } : prev));
+        return;
+      }
+    }
     // Taken: off until the agent's next state takes the line away. Not taken:
     // the time ran out, the turn ended, or another window answered first.
-    setKept(prev => (prev.of === askedAt ? { ...prev, phase: taken ? 'sent' : 'late' } : prev));
+    setKept(prev => (holds(prev, askedAt) ? { ...prev, phase: taken ? 'sent' : 'late' } : prev));
+    if (taken && decision === 'ask') onAskedInTerminal?.();
   };
   const deny = () => answer('deny', state.reason.trim() || undefined);
   const back = () => update({ phase: 'answers', reason: '' });
@@ -148,6 +247,11 @@ export default function PermissionAskNotice({ agent, layout }: {
     const why = withheldWhy && !late && state.phase !== 'reason' ? (
       <p data-withheld-why className="truncate pl-[26px] pr-3 pt-[3px] pb-1 bg-secondary border-b border-border font-mono text-[10.5px] text-muted-foreground" title={withheldWhy}>{withheldWhy}</p>
     ) : null;
+    // Allowed from the line only when it holds the call whole and the view gives its fingerprint; a cut view opens
+    // whole first (frame `Permission asked of Tars`, its row `a cut view, and while it is read`).
+    // Main's line leaves out an empty field (a Write emptying a file reads as its path): allowed from the line only
+    // when it names every field (the Audit's M1 on #589); otherwise show all.
+    const allowHere = state.fits && !needsWhole && !!fingerprint && !state.noAllow && lineNamesEveryField(ask.tool, ask.fields);
     return (
       <div role="status" data-permission-ask={agent.id} title={late ? `${LATE_WHO} ${LATE_REST}` : line.title} className="shrink-0 flex flex-col">
       <div
@@ -169,13 +273,13 @@ export default function PermissionAskNotice({ agent, layout }: {
               <span ref={measure} data-subject className="min-w-0 truncate whitespace-pre font-mono">{withheld ? `${line.subject} · ${withheldWhy ? 'withheld' : 'content withheld'}` : line.subject}</span>
             </p>
             <div className="shrink-0 flex items-center">
-              {withheld ? null : state.fits ? (
+              {withheld ? null : allowHere ? (
                 <Button variant="ghost" size="sm" className={ACTION} disabled={busy} onClick={() => answer('allow')}>allow</Button>
               ) : (
                 <Button variant="ghost" size="sm" className={ACTION} disabled={busy} onClick={() => update({ shown: true })} title="Read the whole call before allowing it">show all</Button>
               )}
               <Button variant="ghost" size="sm" className={ACTION} disabled={busy} onClick={() => update({ phase: 'reason' })}>deny</Button>
-              <Button variant="ghost" size="sm" className={ACTION} disabled={busy} onClick={() => answer('ask')} title="Claude Code's own dialog, which has no delay: answer it there">ask in terminal</Button>
+              <Button variant="ghost" size="sm" className={ACTION} disabled={busy} onClick={() => answer('ask')} title={TERMINAL_TITLE}>ask in terminal</Button>
             </div>
           </>
         )}
@@ -185,44 +289,85 @@ export default function PermissionAskNotice({ agent, layout }: {
     );
   }
 
+  // The fields to show: the whole question once read; while it is read, the view's fields it holds whole.
+  const cutNames = new Set((ask.cut ?? []).map(c => c.field));
+  const fields = withheld ? [] : shown
+    ? questionFields(shown.fields, shown.jsonFields)
+    : questionFields(Object.fromEntries(Object.entries(ask.fields).filter(([n]) => !cutNames.has(n))), ask.jsonFields ?? []);
+  // Why Claude Code asks and the rule that asked, the question shown's, flattened as the line does.
+  const why = state.whole ? flat(state.whole.reason) : line.reason;
+  const rule = state.whole ? flat(state.whole.rule) : line.rule;
+
   // The window, and a panel that opened the call whole: the same block. Where
   // its column is too short for it (a panel in the board's smallest cell, a
   // low window), it shrinks to what the column holds: its head and its
   // answers keep their place, and the call, why and the rule scroll between
   // them, inside the block only (JeanBrasse's report of 2026-10-22:
   // the block overflowed the panel, which clips, and allow and deny were out
-  // of reach outside full screen). Frame: `Permission asked of Tars`, its
-  // `smallest cell` row.
+  // of reach outside full screen). Since 2.0.7 each field is shown by name and
+  // whole, a long one with its size above it, and allow comes first, naming the
+  // fingerprint of the question shown (frame `Permission asked of Tars`, its rows
+  // `approve a file, shown whole` and `the question changed`).
   return (
     <div role="status" data-permission-ask={agent.id} className="min-h-0 flex flex-col gap-2 px-3 py-2.5 bg-secondary border-b border-border">
       <div className="shrink-0 flex items-center justify-between gap-3">
         <div className="min-w-0 flex items-center gap-2">
           <StatusSquare tone="waiting" />
-          <span className="text-xs text-foreground truncate" title={line.title}>{line.who.replace(/:$/, '')}</span>
+          <span className="text-xs text-foreground truncate" title={line.title}>{state.whole ? `Asks to use ${flat(state.whole.tool)}` : line.who.replace(/:$/, '')}</span>
         </div>
         {line.at && <span className="shrink-0 font-mono text-[11px] text-text-muted">{line.at}</span>}
       </div>
+      {state.said && !late && (
+        <p data-ask-said={state.said.tone} className={`shrink-0 flex items-center gap-2 text-xs ${state.said.tone === 'idle' ? 'text-muted-foreground' : 'text-foreground'}`}>
+          <StatusSquare tone={state.said.tone} />
+          <span className="min-w-0 break-words">{state.said.text}</span>
+        </p>
+      )}
       <div data-ask-details className="min-h-0 flex flex-col gap-2 overflow-y-auto">
-        {line.subject && (
-          <p className={`px-2.5 py-[7px] border border-border ${TERMINAL_SURFACE_CLASS} font-mono text-xs leading-[18px] text-foreground break-all select-text`}>
-            {/* Each line on its own: a break is never read as a space (the Audit's M1 on PR 544). */}
-            {line.lines.map((l, i) => <span key={i} data-subject-line className="block whitespace-pre-wrap">{l}</span>)}
-            {withheld && <span className="text-muted-foreground">{` · ${withheldWhy ? 'withheld' : 'content withheld'}`}</span>}
-          </p>
+        {withheld ? (
+          <>
+            {line.subject && (
+              <p className={`px-2.5 py-[7px] border border-border ${TERMINAL_SURFACE_CLASS} font-mono text-xs leading-[18px] text-foreground break-all select-text`}>
+                {line.lines.map((l, i) => <span key={i} data-subject-line className="block whitespace-pre-wrap">{l}</span>)}
+                <span className="text-muted-foreground">{` · ${withheldWhy ? 'withheld' : 'content withheld'}`}</span>
+              </p>
+            )}
+            {withheldWhy && <p data-withheld-why className="font-mono text-[11px] leading-[15px] text-muted-foreground break-words">{withheldWhy}</p>}
+          </>
+        ) : fields.map((f, i) => (
+          <div key={f.name} data-ask-field={f.name} className="flex flex-col gap-1">
+            <p className="font-mono text-[11px] leading-[15px] text-text-muted break-all">{f.size ? `${f.name} · ${f.size}` : f.name}</p>
+            <p className={`px-2.5 py-[7px] border border-border ${TERMINAL_SURFACE_CLASS} font-mono text-xs leading-[18px] text-foreground break-all select-text`}>
+              {/* Each line on its own: a break is never read as a space (the Audit's M1 on PR 544). The main field's
+                  lines one by one; a long one as one text, its breaks kept, so a file of 3 MiB draws in one pass. */}
+              {i === 0
+                ? f.lines.map((l, k) => <span key={k} data-subject-line className="block whitespace-pre-wrap">{l || ' '}</span>)
+                : <span className="block whitespace-pre-wrap">{f.lines.join('\n')}</span>}
+            </p>
+          </div>
+        ))}
+        {!withheld && !shown && !late && !state.readFailed && (
+          <p data-ask-reading className="font-mono text-[11px] text-text-muted">reading the whole question</p>
         )}
-        {withheldWhy && <p data-withheld-why className="font-mono text-[11px] leading-[15px] text-muted-foreground break-words">{withheldWhy}</p>}
-        {(line.reason || line.rule) && (
+        {!withheld && !shown && !late && state.readFailed && (
+          <div data-ask-read-failed className="flex items-center gap-2 text-xs text-foreground">
+            <StatusSquare tone="error" />
+            <span className="min-w-0 flex-1 break-words">The question could not be read: {state.readFailed.replace(/[.\s]+$/, '')}.</span>
+            <Button size="sm" className={`shrink-0 ${ACTION}`} onClick={() => update({ readFailed: undefined })}>read again</Button>
+          </div>
+        )}
+        {(why || rule) && (
           <dl className="grid grid-cols-[30px_minmax(0,1fr)] gap-x-2.5 gap-y-[3px] text-[11px] leading-[15px] select-text">
-            {line.reason && (
+            {why && (
               <>
                 <dt className="font-mono text-text-muted">why</dt>
-                <dd className="text-muted-foreground break-words">{line.reason}</dd>
+                <dd className="text-muted-foreground break-words">{why}</dd>
               </>
             )}
-            {line.rule && (
+            {rule && (
               <>
                 <dt className="font-mono text-text-muted">rule</dt>
-                <dd className="font-mono text-muted-foreground break-all">{line.rule}</dd>
+                <dd className="font-mono text-muted-foreground break-all">{rule}</dd>
               </>
             )}
           </dl>
@@ -236,9 +381,9 @@ export default function PermissionAskNotice({ agent, layout }: {
         </div>
       ) : late ? lateLine : (
         <div className="shrink-0 flex items-center gap-1.5">
-          {!withheld && <Button size="sm" className={ACTION} disabled={busy} onClick={() => answer('allow')}>allow</Button>}
+          {!withheld && !state.noAllow && shown && fingerprint && <Button size="sm" className={ACTION} disabled={busy} onClick={() => answer('allow')}>allow</Button>}
           <Button size="sm" className={ACTION} disabled={busy} onClick={() => update({ phase: 'reason' })}>deny</Button>
-          <Button size="sm" className={ACTION} disabled={busy} onClick={() => answer('ask')} title="Claude Code's own dialog, which has no delay: answer it there">ask in terminal</Button>
+          <Button variant="ghost" size="sm" className={ACTION} disabled={busy} onClick={() => answer('ask')} title={TERMINAL_TITLE}>ask in terminal</Button>
         </div>
       )}
     </div>

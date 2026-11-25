@@ -13,6 +13,8 @@ export interface AuthState {
   email: string | null;
   subscriptionType: string | null;
   error: string | null;
+  /** `cli-missing`: there is no claude to ask (auth.ts ClaudeCliMissing). */
+  code?: 'cli-missing' | null;
 }
 
 /** A move switching.ts asked for, made by the agent's next terminal launch. */

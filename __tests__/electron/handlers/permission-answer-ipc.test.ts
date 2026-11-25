@@ -12,6 +12,15 @@
  * 3. A stop or a delete leaves the question held: the mod's request open on a
  *    CLI that is being ended, and a later answer taken for a gone session.
  * 4. The quit leaves the questions held: a request open while the app exits.
+ * And from the owner's question of 10/11 (approve-everywhere.md), written before the code:
+ * 5. The window has only the view Tars publishes of a question (each field at most 2,000 characters): it cannot show
+ *    the whole call it would allow. agent:permissionQuestion gives it whole, with its fingerprint, and nothing for an
+ *    agent with no question.
+ * 6. The window's answer cannot name what it read: agent:answerPermission takes the fingerprint the window showed,
+ *    and an allow naming another question's changes nothing.
+ * And from the Audit's FIX FIRST on #588 (M1 and L2), written before the code:
+ * 7. An allow with no fingerprint is taken, and a refusal comes back as a bare `success: false` the window reads as a
+ *    question gone: every allow names the fingerprint, and a refusal says why (`code`, `error`), in the preload's type.
  *
  * The handlers are the real ones; the question is held as the route holds it.
  */
@@ -81,9 +90,13 @@ beforeEach(() => {
 });
 
 describe("the window's answer", () => {
-  it('1, 2. agent:answerPermission allows the held call, as the user', async () => {
+  it('1, 2, 7. agent:answerPermission allows the held call, as the user, named by its fingerprint', async () => {
     const { agent, answer } = held();
-    expect(await handlers.get('agent:answerPermission')!({}, 'a1', 'allow')).toEqual({ success: true });
+    expect(await handlers.get('agent:answerPermission')!({}, 'a1', 'allow')).toMatchObject({
+      success: false, code: 'read-first', error: expect.stringMatching(/whole/),
+    });
+    const read = agent.permissionAsk!.fingerprint;
+    expect(await handlers.get('agent:answerPermission')!({}, 'a1', 'allow', undefined, read)).toEqual({ success: true });
     expect(await answer).toMatchObject({ decision: 'allow', reason: 'the user allowed it in Tars' });
     expect(agent.status).toBe('running');
   });
@@ -94,15 +107,51 @@ describe("the window's answer", () => {
     expect(await answer).toMatchObject({ decision: 'deny', reason: 'the user refused it in Tars: not on main' });
   });
 
-  it('1. says when there was nothing to answer', async () => {
-    expect(await handlers.get('agent:answerPermission')!({}, 'a1', 'allow')).toEqual({ success: false });
+  it('1, 7. says when there was nothing to answer, and why', async () => {
+    expect(await handlers.get('agent:answerPermission')!({}, 'a1', 'allow')).toMatchObject({
+      success: false, code: 'no-question', error: expect.stringMatching(/no longer holds/),
+    });
   });
 
-  it('1. is in the preload and typed for the renderer', () => {
+  it('1, 6, 7. is in the preload and typed for the renderer, with the fingerprint the window read and why a refusal', () => {
     const preload = fs.readFileSync(path.join(ROOT, 'electron/preload.ts'), 'utf8');
     const types = fs.readFileSync(path.join(ROOT, 'src/types/electron.d.ts'), 'utf8');
-    expect(preload).toMatch(/answerPermission: \(id: string, decision: 'allow' \| 'deny' \| 'ask', reason\?: string\) =>\s*ipcRenderer\.invoke\('agent:answerPermission', id, decision, reason\)/);
-    expect(types).toContain("answerPermission: (id: string, decision: 'allow' | 'deny' | 'ask', reason?: string) => Promise<{ success: boolean }>;");
+    expect(preload).toMatch(/answerPermission: \(id: string, decision: 'allow' \| 'deny' \| 'ask', reason\?: string, fingerprint\?: string\) =>\s*ipcRenderer\.invoke\('agent:answerPermission', id, decision, reason, fingerprint\)/);
+    expect(types).toContain("answerPermission: (id: string, decision: 'allow' | 'deny' | 'ask', reason?: string, fingerprint?: string) => Promise<{ success: true } | { success: false; code: PermissionRefusal; error: string }>;");
+    expect(types).toContain("export type PermissionRefusal = 'no-question' | 'another-question' | 'read-first' | 'withheld' | 'not-a-decision';");
+  });
+
+  it('6. an allow naming the fingerprint of what the window read is taken; one naming another changes nothing', async () => {
+    const { answer } = held();
+    const shown = (await handlers.get('agent:permissionQuestion')!({}, 'a1') as { question: { fingerprint: string } }).question.fingerprint;
+    expect(await handlers.get('agent:answerPermission')!({}, 'a1', 'allow', undefined, 'f'.repeat(64))).toMatchObject({ success: false, code: 'another-question' });
+    expect(await handlers.get('agent:answerPermission')!({}, 'a1', 'allow', undefined, shown)).toEqual({ success: true });
+    expect(await answer).toMatchObject({ decision: 'allow', fingerprint: shown });
+  });
+});
+
+describe('the whole question, for the window', () => {
+  it('5. agent:permissionQuestion gives the held question whole, with its fingerprint', async () => {
+    const command = `cat > notes.md <<'EOF'\n${'y'.repeat(5000)}\nEOF`;
+    const agent = { id: 'a1', name: 'Backend', status: 'running', projectPath: tmpHome, skills: [], output: [], lastActivity: new Date().toISOString() } as unknown as AgentStatus;
+    agents.set('a1', agent);
+    void holdPermissionAsk(agent, { tool: 'Bash', toolUseId: 'toolu_1', fields: { command }, waitingOn: undefined }, () => undefined);
+    const got = await handlers.get('agent:permissionQuestion')!({}, 'a1') as { success: boolean; question: Record<string, unknown> };
+    expect(got).toMatchObject({ success: true, question: { tool: 'Bash', fields: { command }, subject: command, jsonFields: [] } });
+    expect(got.question.fingerprint).toMatch(/^[0-9a-f]{64}$/);
+    expect(agent.permissionAsk?.fields.command).toHaveLength(2000);
+  });
+
+  it('5. says when there is no question', async () => {
+    expect(await handlers.get('agent:permissionQuestion')!({}, 'a1')).toMatchObject({ success: false });
+    expect(await handlers.get('agent:permissionQuestion')!({}, 42)).toMatchObject({ success: false });
+  });
+
+  it('5. is in the preload and typed for the renderer', () => {
+    const preload = fs.readFileSync(path.join(ROOT, 'electron/preload.ts'), 'utf8');
+    const types = fs.readFileSync(path.join(ROOT, 'src/types/electron.d.ts'), 'utf8');
+    expect(preload).toMatch(/permissionQuestion: \(id: string\) =>\s*ipcRenderer\.invoke\('agent:permissionQuestion', id\)/);
+    expect(types).toMatch(/permissionQuestion: \(id: string\) => Promise<\{ success: true; question: PermissionQuestionWhole \} \| \{ success: false; error: string \}>;/);
   });
 });
 

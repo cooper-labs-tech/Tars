@@ -35,6 +35,8 @@ export interface TaskRequest {
   state: 'queued' | 'delivered';
   /** Its message is a new session's prompt, which carries no sender line: that session's first turn is its turn. */
   newSession?: boolean;
+  /** Handed as a release gate by its project's orchestrator (delegate_task's `gate`): its worker's heavy runs go first. */
+  gate?: true;
 }
 
 /** The fields of an agent these functions read and write. */
@@ -42,7 +44,7 @@ export interface RequestWorker {
   id: string;
   ptyId?: string;
   taskQueue?: TaskRequest[];
-  requestedBy?: { agentId: string; ptyId: string; backgroundLeft?: string[]; taskRef?: string };
+  requestedBy?: { agentId: string; ptyId: string; backgroundLeft?: string[]; taskRef?: string; gate?: true };
 }
 
 /**
@@ -102,17 +104,18 @@ function keepTitle(ref: string, text: string | undefined): void {
 }
 
 /** Queued on the worker when it is sent. Returns its id, for the sender line. */
-export function enqueueRequest(worker: RequestWorker, requesterAgentId: string, opts: { newSession?: boolean; ref?: string; title?: string } = {}): string {
+export function enqueueRequest(worker: RequestWorker, requesterAgentId: string, opts: { newSession?: boolean; ref?: string; title?: string; gate?: boolean } = {}): string {
   const ref = opts.ref ?? newTaskRef();
   keepTitle(ref, opts.title);
   worker.taskQueue = [...(worker.taskQueue ?? []), {
     ref, requesterAgentId, queuedAt: new Date().toISOString(), state: 'queued', ...(opts.newSession ? { newSession: true } : {}),
+    ...(opts.gate ? { gate: true as const } : {}),
   }];
   return ref;
 }
 
 function link(worker: RequestWorker, request: TaskRequest): void {
-  worker.requestedBy = { agentId: request.requesterAgentId, ptyId: worker.ptyId ?? '', taskRef: request.ref };
+  worker.requestedBy = { agentId: request.requesterAgentId, ptyId: worker.ptyId ?? '', taskRef: request.ref, ...(request.gate ? { gate: true as const } : {}) };
 }
 
 /** Written into the worker's terminal: it takes the link when no request holds it. */

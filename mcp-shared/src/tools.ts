@@ -45,6 +45,12 @@ export interface Tool<S extends Shape = Shape> {
   schema: S;
   /** How a throw is reported: "Error <failure>: <message>". */
   failure: string;
+  /**
+   * It only reads: told to the CLI as readOnlyHint, which lets Claude Code run it beside the other calls of one
+   * message (2.1.321 runs an MCP call alongside others only for a read-only tool, or a server that sets mayOverlap;
+   * QA's gate of #579). Never on a tool that changes anything: the mark also tells a CLI it needs no permission.
+   */
+  readOnly?: true;
   run(args: { [K in keyof S]: S[K]["_output"] }, extra: ToolExtra): Promise<ToolResult>;
 }
 
@@ -57,12 +63,12 @@ export const tool = <S extends Shape>(row: Tool<S>): Tool => row as unknown as T
  * which this folder cannot name.
  */
 export interface ToolServer {
-  tool(name: string, description: never, schema: never, run: never): unknown;
+  tool(name: string, description: never, schema: never, ...rest: never[]): unknown;
 }
 
 /** Registers the rows in order, the order tools/list gives them in. */
 export function registerTools(server: ToolServer, tools: readonly Tool[]): void {
-  for (const { name, description, schema, failure, run } of tools) {
+  for (const { name, description, schema, failure, run, readOnly } of tools) {
     const guarded = async (args: never, extra: ToolExtra): Promise<ToolResult> => {
       try {
         // Its calls to Tars name it (tool-call.ts).
@@ -71,6 +77,7 @@ export function registerTools(server: ToolServer, tools: readonly Tool[]): void 
         return failed(failure, error);
       }
     };
-    server.tool(name, description as never, schema as never, guarded as never);
+    if (readOnly) server.tool(name, description as never, schema as never, { readOnlyHint: true } as never, guarded as never);
+    else server.tool(name, description as never, schema as never, guarded as never);
   }
 }

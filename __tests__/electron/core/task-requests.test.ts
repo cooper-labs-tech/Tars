@@ -75,6 +75,11 @@
  *     never started, though the agent had done it.
  * 18. A look-alike envelope inside that owed block (the memory is not quoted)
  *     taken for the task's, or an envelope after anything but Tars's own line.
+ * And for the release gate the orchestrator hands (2.0.7, the Audit's L4 on
+ * #579, written before the code, 2026-11-10):
+ * 19. A request handed as a gate does not carry it to the worker's link once
+ *     delivered, or a request handed without it does: any task an orchestrator
+ *     delegated then let its worker put any run first in the heavy-run slot.
  */
 import { describe, it, expect } from 'vitest';
 import {
@@ -103,6 +108,18 @@ describe("a worker's requests", () => {
     requestDelivered(w, a);
     requestDelivered(w, b);
     expect(w.requestedBy).toMatchObject({ agentId: 'orch', ptyId: 'pty-w', taskRef: a });
+  });
+
+  it('19. a request handed as a gate carries it to the link, and only that one', () => {
+    const w = worker();
+    const gate = enqueueRequest(w, 'orch', { gate: true });
+    const plain = enqueueRequest(w, 'orch');
+    requestDelivered(w, gate);
+    expect(w.requestedBy).toMatchObject({ agentId: 'orch', taskRef: gate, gate: true });
+    requestDelivered(w, plain);
+    linkSpent(w);
+    expect(w.requestedBy).toMatchObject({ taskRef: plain });
+    expect(w.requestedBy!.gate).toBeUndefined();
   });
 
   it('2. once the first is spent, the next delivered request takes the link, and a queued one does not', () => {

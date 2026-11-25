@@ -83,15 +83,24 @@ function looksLikePlaceholder(value: string): boolean {
 }
 
 /**
+ * A private key's block (PEM: RSA, EC, DSA, OPENSSH, a plain or ENCRYPTED PRIVATE KEY, a PGP PRIVATE KEY BLOCK), from
+ * its BEGIN line to its END line, or to the end of the text for a block cut before its END (a permission question's
+ * view holds a field's first 2,000 characters: the Audit's L1 on #588, a key file being written read by a teammate).
+ * Its body goes whole, its BEGIN and END lines stay so the reader knows what it was. A public key or a certificate is
+ * not a secret, and stays.
+ */
+const PRIVATE_KEY = /(-----BEGIN (?:[A-Z0-9]+ )*PRIVATE KEY(?: BLOCK)?-----)[\s\S]*?(-----END (?:[A-Z0-9]+ )*PRIVATE KEY(?: BLOCK)?-----|$)/g;
+
+/**
  * Redact every secret-shaped run in `text`.
  *
  * Returns the text with each match masked down to its first and last four
  * characters, so a user can still tell which key it was without the key being
- * usable. Known non-secrets are left alone.
+ * usable, and a private key's body masked whole. Known non-secrets are left alone.
  */
 export function redactSecrets(text: string): string {
   if (!text) return text;
-  let out = text;
+  let out = text.replace(PRIVATE_KEY, (_block, begin: string, end: string) => `${begin}\n[redacted]${end ? `\n${end}` : ''}`);
   for (const rule of RULES) {
     out = out.replace(rule.pattern, (match, ...groups) => {
       const index = (rule.group ?? 0) - 1;

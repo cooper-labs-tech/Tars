@@ -28,7 +28,7 @@ export interface SlotView {
   position?: number;
   why?: string;
   priority: SlotTicket['priority'];
-  /** Asked for `gate` without being an orchestrator: given `normal`. */
+  /** Asked for `gate` by an agent that may not (SlotAsk.mayGate): given `normal`. */
   clamped?: true;
   /** What the run is: the command `tars-slot run` runs, or the label its asker gave. */
   label: string;

@@ -148,6 +148,23 @@ export function nextStartResumes(
 }
 
 /**
+ * Whether a launch given this resume option continues a conversation, as the window's launcher resolves it
+ * (handlers/ipc-handlers.ts, launchInTerminal), without counting as that start: a session id continues that session
+ * when its transcript is there, null continues none, and no option the last session, once per run or after a sleep.
+ * What decides whether a start takes the agent's first task (core/first-task.ts, the Audit's L3 on #584: a wake gives
+ * no option and continues the conversation all the same).
+ */
+export function launchResumes(
+  agent: { id: string; provider?: string; resumableSessionId?: string; forkedFromSessionId?: string; projectPath?: string; worktreePath?: string },
+  named: string | null | undefined,
+  homeDir?: string,
+): boolean {
+  if (named === null) return false;
+  if (named === undefined) return nextStartResumes(agent, homeDir);
+  return resolveResumeSessionId({ ...agent, resumableSessionId: named }, homeDir) !== null;
+}
+
+/**
  * The next start of this agent resumes its conversation again, as the first of
  * a run does: it was put to sleep (core/agent-asleep.ts), and woken, it must
  * pick up where it was, whichever sender wakes it and however often this run

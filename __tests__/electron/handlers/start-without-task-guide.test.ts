@@ -311,7 +311,8 @@ describe('a CLI without Claude\'s hook started from the window with no task', ()
     const first = typedInto(terminal);
     expect(count(first), first).toBe(1);
     expect(first).toContain(MEMORY);
-    expect(first).toContain('assign_task');
+    // A worker's section (2.0.7: its kanban line follows Hermes, absent here, so a line every worker gets).
+    expect(first).toContain('send_message to "orchestrator"');
     // One message, one Enter: the section goes in with the task, not as a turn of its own.
     expect(count(first, '\r')).toBe(1);
     // The task under its sender's line, which opens the prompt (11), then Tars's words under Tars's line.

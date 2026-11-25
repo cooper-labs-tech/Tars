@@ -2,6 +2,7 @@ import * as path from 'path';
 import * as pty from 'node-pty';
 import { spawnPty } from './pty-spawn';
 import { managedCliEnv } from '../providers/cli-provider';
+import { chromeLaunchEnv } from '../services/chrome-without-asking';
 import { mintAgentToken, revokeTerminalToken, tarsInstanceId } from './agent-tokens';
 import { API_PORT } from '../constants';
 import { rememberTerminalOwner, terminalExited } from './pty-manager';
@@ -202,6 +203,10 @@ export function spawnAgentPty(opts: {
       // The state mod (services/state-mod.ts), for a claude new enough to load
       // it: its hooks report this terminal's state from inside the CLI.
       ...stateModLaunchEnv(opts.binaryName, env),
+      // The owner's switch, Claude in Chrome acts without asking (services/chrome-without-asking.ts, held from
+      // ~/.tars-private): Claude in Chrome back under bypass, out of the auto mode classifier the server's flag
+      // hands it to. After the caller's env, which cannot take it back.
+      ...chromeLaunchEnv(opts.binaryName),
     }) as { [key: string]: string },
   });
   spawnedAs.set(spawned, { shell: opts.shell, runsCommand: opts.runsCommand, env: opts.env });

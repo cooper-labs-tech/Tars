@@ -11,7 +11,7 @@ import { restartRunnersOf } from '../services/chat-runners';
 import { diskSpace, listOrphanFolders, removeOrphanFolders } from '../services/orphan-folders';
 import { janitorApprove, janitorScan, janitorState, setJanitorProjects } from '../services/disk-janitor';
 import { cloneDependencies, logDependencies } from '../services/worktree-deps';
-import { answerPermission, type PermissionDecision } from '../services/permission-asks';
+import { decidePermission, permissionQuestionOf, type PermissionDecision } from '../services/permission-asks';
 import { noteWaker, publishedWaking, screenWhileAsleep, wakeAgent, wakesOnKey } from '../core/agent-asleep';
 import { publishedWaitingOn } from '../utils/waiting-on';
 import { defaultShell } from '../utils/default-shell';
@@ -64,7 +64,7 @@ import { usageByProvider as ledgerUsageByProvider } from '../services/usage-ledg
 import { tasksReport } from '../services/task-watch';
 import type { TaskQuery } from '../services/task-cost';
 import { oneReadingAtATime } from '../core/one-reading-at-a-time';
-import { consumeResumeSessionId, resolveResumeSessionId, spendResume } from '../utils/resume-session';
+import { consumeResumeSessionId, launchResumes, resolveResumeSessionId, spendResume } from '../utils/resume-session';
 import { registerAgentLauncher, launchAgent, launchBegins, launchAbandoned, sessionStarting, type AgentLauncher } from '../core/agent-launch';
 import { noTerminalAnswer } from '../core/no-terminal';
 import { orchestratorMoved } from '../core/chat-identity';
@@ -88,6 +88,9 @@ import { cliKeyStates, withCliKey } from '../services/cli-keys';
 import { keepSecrets, secretStates, setSecret, settingsForWindow, type SecretField } from '../services/settings-secrets';
 import { isSecretFile, mayBeProject, windowMayRead, windowMayWrite } from '../utils/window-file-access';
 import { mcpConfigPathFor } from '../services/mcp-roles';
+import { registerFirstRunHandlers } from './first-run-handlers';
+import { setFirstTask, spendFirstTask, withFirstTask } from '../core/first-task';
+import { registerChromeSwitchHandlers } from '../services/chrome-without-asking';
 
 /**
  * Normalize a JIRA domain value to a full hostname.
@@ -223,6 +226,8 @@ export function registerIpcHandlers(deps: IpcHandlerDependencies): void {
   registerObsidianHandlers({ getAppSettings: deps.getAppSettings, setAppSettings: deps.setAppSettings, saveAppSettings: deps.saveAppSettings });
   registerGwsHandlers({ getAppSettings: deps.getAppSettings, setAppSettings: deps.setAppSettings, saveAppSettings: deps.saveAppSettings });
   registerMcpConfigHandlers();
+  // The owner's switch, Claude in Chrome acts without asking (2.0.7): the window's own channel, kept in ~/.tars-private.
+  registerChromeSwitchHandlers(ipcMain);
   registerTrayHandlers(deps);
 }
 
@@ -327,7 +332,7 @@ function registerAgentHandlers(deps: IpcHandlerDependencies): void {
   } = deps;
 
   // Create a new agent (now creates a PTY-backed terminal)
-  ipcMain.handle('agent:create', async (_event, config: {
+  type AgentCreateConfig = {
     projectPath: string;
     skills: string[];
     worktree?: WorktreeConfig;
@@ -345,7 +350,9 @@ function registerAgentHandlers(deps: IpcHandlerDependencies): void {
     /** The toggle's old name, read when `role` is absent. */
     orchestratorMode?: boolean;
     cliPath?: string;
-  }) => {
+  };
+  // The one creation of an agent from the window: agent:create, and every member of teams:deploy (first-run-handlers.ts).
+  const createAgentFromConfig = async (config: AgentCreateConfig) => {
     const id = uuidv4();
     const { shell, args: shellArgv } = agentShell({ setting: getAppSettings().terminalShell });
 
@@ -536,7 +543,10 @@ function registerAgentHandlers(deps: IpcHandlerDependencies): void {
     });
 
     return { ...status, ptyId };
-  });
+  };
+  ipcMain.handle('agent:create', async (_event, config: AgentCreateConfig) => createAgentFromConfig(config));
+  // The first run's channels (2.0.7): a project's git, what it lacks for PR delivery, a team deployed whole or not at all.
+  registerFirstRunHandlers({ createAgent: createAgentFromConfig, projectPaths: () => [...readCustomProjects(), ...[...agents.values()].map(a => a.projectPath)], getAppSettings });
 
   // Start an agent with a prompt (sends command to PTY). The one launch of an
   // agent's CLI into its terminal: the handler below and the restart that
@@ -862,10 +872,14 @@ function registerAgentHandlers(deps: IpcHandlerDependencies): void {
     const refused = cliStartRefusal(agent, start);
     if (refused) return { success: false, cliRunning: true, error: refused };
     // What the agent was, should its CLI's terminal fail to open below.
-    const before = { status: agent.status, currentTask: agent.currentTask, waitingReason: agent.waitingReason, savedPrompt: agent.savedPrompt };
+    const before = { status: agent.status, currentTask: agent.currentTask, waitingReason: agent.waitingReason };
 
-    // Persist the prompt for future re-launches and update status. Working
-    // only with a task. A start without one, which is every start from the
+    // The prompt is a turn, never the agent's role (savedPrompt, "## Your
+    // role" in its bootstrap), which only the role editor and a template set:
+    // kept here, a first task, Restart's "Continue working on the previous
+    // task" and the note of a resume after an abrupt stop each replaced it,
+    // and 12 agents of one machine had a restart notice for a role (B2 of the
+    // fresh-install report, 10/11/2026). Working only with a task. A start without one, which is every start from the
     // Dashboard, autostart included, and every restart, brings the CLI up at
     // its prompt, where it waits: marked `running`, it stayed that way until a
     // turn it never had came to an end. Measured on 2026-09-22: eleven agents
@@ -874,8 +888,6 @@ function registerAgentHandlers(deps: IpcHandlerDependencies): void {
     // to an agent that is `running`, so a note owed to one of them waited on a
     // turn that was not coming.
     if (prompt.trim()) {
-      // A chat's message is a turn, not the agent's brief (AgentLaunchOptions.message).
-      if (!options?.message) agent.savedPrompt = prompt;
       agent.status = 'running';
       agent.currentTask = prompt.slice(0, 100);
     } else {
@@ -938,10 +950,19 @@ function registerAgentHandlers(deps: IpcHandlerDependencies): void {
    * session over it and lose the conversation.
    */
   const startAgentCli: AgentLauncher = async (id, prompt, options) => {
-    const launch = launchBegins(id, { withTask: !!prompt?.trim() });
+    // The agent's first task (core/first-task.ts): typed by a start that opens a new conversation, read from the one
+    // this launch resolves (a wake gives no option and continues it all the same), and spent once it launched.
+    const agent = agents.get(id);
+    const resumes = !!agent && launchResumes(agent, options?.resumeSessionId);
+    const first = withFirstTask(agent, prompt ?? '', { message: options?.message, resumes });
+    const launch = launchBegins(id, { withTask: !!first.prompt.trim() });
     try {
-      const result = await launchInTerminal(id, prompt, options);
+      const result = await launchInTerminal(id, first.prompt, first.took ? { ...options, firstTask: true } : options);
       if (!result.success) launchAbandoned(id, launch);
+      else if (first.spent) {
+        spendFirstTask(agents.get(id), first.took);
+        saveAgents();
+      }
       return result;
     } catch (err) {
       launchAbandoned(id, launch);
@@ -958,8 +979,8 @@ function registerAgentHandlers(deps: IpcHandlerDependencies): void {
     // Started from a window while asleep: woken by you (core/agent-asleep.ts).
     if (agents.get(id)?.status === 'asleep') noteWaker(id, 'you', 'start');
     // Through the slot gate, as every start: a chat's runner takes a slot
-    // within the RAM's limit, its settings stay the orchestrator's, and the
-    // window's words are a turn, not its brief (the Audit's M1 on #379).
+    // within the RAM's limit, and its settings stay the orchestrator's (the
+    // Audit's M1 on #379).
     try {
       if (agents.get(id)?.kind === 'chat') return await launchAgent(id, prompt, { message: true });
       // What a window may choose, and nothing else: the session a restart
@@ -980,6 +1001,14 @@ function registerAgentHandlers(deps: IpcHandlerDependencies): void {
 
   // Wake an asleep agent: its CLI started on its own conversation, nothing
   // typed (core/agent-asleep.ts). The window's `wake`.
+  // A first task kept for the agent's next fresh start (2.0.7, core/first-task.ts): typed once, never its role.
+  ipcMain.handle('agent:set-first-task', async (_event, params: { id?: unknown; task?: unknown }) => {
+    const agent = typeof params?.id === 'string' ? agents.get(params.id) : undefined;
+    const set = setFirstTask(agent, params?.task);
+    if (set.success) saveAgents();
+    return set;
+  });
+
   ipcMain.handle('agent:wake', async (_event, id: string) => {
     const agent = agents.get(id);
     if (!agent) return { success: false, error: 'Agent not found' };
@@ -1082,10 +1111,20 @@ function registerAgentHandlers(deps: IpcHandlerDependencies): void {
   // The window's answer to a permission question the state mod asked Tars
   // (services/permission-asks.ts): allow or deny decide the call, ask hands it
   // back to the terminal's dialog. Given as the user: the model reads it.
-  ipcMain.handle('agent:answerPermission', async (_event, id: string, decision: unknown, reason?: unknown) => {
-    // The window hears of it through the question's own event (hooks-routes).
-    const answered = answerPermission(id, decision as PermissionDecision, 'the user', typeof reason === 'string' ? reason : undefined);
-    return { success: answered };
+  ipcMain.handle('agent:answerPermission', async (_event, id: string, decision: unknown, reason?: unknown, fingerprint?: unknown) => {
+    // The window hears of it through the question's own event (hooks-routes). The fingerprint is the one it read:
+    // an answer to another question changes nothing, and every allow names it (approve-everywhere, the Audit's M1
+    // on #588). Refused, it says why, so the window can say what happened (its L2).
+    const answer = decidePermission(id, decision as PermissionDecision, 'the user', typeof reason === 'string' ? reason : undefined,
+      typeof fingerprint === 'string' ? fingerprint : undefined);
+    return answer.ok ? { success: true } : { success: false, code: answer.code, error: answer.error };
+  });
+
+  // The question Tars holds for an agent, whole: what the window shows before an allow, beyond the view every tick
+  // carries (each field at most 2,000 characters, services/permission-asks.ts).
+  ipcMain.handle('agent:permissionQuestion', async (_event, id: unknown) => {
+    const question = typeof id === 'string' ? permissionQuestionOf(id) : undefined;
+    return question ? { success: true, question } : { success: false, error: 'Tars holds no permission question for this agent' };
   });
 
   // Remove an agent
