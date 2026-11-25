@@ -826140,7 +826140,7 @@
               "fill": "$text-secondary",
               "textGrowth": "fixed-width",
               "width": 946,
-              "content": "The Memory tab adds a folder to the agent’s workspace: one of your projects, or a path of your own. When Tars refuses it (gemini and Qwen Code split their folders at commas, so a folder with a comma in it, or ending in a space, never reaches them), its reason shows under the field, word for word, in the error ink of the window’s notes, and the field keeps the path so you can change it. A call that fails is said in main’s own words, without Electron’s. A folder taken while Claude Code runs is typed into it by Tars as its own /add-dir; any other CLI, or an agent not running, sees it from its next start, and the line under the field says so. Opening another agent, or editing the path, clears the line.",
+              "content": "The Memory tab adds a folder to the agent’s workspace: one of your projects, or a path of your own. When Tars refuses it (gemini and Qwen Code split their folders at commas, so a folder with a comma in it, or ending in a space, never reaches them), its reason shows under the field, word for word, in the error ink of the window’s notes, and the field keeps the path so you can change it. A call that fails is said in main’s own words, without Electron’s. Tars types nothing into the agent for a folder: claude, codex, gemini and Qwen Code see it from their next start; a CLI that is not handed a secondary folder (grok, OpenCode, Pi, Amp, the API-key providers) never does, and the line under the field says which. Opening another agent, or editing the path, clears the line.",
               "lineHeight": 1.4,
               "fontFamily": "$font-ui",
               "fontSize": 12.5,
@@ -826170,7 +826170,7 @@
                   "fill": "$text-secondary",
                   "textGrowth": "fixed-width",
                   "width": 392,
-                  "content": "ADDED WHILE CLAUDE CODE RUNS: TARS TYPED IT, THE FIELD EMPTIED",
+                  "content": "ADDED, A CLI NOT HANDED A SECONDARY FOLDER: KEPT IN TARS’S RECORD ONLY, THE FIELD EMPTIED",
                   "lineHeight": 1.2,
                   "fontFamily": "$font-ui",
                   "fontSize": 10,
@@ -826329,6 +826329,19 @@
                               ]
                             }
                           ]
+                        },
+                        {
+                          "type": "text",
+                          "id": "yFwhR",
+                          "name": "not handed",
+                          "fill": "$text-muted",
+                          "textGrowth": "fixed-width",
+                          "width": 342,
+                          "content": "kept, but not in the agent’s workspace: its CLI is not handed a secondary folder",
+                          "lineHeight": 1.45,
+                          "fontFamily": "$font-ui",
+                          "fontSize": 11,
+                          "fontWeight": "normal"
                         }
                       ]
                     }
@@ -826630,7 +826643,7 @@
                   "fill": "$text-secondary",
                   "textGrowth": "fixed-width",
                   "width": 392,
-                  "content": "ADDED, ANY OTHER CLI OR THE AGENT NOT RUNNING: IT APPLIES AT ITS NEXT START",
+                  "content": "ADDED, CLAUDE, CODEX, GEMINI OR QWEN CODE: IT APPLIES AT THE AGENT’S NEXT START",
                   "lineHeight": 1.2,
                   "fontFamily": "$font-ui",
                   "fontSize": 10,
@@ -826994,7 +827007,7 @@
               "fill": "$text-secondary",
               "textGrowth": "fixed-width",
               "width": 946,
-              "content": "The Memory tab adds a folder to the agent’s workspace: one of your projects, or a path of your own. When Tars refuses it (gemini and Qwen Code split their folders at commas, so a folder with a comma in it, or ending in a space, never reaches them), its reason shows under the field, word for word, in the error ink of the window’s notes, and the field keeps the path so you can change it. A call that fails is said in main’s own words, without Electron’s. A folder taken while Claude Code runs is typed into it by Tars as its own /add-dir; any other CLI, or an agent not running, sees it from its next start, and the line under the field says so. Opening another agent, or editing the path, clears the line.",
+              "content": "The Memory tab adds a folder to the agent’s workspace: one of your projects, or a path of your own. When Tars refuses it (gemini and Qwen Code split their folders at commas, so a folder with a comma in it, or ending in a space, never reaches them), its reason shows under the field, word for word, in the error ink of the window’s notes, and the field keeps the path so you can change it. A call that fails is said in main’s own words, without Electron’s. Tars types nothing into the agent for a folder: claude, codex, gemini and Qwen Code see it from their next start; a CLI that is not handed a secondary folder (grok, OpenCode, Pi, Amp, the API-key providers) never does, and the line under the field says which. Opening another agent, or editing the path, clears the line.",
               "lineHeight": 1.4,
               "fontFamily": "$font-ui",
               "fontSize": 12.5,
@@ -827024,7 +827037,7 @@
                   "fill": "$text-secondary",
                   "textGrowth": "fixed-width",
                   "width": 392,
-                  "content": "ADDED WHILE CLAUDE CODE RUNS: TARS TYPED IT, THE FIELD EMPTIED",
+                  "content": "ADDED, A CLI NOT HANDED A SECONDARY FOLDER: KEPT IN TARS’S RECORD ONLY, THE FIELD EMPTIED",
                   "lineHeight": 1.2,
                   "fontFamily": "$font-ui",
                   "fontSize": 10,
@@ -827183,6 +827196,19 @@
                               ]
                             }
                           ]
+                        },
+                        {
+                          "type": "text",
+                          "id": "DRat1",
+                          "name": "not handed",
+                          "fill": "$text-muted",
+                          "textGrowth": "fixed-width",
+                          "width": 342,
+                          "content": "kept, but not in the agent’s workspace: its CLI is not handed a secondary folder",
+                          "lineHeight": 1.45,
+                          "fontFamily": "$font-ui",
+                          "fontSize": 11,
+                          "fontWeight": "normal"
                         }
                       ]
                     }
@@ -827484,7 +827510,7 @@
                   "fill": "$text-secondary",
                   "textGrowth": "fixed-width",
                   "width": 392,
-                  "content": "ADDED, ANY OTHER CLI OR THE AGENT NOT RUNNING: IT APPLIES AT ITS NEXT START",
+                  "content": "ADDED, CLAUDE, CODEX, GEMINI OR QWEN CODE: IT APPLIES AT THE AGENT’S NEXT START",
                   "lineHeight": 1.2,
                   "fontFamily": "$font-ui",
                   "fontSize": 10,

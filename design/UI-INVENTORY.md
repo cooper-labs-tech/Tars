@@ -199,8 +199,8 @@ Agent · Claude account (and their light copies).
   stopped group in Agent stopped · who and why; an asleep agent's, and the
   rail's asleep group, in Agent asleep · and how it wakes; the Skills tab's
   permissions, plan first, in Permissions · plan mode · states; the Memory tab's
-  secondary folder, taken, refused with main's reason, a call that failed, and
-  one that applies at the agent's next start, in Agent window · a secondary
+  secondary folder, refused with main's reason, a call that failed, one that
+  applies at the agent's next start, and one its CLI is not handed, in Agent window · a secondary
   folder refused · states and its light copy (… · states · light)
 - Start prompt (`StartPromptModal`)
 - Kanban (the Hermes board): new task, a task's detail
