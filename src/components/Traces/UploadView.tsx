@@ -293,8 +293,18 @@ export function UploadView() {
   if (error) return <Unread text="could not read the upload's settings:" detail={error} onRetry={() => { void read(); }} />;
 
   const address = settings?.uploadUrl ?? '';
+  /** Main's note while a change it holds is not written yet (its answer's, or the upload state's). */
+  const unsavedWord = state?.unsaved ?? answerUnsaved;
+  /**
+   * A consent the settings still carry but that does not stand (the Audit's I-5 on PR 599): a revoke not yet written
+   * has main drop the consent's file, so the uploader reads none (uploadState.consentAt empty). The line then says
+   * main's own words, never "consent given".
+   */
+  const consentHeld = !!settings?.uploadConsentAt && !!state && !state.consentAt && !!unsavedWord;
   const consentWord = !address
     ? { word: 'no address: nothing leaves this computer', tone: 'idle' as const }
+    : consentHeld && unsavedWord
+      ? { word: unsavedWord, tone: 'waiting' as const }
     : settings?.uploadConsentAt
       ? { word: `consent given ${dayClockOf(Date.parse(settings.uploadConsentAt))}${state?.registered ? ' · this install is registered' : ''}`, tone: 'running' as const }
       : settings?.uploadDeletionOwed || state?.deletionOwed
@@ -311,7 +321,6 @@ export function UploadView() {
    * Settings main holds and could not write (a withdrawn consent, a deletion's bookkeeping): main's own words, beside
    * the consent and the deletion, while it lasts. traces:changed says when it comes and goes, and read() reads it.
    */
-  const unsavedWord = state?.unsaved ?? answerUnsaved;
   const unsaved = unsavedWord
     ? <div data-upload-unsaved><StateLine word={unsavedWord} tone="waiting" /></div>
     : null;
@@ -378,8 +387,9 @@ export function UploadView() {
             )}
             {saveError && <Row><div data-backoffice-error><StateLine word={saveError} tone="error" /></div></Row>}
             <Row className="space-y-2 py-2.5">
-              <StateLine word={consentWord.word} tone={consentWord.tone} />
-              {unsaved}
+              <div data-consent-line={consentHeld ? 'held' : undefined}><StateLine word={consentWord.word} tone={consentWord.tone} /></div>
+              {/* A held consent's line already says main's note: not twice in this card. */}
+              {!consentHeld && unsaved}
               {noticeError && <StateLine word={`notice not read: ${noticeError}. What leaves this computer reads it again.`} tone="error" />}
               <div className="flex items-center gap-2">
                 <Button size="sm" onClick={() => { void openNotice(); }} disabled={!notice && !noticeError}>What leaves this computer</Button>
