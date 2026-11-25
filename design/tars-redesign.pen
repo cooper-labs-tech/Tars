@@ -826093,6 +826093,1038 @@
           ]
         }
       ]
+    },
+    {
+      "type": "frame",
+      "id": "x5jdgw",
+      "x": 19804,
+      "y": 2200,
+      "name": "Agent window · a secondary folder refused · states",
+      "theme": {
+        "mode": "dark"
+      },
+      "width": 1440,
+      "fill": "$bg",
+      "layout": "vertical",
+      "gap": 28,
+      "padding": [
+        40,
+        48,
+        48,
+        48
+      ],
+      "children": [
+        {
+          "type": "frame",
+          "id": "DzHSi",
+          "name": "head",
+          "width": "fill_container",
+          "layout": "vertical",
+          "gap": 8,
+          "children": [
+            {
+              "type": "text",
+              "id": "Y1DYJ",
+              "name": "title",
+              "fill": "$text-primary",
+              "content": "An agent’s window: a secondary folder Tars refuses",
+              "lineHeight": 1.1,
+              "fontFamily": "$font-display",
+              "fontSize": 28,
+              "fontWeight": "normal"
+            },
+            {
+              "type": "text",
+              "id": "kE2Gj",
+              "name": "intro",
+              "fill": "$text-secondary",
+              "textGrowth": "fixed-width",
+              "width": 946,
+              "content": "The Context tab adds a folder to the agent’s workspace: one of your projects, or a path of your own. When Tars refuses it (Gemini and Qwen Code split their folders at commas, so a folder with a comma in it, or ending in a space, never reaches them), its reason shows under the field, word for word, in the error ink of the window’s notes, and the field keeps the path so you can change it. A call that fails is said the same way. Nothing is typed into the terminal for a folder Tars did not take.",
+              "lineHeight": 1.4,
+              "fontFamily": "$font-ui",
+              "fontSize": 12.5,
+              "fontWeight": "normal"
+            }
+          ]
+        },
+        {
+          "type": "frame",
+          "id": "cZrsT",
+          "name": "states",
+          "width": "fill_container",
+          "gap": 24,
+          "children": [
+            {
+              "type": "frame",
+              "id": "NT4CI",
+              "name": "state ADDED: THE FOLDER IS IN THE AGENT’S CONTEXT, THE FIELD EMPTIED",
+              "width": 392,
+              "layout": "vertical",
+              "gap": 8,
+              "children": [
+                {
+                  "type": "text",
+                  "id": "n0Vdw",
+                  "name": "caption",
+                  "fill": "$text-secondary",
+                  "textGrowth": "fixed-width",
+                  "width": 392,
+                  "content": "ADDED: THE FOLDER IS IN THE AGENT’S CONTEXT, THE FIELD EMPTIED",
+                  "lineHeight": 1.2,
+                  "fontFamily": "$font-ui",
+                  "fontSize": 10,
+                  "fontWeight": "normal",
+                  "letterSpacing": 0.8
+                },
+                {
+                  "type": "frame",
+                  "id": "v0D9OC",
+                  "name": "context tab",
+                  "width": "fill_container",
+                  "fill": "$surface",
+                  "stroke": "$border",
+                  "strokeWidth": 1,
+                  "layout": "vertical",
+                  "gap": 12,
+                  "padding": 12,
+                  "children": [
+                    {
+                      "type": "frame",
+                      "id": "dE27N",
+                      "name": "active context",
+                      "width": "fill_container",
+                      "layout": "vertical",
+                      "gap": 6,
+                      "children": [
+                        {
+                          "type": "text",
+                          "id": "rayad",
+                          "fill": "$text-muted",
+                          "content": "ACTIVE CONTEXT",
+                          "lineHeight": 1.2,
+                          "fontFamily": "$font-ui",
+                          "fontSize": 10,
+                          "fontWeight": "normal",
+                          "letterSpacing": 0.8
+                        },
+                        {
+                          "type": "frame",
+                          "id": "z700Pv",
+                          "name": "folder",
+                          "width": "fill_container",
+                          "height": 26,
+                          "fill": "$surface-raised",
+                          "stroke": "$status-waiting",
+                          "strokeWidth": 1,
+                          "padding": [
+                            0,
+                            8
+                          ],
+                          "justifyContent": "space_between",
+                          "alignItems": "center",
+                          "children": [
+                            {
+                              "type": "text",
+                              "id": "ptPJM",
+                              "fill": "$status-waiting",
+                              "content": "Q3 reports",
+                              "lineHeight": 1.4,
+                              "fontFamily": "$font-mono",
+                              "fontSize": 11,
+                              "fontWeight": "normal"
+                            },
+                            {
+                              "type": "text",
+                              "id": "PWpKh",
+                              "fill": "$status-waiting",
+                              "content": "x",
+                              "lineHeight": 1.4,
+                              "fontFamily": "$font-mono",
+                              "fontSize": 11,
+                              "fontWeight": "normal"
+                            }
+                          ]
+                        }
+                      ]
+                    },
+                    {
+                      "type": "frame",
+                      "id": "r3oTBE",
+                      "name": "custom path",
+                      "width": "fill_container",
+                      "layout": "vertical",
+                      "gap": 6,
+                      "children": [
+                        {
+                          "type": "text",
+                          "id": "w6XaK",
+                          "fill": "$text-muted",
+                          "content": "CUSTOM PATH",
+                          "lineHeight": 1.2,
+                          "fontFamily": "$font-ui",
+                          "fontSize": 10,
+                          "fontWeight": "normal",
+                          "letterSpacing": 0.8
+                        },
+                        {
+                          "type": "frame",
+                          "id": "VeCUK",
+                          "name": "row",
+                          "width": "fill_container",
+                          "gap": 6,
+                          "alignItems": "center",
+                          "children": [
+                            {
+                              "type": "frame",
+                              "id": "R4VYn",
+                              "name": "field",
+                              "width": "fill_container",
+                              "height": 26,
+                              "fill": "$bg",
+                              "stroke": "$border",
+                              "strokeWidth": 1,
+                              "padding": [
+                                0,
+                                8
+                              ],
+                              "alignItems": "center",
+                              "children": [
+                                {
+                                  "type": "text",
+                                  "id": "BtvZH",
+                                  "fill": "$text-muted",
+                                  "content": "/path/to/project...",
+                                  "lineHeight": 1.4,
+                                  "fontFamily": "$font-mono",
+                                  "fontSize": 11,
+                                  "fontWeight": "normal"
+                                }
+                              ]
+                            },
+                            {
+                              "type": "frame",
+                              "id": "ghtf2",
+                              "name": "b Add",
+                              "height": 26,
+                              "fill": "$surface-raised",
+                              "stroke": "$status-waiting",
+                              "strokeWidth": 1,
+                              "padding": [
+                                0,
+                                11
+                              ],
+                              "alignItems": "center",
+                              "children": [
+                                {
+                                  "type": "text",
+                                  "id": "XHQHd",
+                                  "fill": "$status-waiting",
+                                  "content": "Add",
+                                  "lineHeight": 1.4,
+                                  "fontFamily": "$font-mono",
+                                  "fontSize": 11,
+                                  "fontWeight": "normal"
+                                }
+                              ]
+                            }
+                          ]
+                        }
+                      ]
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "type": "frame",
+              "id": "yzd4B",
+              "name": "state REFUSED BY TARS: ITS REASON UNDER THE FIELD, WORD FOR WORD",
+              "width": 392,
+              "layout": "vertical",
+              "gap": 8,
+              "children": [
+                {
+                  "type": "text",
+                  "id": "fzz0G",
+                  "name": "caption",
+                  "fill": "$text-secondary",
+                  "textGrowth": "fixed-width",
+                  "width": 392,
+                  "content": "REFUSED BY TARS: ITS REASON UNDER THE FIELD, WORD FOR WORD",
+                  "lineHeight": 1.2,
+                  "fontFamily": "$font-ui",
+                  "fontSize": 10,
+                  "fontWeight": "normal",
+                  "letterSpacing": 0.8
+                },
+                {
+                  "type": "frame",
+                  "id": "piA80",
+                  "name": "context tab",
+                  "width": "fill_container",
+                  "fill": "$surface",
+                  "stroke": "$border",
+                  "strokeWidth": 1,
+                  "layout": "vertical",
+                  "gap": 12,
+                  "padding": 12,
+                  "children": [
+                    {
+                      "type": "frame",
+                      "id": "wqE0S",
+                      "name": "custom path",
+                      "width": "fill_container",
+                      "layout": "vertical",
+                      "gap": 6,
+                      "children": [
+                        {
+                          "type": "text",
+                          "id": "FGy83",
+                          "fill": "$text-muted",
+                          "content": "CUSTOM PATH",
+                          "lineHeight": 1.2,
+                          "fontFamily": "$font-ui",
+                          "fontSize": 10,
+                          "fontWeight": "normal",
+                          "letterSpacing": 0.8
+                        },
+                        {
+                          "type": "frame",
+                          "id": "HQLQO",
+                          "name": "row",
+                          "width": "fill_container",
+                          "gap": 6,
+                          "alignItems": "center",
+                          "children": [
+                            {
+                              "type": "frame",
+                              "id": "KS5Kp",
+                              "name": "field",
+                              "width": "fill_container",
+                              "height": 26,
+                              "fill": "$bg",
+                              "stroke": "$border",
+                              "strokeWidth": 1,
+                              "padding": [
+                                0,
+                                8
+                              ],
+                              "alignItems": "center",
+                              "children": [
+                                {
+                                  "type": "text",
+                                  "id": "MO4tY",
+                                  "fill": "$text-primary",
+                                  "content": "/Users/me/Q3, Q4",
+                                  "lineHeight": 1.4,
+                                  "fontFamily": "$font-mono",
+                                  "fontSize": 11,
+                                  "fontWeight": "normal"
+                                }
+                              ]
+                            },
+                            {
+                              "type": "frame",
+                              "id": "owwPQ",
+                              "name": "b Add",
+                              "height": 26,
+                              "fill": "$surface-raised",
+                              "stroke": "$status-waiting",
+                              "strokeWidth": 1,
+                              "padding": [
+                                0,
+                                11
+                              ],
+                              "alignItems": "center",
+                              "children": [
+                                {
+                                  "type": "text",
+                                  "id": "Q0eOue",
+                                  "fill": "$status-waiting",
+                                  "content": "Add",
+                                  "lineHeight": 1.4,
+                                  "fontFamily": "$font-mono",
+                                  "fontSize": 11,
+                                  "fontWeight": "normal"
+                                }
+                              ]
+                            }
+                          ]
+                        },
+                        {
+                          "type": "text",
+                          "id": "Z6jDG",
+                          "name": "refusal",
+                          "fill": "$status-error",
+                          "textGrowth": "fixed-width",
+                          "width": 342,
+                          "content": "Gemini splits the folders it is given at commas and trims each piece, so /Users/me/Q3, Q4 is not in this agent’s workspace: rename the folder, or give the agent another",
+                          "lineHeight": 1.45,
+                          "fontFamily": "$font-ui",
+                          "fontSize": 11,
+                          "fontWeight": "normal"
+                        }
+                      ]
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "type": "frame",
+              "id": "VZp3u",
+              "name": "state NOT REACHED: THE CALL FAILED, SAID THE SAME WAY",
+              "width": 392,
+              "layout": "vertical",
+              "gap": 8,
+              "children": [
+                {
+                  "type": "text",
+                  "id": "DGs2r",
+                  "name": "caption",
+                  "fill": "$text-secondary",
+                  "textGrowth": "fixed-width",
+                  "width": 392,
+                  "content": "NOT REACHED: THE CALL FAILED, SAID THE SAME WAY",
+                  "lineHeight": 1.2,
+                  "fontFamily": "$font-ui",
+                  "fontSize": 10,
+                  "fontWeight": "normal",
+                  "letterSpacing": 0.8
+                },
+                {
+                  "type": "frame",
+                  "id": "MQkIW",
+                  "name": "context tab",
+                  "width": "fill_container",
+                  "fill": "$surface",
+                  "stroke": "$border",
+                  "strokeWidth": 1,
+                  "layout": "vertical",
+                  "gap": 12,
+                  "padding": 12,
+                  "children": [
+                    {
+                      "type": "frame",
+                      "id": "U2d4Rz",
+                      "name": "custom path",
+                      "width": "fill_container",
+                      "layout": "vertical",
+                      "gap": 6,
+                      "children": [
+                        {
+                          "type": "text",
+                          "id": "U7OISZ",
+                          "fill": "$text-muted",
+                          "content": "CUSTOM PATH",
+                          "lineHeight": 1.2,
+                          "fontFamily": "$font-ui",
+                          "fontSize": 10,
+                          "fontWeight": "normal",
+                          "letterSpacing": 0.8
+                        },
+                        {
+                          "type": "frame",
+                          "id": "Q9WS3F",
+                          "name": "row",
+                          "width": "fill_container",
+                          "gap": 6,
+                          "alignItems": "center",
+                          "children": [
+                            {
+                              "type": "frame",
+                              "id": "ZMLCk",
+                              "name": "field",
+                              "width": "fill_container",
+                              "height": 26,
+                              "fill": "$bg",
+                              "stroke": "$border",
+                              "strokeWidth": 1,
+                              "padding": [
+                                0,
+                                8
+                              ],
+                              "alignItems": "center",
+                              "children": [
+                                {
+                                  "type": "text",
+                                  "id": "Q39Lmi",
+                                  "fill": "$text-primary",
+                                  "content": "/Users/me/reports",
+                                  "lineHeight": 1.4,
+                                  "fontFamily": "$font-mono",
+                                  "fontSize": 11,
+                                  "fontWeight": "normal"
+                                }
+                              ]
+                            },
+                            {
+                              "type": "frame",
+                              "id": "y2iVC",
+                              "name": "b Add",
+                              "height": 26,
+                              "fill": "$surface-raised",
+                              "stroke": "$status-waiting",
+                              "strokeWidth": 1,
+                              "padding": [
+                                0,
+                                11
+                              ],
+                              "alignItems": "center",
+                              "children": [
+                                {
+                                  "type": "text",
+                                  "id": "aAP06",
+                                  "fill": "$status-waiting",
+                                  "content": "Add",
+                                  "lineHeight": 1.4,
+                                  "fontFamily": "$font-mono",
+                                  "fontSize": 11,
+                                  "fontWeight": "normal"
+                                }
+                              ]
+                            }
+                          ]
+                        },
+                        {
+                          "type": "text",
+                          "id": "K2xOu",
+                          "name": "refusal",
+                          "fill": "$status-error",
+                          "textGrowth": "fixed-width",
+                          "width": 342,
+                          "content": "Error invoking remote method ‘agent:setSecondaryProject’: Error: the agent is gone",
+                          "lineHeight": 1.45,
+                          "fontFamily": "$font-ui",
+                          "fontSize": 11,
+                          "fontWeight": "normal"
+                        }
+                      ]
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "type": "frame",
+      "id": "DJjF0",
+      "x": 21344,
+      "y": 2200,
+      "name": "Agent window · a secondary folder refused · states · light",
+      "theme": {
+        "mode": "light"
+      },
+      "width": 1440,
+      "fill": "$bg",
+      "layout": "vertical",
+      "gap": 28,
+      "padding": [
+        40,
+        48,
+        48,
+        48
+      ],
+      "children": [
+        {
+          "type": "frame",
+          "id": "Ybmnj",
+          "name": "head",
+          "width": "fill_container",
+          "layout": "vertical",
+          "gap": 8,
+          "children": [
+            {
+              "type": "text",
+              "id": "F9ux6k",
+              "name": "title",
+              "fill": "$text-primary",
+              "content": "An agent’s window: a secondary folder Tars refuses",
+              "lineHeight": 1.1,
+              "fontFamily": "$font-display",
+              "fontSize": 28,
+              "fontWeight": "normal"
+            },
+            {
+              "type": "text",
+              "id": "S9MjTP",
+              "name": "intro",
+              "fill": "$text-secondary",
+              "textGrowth": "fixed-width",
+              "width": 946,
+              "content": "The Context tab adds a folder to the agent’s workspace: one of your projects, or a path of your own. When Tars refuses it (Gemini and Qwen Code split their folders at commas, so a folder with a comma in it, or ending in a space, never reaches them), its reason shows under the field, word for word, in the error ink of the window’s notes, and the field keeps the path so you can change it. A call that fails is said the same way. Nothing is typed into the terminal for a folder Tars did not take.",
+              "lineHeight": 1.4,
+              "fontFamily": "$font-ui",
+              "fontSize": 12.5,
+              "fontWeight": "normal"
+            }
+          ]
+        },
+        {
+          "type": "frame",
+          "id": "t5euv",
+          "name": "states",
+          "width": "fill_container",
+          "gap": 24,
+          "children": [
+            {
+              "type": "frame",
+              "id": "gfa1d",
+              "name": "state ADDED: THE FOLDER IS IN THE AGENT’S CONTEXT, THE FIELD EMPTIED",
+              "width": 392,
+              "layout": "vertical",
+              "gap": 8,
+              "children": [
+                {
+                  "type": "text",
+                  "id": "EXqPe",
+                  "name": "caption",
+                  "fill": "$text-secondary",
+                  "textGrowth": "fixed-width",
+                  "width": 392,
+                  "content": "ADDED: THE FOLDER IS IN THE AGENT’S CONTEXT, THE FIELD EMPTIED",
+                  "lineHeight": 1.2,
+                  "fontFamily": "$font-ui",
+                  "fontSize": 10,
+                  "fontWeight": "normal",
+                  "letterSpacing": 0.8
+                },
+                {
+                  "type": "frame",
+                  "id": "y7fApd",
+                  "name": "context tab",
+                  "width": "fill_container",
+                  "fill": "$surface",
+                  "stroke": "$border",
+                  "strokeWidth": 1,
+                  "layout": "vertical",
+                  "gap": 12,
+                  "padding": 12,
+                  "children": [
+                    {
+                      "type": "frame",
+                      "id": "N97gY",
+                      "name": "active context",
+                      "width": "fill_container",
+                      "layout": "vertical",
+                      "gap": 6,
+                      "children": [
+                        {
+                          "type": "text",
+                          "id": "VQiko",
+                          "fill": "$text-muted",
+                          "content": "ACTIVE CONTEXT",
+                          "lineHeight": 1.2,
+                          "fontFamily": "$font-ui",
+                          "fontSize": 10,
+                          "fontWeight": "normal",
+                          "letterSpacing": 0.8
+                        },
+                        {
+                          "type": "frame",
+                          "id": "a1cVlc",
+                          "name": "folder",
+                          "width": "fill_container",
+                          "height": 26,
+                          "fill": "$surface-raised",
+                          "stroke": "$status-waiting",
+                          "strokeWidth": 1,
+                          "padding": [
+                            0,
+                            8
+                          ],
+                          "justifyContent": "space_between",
+                          "alignItems": "center",
+                          "children": [
+                            {
+                              "type": "text",
+                              "id": "qfFUZ",
+                              "fill": "$status-waiting",
+                              "content": "Q3 reports",
+                              "lineHeight": 1.4,
+                              "fontFamily": "$font-mono",
+                              "fontSize": 11,
+                              "fontWeight": "normal"
+                            },
+                            {
+                              "type": "text",
+                              "id": "KFACS",
+                              "fill": "$status-waiting",
+                              "content": "x",
+                              "lineHeight": 1.4,
+                              "fontFamily": "$font-mono",
+                              "fontSize": 11,
+                              "fontWeight": "normal"
+                            }
+                          ]
+                        }
+                      ]
+                    },
+                    {
+                      "type": "frame",
+                      "id": "W0hFUH",
+                      "name": "custom path",
+                      "width": "fill_container",
+                      "layout": "vertical",
+                      "gap": 6,
+                      "children": [
+                        {
+                          "type": "text",
+                          "id": "O30Wr8",
+                          "fill": "$text-muted",
+                          "content": "CUSTOM PATH",
+                          "lineHeight": 1.2,
+                          "fontFamily": "$font-ui",
+                          "fontSize": 10,
+                          "fontWeight": "normal",
+                          "letterSpacing": 0.8
+                        },
+                        {
+                          "type": "frame",
+                          "id": "j5wj0",
+                          "name": "row",
+                          "width": "fill_container",
+                          "gap": 6,
+                          "alignItems": "center",
+                          "children": [
+                            {
+                              "type": "frame",
+                              "id": "qKyXl",
+                              "name": "field",
+                              "width": "fill_container",
+                              "height": 26,
+                              "fill": "$bg",
+                              "stroke": "$border",
+                              "strokeWidth": 1,
+                              "padding": [
+                                0,
+                                8
+                              ],
+                              "alignItems": "center",
+                              "children": [
+                                {
+                                  "type": "text",
+                                  "id": "vzOX4",
+                                  "fill": "$text-muted",
+                                  "content": "/path/to/project...",
+                                  "lineHeight": 1.4,
+                                  "fontFamily": "$font-mono",
+                                  "fontSize": 11,
+                                  "fontWeight": "normal"
+                                }
+                              ]
+                            },
+                            {
+                              "type": "frame",
+                              "id": "HzflY",
+                              "name": "b Add",
+                              "height": 26,
+                              "fill": "$surface-raised",
+                              "stroke": "$status-waiting",
+                              "strokeWidth": 1,
+                              "padding": [
+                                0,
+                                11
+                              ],
+                              "alignItems": "center",
+                              "children": [
+                                {
+                                  "type": "text",
+                                  "id": "LONeR",
+                                  "fill": "$status-waiting",
+                                  "content": "Add",
+                                  "lineHeight": 1.4,
+                                  "fontFamily": "$font-mono",
+                                  "fontSize": 11,
+                                  "fontWeight": "normal"
+                                }
+                              ]
+                            }
+                          ]
+                        }
+                      ]
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "type": "frame",
+              "id": "SSRQF",
+              "name": "state REFUSED BY TARS: ITS REASON UNDER THE FIELD, WORD FOR WORD",
+              "width": 392,
+              "layout": "vertical",
+              "gap": 8,
+              "children": [
+                {
+                  "type": "text",
+                  "id": "f9Tu2",
+                  "name": "caption",
+                  "fill": "$text-secondary",
+                  "textGrowth": "fixed-width",
+                  "width": 392,
+                  "content": "REFUSED BY TARS: ITS REASON UNDER THE FIELD, WORD FOR WORD",
+                  "lineHeight": 1.2,
+                  "fontFamily": "$font-ui",
+                  "fontSize": 10,
+                  "fontWeight": "normal",
+                  "letterSpacing": 0.8
+                },
+                {
+                  "type": "frame",
+                  "id": "BGY1l",
+                  "name": "context tab",
+                  "width": "fill_container",
+                  "fill": "$surface",
+                  "stroke": "$border",
+                  "strokeWidth": 1,
+                  "layout": "vertical",
+                  "gap": 12,
+                  "padding": 12,
+                  "children": [
+                    {
+                      "type": "frame",
+                      "id": "Na4ue",
+                      "name": "custom path",
+                      "width": "fill_container",
+                      "layout": "vertical",
+                      "gap": 6,
+                      "children": [
+                        {
+                          "type": "text",
+                          "id": "qQMd3",
+                          "fill": "$text-muted",
+                          "content": "CUSTOM PATH",
+                          "lineHeight": 1.2,
+                          "fontFamily": "$font-ui",
+                          "fontSize": 10,
+                          "fontWeight": "normal",
+                          "letterSpacing": 0.8
+                        },
+                        {
+                          "type": "frame",
+                          "id": "WLjkW",
+                          "name": "row",
+                          "width": "fill_container",
+                          "gap": 6,
+                          "alignItems": "center",
+                          "children": [
+                            {
+                              "type": "frame",
+                              "id": "H0lHJ",
+                              "name": "field",
+                              "width": "fill_container",
+                              "height": 26,
+                              "fill": "$bg",
+                              "stroke": "$border",
+                              "strokeWidth": 1,
+                              "padding": [
+                                0,
+                                8
+                              ],
+                              "alignItems": "center",
+                              "children": [
+                                {
+                                  "type": "text",
+                                  "id": "eWIlg",
+                                  "fill": "$text-primary",
+                                  "content": "/Users/me/Q3, Q4",
+                                  "lineHeight": 1.4,
+                                  "fontFamily": "$font-mono",
+                                  "fontSize": 11,
+                                  "fontWeight": "normal"
+                                }
+                              ]
+                            },
+                            {
+                              "type": "frame",
+                              "id": "vXoUS",
+                              "name": "b Add",
+                              "height": 26,
+                              "fill": "$surface-raised",
+                              "stroke": "$status-waiting",
+                              "strokeWidth": 1,
+                              "padding": [
+                                0,
+                                11
+                              ],
+                              "alignItems": "center",
+                              "children": [
+                                {
+                                  "type": "text",
+                                  "id": "HGYq7",
+                                  "fill": "$status-waiting",
+                                  "content": "Add",
+                                  "lineHeight": 1.4,
+                                  "fontFamily": "$font-mono",
+                                  "fontSize": 11,
+                                  "fontWeight": "normal"
+                                }
+                              ]
+                            }
+                          ]
+                        },
+                        {
+                          "type": "text",
+                          "id": "yF6x8",
+                          "name": "refusal",
+                          "fill": "$status-error",
+                          "textGrowth": "fixed-width",
+                          "width": 342,
+                          "content": "Gemini splits the folders it is given at commas and trims each piece, so /Users/me/Q3, Q4 is not in this agent’s workspace: rename the folder, or give the agent another",
+                          "lineHeight": 1.45,
+                          "fontFamily": "$font-ui",
+                          "fontSize": 11,
+                          "fontWeight": "normal"
+                        }
+                      ]
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "type": "frame",
+              "id": "ocXRw",
+              "name": "state NOT REACHED: THE CALL FAILED, SAID THE SAME WAY",
+              "width": 392,
+              "layout": "vertical",
+              "gap": 8,
+              "children": [
+                {
+                  "type": "text",
+                  "id": "ULMrO",
+                  "name": "caption",
+                  "fill": "$text-secondary",
+                  "textGrowth": "fixed-width",
+                  "width": 392,
+                  "content": "NOT REACHED: THE CALL FAILED, SAID THE SAME WAY",
+                  "lineHeight": 1.2,
+                  "fontFamily": "$font-ui",
+                  "fontSize": 10,
+                  "fontWeight": "normal",
+                  "letterSpacing": 0.8
+                },
+                {
+                  "type": "frame",
+                  "id": "lTfPU",
+                  "name": "context tab",
+                  "width": "fill_container",
+                  "fill": "$surface",
+                  "stroke": "$border",
+                  "strokeWidth": 1,
+                  "layout": "vertical",
+                  "gap": 12,
+                  "padding": 12,
+                  "children": [
+                    {
+                      "type": "frame",
+                      "id": "vWlQz",
+                      "name": "custom path",
+                      "width": "fill_container",
+                      "layout": "vertical",
+                      "gap": 6,
+                      "children": [
+                        {
+                          "type": "text",
+                          "id": "qRsGZ",
+                          "fill": "$text-muted",
+                          "content": "CUSTOM PATH",
+                          "lineHeight": 1.2,
+                          "fontFamily": "$font-ui",
+                          "fontSize": 10,
+                          "fontWeight": "normal",
+                          "letterSpacing": 0.8
+                        },
+                        {
+                          "type": "frame",
+                          "id": "HeV3V",
+                          "name": "row",
+                          "width": "fill_container",
+                          "gap": 6,
+                          "alignItems": "center",
+                          "children": [
+                            {
+                              "type": "frame",
+                              "id": "XNhBs",
+                              "name": "field",
+                              "width": "fill_container",
+                              "height": 26,
+                              "fill": "$bg",
+                              "stroke": "$border",
+                              "strokeWidth": 1,
+                              "padding": [
+                                0,
+                                8
+                              ],
+                              "alignItems": "center",
+                              "children": [
+                                {
+                                  "type": "text",
+                                  "id": "CGE0G",
+                                  "fill": "$text-primary",
+                                  "content": "/Users/me/reports",
+                                  "lineHeight": 1.4,
+                                  "fontFamily": "$font-mono",
+                                  "fontSize": 11,
+                                  "fontWeight": "normal"
+                                }
+                              ]
+                            },
+                            {
+                              "type": "frame",
+                              "id": "PLUOI",
+                              "name": "b Add",
+                              "height": 26,
+                              "fill": "$surface-raised",
+                              "stroke": "$status-waiting",
+                              "strokeWidth": 1,
+                              "padding": [
+                                0,
+                                11
+                              ],
+                              "alignItems": "center",
+                              "children": [
+                                {
+                                  "type": "text",
+                                  "id": "poTsI",
+                                  "fill": "$status-waiting",
+                                  "content": "Add",
+                                  "lineHeight": 1.4,
+                                  "fontFamily": "$font-mono",
+                                  "fontSize": 11,
+                                  "fontWeight": "normal"
+                                }
+                              ]
+                            }
+                          ]
+                        },
+                        {
+                          "type": "text",
+                          "id": "W7kDN",
+                          "name": "refusal",
+                          "fill": "$status-error",
+                          "textGrowth": "fixed-width",
+                          "width": 342,
+                          "content": "Error invoking remote method ‘agent:setSecondaryProject’: Error: the agent is gone",
+                          "lineHeight": 1.45,
+                          "fontFamily": "$font-ui",
+                          "fontSize": 11,
+                          "fontWeight": "normal"
+                        }
+                      ]
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        }
+      ]
     }
   ],
   "themes": {
