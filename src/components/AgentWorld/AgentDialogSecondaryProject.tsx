@@ -11,7 +11,7 @@ interface AgentDialogSecondaryProjectProps {
   onSetSecondaryProject: (path: string | null) => void;
   /** Why the last folder was not set, under the field (frame `Agent window · a secondary folder refused · states`). */
   error?: string | null;
-  /** When the last folder taken applies, in the window's words, when main answered 'next-start'. */
+  /** What becomes of the last folder taken, in the window's words, from main's appliesAt. */
   note?: string | null;
   onBrowseFolder?: () => Promise<string | null>;
 }
