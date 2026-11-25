@@ -3,7 +3,7 @@ import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
 import { spawnSync } from 'child_process';
-import { launchSandboxed, recordValues, removeHome } from './fixture.mjs';
+import { launchSandboxed, recordValues, removeHome, writeNodeCli } from './fixture.mjs';
 import { DEV_URL, apiPort } from './ports.mjs';
 
 /**
@@ -25,8 +25,13 @@ import { DEV_URL, apiPort } from './ports.mjs';
  * 1. `gemini mcp list` shows Tars's orchestrator server, read from $GEMINI_CLI_HOME/.gemini/settings.json, the file
  *    that holds Tars's hooks (SessionStart, BeforeAgent, AfterAgent): gemini 0.70.0 lists no hooks of its own;
  * 2. `grok mcp list` shows it, from $GROK_HOME/config.toml (Tars writes no grok hooks on main: #635 brings them);
- * 3. nothing of Tars's in the sandbox's plain ~/.gemini/settings.json or ~/.grok/config.toml.
- * Red before the fix: Tars wrote both into the plain folders, and each CLI listed none of Tars's servers.
+ * 3. nothing of Tars's in the sandbox's plain ~/.gemini/settings.json or ~/.grok/config.toml;
+ * 4. a gemini agent started from the window gets the home on its CLI's line: a recorder stands where gemini's binary
+ *    is, and the GEMINI_CLI_HOME it starts with is $GEMINI_CLI_HOME's (QA, the orchestrator's word on QA's Info of
+ *    25/11: 1 to 3 run gemini themselves, never through the line Tars builds for an agent). The recorder, not the real
+ *    gemini, because an agent's gemini with no sign-in asks for one and may open a browser.
+ * Red before the fix: Tars wrote both into the plain folders, and each CLI listed none of Tars's servers. Red on 4
+ * with the home taken off the line (`env -u GEMINI_CLI_HOME`) while Tars's environment names one.
  *
  * Opt-in: TARS_HARNESS_GEMINI and TARS_HARNESS_GROK name the binaries (gemini's own bundle/gemini.js, grok's binary),
  * pinned in folders of their own; skipped and said so without them. Every run of a binary is isolated: the sandbox's
@@ -55,7 +60,15 @@ test("gemini and grok read Tars's servers and hooks in the homes their variables
     id, name: `${provider} agent`, character: 'robot', provider, status: 'idle', role: 'worker', projectPath: project, skills: [],
     permissionMode: 'bypass', cliPath, createdAt: '2026-11-25T08:00:00.000Z', lastActivity: '2026-11-25T08:00:00.000Z',
   });
-  fs.writeFileSync(path.join(dir, 'agents.json'), JSON.stringify([agent('gem', 'gemini', GEMINI), agent('grk', 'grok', GROK)], null, 2));
+  // 4's recorder: what a gemini Tars starts receives, its line's words and its GEMINI_CLI_HOME, then it waits as a CLI.
+  const atStartLog = path.join(home, 'gemini-at-start.jsonl');
+  const recorder = writeNodeCli(path.join(shim, 'gemini-at-start'), [
+    "const fs = require('fs');",
+    `fs.appendFileSync(${JSON.stringify(atStartLog)}, JSON.stringify({ argv: process.argv.slice(2), GEMINI_CLI_HOME: process.env.GEMINI_CLI_HOME ?? null }) + '\\n');`,
+    "if (process.argv.includes('--version')) { console.log('0.70.0'); process.exit(0); }",
+    'setInterval(() => {}, 1000);',
+  ].join('\n'));
+  fs.writeFileSync(path.join(dir, 'agents.json'), JSON.stringify([agent('gem', 'gemini', GEMINI), agent('grk', 'grok', GROK), agent('gem-start', 'gemini', recorder)], null, 2));
   fs.writeFileSync(path.join(dir, 'projects.json'), JSON.stringify([project]));
   fs.writeFileSync(path.join(dir, 'app-settings.json'), JSON.stringify({
     autoStartAgentsOnLaunch: false, ollamaBaseUrl: 'http://127.0.0.1:9', geminiEnabled: true, grokEnabled: true,
@@ -136,6 +149,18 @@ test("gemini and grok read Tars's servers and hooks in the homes their variables
     expect.soft(plainGemini, 'nothing written to the plain ~/.gemini/settings.json').toBeNull();
     expect.soft(plainGrok, 'nothing written to the plain ~/.grok/config.toml').toBeNull();
     expect.soft(plain(opened) ?? '', 'nothing opened').toBe('');
+
+    // 4. A gemini agent started from the window: the GEMINI_CLI_HOME its CLI starts with.
+    type Start = { argv: string[]; GEMINI_CLI_HOME: string | null };
+    const starts = (): Start[] => (fs.existsSync(atStartLog) ? fs.readFileSync(atStartLog, 'utf8').trim().split('\n').filter(Boolean).map((l) => JSON.parse(l) as Start) : [])
+      .filter((s) => !s.argv.includes('--version'));
+    const started = await page.evaluate(() => (window as unknown as { electronAPI: { agent: { start(p: { id: string; prompt: string }): Promise<unknown> } } })
+      .electronAPI.agent.start({ id: 'gem-start', prompt: '' }));
+    for (let waited = 0; waited < 30_000 && starts().length === 0; waited += 250) await new Promise((r) => setTimeout(r, 250));
+    const atStart = starts();
+    keep({ started, atStart });
+    expect.soft(atStart.length, 'the gemini agent started from the window ran its CLI').toBeGreaterThan(0);
+    expect.soft(atStart.at(-1)?.GEMINI_CLI_HOME ?? null, "the GEMINI_CLI_HOME gemini starts with, from an agent the window starts").toBe(geminiHome);
   } finally {
     await app.close();
     await removeHome(home);
