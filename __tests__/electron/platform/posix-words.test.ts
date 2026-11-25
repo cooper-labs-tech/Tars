@@ -32,6 +32,11 @@ import { posixWords, PosixWordsError } from '../../../electron/platform/posix-wo
  * 8. The error does not say which code or where (index).
  * 9. A provider's real command, with every option Tars can set, does not
  *    round-trip: the words differ from bash's own reading of the line.
+ *    A line may hand its CLI a home ahead of the binary, on macOS and Linux:
+ *    codex's `env CODEX_HOME=<home>` (the Audit's L4 on #465), grok's
+ *    `env GROK_HOME=<home>` and gemini's `env GEMINI_CLI_HOME=<home>` or
+ *    `env -u GEMINI_CLI_HOME` (#645). That prefix in another form, or ahead of
+ *    another provider's binary, fails too.
  */
 
 let tmpDir: string;
@@ -199,6 +204,29 @@ async function commandOf(providerId: string, prompt: string, binaryPath: string)
   });
 }
 
+/**
+ * The home variable a provider's line may hand its CLI ahead of the binary, on macOS and Linux: codex's Tars's home
+ * (`env CODEX_HOME=<home>`, the Audit's L4 on #465), grok's always (`env GROK_HOME=<home>`, grok-provider.ts, #645),
+ * gemini's the GEMINI_CLI_HOME Tars's environment names (`env GEMINI_CLI_HOME=<home>`), else the variable taken off the
+ * line (`env -u GEMINI_CLI_HOME`, gemini-provider.ts homeOnLine, #645).
+ */
+const HOME_AHEAD: Record<string, string> = { codex: 'CODEX_HOME', gemini: 'GEMINI_CLI_HOME', grok: 'GROK_HOME' };
+
+/**
+ * How many of a line's first words hand its CLI that home (0 when none), their form asserted. Another provider's
+ * `env`, or one naming another variable, is not taken off, so its first word is not its binary and case 9 fails.
+ */
+function homeAhead(id: string, all: string[]): number {
+  const name = HOME_AHEAD[id];
+  if (all[0] !== 'env' || !name) return 0;
+  if (id === 'gemini' && all[1] === '-u') {
+    expect([id, all[2]]).toEqual([id, name]);
+    return 3;
+  }
+  expect([id, all[1]?.startsWith(`${name}=`)]).toEqual([id, true]);
+  return 2;
+}
+
 describe('9. every provider round-trips', () => {
   it('covers the 21 providers', async () => {
     const { getAllProviders } = await import('../../../electron/providers');
@@ -211,8 +239,7 @@ describe('9. every provider round-trips', () => {
     for (const provider of getAllProviders()) {
       for (const [label, prompt] of ADVERSARIAL) {
         const all = posixWords(await commandOf(provider.id, prompt, bin));
-        // codex's line hands it Tars's home first, on macOS and Linux (`env CODEX_HOME=<home>`, the Audit's L4 on #465).
-        const words = all[0] === 'env' && all[1]?.startsWith('CODEX_HOME=') ? all.slice(2) : all;
+        const words = all.slice(homeAhead(provider.id, all));
         if (provider.taskTypedAfterLaunch) {
           // Amp's line never carries the task: it is typed in once its TUI runs (core/typed-task.ts, 2.0.4).
           expect([provider.id, label, words[0], words.includes(prompt)]).toEqual([provider.id, label, bin, false]);
