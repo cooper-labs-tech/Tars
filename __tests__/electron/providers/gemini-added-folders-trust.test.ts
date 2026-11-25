@@ -70,7 +70,9 @@ import { pinPlatform } from './win-fake-disk';
  * 21. A folder whose path holds a comma passed in --include-directories: gemini splits every value there at commas
  *     (`coerceCommaSeparated`, 0.70.0), so it reaches gemini as two other folders, untrusted, and gemini asks (the
  *     Audit's I-3). No spelling passes such a folder whole on gemini's line: it is left out of the line, with no
- *     entry written for it, and said once.
+ *     entry written for it. Said once in Tars's log, it reached nobody (the Audit's L1 at aef730f1c): written before
+ *     the code, it is said in the agent's own output at each launch (agentNotice), and refused where it is set
+ *     (added-folders.test.ts).
  */
 
 let tmpDir: string;
@@ -290,17 +292,21 @@ describe("what Tars cannot write without changing a decision of the user's is le
     expect(said(warn)).toContain(store());
   });
 
-  it('21. leaves a folder whose path holds a comma out of the line and the file, says so once, and adds the others', async () => {
+  it("21. leaves a folder whose path holds a comma out of the line and the file, says so in the agent's output at each launch, and adds the others", async () => {
+    // Said where the user reads it, at each launch (the Audit's L1 at aef730f1c), not once in Tars's log.
+    const notices: Array<[string, string]> = [];
+    const { setAgentNoticeSink } = await import('../../../electron/core/agent-notices');
+    setAgentNoticeSink((agentId, text) => { notices.push([agentId, text]); });
     const secondary = path.join(tmpDir, 'work', 'a,b');
     fs.mkdirSync(secondary, { recursive: true });
-    const warn = warned();
-    const first = await line({ secondaryProjectPath: secondary });
-    await line({ secondaryProjectPath: secondary });
+    warned();
+    const first = await line({ agentId: 'g21', secondaryProjectPath: secondary });
+    await line({ agentId: 'g21', secondaryProjectPath: secondary });
     expect(first).not.toContain('a,b');
     expect(first).toContain('--include-directories');
     expect(read()[secondary]).toBeUndefined();
     expect(read()[tars()]).toBe('TRUST_FOLDER');
-    expect(warn.mock.calls.map((c) => c.join(' ')).filter((l) => l.includes(secondary))).toHaveLength(1);
+    expect(notices.filter(([id, text]) => id === 'g21' && text.includes(secondary))).toHaveLength(2);
   });
 });
 
