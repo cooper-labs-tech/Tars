@@ -290,8 +290,8 @@ file is dropped (none is given meanwhile), so the next start finds a consent the
 not hold, and takes it for a deletion of its own (`uploadDeletionBy: 'start'`): the sessions recorded before that
 start are never sent anywhere, and if an install is still there its DELETE is owed, offered in the window and asked
 only when the user deletes again. The start cannot tell such a revoke from a withdrawal it could not write down, so
-it reads the closed way. It is narrower than nothing only in what it keeps: the local traces stay, and a new consent
-shares what is recorded after that start.
+it reads the closed way. What it keeps: the local traces stay, and a new consent shares what is recorded after that
+start.
 
 ### Alt-provider safety gate
 
