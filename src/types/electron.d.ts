@@ -3067,6 +3067,12 @@ export interface UploadState {
    *  deletion's bookkeeping, a revoke of sharing): the reason, with "Tars tries again every minute". Uploads stay off
    *  meanwhile, unless the words say a restart would share again. Say it as a warning until it goes. */
   unsaved?: string;
+  /** Which note `unsaved` carries, set with it and gone with it; key on this, never on the words:
+   *  - 'consent-held': a revoke not yet saved holds the consent back, and nothing is shared meanwhile;
+   *  - 'revoke-comes-back': a revoke or withdrawal not yet saved whose consent file stays, so a restart would share
+   *    again what it stopped;
+   *  - 'owed': any other write owed (a withdrawal whose file went, a deletion's bookkeeping). */
+  unsavedKind?: 'consent-held' | 'revoke-comes-back' | 'owed';
   /** Say each plainly, not as an error:
    *  - 'registration_closed': "this back-office does not take new installs" (looked at again in 6 hours);
    *  - 'install_blocked': "this back-office blocked this install" (looked at again in 6 hours);

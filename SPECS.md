@@ -290,7 +290,8 @@ API has its change written first, and on a failed write is answered with the rea
 applied first could drop the owner's consent. What is sent follows the trace gate as it is at sending, so a revoke
 also holds back what was recorded before it.
 
-A revoke whose write never holds before Tars quits (it tries once more as it quits) fails closed, and does more than
+A revoke whose write never holds before Tars quits (it tries once more as it quits, a quit that reaches its shutdown
+steps: not a crash, a forced kill or a power loss) fails closed, and does more than
 the user asked. Its consent's
 file is dropped (none is given meanwhile), so the next start finds a consent the settings name and its file does
 not hold, and takes it for a deletion of its own (`uploadDeletionBy: 'start'`): the sessions recorded before that

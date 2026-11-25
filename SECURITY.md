@@ -1135,10 +1135,11 @@ else.
   writes the rest: on settings that cannot be written, sharing has still stopped, and the window is told so.
 - The other revokes of sharing made in the window apply first too: a project opted out, a pair removed, closed
   models left out, an endpoint's traces turned off, an endpoint removed. Each holds in memory at once, then is
-  written, and is tried again every minute and once more as Tars quits, until it holds, the window told. What is sent
-  follows the trace gate as it is at sending, so each also holds back what was recorded before it. While such a write
-  does not hold, the consent's file is dropped (unlinked or emptied, which needs no free space): nothing is shared
-  meanwhile, and a start before the write holds reads no consent and takes it for a deletion, which fails closed. The
+  written, and is tried again every minute and once more as Tars quits (not on a crash, a forced kill or a power
+  loss), until it holds, the window told. What is sent follows the trace gate as it is at sending, so each also holds
+  back what was recorded before it. While such a write does not hold, the consent's file is dropped (unlinked or
+  emptied, which needs no free space): nothing is shared meanwhile, and a start before the write holds reads no
+  consent and takes it for a deletion, which fails closed. The
   file is put back once the settings hold. When the file can be neither removed nor emptied, a restart before the
   write holds shares again what the revoke stopped, and the window is told so. The grants opposite to these are
   written first, and so is an endpoint's address moved in the same save. An agent's own change through the local API
