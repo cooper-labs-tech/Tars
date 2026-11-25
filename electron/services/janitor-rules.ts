@@ -186,19 +186,61 @@ function fromEnv(name: string, ...under: string[]): string[] {
 const UV_TOML_MAX = 64 * 1024;
 
 /**
+ * The text of a small regular file, or undefined, checked and read on one descriptor, so what is checked is what is
+ * read (the Audit's I-1 on #605 at af2ee8be2: checked by path then read by path, a file swapped in between was read):
+ * - opened non-blocking: a FIFO in its place, put there at any moment, never blocks the main process on its open;
+ * - its fstat refuses anything that is no regular file;
+ * - at most UV_TOML_MAX + 1 bytes are read from it, so a file grown since its check is not read whole.
+ * A link is followed, as uv 0.13.1 follows it (measured), so no O_NOFOLLOW. On Windows O_NONBLOCK is not defined: a
+ * path in the home is no named pipe there (those live under \\.\pipe\), and the fstat and the bounded read hold alike.
+ */
+function readSmallFile(file: string): string | undefined {
+  const fd = fs.openSync(file, fs.constants.O_RDONLY | (fs.constants.O_NONBLOCK ?? 0));
+  try {
+    if (!fs.fstatSync(fd).isFile()) return undefined;
+    const buf = Buffer.alloc(UV_TOML_MAX + 1);
+    let n = 0;
+    while (n < buf.length) {
+      const got = fs.readSync(fd, buf, n, buf.length - n, n);
+      if (got === 0) break;
+      n += got;
+    }
+    return n > UV_TOML_MAX ? undefined : buf.toString('utf-8', 0, n);
+  } finally {
+    fs.closeSync(fd);
+  }
+}
+
+/**
+ * A cache-dir that would hide every proposal: the root of its volume, the home, or an ancestor of the home, by real
+ * path. Any process of the user, an agent included, can write one into the user's uv.toml (the Audit's I-2 on #605).
+ */
+function hidesEverything(dir: string, home: string): boolean {
+  const at = real(dir);
+  return at === path.parse(at).root || inside(real(home), at);
+}
+
+/**
  * The `cache-dir` of a uv.toml, as uv 0.13.1 reads it (measured): a folder only when absolute, since uv takes `~`,
  * `$HOME` and a relative value as written, relative to the folder it runs in. None when the file is missing, is no
- * file, is past UV_TOML_MAX, or is no TOML (uv refuses it too).
+ * regular file, is past UV_TOML_MAX, or is no TOML (uv refuses it too), and none, said in one line, when it would hide
+ * every proposal (hidesEverything).
  */
-function uvTomlCacheDir(file: string): string[] {
+function uvTomlCacheDir(file: string, home: string): string[] {
+  let value: unknown;
   try {
-    const st = fs.statSync(file);
-    if (!st.isFile() || st.size > UV_TOML_MAX) return [];
-    const value = (parseToml(fs.readFileSync(file, 'utf-8')) as Record<string, unknown>)['cache-dir'];
-    return typeof value === 'string' && path.isAbsolute(value) ? [value] : [];
+    const text = readSmallFile(file);
+    if (text === undefined) return [];
+    value = (parseToml(text) as Record<string, unknown>)['cache-dir'];
   } catch {
     return [];
   }
+  if (typeof value !== 'string' || !path.isAbsolute(value)) return [];
+  if (hidesEverything(value, home)) {
+    console.warn(`[janitor] ${file}: cache-dir "${value}" ignored: it is the root, the home or above the home, and would hide every proposal`);
+    return [];
+  }
+  return [value];
 }
 
 /**
@@ -237,7 +279,7 @@ function never(world: JanitorWorld): string[] {
   const list = [
     world.privateDir, path.join(h, 'Documents'),
     ...fromEnv('UV_CACHE_DIR'), ...fromEnv('XDG_CACHE_HOME', 'uv'), ...fromEnv('LOCALAPPDATA', 'uv', 'cache'),
-    ...uvConfigs.flatMap(uvTomlCacheDir),
+    ...uvConfigs.flatMap(file => uvTomlCacheDir(file, h)),
     path.join(h, '.cache', 'uv'), path.join(h, 'Library', 'Caches', 'uv'), path.join(h, 'AppData', 'Local', 'uv', 'cache'),
     path.join(h, '.Trash'), ...fromEnv('XDG_DATA_HOME', 'Trash'), path.join(h, '.local', 'share', 'Trash'),
     path.join(h, 'Library', 'Developer'), '/Library/Developer',
