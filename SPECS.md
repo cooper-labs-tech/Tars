@@ -278,8 +278,20 @@ write that fails answers the window with the reason: nothing is given. A withdra
 not come back at a restart on a full volume or in a private folder that may not be written, the two cases measured,
 and a start that finds it was not written down takes it for a deletion, so nothing recorded before it is sent. It
 does come back when its file can be neither removed nor emptied and no write of the settings holds before Tars quits
-(SECURITY.md, § 9). Every trace and endpoint setting the window or an agent changes is written first, then held in
-memory, or answered with the reason; a save that fails leaves the keys' file as it was.
+(SECURITY.md, § 9). A grant (a trace or endpoint setting that widens sharing) is written first, then held in memory,
+or answered with the reason; a save that fails leaves the keys' file as it was. A revoke of sharing applies first:
+emptying or changing the address, opting a project out, removing a pair, leaving closed models out, turning an
+endpoint's traces off, removing an endpoint. Each holds in memory at once, is written, and is tried again every
+minute until it holds, the window answered ok with the reason it is not saved yet (`unsaved`). What is sent follows
+the trace gate as it is at sending, so a revoke also holds back what was recorded before it.
+
+A revoke whose write never holds before Tars quits fails closed, and does more than the user asked. Its consent's
+file is dropped (none is given meanwhile), so the next start finds a consent the settings name and its file does
+not hold, and takes it for a deletion of its own (`uploadDeletionBy: 'start'`): the sessions recorded before that
+start are never sent anywhere, and if an install is still there its DELETE is owed, offered in the window and asked
+only when the user deletes again. The start cannot tell such a revoke from a withdrawal it could not write down, so
+it reads the closed way. It is narrower than nothing only in what it keeps: the local traces stay, and a new consent
+shares what is recorded after that start.
 
 ### Alt-provider safety gate
 

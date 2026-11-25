@@ -88,15 +88,19 @@ export function registerTracesHandlers(deps: TracesHandlerDeps): void {
       allowPlainHttp: typeof i.allowPlainHttp === 'boolean' ? i.allowPlainHttp : undefined,
     }, { window: true });
     if (!r.ok) return r;
-    // Traces turned off for an endpoint is a revoke of sharing: it applies first, then is written (holdRevoke).
-    // Whatever else the save changes is written first.
+    // Traces turned off for an endpoint is a revoke of sharing: it applies first, then is written (holdRevoke), with
+    // the rest of the save when that grants nothing (names, the hold, the defaults the save fills in). A save that
+    // also grants (session headers or plain http turned on) has that part written first.
     const before = (deps.getAppSettings().inferenceEndpoints ?? []).find(e => e.id === r.endpoint.id);
     let held: string | undefined;
     if (before?.allowTraces === true && r.endpoint.allowTraces === false) {
-      const now = deps.getAppSettings();
-      const tracesOff = { ...now, inferenceEndpoints: (now.inferenceEndpoints ?? []).map(e => (e.id === r.endpoint.id ? { ...e, allowTraces: false } : e)) };
-      held = holdRevoke(tracesOff);
-      if (JSON.stringify(tracesOff) !== JSON.stringify(r.settings)) {
+      const grants = (before.sendSessionHeaders !== true && r.endpoint.sendSessionHeaders === true)
+        || (before.allowPlainHttp !== true && r.endpoint.allowPlainHttp === true);
+      if (!grants) {
+        held = holdRevoke(r.settings);
+      } else {
+        const now = deps.getAppSettings();
+        held = holdRevoke({ ...now, inferenceEndpoints: (now.inferenceEndpoints ?? []).map(e => (e.id === r.endpoint.id ? { ...e, allowTraces: false } : e)) });
         const unsaved = apply(r.settings, 'traces stay off for it, and the rest was not saved');
         if (unsaved) return { ok: false, error: unsaved };
       }
@@ -201,7 +205,9 @@ export function registerTracesHandlers(deps: TracesHandlerDeps): void {
     // the disk, before the rest is written, so a write that fails never leaves sharing on (the Audit's L2 at
     // 1e9571eab). Settings that never hold then: the next start takes it for a deletion, which fails closed.
     const dropsConsent = !!current.uploadConsentAt && !next.uploadConsentAt;
-    if (dropsConsent) withdrawUploadConsent();
+    // `persisted` false: neither the consent's file nor the settings hold the withdrawal, so a restart before a write
+    // holds would share again with the old address (the Audit's L1 at c447c1ceb). Said, not hidden.
+    const withdrawn = dropsConsent ? withdrawUploadConsent() : undefined;
     // What the patch takes away from sharing (projects opted out, pairs removed, closed models left out) applies
     // first, then is written (holdRevoke); what it grants, or anything else it changes, is written first.
     const base = traceSettingsOf(deps.getAppSettings());
@@ -214,7 +220,9 @@ export function registerTracesHandlers(deps: TracesHandlerDeps): void {
     const revoked = JSON.stringify(narrowed) !== JSON.stringify(base);
     const held = revoked ? holdRevoke({ ...deps.getAppSettings(), traces: narrowed }) : undefined;
     if (JSON.stringify(next) !== JSON.stringify({ ...narrowed, ...(next.uploadConsentAt ? { uploadConsentAt: next.uploadConsentAt } : {}) })) {
-      const then = dropsConsent ? 'sharing stopped at once, and the address was not saved'
+      const then = withdrawn && !withdrawn.persisted
+        ? 'sharing stopped for now, but a restart before the settings are saved would share again with the old address; Tars tries again every minute'
+        : dropsConsent ? 'sharing stopped at once, and the address was not saved'
         : revoked ? 'what it took away from sharing holds, and the rest was not saved' : undefined;
       const unsaved = apply({ ...deps.getAppSettings(), traces: next }, then);
       if (unsaved) return { ok: false, error: unsaved };

@@ -668,7 +668,7 @@ function dropReaderToken(): string | null {
  */
 export function rotateReaderToken(): string {
   const kept = dropReaderToken();
-  if (kept) throw new Error(`Tars could not remove the reader token (${kept}): it opens nothing until Tars quits, and no new one was made.`);
+  if (kept) throw new Error(`Tars could not remove the reader token (${kept}): it opens nothing until Tars quits, but would again after a restart, and no new one was made.`);
   const token = `trd_${randomBytes(32).toString('hex')}`;
   try {
     writeSecretFileSync(TRACES_READER_TOKEN_FILE, token);
