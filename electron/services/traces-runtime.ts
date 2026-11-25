@@ -135,9 +135,13 @@ let unsaved: string | undefined;
 let persistRetry: NodeJS.Timeout | null = null;
 const PERSIST_RETRY_MS = 60_000;
 
-/** What the settings' last write said when it failed, for the window; nothing once a later one held. */
-export function uploadPersistence(): { unsaved?: string } {
-  return unsaved ? { unsaved } : {};
+/** Which note `unsaved` carries, for the window to key on rather than on the words (src/types/electron.d.ts). */
+export type UnsavedKind = 'consent-held' | 'revoke-comes-back' | 'owed';
+let unsavedKind: UnsavedKind | undefined;
+
+/** What the settings' last write said when it failed, for the window, and which note it is; nothing once one held. */
+export function uploadPersistence(): { unsaved?: string; unsavedKind?: UnsavedKind } {
+  return unsaved ? { unsaved, unsavedKind } : {};
 }
 
 /**
@@ -156,6 +160,7 @@ function persistSettings(): boolean {
       : 'Tars tries again every minute and once more as it quits';
     const reason = settingsNotWritten(err, then);
     console.error(`[traces] ${reason}`);
+    unsavedKind = consentHeldForRevoke ? 'consent-held' : revokeComesBack ? 'revoke-comes-back' : 'owed';
     if (unsaved !== reason) { unsaved = reason; deps.emit('traces:changed'); }
     if (!persistRetry) {
       persistRetry = setTimeout(() => { persistRetry = null; persistSettings(); }, PERSIST_RETRY_MS);
@@ -164,6 +169,7 @@ function persistSettings(): boolean {
     return false;
   }
   if (unsaved) { unsaved = undefined; deps.emit('traces:changed'); }
+  unsavedKind = undefined;
   revokeComesBack = false;
   if (consentHeldForRevoke) restoreHeldConsent();
   return true;
