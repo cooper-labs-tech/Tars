@@ -11,6 +11,8 @@ interface AgentDialogSecondaryProjectProps {
   onSetSecondaryProject: (path: string | null) => void;
   /** Why the last folder was not set, under the field (frame `Agent window · a secondary folder refused · states`). */
   error?: string | null;
+  /** When the last folder taken applies, in the window's words, when main answered 'next-start'. */
+  note?: string | null;
   onBrowseFolder?: () => Promise<string | null>;
 }
 
@@ -21,6 +23,7 @@ export const AgentDialogSecondaryProject = memo(function AgentDialogSecondaryPro
   onCustomPathChange,
   onSetSecondaryProject,
   error,
+  note,
   onBrowseFolder,
 }: AgentDialogSecondaryProjectProps) {
   const selectedProjectName = lastPathPart(agent.secondaryProjectPath ?? '');
@@ -104,6 +107,7 @@ export const AgentDialogSecondaryProject = memo(function AgentDialogSecondaryPro
           </button>
         </div>
         {error && <p data-secondary-project-error className="mt-1.5 text-[11px] leading-snug text-danger break-words">{error}</p>}
+        {!error && note && <p data-secondary-project-note className="mt-1.5 text-[11px] leading-snug text-muted-foreground">{note}</p>}
       </div>
     </div>
   );

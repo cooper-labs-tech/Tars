@@ -9,6 +9,7 @@ import TaskBanner from '@/components/TaskBanner';
 import { useMessageWaiting } from '@/hooks/useMessagesWaiting';
 import { TERMINAL_SURFACE_CLASS } from '@/lib/terminal-theme';
 import { stopLine } from '@/lib/stop-line';
+import { ipcReason } from '@/lib/ipc-error';
 import { asleepHint, asleepLine, wakingLine } from '@/lib/asleep-line';
 import 'xterm/css/xterm.css';
 
@@ -169,34 +170,47 @@ export default function AgentTerminalDialog({
     setExpandedPanels(prev => new Set(prev).add(panel));
   }, []);
 
-  /** Why the last folder was not set: main's refusal word for word, or the failed call's message, under the field. */
+  /** Why the last folder was not set: main's refusal word for word, or the failed call's reason, under the field. */
   const [secondaryError, setSecondaryError] = useState<string | null>(null);
+  /** When the last folder taken applies, when main answered 'next-start' (frame `Agent window · a secondary folder refused · states`). */
+  const [secondaryNote, setSecondaryNote] = useState<string | null>(null);
+
+  // The dialog stays mounted from one agent to the next: what was said, or typed, for the last one goes with it.
+  useEffect(() => {
+    setSecondaryError(null);
+    setSecondaryNote(null);
+    setCustomSecondaryPath('');
+  }, [agent?.id]);
+
+  const handleCustomSecondaryPathChange = useCallback((value: string) => {
+    setCustomSecondaryPath(value);
+    setSecondaryError(null);
+    setSecondaryNote(null);
+  }, []);
 
   const handleSetSecondaryProject = useCallback(async (path: string | null) => {
     if (!agent || !window.electronAPI?.agent?.setSecondaryProject) return;
-    // Main answers first: a folder it refuses (one its CLI would never see) keeps the field filled, says why under it,
-    // and is never typed into the terminal.
+    // Main sets the folder, refuses one its CLI would never see, and types it into a running Claude Code itself
+    // (answering 'now'); the window types nothing. A refusal keeps the field filled and says why under it.
     let result: Awaited<ReturnType<typeof window.electronAPI.agent.setSecondaryProject>>;
     try {
       result = await window.electronAPI.agent.setSecondaryProject({ id: agent.id, secondaryProjectPath: path });
     } catch (err) {
-      setSecondaryError(err instanceof Error ? err.message : String(err));
+      setSecondaryNote(null);
+      setSecondaryError(ipcReason(err, 'The folder was not set.'));
       return;
     }
     if (!result.success) {
+      setSecondaryNote(null);
       setSecondaryError(result.error || 'The folder was not set.');
       return;
     }
     setSecondaryError(null);
     setCustomSecondaryPath('');
+    setSecondaryNote(result.appliesAt === 'next-start'
+      ? (path ? 'added: the agent sees it from its next start' : 'removed: the agent stops seeing it at its next start')
+      : null);
     if (result.agent && onAgentUpdated) onAgentUpdated(result.agent);
-    if (path && window.electronAPI.agent.sendInput) {
-      try {
-        await window.electronAPI.agent.sendInput({ id: agent.id, input: `/add-dir ${path}\r` });
-      } catch (err) {
-        console.error('Failed to send /add-dir command:', err);
-      }
-    }
   }, [agent, onAgentUpdated]);
 
   const [permissionError, setPermissionError] = useState<string | null>(null);
@@ -355,9 +369,10 @@ export default function AgentTerminalDialog({
                 hasSecondaryProject={hasSecondaryProject}
                 availableProjects={availableProjects}
                 customSecondaryPath={customSecondaryPath}
-                onCustomSecondaryPathChange={setCustomSecondaryPath}
+                onCustomSecondaryPathChange={handleCustomSecondaryPathChange}
                 onSetSecondaryProject={handleSetSecondaryProject}
                 secondaryError={secondaryError}
+                secondaryNote={secondaryNote}
                 onBrowseFolder={onBrowseFolder}
                 editPermissionMode={editPermissionMode}
                 isSavingSettings={isSavingSettings}
