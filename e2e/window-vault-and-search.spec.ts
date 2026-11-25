@@ -20,7 +20,9 @@ import { DEV_URL, apiPort } from './ports.mjs';
  * 6. A file the dialog returned is good for one attach (the main process's dialog answers with a stand-in picture).
  * 7. A project Tars holds under a dot folder of the home is listed by fs.listProjects with the reason it is refused,
  *    and project.searchContent answers with that reason; fs.addCustomProject refuses a new one with it.
- * Red on train/2.0.7 b5f207bcf (1 to 7) and on bb66b3255 (6 and 7).
+ * 8. fs.readProjectFiles reads nothing of a folder of credentials a skill link in ~/.claude/skills leads to, by the
+ *    folder's name or the link's, and still reads a real skill.
+ * Red on train/2.0.7 b5f207bcf (1 to 7), on bb66b3255 (6 and 7) and on f0e547bd6 (8).
  * The artefact: values.json (every answer, the files' state), with E2E_TRACE=on the app's trace.
  */
 
@@ -40,6 +42,7 @@ type Api = { electronAPI: {
     attachFile(p: { document_id: string; file_path: string }): Promise<{ success: boolean; error?: string }>;
   };
   fs: {
+    readProjectFiles(p: { paths: string[]; relative: string[] }): Promise<{ files: Record<string, string> }>;
     listProjects(): Promise<Array<{ path: string; refused?: string }>>;
     addCustomProject(p: string): Promise<{ success: boolean; error?: string }>;
   };
@@ -59,6 +62,13 @@ test("the window's vault and Code panel channels open nothing outside a vault or
   for (const d of [dir, vault, project, path.join(home, '.ssh'), path.join(home, '.gemini'), held, azure, path.dirname(picture)]) fs.mkdirSync(d, { recursive: true });
   fs.writeFileSync(path.join(held, 'lib.ts'), 'export const needle = 2;\n');
   fs.writeFileSync(picture, 'a picture');
+  // A skill link an agent made to a stand-in folder of credentials, beside a real skill.
+  const kube = path.join(home, '.kube');
+  const skills = path.join(home, '.claude', 'skills');
+  for (const d of [kube, path.join(skills, 'mine')]) fs.mkdirSync(d, { recursive: true });
+  fs.writeFileSync(path.join(kube, 'config'), `token: ${TOKEN}`);
+  fs.writeFileSync(path.join(skills, 'mine', 'SKILL.md'), '# a skill');
+  fs.symlinkSync(kube, path.join(skills, 'kc'), 'junction');
   fs.writeFileSync(path.join(home, '.ssh', 'id_ed25519'), KEY);
   fs.writeFileSync(path.join(home, '.gemini', 'oauth_creds.json'), JSON.stringify({ access_token: TOKEN, refresh_token: TOKEN }));
   fs.writeFileSync(path.join(vault, 'note.md'), '# a note');
@@ -152,6 +162,13 @@ test("the window's vault and Code panel channels open nothing outside a vault or
     expect.soft(searchHeld.error).toMatch(/dot/i);
     expect.soft(addAzure).toMatchObject({ success: false });
     expect.soft(addAzure.error).toMatch(/dot/i);
+
+    // 8. The Brain's channel: nothing of a folder of credentials a skill link names, a real skill still read.
+    const brainKube = await api((a, arg) => a.fs.readProjectFiles({ paths: arg as string[], relative: ['config'] }), [kube, path.join(skills, 'kc')]);
+    const brainSkill = await api((a, p) => a.fs.readProjectFiles({ paths: [p as string], relative: ['SKILL.md'] }), path.join(skills, 'mine'));
+    keep({ brainKube, brainSkill: Object.values(brainSkill.files) });
+    expect.soft(brainKube.files).toEqual({});
+    expect.soft(Object.values(brainSkill.files)).toEqual(['# a skill']);
 
     keep({ addNotes, readNote, writeNote, searchProject, errors });
     expect.soft(addNotes).toMatchObject({ success: true });

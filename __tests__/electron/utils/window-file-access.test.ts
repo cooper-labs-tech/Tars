@@ -62,6 +62,13 @@ import * as path from 'node:path';
  *      refused; or a project in iCloud Drive (~/Library/Mobile Documents) or in
  *      a cloud drive's folder (~/Library/CloudStorage), where people keep their
  *      documents.
+ * Extended before their code after the Audit's L1 and I-1 on #648 (2026-11-26):
+ *  W11 also: an application's own iCloud container in ~/Library/Mobile
+ *      Documents (iCloud~<bundle>), application storage as Application Support
+ *      is, taken for a documents folder; and a folder of the home whose name
+ *      starts with two dots (`..x`) taken for one outside the home.
+ *  W12 also: a vault in Obsidian's own iCloud folder
+ *      (Mobile Documents/iCloud~md~obsidian/Documents) refused.
  */
 
 import { windowMayRead, windowMayWrite, localFileServes, mayBeProject } from '../../../electron/utils/window-file-access';
@@ -74,7 +81,7 @@ let project: string;
 
 beforeEach(() => {
   for (const d of ['.tars', '.tars-private', '.claude', '.codex', '.gemini', '.grok', '.ssh', '.gnupg', '.aws', '.config', '.kube', '.docker', 'proj', 'kube-link',
-    '.azure', '.terraform.d', '.wrangler', '.cargo', '.m2', '.qwen', '.pi', '.kimi-code', 'Library', 'AppData']) fs.rmSync(at(d), { recursive: true, force: true });
+    '.azure', '.terraform.d', '.wrangler', '.cargo', '.m2', '.qwen', '.pi', '.kimi-code', 'Library', 'AppData', '..x']) fs.rmSync(at(d), { recursive: true, force: true });
   project = at('proj');
   fs.mkdirSync(project, { recursive: true });
 });
@@ -204,6 +211,7 @@ describe('the project rule and the home\'s other folders (the Audit\'s L3 on #64
     const places = [
       at('.azure'), at('.terraform.d'), at('.wrangler'), at('.cargo', 'registry'), at('.m2'), at('.qwen'), at('.pi'), at('.kimi-code'),
       at('Library'), at('Library', 'Application Support', 'gh'), at('AppData'), at('AppData', 'Roaming', 'gcloud'),
+      at('Library', 'Mobile Documents', 'iCloud~com~example~shell'), at('Library', 'Mobile Documents', 'iCloud~md~obsidian'), at('..x'),
     ];
     for (const place of places) {
       const file = put(path.join(place, 'notes.md'), 'a token');
@@ -214,7 +222,8 @@ describe('the project rule and the home\'s other folders (the Audit\'s L3 on #64
 
   it('W12. the four CLI folders, a project in one, and the cloud documents folders still are', () => {
     for (const place of [at('.claude'), at('.codex'), at('.gemini'), at('.grok'), at('.claude', 'plugins', 'mine'),
-      at('Library', 'Mobile Documents', 'com~apple~CloudDocs', 'work'), at('Library', 'CloudStorage', 'Dropbox', 'work')]) {
+      at('Library', 'Mobile Documents', 'com~apple~CloudDocs', 'work'), at('Library', 'CloudStorage', 'Dropbox', 'work'),
+      at('Library', 'Mobile Documents', 'iCloud~md~obsidian', 'Documents', 'Notes')]) {
       fs.mkdirSync(place, { recursive: true });
       expect(mayBeProject(place), place).toBe(true);
     }

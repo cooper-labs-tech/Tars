@@ -35,6 +35,17 @@ import { createRequire, syncBuiltinESMExports } from 'node:module';
  *    folder of the home but the four CLI folders), held as a project in
  *    ~/.tars/projects.json or as an agent's folder; or, over-correcting, no
  *    longer reads ~/.agents or a project in iCloud Drive.
+ * Added before their code after the Audit's M1 and L2 on #648 (2026-11-26):
+ * 9. fs:read-project-files reads a file of a folder of credentials, an
+ *    application folder of the home or a dot folder of the home through a
+ *    root it takes from a list agents write: a skill of ~/.claude/skills or
+ *    ~/.agents/skills (a folder or a link, its real path), or a plugin's path
+ *    in ~/.claude/plugins/installed_plugins.json; or, over-correcting, no
+ *    longer reads a skill in ~/.agents/skills, a skill linked from a folder
+ *    of the user's, or a plugin in ~/.claude/plugins.
+ * 10. fs:list-projects follows a listed project synchronously on the main
+ *    thread (a realpath, a stat), so a slow share freezes the window at each
+ *    listing; it may follow it only asynchronously.
  */
 
 vi.mock('node-pty', () => ({ spawn: vi.fn() }));
@@ -66,11 +77,14 @@ import { registerIpcHandlers, type IpcHandlerDependencies } from '../../../elect
 import { setupProtocolHandler } from '../../../electron/core/window-manager';
 import { DATA_DIR } from '../../../electron/constants';
 import type { AgentStatus } from '../../../electron/types';
+import { getClaudeSkills } from '../../../electron/services/claude-service';
 
 const agents = new Map<string, AgentStatus>();
+/** No skill unless a case asks for the real reader, as main.ts wires it (case 9). */
+let skillsOf: () => Promise<unknown[]> = async () => [];
 
 function deps(): IpcHandlerDependencies {
-  const fixed: Record<string, unknown> = { agents, getClaudeSkills: async () => [] };
+  const fixed: Record<string, unknown> = { agents, getClaudeSkills: () => skillsOf() };
   return new Proxy(fixed, {
     get(target, key: string) {
       if (key in target) return target[key];
@@ -187,6 +201,44 @@ describe('fs:read-project-files', () => {
     expect(Object.values((await readProject(agentsDir, 'AGENTS.md')).files)).toEqual(['kept']);
     expect(Object.values((await readProject(cloud, 'AGENTS.md')).files)).toEqual(['kept']);
   });
+
+  it('9. reads nothing of a folder the rule refuses through a skill or a plugin, and still reads real ones', async () => {
+    skillsOf = getClaudeSkills;
+    const skills = path.join(home, '.claude', 'skills');
+    const plugins = path.join(home, '.claude', 'plugins', 'installed_plugins.json');
+    const kube = path.join(home, '.kube');
+    const azure = path.join(home, '.azure');
+    const gcloud = path.join(home, 'Library', 'Application Support', 'gcloud');
+    const mine = path.join(home, 'dev', 'skills', 'mine');
+    const agentSkill = path.join(home, '.agents', 'skills', 'helper');
+    const plugin = path.join(home, '.claude', 'plugins', 'cache', 'tool');
+    try {
+      customProjects([]);
+      for (const [dir, name] of [[kube, 'config'], [azure, 'msal_token_cache.json'], [gcloud, 'access_tokens.db'],
+        [mine, 'SKILL.md'], [agentSkill, 'SKILL.md'], [plugin, 'README.md']] as const) {
+        fs.mkdirSync(dir, { recursive: true });
+        fs.writeFileSync(path.join(dir, name), `the ${name}`);
+      }
+      fs.mkdirSync(skills, { recursive: true });
+      for (const [to, name] of [[azure, 'az'], [gcloud, 'gc'], [kube, 'kc'], [mine, 'mine']] as const) {
+        fs.symlinkSync(to, path.join(skills, name), 'junction');
+      }
+      fs.writeFileSync(plugins, JSON.stringify([{ name: 'k', path: kube }, { name: 'tool', path: plugin }]));
+      for (const [dir, name] of [[kube, 'config'], [azure, 'msal_token_cache.json'], [gcloud, 'access_tokens.db']] as const) {
+        expect((await readProject(dir, name)).files, dir).toEqual({});
+      }
+      expect((await readProject(path.join(skills, 'kc'), 'config')).files).toEqual({});
+      expect((await readProject(path.join(skills, 'az'), 'msal_token_cache.json')).files).toEqual({});
+      expect(Object.values((await readProject(mine, 'SKILL.md')).files)).toEqual(['the SKILL.md']);
+      expect(Object.values((await readProject(agentSkill, 'SKILL.md')).files)).toEqual(['the SKILL.md']);
+      expect(Object.values((await readProject(plugin, 'README.md')).files)).toEqual(['the README.md']);
+    } finally {
+      skillsOf = async () => [];
+      for (const dir of [skills, plugins, kube, azure, path.join(home, 'Library'), path.join(home, 'dev'), path.join(home, '.agents'), path.join(home, '.claude', 'plugins')]) {
+        fs.rmSync(dir, { recursive: true, force: true });
+      }
+    }
+  });
 });
 
 // Not on Windows: there local-file:// serves no file at all, since the URL's
@@ -249,6 +301,32 @@ describe('a project root the target is not under', () => {
     }
     return touched;
   }
+
+  it('10. fs:list-projects follows a listed project only asynchronously', async () => {
+    customProjects([project]);
+    const real = createRequire(import.meta.url)('node:fs') as typeof fs & Record<string, unknown>;
+    const names = ['statSync', 'lstatSync', 'existsSync', 'accessSync', 'readdirSync'] as const;
+    const saved = { ...Object.fromEntries(names.map(n => [n, real[n]])), realpathSync: real.realpathSync };
+    const touched: string[] = [];
+    const record = (name: string, fn: (...a: unknown[]) => unknown) => (...args: unknown[]) => {
+      if (String(args[0]).startsWith(project)) touched.push(`${name} ${String(args[0])}`);
+      return fn(...args);
+    };
+    for (const n of names) (real as Record<string, unknown>)[n] = record(n, saved[n] as (...a: unknown[]) => unknown);
+    const nativeRealpath = saved.realpathSync.native as (...a: unknown[]) => unknown;
+    (real as Record<string, unknown>).realpathSync = Object.assign(record('realpathSync', saved.realpathSync as (...a: unknown[]) => unknown),
+      { native: record('realpathSync.native', nativeRealpath) });
+    syncBuiltinESMExports();
+    let listed: Array<{ path: string; refused?: string }> = [];
+    try {
+      listed = await handlers.get('fs:list-projects')!({}) as typeof listed;
+    } finally {
+      for (const [n, fn] of Object.entries(saved)) (real as Record<string, unknown>)[n] = fn;
+      syncBuiltinESMExports();
+    }
+    expect(listed.find(p => p.path === project)).toBeDefined();
+    expect(touched).toEqual([]);
+  });
 
   it('7. is never looked at when reading and writing under another project', async () => {
     customProjects([OFFLINE, project]);
