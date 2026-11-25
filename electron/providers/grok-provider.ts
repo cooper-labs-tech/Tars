@@ -14,7 +14,10 @@ import type {
   ProviderModel,
   HookConfig,
 } from './cli-provider';
-import { safeEffort } from './cli-provider';
+import { resumeFlags, safeEffort } from './cli-provider';
+
+/** A session of grok's own, as its hooks report it: a uuid. */
+const GROK_SESSION_ID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 /**
  * Provider for xAI's Grok CLI ("Grok Build", https://x.ai/cli).
@@ -83,6 +86,13 @@ export class GrokProvider implements CLIProvider {
     // Verbose → debug logging.
     if (params.verbose) {
       command += ' --debug';
+    }
+
+    // Its own session continued (grok 1.0.92, measured 23/11): the uuid its hooks report, and only a uuid, since grok
+    // takes a session's title there too, and resumes the most recent session with none. A fork is grok's own
+    // --fork-session, which leaves the session it forks from as it was.
+    if (params.resumeSessionId && GROK_SESSION_ID.test(params.resumeSessionId)) {
+      command += resumeFlags(params.resumeSessionId, params.forkSession);
     }
 
     // Prompt (positional) with optional skills directive.
