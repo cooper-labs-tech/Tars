@@ -41,6 +41,10 @@ import { assertThrowaway } from '../../setup/throwaway-dirs';
  * V13. (The orchestrator's note for #599, which shows these words as they are.) While a revoke holds the consent
  *      back, the note says only that sharing is stopped and Tars tries again: not that Tars tries once more as it
  *      quits, nor that a start before a write holds takes the consent as withdrawn.
+ * V14. (The Audit's I-3 on #599 at a8d32edc1.) The window can tell which of the three notes `unsaved` carries only
+ *      from its words: the upload state has no field that says it (`unsavedKind`), so a consent missing for another
+ *      reason, beside an unrelated owed write, is shown as held back by a revoke. One case per kind, and none once
+ *      the write holds.
  */
 
 assertThrowaway({ DATA_DIR, PRIVATE_DIR });
@@ -238,5 +242,41 @@ describe('a revoke of sharing on settings that cannot be written applies at once
     expect(answer.unsaved).toMatch(/once more as it quits/);
     expect(answer.unsaved).toMatch(/the next start takes your consent as withdrawn/);
     expect(runtime.uploadPersistence().unsaved).toBe(answer.unsaved);
+  });
+
+  describe('V14. the upload state says which note `unsaved` carries', () => {
+    const kind = () => (call('traces:uploadState') as { unsaved?: string; unsavedKind?: string });
+
+    it("'consent-held': a revoke whose write failed holds the consent back", () => {
+      vi.useFakeTimers();
+      failWith = full();
+      call('traces:removePair', { harness: 'qwen-code', models: '*' });
+      expect(kind()).toMatchObject({ unsaved: expect.stringMatching(/ENOSPC/), unsavedKind: 'consent-held' });
+      failWith = null;
+      vi.advanceTimersByTime(60_000);
+      expect(kind().unsaved).toBeUndefined();
+      expect(kind().unsavedKind).toBeUndefined();
+    });
+
+    it.skipIf(process.platform === 'win32')("'revoke-comes-back': the consent's file stays and the settings are refused", () => {
+      const file = runtime.TRACES_CONSENT_FILE;
+      const folder = path.dirname(file);
+      fs.chmodSync(file, 0o444);
+      fs.chmodSync(folder, 0o500);
+      failWith = full();
+      try {
+        call('traces:removePair', { harness: 'qwen-code', models: '*' });
+      } finally {
+        fs.chmodSync(folder, 0o700);
+        fs.chmodSync(file, 0o600);
+      }
+      expect(kind().unsavedKind).toBe('revoke-comes-back');
+    });
+
+    it("'owed': a withdrawal whose file went, its settings not written", () => {
+      failWith = full();
+      runtime.withdrawUploadConsent();
+      expect(kind()).toMatchObject({ unsaved: expect.stringMatching(/ENOSPC/), unsavedKind: 'owed' });
+    });
   });
 });
