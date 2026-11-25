@@ -90,12 +90,14 @@ export function registerTracesHandlers(deps: TracesHandlerDeps): void {
     if (!r.ok) return r;
     // Traces turned off for an endpoint is a revoke of sharing: it applies first, then is written (holdRevoke), with
     // the rest of the save when that grants nothing (names, the hold, the defaults the save fills in). A save that
-    // also grants (session headers or plain http turned on) has that part written first.
+    // also grants (session headers or plain http turned on, or the address moved, which the save approves with the
+    // key) has that part written first.
     const before = (deps.getAppSettings().inferenceEndpoints ?? []).find(e => e.id === r.endpoint.id);
     let held: string | undefined;
     if (before?.allowTraces === true && r.endpoint.allowTraces === false) {
       const grants = (before.sendSessionHeaders !== true && r.endpoint.sendSessionHeaders === true)
-        || (before.allowPlainHttp !== true && r.endpoint.allowPlainHttp === true);
+        || (before.allowPlainHttp !== true && r.endpoint.allowPlainHttp === true)
+        || before.baseUrl !== r.endpoint.baseUrl;
       if (!grants) {
         held = holdRevoke(r.settings);
       } else {

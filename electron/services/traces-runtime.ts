@@ -150,7 +150,9 @@ function persistSettings(): boolean {
   try {
     deps.writeSettings(deps.getSettings());
   } catch (err) {
-    const then = consentHeldForRevoke ? 'sharing is stopped until they are, and Tars tries again every minute' : 'Tars tries again every minute';
+    const then = consentHeldForRevoke ? 'sharing is stopped until they are, and Tars tries again every minute'
+      : revokeComesBack ? 'what you stopped is stopped for now, but a restart before they are saved would share it again; Tars tries again every minute'
+      : 'Tars tries again every minute';
     const reason = settingsNotWritten(err, then);
     console.error(`[traces] ${reason}`);
     if (unsaved !== reason) { unsaved = reason; deps.emit('traces:changed'); }
@@ -161,9 +163,16 @@ function persistSettings(): boolean {
     return false;
   }
   if (unsaved) { unsaved = undefined; deps.emit('traces:changed'); }
+  revokeComesBack = false;
   if (consentHeldForRevoke) restoreHeldConsent();
   return true;
 }
+
+/**
+ * A revoke not yet written whose consent's file could be neither removed nor emptied: a restart before the settings
+ * hold reads them as they were, the consent standing, and shares again what the revoke stopped. The window is told.
+ */
+let revokeComesBack = false;
 
 /**
  * The consent whose file a revoke not yet written dropped (holdRevoke), to be put back once the settings hold: the
@@ -189,16 +198,18 @@ function restoreHeldConsent(): void {
  * and tried again every minute until it holds, the window told (`unsaved`). While it does not hold, the consent's
  * file is dropped, which needs no free space (dropConsentFile), so that a start before the write holds reads the old
  * settings with no consent and takes it for a deletion: it fails closed. Meanwhile nothing is shared at all; the file
- * is put back once the settings hold. Undefined when written, else the window's note.
+ * is put back once the settings hold. A file that can be neither removed nor emptied cannot fail closed, and the note
+ * says a restart would share again (revokeComesBack). Undefined when written, else the window's note.
  */
 export function holdRevoke(settings: AppSettings): string | undefined {
   if (!deps) return 'Tars is not ready.';
   deps.setSettings(settings);
   if (persistSettings()) return undefined;
   const at = traceSettingsOf(settings).uploadConsentAt;
-  if (at && !consentHeldForRevoke && consentStands(settings) && dropConsentFile()) {
-    consentHeldForRevoke = at;
-    // Once more, so the note says sharing is stopped.
+  if (at && !consentHeldForRevoke && consentStands(settings)) {
+    if (dropConsentFile()) consentHeldForRevoke = at;
+    else revokeComesBack = true;
+    // Once more, so the note says what a restart would do.
     persistSettings();
   }
   return unsaved;
@@ -467,10 +478,19 @@ export function stopTracesRuntime(): void {
   if (uploadSoon) clearTimeout(uploadSoon);
   uploadTimer = null;
   uploadSoon = null;
-  if (persistRetry) clearTimeout(persistRetry);
-  persistRetry = null;
-  // A consent dropped for a revoke not yet written stays dropped: the next start reads closed.
+  // A write still owed is tried once more before Tars stops: another save may have written the settings since (the
+  // window's own, an agent's), and only this one puts a consent dropped for a revoke back.
+  if (persistRetry) {
+    clearTimeout(persistRetry);
+    persistRetry = null;
+    persistSettings();
+    // Failed again: no retry outlives the runtime.
+    if (persistRetry) clearTimeout(persistRetry);
+    persistRetry = null;
+  }
+  // A consent dropped for a revoke that is still not written stays dropped: the next start reads closed.
   consentHeldForRevoke = undefined;
+  revokeComesBack = false;
   uploader = null;
   store?.close();
   store = null;
