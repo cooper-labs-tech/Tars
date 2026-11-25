@@ -1,6 +1,7 @@
 import { createHash } from 'crypto';
 import * as fs from 'fs';
 import * as path from 'path';
+import { parse as parseToml } from 'smol-toml';
 import { shortIdOf } from './agent-tmp';
 
 /**
@@ -32,8 +33,8 @@ import { shortIdOf } from './agent-tmp';
  * - worktree-node-modules: the node_modules of a worktree nothing changed in for 7 days (caches aside).
  * None of these when a report names it or a process works in it. A temporary item carries its agent's project.
  * Never, whatever matches: ~/.tars-private, ~/Documents, the uv cache (wherever uv puts it, from the variables Tars runs
- * with: never()), the Trash (the Finder's, and Linux's), ~/Library/Developer (Xcode, the iOS
- * runtimes and simulators), a Docker volume, a project's own folder, anything inside a worktree a fleet agent works
+ * with and uv's user-level config: never()), the Trash (the Finder's, Linux's, and each volume's), ~/Library/Developer
+ * (Xcode, the iOS runtimes and simulators), a Docker volume, a project's own folder, anything inside a worktree a fleet agent works
  * in, one with uncommitted work, or one a process works in. When the processes cannot be read (no lsof, Windows),
  * nothing that needs "nothing runs in it" is proposed.
  */
@@ -181,34 +182,82 @@ function fromEnv(name: string, ...under: string[]): string[] {
   return value && path.isAbsolute(value) ? [path.join(value, ...under)] : [];
 }
 
+/** Past this a uv.toml is no config, and is not read. */
+const UV_TOML_MAX = 64 * 1024;
+
 /**
- * The never list: folders nothing is ever proposed in. The uv cache is wherever uv may put it (uv 0.13.1, measured by
- * QA): $UV_CACHE_DIR, else $XDG_CACHE_HOME/uv, else ~/.cache/uv, and %LOCALAPPDATA%\uv\cache on Windows, with the
- * ~/Library/Caches/uv of older versions; every one of them is on the list, whichever uv would take. The Trash is the
- * Finder's ~/.Trash and Linux's freedesktop.org trash, $XDG_DATA_HOME/Trash or ~/.local/share/Trash. The variables are
- * the ones Tars runs with: a uv a shell starts with others is not seen here.
+ * The `cache-dir` of a uv.toml, as uv 0.13.1 reads it (measured): a folder only when absolute, since uv takes `~`,
+ * `$HOME` and a relative value as written, relative to the folder it runs in. None when the file is missing, is no
+ * file, is past UV_TOML_MAX, or is no TOML (uv refuses it too).
+ */
+function uvTomlCacheDir(file: string): string[] {
+  try {
+    const st = fs.statSync(file);
+    if (!st.isFile() || st.size > UV_TOML_MAX) return [];
+    const value = (parseToml(fs.readFileSync(file, 'utf-8')) as Record<string, unknown>)['cache-dir'];
+    return typeof value === 'string' && path.isAbsolute(value) ? [value] : [];
+  } catch {
+    return [];
+  }
+}
+
+/**
+ * A volume's trash, by the name of its folder: /Volumes/<v>/.Trashes on macOS, <mount>/.Trash-<uid> and
+ * <mount>/.Trash/<uid> on Linux, <drive>\$Recycle.Bin on Windows. The janitor reaches other volumes, since
+ * projects.json names any folder, so a project on a volume of its own included.
+ */
+const TRASH_FOLDER = /^(\.Trashes|\.Trash|\.Trash-\d+|\$Recycle\.Bin)$/i;
+const inATrash = (p: string) => p.split(/[\\/]/).some(s => TRASH_FOLDER.test(s));
+
+const neverOf = new WeakMap<JanitorWorld, string[]>();
+
+/**
+ * The never list: folders nothing is ever proposed in, made once for a world (it reads uv's config files).
+ * - The uv cache, wherever uv may put it (uv 0.13.1, measured), whichever of these uv would take:
+ *   - the variables: $UV_CACHE_DIR, $XDG_CACHE_HOME/uv, %LOCALAPPDATA%\uv\cache on Windows;
+ *   - the `cache-dir` of the user-level uv.toml, which moves it for every uv: $XDG_CONFIG_HOME/uv/uv.toml, else
+ *     ~/.config/uv/uv.toml, and %APPDATA%\uv\uv.toml on Windows;
+ *   - the literals ~/.cache/uv, <home>\AppData\Local\uv\cache, and the ~/Library/Caches/uv of older versions.
+ * - The Trash: the Finder's ~/.Trash, Linux's freedesktop.org trash ($XDG_DATA_HOME/Trash or ~/.local/share/Trash),
+ *   and each volume's (inATrash).
+ * Not seen here:
+ * - variables a shell sets for the uv it starts: those read are the ones Tars runs with;
+ * - a project's own uv.toml or [tool.uv] of its pyproject.toml: uv takes it from the nearest one above the folder it
+ *   runs in, which can be any folder of any project;
+ * - the system-level uv.toml (/etc/uv/uv.toml, %PROGRAMDATA%\uv\uv.toml) and a file named by UV_CONFIG_FILE.
  */
 function never(world: JanitorWorld): string[] {
+  const made = neverOf.get(world);
+  if (made) return made;
   const h = world.home;
-  return [
+  const uvConfigs = [
+    ...fromEnv('XDG_CONFIG_HOME', 'uv', 'uv.toml'), path.join(h, '.config', 'uv', 'uv.toml'),
+    ...fromEnv('APPDATA', 'uv', 'uv.toml'), path.join(h, 'AppData', 'Roaming', 'uv', 'uv.toml'),
+  ];
+  const list = [
     world.privateDir, path.join(h, 'Documents'),
     ...fromEnv('UV_CACHE_DIR'), ...fromEnv('XDG_CACHE_HOME', 'uv'), ...fromEnv('LOCALAPPDATA', 'uv', 'cache'),
-    path.join(h, '.cache', 'uv'), path.join(h, 'Library', 'Caches', 'uv'),
+    ...uvConfigs.flatMap(uvTomlCacheDir),
+    path.join(h, '.cache', 'uv'), path.join(h, 'Library', 'Caches', 'uv'), path.join(h, 'AppData', 'Local', 'uv', 'cache'),
     path.join(h, '.Trash'), ...fromEnv('XDG_DATA_HOME', 'Trash'), path.join(h, '.local', 'share', 'Trash'),
     path.join(h, 'Library', 'Developer'), '/Library/Developer',
   ].map(real);
+  neverOf.set(world, list);
+  return list;
 }
+
+/** On the never list, or under a folder of it, or in a volume's trash. */
+const isNever = (world: JanitorWorld, at: string) => inATrash(at) || never(world).some(n => inside(at, n));
 
 /** A folder on the never list, or under one (a project in ~/Documents, a .worktrees linked into it). */
 function onNeverList(world: JanitorWorld, p: string): boolean {
-  const at = real(p);
-  return never(world).some(n => inside(at, n));
+  return isNever(world, real(p));
 }
 
 /** Why a folder is not the janitor's to propose, or undefined. */
 function kept(world: JanitorWorld, p: string, worktree?: string): string | undefined {
   const at = real(p);
-  if (never(world).some(n => inside(at, n))) return 'it is on the never list';
+  if (isNever(world, at)) return 'it is on the never list';
   if (world.processes === null) return 'the processes cannot be read';
   const folder = worktree ? real(worktree) : at;
   // In it by its working folder, its executable or an open file, or named on its command line (M1). The paths come
