@@ -21,6 +21,14 @@ import { homeSignInGap } from '../../../electron/services/home-sign-in-gap';
  *    shell that sets no other home, or a relative one, or the same folder under another spelling; that other home not
  *    signed in either.
  * 3. The sentence names the wrong variable or the wrong homes.
+ *
+ * Written before the code, on the Audit's read of 6f2196a0b (its Info): with GEMINI_FORCE_ENCRYPTED_FILE_STORAGE on,
+ * gemini 0.70.0 keeps its sign-in in the keychain (service gemini-cli-oauth, one for every home) or, without one or
+ * with GEMINI_FORCE_FILE_STORAGE, in .gemini/gemini-credentials.json (read in its bundle; measured isolated on 25/11,
+ * never the real keychain: a planted gemini-credentials.json is what gemini read at its start).
+ * 4. A sign-in kept in gemini-credentials.json not seen: no line where one is due, or a line where Tars's home holds it.
+ * 5. With encrypted storage on and the keychain possible, a line claiming Tars's home is not signed in: the keychain
+ *    is not read here (no `security`, no keychain call), so nothing is claimed.
  */
 
 let root: string;
@@ -58,5 +66,29 @@ describe('a gemini or grok agent that will ask to sign in says why (1 to 3)', ()
     expect(await gap(cli, tars, path.join(root, 'nobody'))).toBeUndefined(); // not signed in there either
     signIn(cli, tars);
     expect(await gap(cli, tars, theirs)).toBeUndefined(); // Tars's own home signed in
+  });
+});
+
+describe("gemini's encrypted storage (4, 5)", () => {
+  const encrypted = (home: string) => {
+    fs.mkdirSync(path.join(home, '.gemini'), { recursive: true });
+    fs.writeFileSync(path.join(home, '.gemini', 'gemini-credentials.json'), 'encrypted');
+  };
+
+  it('4. a sign-in kept in gemini-credentials.json counts, in the shell\'s home and in Tars\'s', async () => {
+    const tars = path.join(root, 'tars-home');
+    const theirs = path.join(root, 'own-home');
+    encrypted(theirs);
+    expect(await gap('gemini', tars, theirs)).toContain('~/own-home');
+    encrypted(tars);
+    signIn('gemini', theirs);
+    expect(await gap('gemini', tars, theirs)).toBeUndefined();
+  });
+
+  it('5. with the keychain possible, nothing is claimed', async () => {
+    const tars = path.join(root, 'tars-home');
+    const theirs = path.join(root, 'own-home');
+    signIn('gemini', theirs);
+    expect(await homeSignInGap({ cli: 'gemini', home: tars, keyed: false, shellHome: async () => theirs, homeDir: root, keychainPossible: true })).toBeUndefined();
   });
 });
