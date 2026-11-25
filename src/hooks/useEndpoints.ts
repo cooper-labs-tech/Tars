@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState } from 'react';
 import type { EndpointView, EndpointWait, HarnessSupport } from '@/types/electron';
+import { reasonOf } from '@/lib/traces-format';
 
 /**
  * The inference endpoints as the main process holds them (endpoints.list), the requests it holds while one is busy
@@ -25,7 +26,7 @@ export function useEndpoints() {
       setEndpoints(await api.list());
       setError(null);
     } catch (e) {
-      setError(e instanceof Error ? e.message : String(e));
+      setError(reasonOf(e));
     }
   }, [api]);
 
