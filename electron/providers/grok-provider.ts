@@ -35,8 +35,11 @@ import { safeEffort } from './cli-provider';
  *
  * Grok's CLI semantics closely mirror Claude Code / Codex, so MCP handling
  * follows the Codex provider (config.toml with [mcp_servers.<name>] sections).
- * Note: Grok has no `--add-dir`/multi-root flag, so secondary-project and
- * Obsidian-vault mounting are intentionally not emitted.
+ * Note: grok 1.0.92 takes `--add-dir <DIR>` (repeatable; its help, measured
+ * isolated on 25/11: refused if the folder isn't trusted, and a resumed session
+ * keeps the folders it was created with). Tars does not hand it one yet, the
+ * secondary folder nor the Obsidian vaults: that waits on grok's folder trust
+ * and on its resume (#637). The secondary folder is said at each launch.
  */
 export class GrokProvider implements CLIProvider {
   readonly id = 'grok' as const;
@@ -58,10 +61,10 @@ export class GrokProvider implements CLIProvider {
   }
 
   buildInteractiveCommand(params: InteractiveCommandParams): string {
-    // grok has no flag for a secondary folder (above): one is refused where it is set (providers/added-folders.ts),
-    // and one set before that is said in the agent's output at each launch, where its user reads it.
+    // Tars does not hand grok its secondary folder yet (above): said in the agent's output at each launch, where its
+    // user reads it.
     if (params.agentId && params.secondaryProjectPath) {
-      agentNotice(params.agentId, `grok takes no secondary folder, so ${params.secondaryProjectPath} is not in this agent's workspace: clear it, or give the agent another CLI`);
+      agentNotice(params.agentId, `Tars does not hand grok its secondary folder yet, so ${params.secondaryProjectPath} is not in this agent's workspace`);
     }
     let command = `'${params.binaryPath.replace(/'/g, "'\\''")}'`;
 
@@ -295,7 +298,7 @@ export class GrokProvider implements CLIProvider {
   }
 
   getAddDirFlag(): string {
-    // Grok has no --add-dir / multi-root flag.
+    // grok 1.0.92 has --add-dir, which Tars does not hand it yet (the class's note).
     return '';
   }
 }

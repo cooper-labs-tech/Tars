@@ -11,7 +11,7 @@ export const CHANGELOG: Release[] = [
     version: '2.0.7',
     date: '2026-11-24',
     updates: [
-      'A Gemini agent no longer loses its first task to Gemini\'s folder trust questions, for its own folder and the folders Tars adds; in auto or bypass it no longer waits on an approval for each tool; and it continues its own conversation when Tars starts again. A folder you refused in Gemini stays refused. A folder whose name holds a comma, which Gemini and Qwen Code split apart, and any secondary folder for Grok, which takes none, are refused when you set them, with the reason.',
+      'A Gemini agent no longer loses its first task to Gemini\'s folder trust questions, for its own folder and the folders Tars adds; in auto or bypass it no longer waits on an approval for each tool; and it continues its own conversation when Tars starts again. A folder you refused in Gemini stays refused. A folder whose name holds a comma, which Gemini and Qwen Code split apart, is refused when you set it, with the reason, and an agent that already has one is told when it starts.',
     ],
   },
   {

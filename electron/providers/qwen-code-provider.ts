@@ -22,6 +22,9 @@ import type {
 import { servedPathMatches, shellQuote } from './cli-provider';
 import { qwenRoleArgs } from '../services/mcp-roles';
 
+/** The folders left off a line built with no agent to tell, said once per run in Tars's log, as gemini's are. */
+const unpassableSaid = new Set<string>();
+
 /**
  * Qwen Code (2.0.4): the CLI `qwen`, a Gemini CLI fork, as a CLI of Tars's
  * with everything a claude agent has: a session kept after its first prompt,
@@ -80,6 +83,10 @@ export class QwenCodeProvider implements CLIProvider {
     for (const folder of added) {
       if (!splitOnItsLine(folder)) command += ` --include-directories ${shellQuote(folder)}`;
       else if (params.agentId) agentNotice(params.agentId, splitFolderSentence('Qwen Code', folder));
+      else if (!unpassableSaid.has(folder)) {
+        unpassableSaid.add(folder);
+        console.warn(`[qwen-code] ${splitFolderSentence('Qwen Code', folder)}`);
+      }
     }
 
     // No task, no prompt: a launch without one opens at its prompt.
