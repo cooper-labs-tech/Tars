@@ -481,11 +481,18 @@ describe("a folder the agent's CLI could never see, judged on the move", () => {
   });
 
   it('12g. a grok agent takes a secondary folder, set or kept across a move to grok', async () => {
-    const set = await updateAgent({ id: 'k1', secondaryProjectPath: '/home/me/other' });
-    expect(set.success, JSON.stringify(set)).toBe(true);
-    const moved = await updateAgent({ id: 'w2', provider: 'grok', secondaryProjectPath: '/home/me/other' });
-    expect(moved.success, JSON.stringify(moved)).toBe(true);
-    expect(agents.get('w2')!.provider).toBe('grok');
+    // A folder that exists, which updateAgent checks after the guard with fs.existsSync: the fake disk answers
+    // statSync and accessSync only, so it is a real one.
+    const other = fs.mkdtempSync(path.join(os.tmpdir(), 'grok-secondary-'));
+    try {
+      const set = await updateAgent({ id: 'k1', secondaryProjectPath: other });
+      expect(set.success, JSON.stringify(set)).toBe(true);
+      const moved = await updateAgent({ id: 'w2', provider: 'grok', secondaryProjectPath: other });
+      expect(moved.success, JSON.stringify(moved)).toBe(true);
+      expect(agents.get('w2')!.provider).toBe('grok');
+    } finally {
+      fs.rmSync(other, { recursive: true, force: true });
+    }
   });
 });
 
