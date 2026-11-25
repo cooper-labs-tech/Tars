@@ -28,6 +28,10 @@ import { DEV_URL, apiPort } from './ports.mjs';
  *    again in that shell's place, it gets no CODEX_API_KEY and no provider of Tars's, its own login (the Audit's L1
  *    on #459: the reused shell kept the key it was spawned with).
  * Red on main 42fe71d8: there is no cliKeys channel, and codex's agent gets no key.
+ * 7. (25/11) Grok's key goes under XAI_API_KEY, the variable grok 1.0.92 sends as its key (measured isolated against a
+ *    loopback stand-in of xAI's API: `Authorization: Bearer`; GROK_API_KEY is never read). The window is told so, and
+ *    an install that stored GROK_API_KEY as grok's variable before still gets its key to grok, under XAI_API_KEY (the
+ *    last test). Red on main 58f2863b4: grok's agent gets GROK_API_KEY.
  * The artefact: values.json (the lists, the stand-ins' records, the files scanned), with E2E_TRACE=on the app's trace.
  */
 
@@ -50,14 +54,14 @@ const sha = (s: string) => crypto.createHash('sha256').update(s).digest('hex');
 const KEYS: Record<string, { key: string; envVar: string; set?: string }> = {
   codex: { key: 'sk-e2e-codex-1111', envVar: 'CODEX_API_KEY' },
   gemini: { key: 'e2e-gemini-2222', envVar: 'GEMINI_API_KEY' },
-  grok: { key: 'xai-e2e-grok-3333', envVar: 'GROK_API_KEY' },
+  grok: { key: 'xai-e2e-grok-3333', envVar: 'XAI_API_KEY' },
   amp: { key: 'sgamp-e2e-amp-4444', envVar: 'AMP_API_KEY' },
   opencode: { key: 'sk-or-e2e-opencode-5555', envVar: 'OPENROUTER_API_KEY', set: 'OPENROUTER_API_KEY' },
   pi: { key: 'e2e-pi-mistral-6666', envVar: 'MISTRAL_API_KEY', set: 'MISTRAL_API_KEY' },
 };
 
 type Rec = { name: string; pid: number; agent: string | null; argv: string[]; keys: string[]; hashes: Record<string, string> };
-type KeyState = { id: string; envVar: string | null; hasKey: boolean };
+type KeyState = { id: string; envVar: string | null; hasKey: boolean; envVarFixed?: boolean; envVarChoices?: string[] };
 type Api = { electronAPI: {
   cliKeys: { list(): Promise<KeyState[]>; set(id: string, patch: { key?: string | null; envVar?: string | null }): Promise<{ success: boolean; error?: string }> };
   appSettings: { get(): Promise<unknown>; save(s: unknown): Promise<unknown> };
@@ -185,3 +189,55 @@ for (const newInterface of [false, true]) {
     }
   });
 }
+
+test("an install that stored GROK_API_KEY as grok's variable still gets its key to grok, under XAI_API_KEY", async () => {
+  test.setTimeout(120_000);
+  const home = fs.mkdtempSync(path.join(os.tmpdir(), 'dorothy-e2e-grok-key-'));
+  const project = path.join(home, 'projects', 'demo');
+  const dir = path.join(home, '.tars');
+  const bin = path.join(home, 'bin');
+  for (const d of [project, dir, bin]) fs.mkdirSync(d, { recursive: true });
+  const grok = path.join(bin, 'grok');
+  fs.writeFileSync(grok, `#!${process.execPath}\n${STAND_IN}`, { mode: 0o755 });
+  fs.writeFileSync(path.join(dir, 'agents.json'), JSON.stringify([{
+    id: 'a-grok', name: 'grok agent', character: 'robot', provider: 'grok', status: 'idle', role: 'worker', projectPath: project, skills: [],
+    permissionMode: 'normal', cliPath: grok, createdAt: '2026-11-25T08:00:00.000Z', lastActivity: '2026-11-25T08:00:00.000Z',
+  }], null, 2));
+  fs.writeFileSync(path.join(dir, 'projects.json'), JSON.stringify([project]));
+  fs.writeFileSync(path.join(dir, 'hermes-connection.json'), JSON.stringify({ mode: 'local', localPort: 9, authMode: 'token' }));
+  fs.writeFileSync(path.join(dir, 'app-settings.json'), JSON.stringify({
+    autoStartAgentsOnLaunch: false, ollamaBaseUrl: 'http://127.0.0.1:9', cliPaths: { grok, additionalPaths: [bin] }, grokEnabled: true,
+  }));
+  // What 2.0.6 kept for an install whose grok variable was GROK_API_KEY: the old default picked, or the list's first.
+  const OLD = 'xai-e2e-old-install-7777';
+  fs.mkdirSync(path.join(home, '.tars-private'), { mode: 0o700 });
+  fs.writeFileSync(path.join(home, '.tars-private', 'settings-secrets.json'), `${JSON.stringify({ cliApiKeys: { grok: { key: OLD, envVar: 'GROK_API_KEY' } } }, null, 2)}\n`, { mode: 0o600 });
+  const values: Record<string, unknown> = { home };
+  const keep = (more: Record<string, unknown>) => { Object.assign(values, more); recordValues(values); };
+  const records = () => (fs.existsSync(path.join(home, 'stand-in.jsonl'))
+    ? fs.readFileSync(path.join(home, 'stand-in.jsonl'), 'utf8').trim().split('\n').filter(Boolean).map((l) => JSON.parse(l) as Rec) : []);
+
+  const app: ElectronApplication = await launchSandboxed(electron, home, {
+    env: { NODE_ENV: 'development', DOROTHY_DEV_URL: DEV_URL, DOROTHY_API_PORT: apiPort(31525), DOROTHY_E2E: '1' },
+  });
+  try {
+    const page = await app.firstWindow();
+    await page.goto(`${DEV_URL}/agents`, { waitUntil: 'domcontentloaded' });
+    await page.waitForFunction(() => !!(window as unknown as Partial<Api>).electronAPI);
+    const listed = await page.evaluate(() => (window as unknown as Api).electronAPI.cliKeys.list());
+    const grokState = listed.find((c) => c.id === 'grok');
+    keep({ grokState });
+    expect.soft(grokState).toMatchObject({ hasKey: true, envVar: 'XAI_API_KEY', envVarFixed: true, envVarChoices: [] });
+
+    await page.evaluate(() => (window as unknown as Api).electronAPI.agent.start({ id: 'a-grok', prompt: '' }));
+    await expect.poll(() => records().filter((r) => r.agent === 'a-grok').length, { timeout: 60_000, message: 'the grok stand-in started' }).toBeGreaterThan(0);
+    const rec = records().find((r) => r.agent === 'a-grok')!;
+    keep({ rec });
+    expect.soft(rec.hashes.XAI_API_KEY, 'the key under XAI_API_KEY, which grok reads').toBe(sha(OLD));
+    expect.soft(rec.keys, 'GROK_API_KEY, which grok never reads').not.toContain('GROK_API_KEY');
+    expect.soft(rec.argv.join(' ')).not.toContain(OLD);
+  } finally {
+    await app.close().catch(() => undefined);
+    await removeHome(home);
+  }
+});
