@@ -471,6 +471,20 @@ const ELECTRON_PATHS = ['home', 'appData', 'userData', 'sessionData', 'cache', '
  */
 const onWindows = process.platform === 'win32';
 
+/**
+ * The XDG base folders, each at its default under the sandbox (the XDG spec's
+ * own defaults under HOME), so a runner's exported ones never reach the app or
+ * the CLIs it starts. A spec's env may still name another.
+ */
+function sandboxXdg(sandboxHome) {
+  return {
+    XDG_CONFIG_HOME: path.join(sandboxHome, '.config'),
+    XDG_DATA_HOME: path.join(sandboxHome, '.local', 'share'),
+    XDG_STATE_HOME: path.join(sandboxHome, '.local', 'state'),
+    XDG_CACHE_HOME: path.join(sandboxHome, '.cache'),
+  };
+}
+
 function windowsHome(sandboxHome) {
   if (!onWindows) return {};
   const roaming = path.join(sandboxHome, 'AppData', 'Roaming');
@@ -619,7 +633,9 @@ const RENDERING_ARGS = ['--lang=fr-FR', ...(onWindows ? ['--disable-lcd-text'] :
  * own (writeSandboxGitIdentity), unless the spec wrote one. XDG_CONFIG_HOME is
  * the sandbox's `.config`, unless the spec's env names another: a runner's own
  * reached the app, and through it git's config and the CLIs' (the Audit's I-1
- * on #643).
+ * on #643). XDG_DATA_HOME, XDG_STATE_HOME and XDG_CACHE_HOME are the sandbox's
+ * `.local/share`, `.local/state` and `.cache` the same way, where each CLI keeps
+ * its sessions, its logs and its caches when they are unset (the Audit's I-3).
  *
  * The HOME must lie inside a folder the specs make their sandboxes in, judged
  * as removeHome judges it, or nothing is written there and no app is started
@@ -639,7 +655,7 @@ export async function launchSandboxed(electron, sandboxHome, { env = {}, profile
     ...options,
     // A packed app (executablePath, e2e/sandbox-build.packed.spec.ts) runs its own code: no '.' to name it.
     args: [...(options.executablePath ? [] : ['.']), `--user-data-dir=${path.join(sandboxHome, profile)}`, ...RENDERING_ARGS],
-    env: withSandboxPath({ ...inheritable(process.env), PATH: sandboxPath(sandboxHome), DOROTHY_TAILSCALE_BIN: writeFakeTailscale(sandboxHome), XDG_CONFIG_HOME: path.join(sandboxHome, '.config'), ...env, ...windowsHome(sandboxHome), HOME: sandboxHome, CFFIXED_USER_HOME: sandboxHome }, env),
+    env: withSandboxPath({ ...inheritable(process.env), PATH: sandboxPath(sandboxHome), DOROTHY_TAILSCALE_BIN: writeFakeTailscale(sandboxHome), ...sandboxXdg(sandboxHome), ...env, ...windowsHome(sandboxHome), HOME: sandboxHome, CFFIXED_USER_HOME: sandboxHome }, env),
   });
   // What the app inherited, checked the way its folders are below: a run
   // started by an agent inside Tars carries that agent's CLAUDE_MGR_API_URL
