@@ -7,8 +7,8 @@ import {
 /**
  * One heavy-run slot for the whole machine (2.0.5, lot 2 item A of ressources-agents-proposition-2810.md, the
  * owner's go of 28/10): test suites, builds, dev servers, Docker and simulators of every project's agents take it in
- * turn. Each project's orchestrator had built its own lock (kotsna's mkdir, parallel's heavy-run.lock, 1212's rule
- * 198): nothing coordinated the projects, a dead agent left its lock taken, and 1212 read the free space at the start
+ * turn. Each project's orchestrator had built its own lock (one project's mkdir, another project's lock file, a third's rule
+ * 198): nothing coordinated the projects, a dead agent left its lock taken, and that third project read the free space at the start
  * only, while the swap grew during the run (a `next dev` takes 6 to 7 GB of it).
  *
  * Every way it can fail, written before the code (2026-10-28):
@@ -28,7 +28,7 @@ import {
  *  H8. A figure the system cannot give (null: Windows's swap) blocks every grant forever.
  *  H9. During a run nothing is said as the disk fills (10, 6 and 3 GB) or the swap grows fast; or the same alert is
  *      repeated at every read.
- * H10. Tars stops a run by itself (an ansible run or a build talking to the Sparks must never be ended by anything
+ * H10. Tars stops a run by itself (an ansible run or a build talking to a remote inference host must never be ended by anything
  *      automatic): the world gives the slot no way to end a process, and an alert changes nothing of the lease.
  * H11. A ticket is given back, or read, by another agent than the one that asked.
  * H12. The slot count is a setting: two slots grant two asks; a setting that is not a number in range is 1.

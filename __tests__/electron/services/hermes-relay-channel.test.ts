@@ -287,11 +287,11 @@ describe('a store made again', () => {
 
 describe('the projects "@name" may address', () => {
   it('10. are registered at the first round: the fleet\'s names that are one word, each once', async () => {
-    relay.setRelayProjects(() => ['tars', '1212-Capital', 'My Project', 'a@b', 'x:y', 'esc\x1bname', 'tars']);
+    relay.setRelayProjects(() => ['tars', 'Acme-Capital', 'My Project', 'a@b', 'x:y', 'esc\x1bname', 'tars']);
 
     await relay.relayTick(T0);
 
-    expect(fake.projects).toEqual(['1212-Capital', 'tars']);
+    expect(fake.projects).toEqual(['Acme-Capital', 'tars']);
   });
 
   it('10. are told again when a project comes or goes, or the plugin has lost them, and only then', async () => {
@@ -303,21 +303,21 @@ describe('the projects "@name" may address', () => {
     await relay.relayTick(T0 + 5_000);
     expect(posts()).toBe(1);
 
-    names = ['tars', '1212-Capital'];
+    names = ['tars', 'Acme-Capital'];
     await relay.relayTick(T0 + 10_000);
-    expect(fake.projects).toEqual(['1212-Capital', 'tars']);
+    expect(fake.projects).toEqual(['Acme-Capital', 'tars']);
 
-    fake.projects = ['TARS', '1212-capital'];
+    fake.projects = ['TARS', 'acme-capital'];
     await relay.relayTick(T0 + 15_000);
     expect(posts(), 'the same names in another case are the same projects').toBe(2);
 
     fake.projects = [];
     await relay.relayTick(T0 + 20_000);
-    expect(fake.projects).toEqual(['1212-Capital', 'tars']);
+    expect(fake.projects).toEqual(['Acme-Capital', 'tars']);
 
-    names = ['1212-Capital'];
+    names = ['Acme-Capital'];
     await relay.relayTick(T0 + 25_000);
-    expect(fake.projects).toEqual(['1212-Capital']);
+    expect(fake.projects).toEqual(['Acme-Capital']);
     expect(posts()).toBe(4);
   });
 

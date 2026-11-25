@@ -20,7 +20,7 @@ import type { RoomAgent } from '../../src/hooks/useRoomAgents';
  *    so the head is pushed past the column's edge.
  */
 
-const LONG = '1212-capital-markets-dashboard-and-reports';
+const LONG = 'acme-capital-markets-dashboard-and-reports';
 const noop = () => {};
 
 function agent(id: string): RoomAgent {

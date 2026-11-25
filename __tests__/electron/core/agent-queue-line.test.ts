@@ -6,7 +6,7 @@ import { createOneTaskQueue, type QueueSnapshot } from '../../../electron/core/o
  * lot2-agent-queue-2810.md): the line of electron/core/one-task.ts, which holds every task and message waiting for
  * the agent's rest.
  *
- * What the projects' orchestrators hit on 27 and 28/10 (their tars-feedback-2810.md): six queued items to Kotsna-QA
+ * What the projects' orchestrators hit on 27 and 28/10 (their tars-feedback-2810.md): six queued items to Delta-QA
  * that could be neither seen, cancelled nor moved; a "priority insert" landing behind items queued earlier; a stop
  * that emptied the queue; tasks lost at every restart of Tars, with no list of what was lost; task_status answering
  * "No such task" for a task Tars had announced.
@@ -22,7 +22,7 @@ import { createOneTaskQueue, type QueueSnapshot } from '../../../electron/core/o
  *    and a restore (a restart of Tars); or a restore queues again an id the line already holds;
  * Q5 a change of the line (queued, taken, cancelled, moved, paused, resumed) is not told, so it is not saved;
  * Q6 a request typed straight into the agent's terminal is unknown to task_status: "No such task" for an id Tars
- *    announced (Kotsna, t-9aa78b94, 27/10);
+ *    announced (another project, t-9aa78b94, 27/10);
  * Q7 the line is read out of order, or without who sent each item, since when and how it goes in.
  */
 

@@ -7,8 +7,8 @@ import * as path from 'node:path';
  * An orchestrator told "is now waiting" about an agent that had just started.
  *
  * JeanBrasse's report of 2026-09-18 (faux-waiting-2b86): the orchestrator of
- * 1212-Capital delegated a task to 1212-Backend and was told at once, in its
- * own terminal, that 1212-Backend "is now waiting", while it had only begun.
+ * Acme-Capital delegated a task to Acme-Backend and was told at once, in its
+ * own terminal, that Acme-Backend "is now waiting", while it had only begun.
  * What the logs of that evening show, and what each case below replays:
  *
  * - delegate_task tried ACP first (until 2.0.4), through /run-task, which set `running`.
@@ -134,7 +134,7 @@ beforeEach(() => {
   // The agent it delegates to, with a live claude session at its prompt for
   // more than a minute, so `waiting` because idle: /dispatch types into it.
   liveTerminal('pty-be');
-  putAgent({ id: 'be', name: '1212-Backend', status: 'waiting', waitingReason: 'idle', ptyId: 'pty-be', currentSessionId: sid('sess-be') });
+  putAgent({ id: 'be', name: 'Acme-Backend', status: 'waiting', waitingReason: 'idle', ptyId: 'pty-be', currentSessionId: sid('sess-be') });
 });
 
 afterEach(async () => {
@@ -375,7 +375,7 @@ describe('a permission prompt in the middle of a turn', () => {
     expect(backend().waitingReason).toBe('permission');
     const notes = toldOrchestrator().slice(toldBefore);
     expect(notes, 'a permission prompt in the middle of a delegated turn never reached the orchestrator').toHaveLength(1);
-    expect(notes[0]).toContain('1212-Backend');
+    expect(notes[0]).toContain('Acme-Backend');
     expect(notes[0]).toContain('permission');
   });
 });
@@ -569,7 +569,7 @@ describe('an orchestrator already waiting on this agent', () => {
     await turnEnds('the suite is green');
     await pause(500);
 
-    expect(toldOrchestrator().join('')).toContain('1212-Backend');
+    expect(toldOrchestrator().join('')).toContain('Acme-Backend');
   });
 
   it('is told in its terminal when the poll it is sitting in is about someone else', async () => {
@@ -581,7 +581,7 @@ describe('an orchestrator already waiting on this agent', () => {
     await turnEnds('the suite is green');
     await pause(500);
 
-    expect(toldOrchestrator().join('')).toContain('1212-Backend');
+    expect(toldOrchestrator().join('')).toContain('Acme-Backend');
   });
 
   it('is told in its terminal again once its poll has gone', async () => {
@@ -601,7 +601,7 @@ describe('an orchestrator already waiting on this agent', () => {
     await turnEnds('still green');
     await pause(500);
 
-    expect(toldOrchestrator().join(''), 'the poll that answered went on silencing the next turn').toContain('1212-Backend');
+    expect(toldOrchestrator().join(''), 'the poll that answered went on silencing the next turn').toContain('Acme-Backend');
   });
 });
 

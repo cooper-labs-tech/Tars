@@ -4,7 +4,7 @@ import { EventEmitter } from 'node:events';
 
 /**
  * What an orchestrator reads of its agents' resources (lot 3 item D: "get_agent and list_agents carry each agent's
- * memory and status since"; 1212's orchestrator could not tell which agents held the memory).
+ * memory and status since"; another project's orchestrator could not tell which agents held the memory).
  *
  * How it fails, written before the code (28/10):
  * A1. list_agents gives no agent's memory nor since when it is in its status.

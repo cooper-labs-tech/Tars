@@ -81,7 +81,7 @@ import { FakeHermes } from '../../fixtures/fake-hermes';
 // ── The board: Hermes as measured (__tests__/fixtures/fake-hermes.ts) ──────
 
 const TARS = '/Users/you/tars';
-const OTHER = '/Users/you/1212-capital';
+const OTHER = '/Users/you/acme-capital';
 const dune: KanbanCaller = { agentId: 'aaaa1111-0000-4000-8000-000000000001', name: 'Dune', projectPath: TARS };
 const dove: KanbanCaller = { agentId: 'bbbb2222-0000-4000-8000-000000000002', name: 'Dove', projectPath: TARS };
 const far: KanbanCaller = { agentId: 'cccc3333-0000-4000-8000-000000000003', name: 'Far', projectPath: OTHER };
@@ -137,7 +137,7 @@ describe('1. a task an agent creates arrives parked, and never where Hermes take
       expect(r.ok ? 'ok' : `${r.status} ${r.error}`, asked).toBe('ok');
       expect(h.tasks.get(r.ok ? r.value.id : '')!.tenant).toBe(win.projectPath);
     }
-    for (const asked of ['C:\\Users\\demo\\tars-other', 'C:\\Users\\demo\\tars\\..\\1212-capital', 'D:\\Users\\demo\\tars']) {
+    for (const asked of ['C:\\Users\\demo\\tars-other', 'C:\\Users\\demo\\tars\\..\\acme-capital', 'D:\\Users\\demo\\tars']) {
       const r = await createParkedTask(h, win, { title: 'T', description: 'D', projectPath: asked });
       expect(r.ok ? 0 : r.status, asked).toBe(403);
     }
@@ -356,8 +356,8 @@ describe('10. the local board moves to Hermes once, parked, and stays as a backu
   const file = path.join(dir, 'kanban-tasks.json');
   const record = path.join(dir, 'kanban-moved-to-hermes.json');
   const local = [
-    { id: 'l1', title: '1212 · 0. E2E-first', description: 'Rule', column: 'backlog', projectPath: OTHER, priority: 'high', labels: [] },
-    { id: 'l2', title: '1212 · 1. Mesure', description: 'Perf', column: 'planned', projectPath: OTHER, priority: 'medium', labels: ['perf'] },
+    { id: 'l1', title: 'Acme ·0. E2E-first', description: 'Rule', column: 'backlog', projectPath: OTHER, priority: 'high', labels: [] },
+    { id: 'l2', title: 'Acme ·1. Mesure', description: 'Perf', column: 'planned', projectPath: OTHER, priority: 'medium', labels: ['perf'] },
     { id: 'l3', title: 'Old and done', description: '', column: 'done', projectPath: OTHER, priority: 'low', labels: [] },
   ];
 
@@ -372,7 +372,7 @@ describe('10. the local board moves to Hermes once, parked, and stays as a backu
     expect(r).toMatchObject({ moved: 2, skipped: 0, errors: [] });
     expect(fs.readFileSync(file, 'utf-8')).toBe(before);
     const titles = [...h.tasks.values()].map(t => t.title).sort();
-    expect(titles).toEqual(['1212 · 0. E2E-first', '1212 · 1. Mesure']);
+    expect(titles).toEqual(['Acme ·0. E2E-first', 'Acme ·1. Mesure']);
     for (const t of h.tasks.values()) {
       expect(t.status).toBe('scheduled');
       expect(t.tenant).toBe(OTHER);

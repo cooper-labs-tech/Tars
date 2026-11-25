@@ -48,7 +48,7 @@ const NAME_MAX = 200;
 /**
  * Folders shown by name and never opened, nor counted: listing one is never
  * what the Vault is opened for, and one worktree's node_modules alone holds
- * 100,000 entries (parallel's reports keep 166 worktrees).
+ * 100,000 entries (one project's reports keep 166 worktrees).
  */
 export const HEAVY_FOLDERS = ['node_modules', '.git', '.venv', 'venv', '.next', '__pycache__', '.turbo', 'dist-electron', 'target'] as const;
 export const isHeavy = (name: unknown) => (HEAVY_FOLDERS as readonly unknown[]).includes(name);

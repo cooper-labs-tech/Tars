@@ -29,7 +29,7 @@ type Window = { since: number; until: number };
  * A task's answer from the messages the agent wrote in it, in order: its report, the longest of them (the later of
  * two as long), and every message after it, a blank line between (the DB brief fix-answer-per-task-2810.md). The last
  * message alone was the answer until 2.0.5, and a memory note or a closing line written after the report replaced it:
- * the asker read "Saving the durable lessons to memory" where the report was (1212's orchestrator, 28/10). What comes
+ * the asker read "Saving the durable lessons to memory" where the report was (another project's orchestrator, 28/10). What comes
  * before the report (narration) stays out. Past ANSWER_MAX characters, cut, and the cut said. One rule for every CLI
  * Tars reads an answer from: Claude Code's and Qwen Code's transcripts here, codex's and pi's session logs.
  */

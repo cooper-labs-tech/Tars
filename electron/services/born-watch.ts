@@ -5,9 +5,9 @@ import type { NoteDelivery } from './error-triage';
 
 /**
  * What an agent started that outlives its session: recorded on its record, and said once to its project's
- * orchestrator an hour on; never ended by Tars (2.0.5, the owner's lot 2 of 28/10). kotsna's 5 dev servers (14
+ * orchestrator an hour on; never ended by Tars (2.0.5, the owner's lot 2 of 28/10). One project's 5 dev servers (14
  * processes) ran 10 days with no session, and nobody knew. The owner's limits: an ansible run, a `fly ssh` or a
- * build talking to the Sparks may be among them, so nothing here signals anything; a stop, which someone asks
+ * build talking to a remote inference host may be among them, so nothing here signals anything; a stop, which someone asks
  * for, ends what its agent started (core/born-processes.ts, agent-stop.ts).
  *
  * An agent with no live session: stopped, asleep, or whose CLI is gone from its terminal. With one, what it runs

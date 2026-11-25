@@ -5,7 +5,7 @@ import { redactCommandLine } from '../utils/redact-command-line';
  * What each agent and each project costs, readable (2.0.5, lot 3 item D; brief lot3-agent-resources-2810.md; the
  * Frontend's contract on #539, `FleetResources`): per agent, the memory and CPU of its whole process tree and its
  * processes with their command lines masked, the disk of its worktree and of its temporary folder as last measured,
- * its status and since when; per project, the same summed. 1212's orchestrator could not tell which agents held the
+ * its status and since when; per project, the same summed. Another project's orchestrator could not tell which agents held the
  * memory (its tars-feedback-2810.md, item 8).
  *
  * This is the core, a pure function of the fleet, one process table and the disk measured so far

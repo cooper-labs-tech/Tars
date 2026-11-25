@@ -53,7 +53,7 @@ import { linkSpent, requestTitle, setRequestsEndedHook, type RequestsEndedWhy, t
  * not news it was the only thing that told an orchestrator a delegated turn
  * had ended: a minute late, and also each time the agent came back to rest for
  * any other reason. JeanBrasse's note of 2026-09-18 was one of those. A failed ACP
- * start put 1212-Backend back to the `waiting` it had left, and the
+ * start put Acme-Backend back to the `waiting` it had left, and the
  * orchestrator of a delegation finished 85 minutes earlier was told it "is now
  * waiting". The rest is now news once, as the end of the work handed over,
  * whichever post brings it: the Stop hook's `idle`, or for a turn that ended
@@ -126,7 +126,7 @@ const lastSeen = new Map<string, string>();
 function stateOf(agent: AgentStatus): string {
   // The idle prompt's `waiting` is the same rest as the `idle` before it: Claude Code says so 60 s on. Read as a
   // second transition, an end of turn with background work (its link kept) was told twice, 18 times in 4 days on
-  // Parallel's orchestrator (the DB brief fix-twin-deliveries-2810.md).
+  // another project's orchestrator (the DB brief fix-twin-deliveries-2810.md).
   const resting = agent.status === 'waiting' && agent.waitingReason === 'idle';
   return [resting ? 'idle' : agent.status, resting ? '' : agent.waitingReason ?? '', agent.lastTurnStartedAt ?? ''].join('|');
 }
@@ -362,7 +362,7 @@ export function tellTakenBack(requesterId: string, workerId: string, why: string
  * A message typed into a worker's field that its CLI never took: no turn began
  * on it, and the worker is back at its prompt (services/status-truth.ts,
  * `not-taken`). Whoever handed it is told it never ran, since no turn means no
- * end of turn and no other note: Kotsna-QA's six queued tasks of 28/10 waited
+ * end of turn and no other note: Delta-QA's six queued tasks of 28/10 waited
  * 42 minutes for one.
  */
 export function tellNotTaken(worker: AgentStatus): void {

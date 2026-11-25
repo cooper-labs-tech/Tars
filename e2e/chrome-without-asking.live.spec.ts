@@ -6,7 +6,7 @@
 // was held for Tars's window, which could not allow it, and refused at the delay; "ask in terminal" seemed to do
 // nothing. Measured on claude 2.1.321: under the server's flag tengu_cowork_chrome_automode_default, Claude Code takes
 // Chrome's calls out of bypass and hands each to the auto mode classifier after tool.check, which the state mod took
-// for the dialog. Among them, the Parallel orchestrator's of that night (its answer of 10/11): a browser_batch that
+// for the dialog. Among them, another project's orchestrator's of that night (its answer of 10/11): a browser_batch that
 // navigated to a page of a site the owner is signed in to, refused at the 10-minute delay, and the x.com threads and
 // searches it reads in Chrome, SocialData having no key. A sandbox Tars runs two workers in bypass, each asked, in one
 // turn, to open https://example.com and read it, to make one browser_batch that navigates to the signed-in page
@@ -250,7 +250,7 @@ test('Claude in Chrome acts for an agent in bypass with nothing asking, the owne
       expect(r.transcript.calls.filter(c => c.error && !c.tool.endsWith('__get_page_text')), `${name}: no call failed but a read of a page still loading`).toEqual([]);
       const went = navigated(r);
       expect(went.some(n => n.url.startsWith('https://example.com')), `${name}: example.com opened`).toBe(true);
-      // Parallel's first case: a browser_batch that navigates on a site the owner is signed in to.
+      // That orchestrator's first case: a browser_batch that navigates on a site the owner is signed in to.
       expect(went.some(n => n.tool.endsWith('__browser_batch') && n.url === SIGNED_IN), `${name}: a browser_batch navigated to the signed-in page`).toBe(true);
       // Its second: x.com, a search and a thread, read.
       expect(went.some(n => n.url === X_SEARCH), `${name}: the x.com search opened`).toBe(true);

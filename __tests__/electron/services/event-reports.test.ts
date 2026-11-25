@@ -37,7 +37,7 @@ let on = true;
 const channel = { async send(text: string, projectPath: string) { sent.push({ text, projectPath }); return true; } };
 
 const TARS = '/Users/someone/projects/tars';
-const CAPITAL = '/Users/someone/projects/1212-Capital';
+const CAPITAL = '/Users/someone/projects/Acme-Capital';
 const T0 = new Date(2026, 8, 28, 9, 0, 0).getTime();
 const error = (agentId: string, reason = 'The API refused the request', projectPath = TARS) =>
   ({ kind: 'agent-error' as const, agentId, agentName: `Agent ${agentId}`, projectPath, reason });
@@ -98,7 +98,7 @@ describe('an event report', () => {
     expect(tars.text).toContain('Agent a1');
     expect(tars.text).not.toContain('Capital PR');
     expect(capital.text).toContain('Capital PR');
-    expect(capital.text.split('\n')[0]).toMatch(/1212-Capital/);
+    expect(capital.text.split('\n')[0]).toMatch(/Acme-Capital/);
   });
 
   it('3. says an event once, and again only once it happened again', async () => {

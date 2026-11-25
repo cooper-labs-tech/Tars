@@ -8,8 +8,8 @@ import { redactSecrets } from '../utils/redact-secrets';
  * each further run is admitted by the machine's room, up to a ceiling (below).
  *
  * Measured before: a `next dev` takes 6 to 7 GB of swap, the load reached 300, and each project's orchestrator built
- * its own lock (kotsna's mkdir, parallel's heavy-run.lock, 1212's rule 198), which coordinated nothing between
- * projects and stayed taken when its agent died. 1212 read the free space at the start only, while the swap grew
+ * its own lock (one project's mkdir, another project's lock file, a third's rule 198), which coordinated nothing between
+ * projects and stayed taken when its agent died. That third project read the free space at the start only, while the swap grew
  * during the run.
  *
  * - A lease is held by a live process, the asking agent's (under its terminal, where the process table can be read):
@@ -21,13 +21,13 @@ import { redactSecrets } from '../utils/redact-secrets';
  * - A queue: a release gate before ordinary work before background work, then arrival. Only an orchestrator may
  *   ask for `gate` (it orders its project's merges and releases); anyone else asking for it gets `normal`, and is
  *   told.
- * - An ask from under a holder's process (a git hook inside its own run: kotsna's pre-push hook runs inside `git
+ * - An ask from under a holder's process (a git hook inside its own run: one project's pre-push hook runs inside `git
  *   push`) is granted at once, inside that lease, and takes no slot: the holder never waits behind itself. Only
  *   inside a lease of the same agent: another agent is never let in ahead of the queue.
  * - The machine is read before a grant: under the disk or the memory floor, the grant waits and the waiter is told
  *   the floor and the figure. A figure the system cannot give does not block. During a run, the disk is read again:
  *   alerts at 10, 6 and 3 GB, and on fast swap growth, to the holder, its orchestrator and the window.
- * - Tars never ends a run by itself (an ansible run, a `fly ssh` or a build talking to the Sparks must never be
+ * - Tars never ends a run by itself (an ansible run, a `fly ssh` or a build talking to a remote inference host must never be
  *   ended by anything automatic): this slot is given no way to end a process.
  *
  * The world it lives in is passed in (heavy-slot-runtime.ts in the app, a stand-in in its tests).

@@ -917,7 +917,7 @@ describe('what a restart of Tars kept in a queue (2.0.5, lot 2)', () => {
 });
 
 describe('an end of turn told once (the DB brief fix-twin-deliveries-2810.md)', () => {
-  // How this fails, written before its fix: measured 18 times in 4 days on Parallel's orchestrator, a worker's
+  // How this fails, written before its fix: measured 18 times in 4 days on another project's orchestrator, a worker's
   // "has ended its turn with background work still running" is typed a second time when the worker passes from
   // `idle` to the idle prompt's `waiting` (Claude Code says so 60 s after the rest): the same rest, told twice,
   // because the link is kept for the background work's own end.

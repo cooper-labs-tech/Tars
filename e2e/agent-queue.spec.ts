@@ -9,7 +9,7 @@ import { DEV_URL, apiPort } from './ports.mjs';
  * An agent's queue you can see, pause, reorder, cancel and keep across a stop and a restart of Tars (2.0.5, lot 2,
  * item I of the resources plan; the DB brief lot2-agent-queue-2810.md), in the real app.
  *
- * What the projects' orchestrators hit on 27 and 28/10 (their tars-feedback-2810.md): six items queued to Kotsna-QA
+ * What the projects' orchestrators hit on 27 and 28/10 (their tars-feedback-2810.md): six items queued to Delta-QA
  * that could be neither seen, cancelled nor moved (t-cf5206bb, t-23758534 ...); task_status answering "No such task"
  * for t-9aa78b94, which Tars had announced; a "priority insert" landing behind items queued earlier; stop_agent
  * emptying the queue; every task waiting its turn lost at a restart of Tars, with no list of what was lost.

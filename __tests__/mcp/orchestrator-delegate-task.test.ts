@@ -119,7 +119,7 @@ describe('delegate_task keeps its caller listening while it waits', () => {
   // for 30s; aborting"), and a progress notification resets that clock: the
   // same 150 s call completed when it sent one every 5 s. delegate_task sent
   // none, so every delegation longer than 30 minutes was abandoned by the
-  // orchestrator while the agent went on working (Parallel, 2026-09-23: four
+  // orchestrator while the agent went on working (another project, 2026-09-23: four
   // "sent no response or progress for 18xx s; aborting").
   //
   // How this fails, written before the code:

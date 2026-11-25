@@ -83,7 +83,7 @@ test('names each project by its folder on Agents, and the Code panel shows folde
   const headers = (await main.locator('h2').allTextContents()).map(t => t.trim());
   recordValues({ agentsHeaders: headers });
   await stepShot(page, 'agents');
-  expect(headers).toEqual(expect.arrayContaining(['tars', '1212-capital', 'atlas', 'mercury', 'orion']));
+  expect(headers).toEqual(expect.arrayContaining(['tars', 'acme-capital', 'atlas', 'mercury', 'orion']));
   expect(headers.filter(h => h.includes(home))).toEqual([]);
 
   // Code panel: what the main process lists, then the tree the window draws.
@@ -119,7 +119,7 @@ test('names each chat room by its folder', async () => {
   test.setTimeout(240_000);
   await page.goto(`${DEV_URL}/chat`, { waitUntil: 'domcontentloaded' });
   const main = page.locator('main');
-  const names = ['atlas', 'mercury', 'orion', '1212-capital'];
+  const names = ['atlas', 'mercury', 'orion', 'acme-capital'];
   // The list is loaded once orion's room is listed, under either name.
   const orion = path.join(home, 'projects', 'orion');
   await expect.poll(async () => (await main.getByText('orion', { exact: true }).count())

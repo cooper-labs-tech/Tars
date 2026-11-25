@@ -20,7 +20,7 @@ import * as path from 'node:path';
  * What happened on 2026-09-22 with 1.7.9: JeanBrasse moved every agent to Opus 5.5
  * in the Agents page. The CLIs went on running the old model, and the ones he
  * relaunched from the Dashboard came back on the model their previous session
- * had answered on: Opus 5 for four Tars agents and five Parallel ones, Opus
+ * had answered on: Opus 5 for four Tars agents and five of another project, Opus
  * 4.8 for the Audit Engineer, read from a transcript a month old. Their argv
  * said so, process by process. Then every one of them sat in `running` with no
  * task in front of an idle prompt.

@@ -126,7 +126,7 @@ beforeEach(() => {
     skills: [], output: [], lastActivity: new Date().toISOString(),
   } as AgentStatus);
   agents.set('worker', {
-    id: 'worker', name: '1212-Backend', status: 'running', projectPath: project, ptyCwd: project,
+    id: 'worker', name: 'Acme-Backend', status: 'running', projectPath: project, ptyCwd: project,
     skills: [], output: [], ptyId: 'pty-worker', currentSessionId: 'sess-w',
     lastActivity: new Date().toISOString(),
   } as AgentStatus);

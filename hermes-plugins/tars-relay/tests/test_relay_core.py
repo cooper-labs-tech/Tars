@@ -97,7 +97,7 @@ class Base(unittest.TestCase):
         self.store = self.store_at(NOW)
         self.store.record_sent(chat_id=OWNER_ID, message_id='501', ref='question:q-1', kind='question', project='tars',
                                text='Question from Tars-Backend: may I drop the old migration?')
-        self.store.set_projects(['tars', '1212-Capital'])
+        self.store.set_projects(['tars', 'Acme-Capital'])
 
     def tearDown(self):
         shutil.rmtree(self.dir, ignore_errors=True)
@@ -237,8 +237,8 @@ class WhatIsKeptForTars(Base):
         self.assertEqual((kept['kind'], kept['ref'], kept['project'], kept['text']),
                          ('project', '', 'tars', 'relance la porte de #271'))
 
-        kept = relay_core.decide(message(text='@1212-Capital  fais le point\nsur la QA  '), SETTINGS, self.store)
-        self.assertEqual((kept['project'], kept['text']), ('1212-Capital', 'fais le point\nsur la QA'))
+        kept = relay_core.decide(message(text='@Acme-Capital  fais le point\nsur la QA  '), SETTINGS, self.store)
+        self.assertEqual((kept['project'], kept['text']), ('Acme-Capital', 'fais le point\nsur la QA'))
 
         kept = relay_core.decide(message(text='@tars: go'), SETTINGS, self.store)
         self.assertEqual((kept['project'], kept['text']), ('tars', 'go'))
@@ -265,10 +265,10 @@ class WhatIsKeptForTars(Base):
         self.assertEqual((kept['kind'], kept['project'], kept['text']), ('project', 'tars', 'go'),
                          'the name as Tars registered it')
 
-        self.store_at(NOW + 5).set_projects(['1212-Capital'])
+        self.store_at(NOW + 5).set_projects(['Acme-Capital'])
         self.assertIsNone(relay_core.decide(message(text='@tars go'), SETTINGS, self.store), 'no longer registered')
-        self.assertEqual(relay_core.decide(message(text='@1212-capital go'), SETTINGS, self.store)['project'],
-                         '1212-Capital')
+        self.assertEqual(relay_core.decide(message(text='@acme-capital go'), SETTINGS, self.store)['project'],
+                         'Acme-Capital')
 
     def test_5_with_nothing_registered_no_prefix_is_tars_s(self):
         fresh = relay_core.Store(os.path.join(self.dir, 'fresh'), now=lambda: NOW)
@@ -280,8 +280,8 @@ class WhatIsKeptForTars(Base):
         self.assertIsNone(relay_core.decide(message(text='@tars go'), SETTINGS, fresh))
 
     def test_5_a_registration_is_checked(self):
-        self.assertEqual(relay_core.check_projects({'projects': ['tars', '1212-Capital', 'tars']}),
-                         ['tars', '1212-Capital', 'tars'])
+        self.assertEqual(relay_core.check_projects({'projects': ['tars', 'Acme-Capital', 'tars']}),
+                         ['tars', 'Acme-Capital', 'tars'])
         self.assertEqual(relay_core.check_projects({'projects': []}), [])
         self.assertEqual(len(relay_core.check_projects({'projects': ['p%d' % i for i in range(500)]})), 500)
 

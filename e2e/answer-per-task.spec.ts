@@ -7,7 +7,7 @@ import { DEV_URL, apiPort } from './ports.mjs';
 
 /**
  * Each task keeps its whole answer (2.0.5; the DB brief fix-answer-per-task-2810.md, the orchestrators' feedback of
- * 28/10: task_status gave 1212's orchestrator "Saving the durable lessons to memory" where the report was), in the
+ * 28/10: task_status gave another project's orchestrator "Saving the durable lessons to memory" where the report was), in the
  * real app.
  *
  * A sandbox HOME with one project, its orchestrator "Lead" (no CLI: its own token makes the calls) and a worker whose
@@ -56,7 +56,7 @@ async function turn(prompt) {
   let n = 0;
   const says = (text) => line({ type: 'assistant', message: { id: 'msg-' + sid + '-' + (++n) + '-' + Date.now(), role: 'assistant', content: [{ type: 'text', text }] } });
   let last = 'done';
-  // A turn that writes its report, then a memory note, then a closing line: what 1212's orchestrator met on 28/10.
+  // A turn that writes its report, then a memory note, then a closing line: what another project's orchestrator met on 28/10.
   if (prompt.includes('REPORT>>')) {
     says('Let me look at the migration.');
     says(REPORT);

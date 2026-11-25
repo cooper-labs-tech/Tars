@@ -7,7 +7,7 @@ import * as path from 'path';
  * The name a project's room goes by in the Chat's list: its folder's.
  *
  * How it can fail, each case below:
- *  - on Windows the room is named by the whole path (`C:\...\1212-capital`),
+ *  - on Windows the room is named by the whole path (`C:\...\acme-capital`),
  *    since a `\` is not a `/`, or by nothing for a path that ends in one;
  *  - a drive root is named by an empty string instead of its path;
  *  - darwin and linux change: a trailing `/` stops naming the folder before
@@ -69,8 +69,8 @@ describe('the title of a project room', () => {
   it('win32: the folder, whichever separator the path uses, and a drive root by its path', () => {
     runningOn('win32');
     expect(titlesOf([
-      'C:\\Users\\someone\\projects\\1212-capital', 'C:\\work\\tars\\', 'D:/work/orion', '\\\\srv\\share\\atlas', 'C:\\',
-    ])).toEqual(['1212-capital', 'tars', 'orion', 'atlas', 'C:\\']);
+      'C:\\Users\\someone\\projects\\acme-capital', 'C:\\work\\tars\\', 'D:/work/orion', '\\\\srv\\share\\atlas', 'C:\\',
+    ])).toEqual(['acme-capital', 'tars', 'orion', 'atlas', 'C:\\']);
   });
 
   it('darwin and linux: as before, the last folder, a trailing / included, a root by its path, a \\ an ordinary character', () => {

@@ -79,7 +79,7 @@ let fake: FakeRelay;
 const T0 = Date.UTC(2026, 9, 1, 8, 0, 0);
 const settle = () => new Promise((r) => setTimeout(r, 900));
 const TARS = '/Users/someone/projects/tars';
-const CAPITAL = '/Users/someone/projects/1212-Capital';
+const CAPITAL = '/Users/someone/projects/Acme-Capital';
 const USER_LINE = 'Message from the user via Telegram: ';
 
 async function load() {
@@ -189,7 +189,7 @@ describe('"@project text"', () => {
   it('6. the plugin is told the fleet\'s projects, the only names it keeps "@name" for', async () => {
     await relay.relayTick(T0);
 
-    expect(fake.projects).toEqual(['1212-Capital', 'tars']);
+    expect(fake.projects).toEqual(['Acme-Capital', 'tars']);
   });
 
   it('7. a project whose folder name holds a space is registered, and reached, under its dashed name', async () => {
@@ -199,7 +199,7 @@ describe('"@project text"', () => {
     agents.set('orch-spaced', { id: 'orch-spaced', name: 'Spaced-Orchestrator', status: 'running', provider: 'claude', projectPath: SPACED, role: 'orchestrator', ptyId: 'pty-orch-spaced', ptyCwd: SPACED, skills: [], output: [], lastActivity: '' } as unknown as AgentStatus);
 
     await relay.relayTick(T0);
-    expect(fake.projects).toEqual(['1212-Capital', 'My-Project', 'tars']);
+    expect(fake.projects).toEqual(['Acme-Capital', 'My-Project', 'tars']);
 
     fake.projectMessage('My-Project', 'fais le point');
     await relay.relayTick(T0 + 5_000);
@@ -225,7 +225,7 @@ describe('"@project text"', () => {
     await settle();
 
     expect(all('orch-tars') + all('orch-capital') + all('worker-tars')).toBe('');
-    expect(fake.sends).toEqual([expect.objectContaining({ kind: 'report', text: expect.stringMatching(/1212-Capital[\s\S]*tars|tars[\s\S]*1212-Capital/) })]);
+    expect(fake.sends).toEqual([expect.objectContaining({ kind: 'report', text: expect.stringMatching(/Acme-Capital[\s\S]*tars|tars[\s\S]*Acme-Capital/) })]);
   });
 
   it('3. a project with no orchestrator: nobody gets it, and the user is told', async () => {

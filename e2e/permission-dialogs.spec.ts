@@ -10,7 +10,7 @@ import { DEV_URL, apiPort } from './ports.mjs';
  * decision of 28/10), in the real app, once with the classic shell and once with the new interface.
  *
  * The night of 27/10: agents in bypass stopped until morning on Claude Code's dialog, each on a heredoc into its own
- * scratchpad; a worker's report to an orchestrator at a dialog was refused (1212 counted 17); an ask that expired
+ * scratchpad; a worker's report to an orchestrator at a dialog was refused (another project counted 17); an ask that expired
  * left the native dialog open.
  *
  * Three agents of one project, each a stand-in for claude with the state mod, asking Tars the way the mod's
@@ -110,7 +110,7 @@ for (const newInterface of [false, true]) {
   test(`Tars allows nothing itself: the owner allows a shell command, a bypass agent's Write is held and refused at the delay, another agent's goes to its dialog, and a message waits out the question${newInterface ? ' (new interface)' : ''}`, async () => {
     test.setTimeout(360_000);
     const home = fs.mkdtempSync(path.join(os.tmpdir(), `dorothy-e2e-permission-dialogs-${newInterface ? 'ni' : 'classic'}-`));
-    const project = path.join(home, 'projects', 'parallel');
+    const project = path.join(home, 'projects', 'project-b');
     fs.mkdirSync(project, { recursive: true });
     const dir = path.join(home, '.tars');
     fs.mkdirSync(dir, { recursive: true });
@@ -118,7 +118,7 @@ for (const newInterface of [false, true]) {
     fs.writeFileSync(path.join(dir, 'agents.json'), JSON.stringify([
       { ...base, id: 'w', name: 'Cloud Architect', role: 'worker', permissionMode: 'bypass', cliPath: worker(home, 'w', "[{ tool_use_id: 'toolu_shell', tool: 'Bash', input: { command: heredoc(scratch) } }, { tool_use_id: 'toolu_file', tool: 'Write', input: { file_path: path.join(scratch, 'retry-probe', 'p.yml') }, withheld: true }, { tool_use_id: 'toolu_long', tool: 'Bash', input: { description: 'write the notes', timeout: '600000' }, withheld: true, why: " + JSON.stringify(LONG_WHY) + ", after: 'long-now' }]") },
       { ...base, id: 'n', name: 'Docs Writer', role: 'worker', permissionMode: 'normal', cliPath: worker(home, 'n', "[{ tool_use_id: 'toolu_n', tool: 'Write', input: { file_path: path.join(scratch, 'n.md') }, withheld: true }]") },
-      { ...base, id: 'o', name: 'Parallel Lead', role: 'orchestrator', cliPath: orchestrator(home) },
+      { ...base, id: 'o', name: 'Project Lead', role: 'orchestrator', cliPath: orchestrator(home) },
     ], null, 2));
     fs.writeFileSync(path.join(dir, 'projects.json'), JSON.stringify([project]));
     fs.writeFileSync(path.join(dir, 'hermes-connection.json'), JSON.stringify({ mode: 'local', localPort: 9, authMode: 'token' }));

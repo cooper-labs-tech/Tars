@@ -112,7 +112,7 @@ afterAll(() => { Object.defineProperty(process, 'platform', hostPlatform); });
 
 
 const project = path.join(tmpHome, 'tars');
-const otherProject = path.join(tmpHome, 'sakartvelo');
+const otherProject = path.join(tmpHome, 'project-b');
 const TOOL_BLOCK = '--disallowed-tools "Edit" "Write" "NotebookEdit" "Task"';
 
 function deps(): IpcHandlerDependencies {
@@ -212,7 +212,7 @@ describe('the Orchestrator toggle', () => {
     const { agent: current, terminal: currentTerminal } = running('current', { name: 'Tars-Orchestrator', role: 'orchestrator', orchestratorMode: true });
     const { agent: next, terminal: nextTerminal } = running('next', { name: 'Tars-Backend' });
     const { agent: elsewhere, terminal: elsewhereTerminal } = running('elsewhere', {
-      name: 'Sak-Orchestrator', role: 'orchestrator', orchestratorMode: true, projectPath: otherProject,
+      name: 'Project B Lead', role: 'orchestrator', orchestratorMode: true, projectPath: otherProject,
     });
 
     const result = await update({ id: 'next', role: 'orchestrator' });

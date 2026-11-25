@@ -65,7 +65,7 @@ import { createRequire, syncBuiltinESMExports } from 'node:module';
  *    (codexSignInGap, codex-sign-in.test.ts) and said in its status, once; never once its session came (it was
  *    signed in after all), nor for a launch a later one replaced, nor when nothing keeps it from signing in.
  * 17. (the DB brief fix-answer-per-task-2810.md, before the code) A turn's answer is codex's last message alone
- *    (`last_agent_message`): a closing line after the report replaces it, as 1212's orchestrator read on 28/10. The
+ *    (`last_agent_message`): a closing line after the report replaces it, as another project's orchestrator read on 28/10. The
  *    answer is the turn's report, its longest message, and what codex wrote after it.
  */
 

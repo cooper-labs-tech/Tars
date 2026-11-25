@@ -19,12 +19,12 @@ import { tellNotTaken } from './agent-watch';
  * (reports/db-status-and-sleep-2810.md), they fire for every way a turn starts,
  * a background task's notification included (114 of 116 such turns had their
  * UserPromptSubmit), but what Tars does between them is not always confirmed:
- * - Kotsna-QA's Stop reached Tars at 19:23:30.659Z, and in the same millisecond
+ * - Delta-QA's Stop reached Tars at 19:23:30.659Z, and in the same millisecond
  *   Tars typed the next queued task and read the agent `running`. The CLI never
  *   took it: no UserPromptSubmit, nothing in its transcript. Tars showed it
  *   working at its prompt for 42 minutes, and the six tasks queued behind it
  *   waited for an end of turn that had already come;
- * - Parallel-Frontend's claude exited mid-turn (no Stop, and SessionEnd's post
+ * - another project's Frontend agent's claude exited mid-turn (no Stop, and SessionEnd's post
  *   never landed) and left the shell it was typed into: `running` with no CLI,
  *   for two days.
  * So, every STATUS_EVERY_MS, each agent's status is set against two things Tars

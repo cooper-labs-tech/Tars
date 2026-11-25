@@ -1371,7 +1371,7 @@ both behave identically. It:
    writer, which holds it while the dialog is up (a typed `\r` would *answer* the dialog) and types
    it once the dialog closes, as for every other writer (the bus, delegation notes, "send held",
    the Hermes relay, Slack; SPECS §5). The reply says `held: true` with the dialog's reason. Until 2.0.5 it
-   was refused with `409`, and a worker's report to an orchestrator at a dialog was lost (1212
+   was refused with `409`, and a worker's report to an orchestrator at a dialog was lost (another project
    counted 17 on the night of 27/10).
 3. types the message into the session (`mode: "message"`) when a CLI runs in the terminal,
    whatever the status says (a turn ends on `idle`, a failed one on `error`, both with the CLI
