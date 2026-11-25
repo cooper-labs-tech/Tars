@@ -47,7 +47,7 @@ import { getProvider, getAllProviders } from '../providers';
 import { planModeRefusal } from '../providers/plan-mode';
 import { addedFolderRefusal } from '../providers/added-folders';
 import { handedFolderProblem } from '../utils/handed-folder';
-import { typeAddedFolder } from '../core/secondary-folder';
+import { folderAppliesAt } from '../core/secondary-folder';
 import { withoutRetiredSettings } from '../services/telegram-retired';
 import { messagesWaiting, oweToFirstMessage, writeHumanInput } from '../core/pty-manager';
 import { killPty } from '../core/pty-kill';
@@ -363,6 +363,9 @@ function registerAgentHandlers(deps: IpcHandlerDependencies): void {
     // A folder its CLI would never see (providers/added-folders.ts).
     const noFolder = addedFolderRefusal(config.provider, { secondary: config.secondaryProjectPath, vaults: config.obsidianVaultPaths });
     if (noFolder) throw new Error(noFolder);
+    // Never ~/.tars-private, as on every other path that sets a secondary folder (utils/handed-folder.ts).
+    const handed = config.secondaryProjectPath ? handedFolderProblem(config.secondaryProjectPath) : null;
+    if (handed) throw new Error(`Not created: ${handed}.`);
     // Before anything is created: a refused role leaves no worktree or terminal behind.
     const role = requestedRole(config) ?? 'worker';
     // Every task the agent is given opens with its skills (gate of #204).
@@ -1195,9 +1198,9 @@ function registerAgentHandlers(deps: IpcHandlerDependencies): void {
     // Save updated agents to disk
     saveAgents();
 
-    // Typed into the session that runs, as its CLI's own command, where one takes it; else at its next start
+    // Typed into no CLI: the folder reaches it at its next start, or never for a CLI whose line hands none
     // (core/secondary-folder.ts). The window says which.
-    return { success: true, agent, appliesAt: typeAddedFolder(agent, secondaryProjectPath) };
+    return { success: true, agent, appliesAt: folderAppliesAt(agent.provider, secondaryProjectPath) };
   });
 
   // Send input to an agent

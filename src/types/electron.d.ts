@@ -1623,11 +1623,11 @@ export interface ElectronAPI {
     wake: (id: string) => Promise<{ success: boolean; error?: string }>;
     resize: (params: { id: string; cols: number; rows: number }) => Promise<{ success: boolean }>;
     /**
-     * `appliesAt` on success: 'now' when main typed the folder into the CLI that runs, as its own command (Claude
-     * Code's /add-dir); 'next-start' when it reaches the CLI on its line at its next start (every other CLI, a CLI not
-     * running, a dialog on screen, a cleared folder).
+     * `appliesAt` on success. Nothing is typed into the agent's CLI for the folder: 'next-start' when the CLI's launch
+     * line hands it, at its next start (claude, codex, gemini, Qwen Code, and a cleared folder on any CLI);
+     * 'not-handed' when the CLI's line never hands one (grok, OpenCode, Pi, Amp, the API-key providers).
      */
-    setSecondaryProject: (params: { id: string; secondaryProjectPath: string | null }) => Promise<{ success: boolean; error?: string; agent?: AgentStatus; appliesAt?: 'now' | 'next-start' }>;
+    setSecondaryProject: (params: { id: string; secondaryProjectPath: string | null }) => Promise<{ success: boolean; error?: string; agent?: AgentStatus; appliesAt?: 'next-start' | 'not-handed' }>;
     onOutput: (callback: (event: AgentEvent) => void) => () => void;
     onError: (callback: (event: AgentEvent) => void) => () => void;
     onComplete: (callback: (event: AgentEvent) => void) => () => void;
