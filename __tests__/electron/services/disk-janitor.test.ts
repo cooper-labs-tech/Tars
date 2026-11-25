@@ -4,6 +4,7 @@ import * as os from 'os';
 import * as path from 'path';
 import { scanJanitor, approveJanitor, type JanitorWorld, type JanitorOps } from '../../../electron/services/janitor-rules';
 import { shortIdOf } from '../../../electron/services/agent-tmp';
+import { pinPlatform } from '../providers/win-fake-disk';
 
 /**
  * A disk janitor on a strict list, approved by the owner (2.0.5, lot 3 item H; brief lot3-disk-janitor-2810.md, the
@@ -49,6 +50,14 @@ import { shortIdOf } from '../../../electron/services/agent-tmp';
  * J21. (M1) Every path of every process is resolved again for each candidate folder: about 8 s of synchronous work
  *      on the main thread per scan (545 processes, 8,628 paths). The world gives the paths resolved once, and the
  *      rules compare strings: a scan over thousands of processes stays well under a second.
+ * And from the Audit's read of #605 at 3d110db14 (confirmed by QA, uv 0.13.1 measured), written before the code:
+ * J22. The uv cache is only ~/.cache/uv and ~/Library/Caches/uv on the never list, where uv puts it at $UV_CACHE_DIR,
+ *      else $XDG_CACHE_HOME/uv, else ~/.cache/uv (on Windows %LOCALAPPDATA%\uv\cache): a project in a uv cache either
+ *      variable moved, or a .worktrees linked into one, has an item proposed.
+ * J23. The same trap in the other entries: the Trash is only the Finder's ~/.Trash, where Linux's (the freedesktop.org
+ *      trash) is $XDG_DATA_HOME/Trash, else ~/.local/share/Trash: a project there has an item proposed.
+ * J24. An empty or relative variable taken for a folder: '' is Tars's own working folder ('/' when the Finder started
+ *      it), and the never list would hold the whole disk, so nothing would ever be proposed.
  */
 
 const DAY = 86_400_000;
@@ -334,6 +343,86 @@ describe('the Audit\'s gate of #542, and the window\'s details', () => {
     } finally {
       (fs.realpathSync as unknown as { native: typeof realpath }).native = realpath;
     }
+  });
+});
+
+describe('the never list where the tools really put things, from the environment Tars runs in (J22-J24)', () => {
+  const VARS = ['HOME', 'UV_CACHE_DIR', 'XDG_CACHE_HOME', 'XDG_DATA_HOME', 'LOCALAPPDATA'] as const;
+  let saved: Record<string, string | undefined>;
+  let cwd: string;
+  let unpin = () => {};
+  beforeEach(() => {
+    saved = Object.fromEntries(VARS.map(k => [k, process.env[k]]));
+    for (const k of VARS) delete process.env[k];
+    process.env.HOME = home;
+    cwd = process.cwd();
+  });
+  afterEach(() => {
+    unpin();
+    unpin = () => {};
+    process.chdir(cwd);
+    for (const k of VARS) {
+      if (saved[k] === undefined) delete process.env[k];
+      else process.env[k] = saved[k];
+    }
+  });
+
+  /** What is proposed of a project in `dir` with an idle worktree, and of a listed project whose .worktrees links into it (as J16). */
+  async function proposedIn(dir: string, label: string) {
+    const inside = path.join(dir, 'git-v0', 'checkouts', label);
+    mk(path.join(inside, '.worktrees', 'idle', '.next'));
+    old(path.join(inside, '.worktrees', 'idle'), 10);
+    const linked = path.join(home, 'projects', `linked-${label}`);
+    fs.mkdirSync(linked, { recursive: true });
+    fs.symlinkSync(path.join(inside, '.worktrees'), path.join(linked, '.worktrees'));
+    const w = world();
+    w.projects = [inside, linked];
+    w.worktrees = async (p) => [{ path: path.join(p, '.worktrees', 'idle'), branch: 'b/done', locked: false }];
+    return (await scanJanitor(w)).filter(i => i.path && (i.path.startsWith(dir) || i.path.includes(`linked-${label}`))).map(keyOf);
+  }
+
+  it('the same project anywhere else is proposed: the cases below prove something', async () => {
+    process.env.UV_CACHE_DIR = path.join(root, 'uv-elsewhere');
+    process.env.XDG_CACHE_HOME = path.join(root, 'xdg-cache');
+    process.env.XDG_DATA_HOME = path.join(root, 'xdg-data');
+    expect(await proposedIn(path.join(root, 'elsewhere'), 'control')).not.toEqual([]);
+  });
+
+  it('J22. the uv cache at $UV_CACHE_DIR', async () => {
+    process.env.UV_CACHE_DIR = path.join(root, 'uv-elsewhere');
+    expect(await proposedIn(path.join(root, 'uv-elsewhere'), 'uv-dir')).toEqual([]);
+  });
+
+  it('J22. the uv cache at $XDG_CACHE_HOME/uv', async () => {
+    process.env.XDG_CACHE_HOME = path.join(root, 'xdg-cache');
+    expect(await proposedIn(path.join(root, 'xdg-cache', 'uv'), 'xdg-uv')).toEqual([]);
+  });
+
+  it('J22. the uv cache at ~/.cache/uv and ~/Library/Caches/uv, still, with no variable', async () => {
+    expect(await proposedIn(path.join(home, '.cache', 'uv'), 'home-uv')).toEqual([]);
+    expect(await proposedIn(path.join(home, 'Library', 'Caches', 'uv'), 'mac-uv')).toEqual([]);
+  });
+
+  it('J22. on Windows, the uv cache at %LOCALAPPDATA%\\uv\\cache', async () => {
+    unpin = pinPlatform('win32');
+    process.env.LOCALAPPDATA = path.join(root, 'appdata-local');
+    expect(await proposedIn(path.join(root, 'appdata-local', 'uv', 'cache'), 'win-uv')).toEqual([]);
+  });
+
+  it('J23. Linux\'s Trash at $XDG_DATA_HOME/Trash, and at ~/.local/share/Trash with no variable', async () => {
+    process.env.XDG_DATA_HOME = path.join(root, 'xdg-data');
+    expect(await proposedIn(path.join(root, 'xdg-data', 'Trash', 'files'), 'xdg-trash')).toEqual([]);
+    delete process.env.XDG_DATA_HOME;
+    expect(await proposedIn(path.join(home, '.local', 'share', 'Trash', 'files'), 'home-trash')).toEqual([]);
+  });
+
+  it('J24. an empty or relative variable is no folder: the never list does not take in Tars\'s working folder', async () => {
+    process.chdir(root);
+    process.env.UV_CACHE_DIR = '';
+    process.env.XDG_CACHE_HOME = '';
+    process.env.XDG_DATA_HOME = 'data';
+    process.env.LOCALAPPDATA = '';
+    expect(await proposedIn(path.join(root, 'elsewhere'), 'empty')).not.toEqual([]);
   });
 });
 
