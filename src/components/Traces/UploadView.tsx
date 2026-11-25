@@ -40,6 +40,12 @@ function said(what: string, e: unknown): string {
 }
 
 /**
+ * A deletion Tars took at a start (deletionBy 'start'), said with what Tars knows of it and no more: under the upload
+ * line after it, and under an owed deletion's line in the delete card.
+ */
+const TAKEN_AT_START = 'Taken by Tars when it started: it found your consent still in its settings but not in the file that confirms it, and took that for a withdrawal it could not finish saving, so for a deletion, to be safe.';
+
+/**
  * Nothing uploaded since the last deletion (its moment, the settings' uploadDeletedAt): the sent count then still holds
  * the sessions of before it, which a full disk can keep marked sent (the Audit's I-2b on #599), so it is not said.
  */
@@ -167,8 +173,10 @@ export function UploadView() {
       setSaveError(`not saved: ${said('saving the address', e)}. Enter tries again, Escape goes back.`);
       return;
     }
-    // Main's refusal says why in its own words (a public address over plain http); the address stays as typed.
-    if (!r.ok) { setSaveError(r.error); return; }
+    // Main's refusal says why in its own words (a public address over plain http; on an address emptied or changed
+    // under a standing consent, "sharing stopped at once, and the address was not saved"); the address stays as typed,
+    // and the settings are read again, so the consent line shows sharing stopped.
+    if (!r.ok) { setSaveError(r.error); void read(); return; }
     edited.current = false;
     setSaveError(null);
     setSettings(r.settings);
@@ -292,6 +300,8 @@ export function UploadView() {
   const status = state && address ? stateWord(state, settings?.uploadDeletedAt) : null;
   /** Nothing uploaded since the last deletion: the sent figure says none since, never the sessions of before it. */
   const sentSince = state ? nothingSentSince(state, settings?.uploadDeletedAt) : false;
+  /** The latest deletion was taken by Tars at a start, not asked by the user. */
+  const byStart = (state?.deletionBy ?? settings?.uploadDeletionBy) === 'start';
   /**
    * Settings main holds and could not write (a withdrawn consent, a deletion's bookkeeping): main's own words, beside
    * the consent and the deletion, while it lasts. traces:changed says when it comes and goes, and read() reads it.
@@ -360,7 +370,7 @@ export function UploadView() {
                 {plainHttp && settings?.uploadAllowPlainHttp && <StateLine word="allowed by you: unencrypted" tone="waiting" />}
               </Row>
             )}
-            {saveError && <Row><StateLine word={saveError} tone="error" /></Row>}
+            {saveError && <Row><div data-backoffice-error><StateLine word={saveError} tone="error" /></div></Row>}
             <Row className="space-y-2 py-2.5">
               <StateLine word={consentWord.word} tone={consentWord.tone} />
               {unsaved}
@@ -376,6 +386,9 @@ export function UploadView() {
             <Box name="Upload" caption="UPLOAD">
               <div className="px-4 pb-3 space-y-2.5">
                 <div data-upload-status><StateLine word={status.word} tone={status.tone} /></div>
+                {byStart && sentSince && !state.deletionOwed && (
+                  <p data-deletion-by-start className="text-[11px] leading-snug text-muted-foreground">{TAKEN_AT_START}</p>
+                )}
                 <div className="grid grid-cols-3 gap-4">
                   {[['QUEUED', String(state.pendingSessions), 'sessions to send'], sentSince ? ['SENT', '0', 'since the deletion'] : ['SENT', String(state.sentSessions), 'sessions'],
                     ['LAST UPLOAD', state.lastUploadAt ? clockOf(state.lastUploadAt) : '-', state.lastUploadAt ? dayOf(state.lastUploadAt) : 'none yet']].map(([k, v, sub]) => (
@@ -414,12 +427,10 @@ export function UploadView() {
               {inProgress && <StateLine word="stopping the upload under way, then asking the back-office to delete" tone="waiting" />}
               {deleted && !inProgress && <StateLine word={deleted.word} tone={deleted.tone} />}
               {owed && !inProgress && <StateLine word={`not confirmed yet${state?.lastError ? `: ${state.lastError}` : ''}. Nothing new is sent meanwhile.`} tone="waiting" />}
-              {/* Where an owed deletion comes from, when this view did not see it asked (after a restart, the Audit's I-3
-                  on PR 599): main does not say which, so both, in words that hold for each. */}
-              {owed && !inProgress && !deleted && (
-                <p data-deletion-owed-why className="text-[11px] leading-snug text-muted-foreground">
-                  Asked by you, or by Tars when it started: it found your consent still in its settings but not in the file that confirms it, and takes that for a withdrawal it could not finish saving, so for a deletion, to be safe.
-                </p>
+              {/* An owed deletion Tars took at a start (deletionBy 'start', the Audit's I-3 on PR 599), said as such; one
+                  the user asked needs no word more. */}
+              {owed && !inProgress && byStart && (
+                <p data-deletion-owed-why className="text-[11px] leading-snug text-muted-foreground">{TAKEN_AT_START}</p>
               )}
               {giveUpError && <StateLine word={`not given up: ${giveUpError}`} tone="error" />}
               {giveUpUnfinished && <StateLine word={`given up, though Tars could not finish: ${giveUpUnfinished}`} tone="waiting" />}

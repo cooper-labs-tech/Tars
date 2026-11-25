@@ -68,6 +68,12 @@ export function StorageView() {
       setTokenError(reasonOf(e));
       return;
     }
+    // Main drops the old token before it writes the new one: a refusal leaves no token at all, so the page reads again.
+    if ('ok' in r) {
+      setTokenError(reasonOf(r.error));
+      setReader(await api.readerToken().catch(() => null));
+      return;
+    }
     closeDialog();
     setCopied(false);
     setShown(r.token);
@@ -77,16 +83,21 @@ export function StorageView() {
   const revoke = async () => {
     const api = tracesApi();
     if (!api) return;
-    // Main answers { ok: false, error } when the revocation cannot hold, and throws in builds before that: both said.
-    let r: { ok: true } | { ok: false; error: string };
+    // Main refuses the token in memory at once, and answers { ok: false, error } when it cannot save that: the token
+    // then opens nothing until Tars quits. A rejected call is said the same way.
+    let r: Awaited<ReturnType<typeof api.revokeReaderToken>>;
     try {
-      r = await (api.revokeReaderToken() as Promise<{ ok: true } | { ok: false; error: string }>);
+      r = await api.revokeReaderToken();
     } catch (e) {
       console.warn('[traces] revoking the reader token failed:', e);
       setTokenError(reasonOf(e));
       return;
     }
-    if (!r.ok) { setTokenError(reasonOf(r.error)); return; }
+    if (!r.ok) {
+      setTokenError(reasonOf(r.error));
+      setReader(await api.readerToken().catch(() => null));
+      return;
+    }
     closeDialog();
     setReader(await api.readerToken().catch(() => null));
   };
@@ -222,14 +233,14 @@ export function StorageView() {
         <DialogShell onClose={closeDialog} width={560} title="Rotate the reader token?"
           subtitle="The one the reader holds stops working at once. You will see the new one once, to give it to the reader."
           footerRight={<><Button onClick={closeDialog}>Cancel</Button><Button variant="primary" onClick={() => { void makeToken(); }}>Rotate</Button></>}>
-          {tokenError && <div data-token-refused><StateLine word={`not rotated: ${tokenError}. Rotate tries again.`} tone="error" /></div>}
+          {tokenError && <div data-token-refused><StateLine word={`not rotated: ${tokenError}. The old token opens nothing now; Rotate tries again.`} tone="error" /></div>}
         </DialogShell>
       )}
       {dialog === 'revoke' && (
         <DialogShell onClose={closeDialog} width={560} title="Revoke the reader token?"
           subtitle="/api/traces/ refuses every read from now on. Create another to give access again."
           footerRight={<><Button onClick={closeDialog}>Keep it</Button><Button variant="danger" onClick={() => { void revoke(); }}>Revoke</Button></>}>
-          {tokenError && <div data-token-refused><StateLine word={`not revoked: ${tokenError}. Revoke tries again.`} tone="error" /></div>}
+          {tokenError && <div data-token-refused><StateLine word={`not saved: ${tokenError}. The token opens nothing until Tars quits; Revoke tries again.`} tone="error" /></div>}
         </DialogShell>
       )}
       {dialog === 'delete-all' && stats && (
