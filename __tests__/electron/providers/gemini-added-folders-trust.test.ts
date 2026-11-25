@@ -55,6 +55,22 @@ import { pinPlatform } from './win-fake-disk';
  *     folder, and the later one, Tars's, replaces the user's (red).
  * 17. On Windows, the user's DO_NOT_TRUST on a parent written with the other separator (`\` against `/`), outranked
  *     the same way (red).
+ *
+ * Written before the code, on the Audit's read of c4a084a0f, and red there:
+ * 18. A refusal of a folder INSIDE an added folder, written under a spelling shorter than Tars's key (a link to the
+ *     added folder, a short name on Windows), outranked: both rules hold that inner folder, and gemini takes the
+ *     longer key, Tars's (L1). Tars leaves the added folder untrusted when such a refusal lies inside it under a key
+ *     no longer than its own, and says so.
+ * 19. A value that is not one of gemini's three levels (a mistyped `DONT_TRUST`) on the folder's own key replaced by
+ *     TRUST_FOLDER: gemini's own start refuses such a file, and the user's refusal is turned into trust (L2; kept at
+ *     bc4e083b6). Tars leaves a file holding such a value as it is, and says so.
+ * 20. A relative key read from Tars's own working folder, where gemini reads it from the agent's (the Audit's I-1):
+ *     the line's builder does not know the agent's folder, so Tars leaves a file holding a relative key as it is, and
+ *     says so. gemini never writes one: it normalises every key it saves.
+ * 21. A folder whose path holds a comma passed in --include-directories: gemini splits every value there at commas
+ *     (`coerceCommaSeparated`, 0.70.0), so it reaches gemini as two other folders, untrusted, and gemini asks (the
+ *     Audit's I-3). No spelling passes such a folder whole on gemini's line: it is left out of the line, with no
+ *     entry written for it, and said once.
  */
 
 let tmpDir: string;
@@ -234,6 +250,57 @@ describe("a rule of the user's that covers the folder decides, as gemini decides
     const { trustGeminiFolders } = await import('../../../electron/utils/gemini-trust');
     trustGeminiFolders([tars()], path.join(tmpDir, '.gemini'), 'win32');
     expect(fs.readFileSync(store(), 'utf8')).toBe(content);
+  });
+});
+
+describe("what Tars cannot write without changing a decision of the user's is left, and said (18 to 21)", () => {
+  const tars = () => path.join(tmpDir, '.tars');
+  const seed = (rules: Record<string, string>) => {
+    fs.mkdirSync(path.dirname(store()), { recursive: true });
+    const content = JSON.stringify(rules, null, 2);
+    fs.writeFileSync(store(), content, { mode: 0o600 });
+    return content;
+  };
+  const warned = () => vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+  const said = (warn: { mock: { calls: unknown[][] } }) => warn.mock.calls.map((c) => c.join(' ')).join('\n');
+
+  it('18. leaves an added folder untrusted when a refusal inside it, under a shorter spelling, would be outranked', async () => {
+    fs.mkdirSync(path.join(tars(), 'x'), { recursive: true });
+    fs.symlinkSync(tars(), path.join(tmpDir, 'l'), 'junction');
+    const content = seed({ [path.join(tmpDir, 'l', 'x')]: 'DO_NOT_TRUST' });
+    const warn = warned();
+    await line();
+    expect(fs.readFileSync(store(), 'utf8')).toBe(content);
+    expect(said(warn)).toContain(tars());
+  });
+
+  it('19. leaves a file holding a value that is not a trust level as it is, and says so', async () => {
+    const content = seed({ [tars()]: 'DONT_TRUST' });
+    const warn = warned();
+    await line();
+    expect(fs.readFileSync(store(), 'utf8')).toBe(content);
+    expect(said(warn)).toContain(store());
+  });
+
+  it('20. leaves a file holding a relative key as it is, and says so', async () => {
+    const content = seed({ [path.join('..', '.tars')]: 'DO_NOT_TRUST' });
+    const warn = warned();
+    await line();
+    expect(fs.readFileSync(store(), 'utf8')).toBe(content);
+    expect(said(warn)).toContain(store());
+  });
+
+  it('21. leaves a folder whose path holds a comma out of the line and the file, says so once, and adds the others', async () => {
+    const secondary = path.join(tmpDir, 'work', 'a,b');
+    fs.mkdirSync(secondary, { recursive: true });
+    const warn = warned();
+    const first = await line({ secondaryProjectPath: secondary });
+    await line({ secondaryProjectPath: secondary });
+    expect(first).not.toContain('a,b');
+    expect(first).toContain('--include-directories');
+    expect(read()[secondary]).toBeUndefined();
+    expect(read()[tars()]).toBe('TRUST_FOLDER');
+    expect(warn.mock.calls.map((c) => c.join(' ')).filter((l) => l.includes(secondary))).toHaveLength(1);
   });
 });
 
