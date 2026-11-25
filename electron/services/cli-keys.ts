@@ -59,9 +59,12 @@ export const CLI_KEYS: readonly CliKeySpec[] = [
     withoutKey: 'The keys its own settings or the shell hold; with none, its requests are refused.',
   },
   {
-    id: 'grok', label: 'Grok CLI', provider: 'grok', envVar: 'GROK_API_KEY', choices: ['GROK_API_KEY', 'XAI_API_KEY'],
-    measured: 'Not installed here: from grok-cli\'s documentation (GROK_API_KEY). Unmeasured.',
-    withoutKey: 'The key in ~/.grok/user-settings.json, or it asks for one in the agent\'s terminal.',
+    // Fixed: grok reads XAI_API_KEY, and GROK_CODE_XAI_API_KEY only as its older name, which XAI_API_KEY wins over, so
+    // no other name could reach it. A variable an install stored before (GROK_API_KEY, the default until 2.0.7) is not
+    // read, as for codex and amp: its key goes under XAI_API_KEY.
+    id: 'grok', label: 'Grok CLI', provider: 'grok', envVar: 'XAI_API_KEY', fixed: true, choices: [],
+    measured: 'grok 1.0.92 (25/11), isolated against a stand-in of xAI\'s API: it sends XAI_API_KEY as its key (Authorization: Bearer), takes GROK_CODE_XAI_API_KEY too, its older name, which XAI_API_KEY wins over, and never reads GROK_API_KEY. Its documentation: a signed-in session (grok login) wins over XAI_API_KEY.',
+    withoutKey: 'Its own sign-in, `grok login`. With none, it says it is not signed in and sends nothing.',
   },
   {
     id: 'amp', label: 'Amp', provider: 'amp', envVar: 'AMP_API_KEY', fixed: true, choices: [],

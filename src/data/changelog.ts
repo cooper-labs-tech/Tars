@@ -7,6 +7,14 @@ export interface Release {
 
 export const CHANGELOG: Release[] = [
   {
+    id: 64,
+    version: '2.0.7',
+    date: '2026-11-25',
+    updates: [
+      'Fixed: a Grok CLI key set in Settings now reaches Grok. Tars gave it as GROK_API_KEY, which Grok never reads; it now goes as XAI_API_KEY, the one Grok sends, including for a key saved before this update.',
+    ],
+  },
+  {
     id: 63,
     version: '2.0.6',
     date: '2026-10-29',

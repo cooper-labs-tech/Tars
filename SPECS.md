@@ -248,7 +248,7 @@ One key per CLI, beside the API-key providers on the claude binary: codex, qwen-
 | codex | `CODEX_API_KEY`, fixed | codex-cli 0.163: `codex exec` reads it, never `OPENAI_API_KEY`; the interactive session reads no key from its environment (its sign-in screen), so with a key Tars starts it with `-c model_provider=tars-key` and that provider's `env_key="CODEX_API_KEY"`, names only. With the ChatGPT login there too, the key wins (a wrong key: 401); without a key nothing is added and the login is used |
 | qwen-code | its model's `envKey` in `~/.qwen/settings.json` modelProviders (`DEEPSEEK_API_KEY` here), the one named in Settings first, else `OPENAI_API_KEY` | Qwen Code 0.25.2: the agent's environment wins over the key its settings' `env` holds (a wrong key: 401). Its provider comes next (feat/qwen-code) |
 | gemini | `GEMINI_API_KEY` (or `GOOGLE_API_KEY`) | not installed here: documentation |
-| grok | `GROK_API_KEY` (or `XAI_API_KEY`) | not installed here: documentation |
+| grok | `XAI_API_KEY`, fixed (`GROK_API_KEY` until 2.0.7, which grok never read; a variable an install stored before is not read, its key goes under `XAI_API_KEY`) | grok 1.0.92 (25/11), isolated against a loopback stand-in of xAI's API: sent as `Authorization: Bearer`; it takes `GROK_CODE_XAI_API_KEY` too, its older name, which `XAI_API_KEY` wins over; with `GROK_API_KEY` alone it sends nothing and says it is not signed in. Its documentation: a signed-in session (`grok login`) wins over `XAI_API_KEY` |
 | amp | `AMP_API_KEY`, fixed | `amp --help` |
 | opencode, pi, omp, cline, kilo | the one named in Settings: none is passed until then | they read each model provider's own variable |
 
