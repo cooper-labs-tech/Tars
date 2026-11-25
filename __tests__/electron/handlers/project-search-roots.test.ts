@@ -25,6 +25,12 @@ import * as path from 'node:path';
  * S5. A real project breaks: one added by hand, an agent's folder, an agent's
  *     worktree, or a folder inside one of them, is no longer listed, found or
  *     searched.
+ * Added before their code after the Audit's L3 on #648 (2026-11-26):
+ * S6. A project Tars already holds under a folder the project rule now refuses
+ *     (a dot folder of the home, ~/Library): searched anyway; or refused with
+ *     no word of why, or dropped from fs:list-projects without a trace. It is
+ *     listed with the reason, the channels answer with it, and
+ *     fs:add-custom-project refuses a new one with it.
  */
 
 vi.mock('node-pty', () => ({ spawn: vi.fn() }));
@@ -148,6 +154,24 @@ describe('the Code panel\'s channels', () => {
       expect(r.success, root).toBe(false);
       expect(JSON.stringify(r)).not.toContain(TOKEN);
     }
+  });
+
+  it('S6. a project under a folder the rule refuses is not searched, and every answer says why', async () => {
+    const held = path.join(home, '.cargo', 'mine');
+    fs.mkdirSync(path.join(held, 'src'), { recursive: true });
+    fs.writeFileSync(path.join(held, 'src', 'lib.rs'), 'const token = 1;\n');
+    customProjects([project, held]);
+    const r = await searchContent(held, 'token');
+    expect(r.success).toBe(false);
+    expect((r as { error?: string }).error).toMatch(/dot|cannot be a project/i);
+    const listed = await call('fs:list-projects', undefined) as unknown as Array<{ path: string; refused?: string }>;
+    expect(listed.find((p) => p.path === held)?.refused).toMatch(/dot|cannot be a project/i);
+    expect(listed.find((p) => p.path === project)?.refused).toBeUndefined();
+    const azure = path.join(home, '.azure', 'work');
+    fs.mkdirSync(azure, { recursive: true });
+    const added = await call('fs:add-custom-project', azure) as { success: boolean; error?: string };
+    expect(added.success).toBe(false);
+    expect(added.error).toMatch(/dot/i);
   });
 
   it('S5. still list, find and search a real project, an agent\'s folder and worktree, and a folder in them', async () => {

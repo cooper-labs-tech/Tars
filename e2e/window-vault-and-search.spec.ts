@@ -17,7 +17,10 @@ import { DEV_URL, apiPort } from './ports.mjs';
  * 3. project.searchContent takes no folder that is no project Tars knows.
  * 4. A real vault is added, a note read and written; a project added by hand is searched.
  * 5. vault.attachFile copies only a file the dialog returned.
- * Red on train/2.0.7 b5f207bcf.
+ * 6. A file the dialog returned is good for one attach (the main process's dialog answers with a stand-in picture).
+ * 7. A project Tars holds under a dot folder of the home is listed by fs.listProjects with the reason it is refused,
+ *    and project.searchContent answers with that reason; fs.addCustomProject refuses a new one with it.
+ * Red on train/2.0.7 b5f207bcf (1 to 7) and on bb66b3255 (6 and 7).
  * The artefact: values.json (every answer, the files' state), with E2E_TRACE=on the app's trace.
  */
 
@@ -36,6 +39,11 @@ type Api = { electronAPI: {
     createDocument(p: { title: string; content: string; author: string }): Promise<{ success: boolean; document?: { id: string } }>;
     attachFile(p: { document_id: string; file_path: string }): Promise<{ success: boolean; error?: string }>;
   };
+  fs: {
+    listProjects(): Promise<Array<{ path: string; refused?: string }>>;
+    addCustomProject(p: string): Promise<{ success: boolean; error?: string }>;
+  };
+  dialog: { openFiles(): Promise<string[]> };
 } };
 
 test("the window's vault and Code panel channels open nothing outside a vault or a project", async () => {
@@ -44,13 +52,19 @@ test("the window's vault and Code panel channels open nothing outside a vault or
   const dir = path.join(home, '.tars');
   const vault = path.join(home, 'Documents', 'Notes');
   const project = path.join(home, 'projects', 'demo');
-  for (const d of [dir, vault, project, path.join(home, '.ssh'), path.join(home, '.gemini')]) fs.mkdirSync(d, { recursive: true });
+  // A project Tars holds under a folder the project rule refuses, and one a user would add there.
+  const held = path.join(home, '.cargo', 'mine');
+  const azure = path.join(home, '.azure', 'work');
+  const picture = path.join(home, 'Pictures', 'diagram.png');
+  for (const d of [dir, vault, project, path.join(home, '.ssh'), path.join(home, '.gemini'), held, azure, path.dirname(picture)]) fs.mkdirSync(d, { recursive: true });
+  fs.writeFileSync(path.join(held, 'lib.ts'), 'export const needle = 2;\n');
+  fs.writeFileSync(picture, 'a picture');
   fs.writeFileSync(path.join(home, '.ssh', 'id_ed25519'), KEY);
   fs.writeFileSync(path.join(home, '.gemini', 'oauth_creds.json'), JSON.stringify({ access_token: TOKEN, refresh_token: TOKEN }));
   fs.writeFileSync(path.join(vault, 'note.md'), '# a note');
   fs.writeFileSync(path.join(project, 'index.ts'), 'export const needle = 1;\n');
   fs.writeFileSync(path.join(dir, 'agents.json'), '[]');
-  fs.writeFileSync(path.join(dir, 'projects.json'), JSON.stringify([project]));
+  fs.writeFileSync(path.join(dir, 'projects.json'), JSON.stringify([project, held]));
   fs.writeFileSync(path.join(dir, 'hermes-connection.json'), JSON.stringify({ mode: 'local', localPort: 9, authMode: 'token' }));
   // A vault an agent stored: ~/.tars is every agent's folder.
   fs.writeFileSync(path.join(dir, 'app-settings.json'), JSON.stringify({
@@ -114,6 +128,30 @@ test("the window's vault and Code panel channels open nothing outside a vault or
     expect.soft(doc.success).toBe(true);
     expect.soft(attachKey).toMatchObject({ success: false });
     expect.soft(copied).not.toContain(KEY);
+
+    // 6. A pick is good for one attach: the main process's dialog answers with the stand-in picture.
+    await app.evaluate(({ dialog }, file) => {
+      dialog.showOpenDialog = (async () => ({ canceled: false, filePaths: [file] })) as typeof dialog.showOpenDialog;
+    }, picture);
+    const pickedPaths = await api((a) => a.dialog.openFiles());
+    const attachOnce = await api((a, arg) => { const [id, f] = arg as [string, string]; return a.vault.attachFile({ document_id: id, file_path: f }); }, [doc.document?.id ?? '', picture]);
+    const attachTwice = await api((a, arg) => { const [id, f] = arg as [string, string]; return a.vault.attachFile({ document_id: id, file_path: f }); }, [doc.document?.id ?? '', picture]);
+    keep({ pickedPaths, attachOnce, attachTwice });
+    expect.soft(pickedPaths).toEqual([picture]);
+    expect.soft(attachOnce).toMatchObject({ success: true });
+    expect.soft(attachTwice).toMatchObject({ success: false });
+
+    // 7. A project held under a dot folder of the home: listed with why, not searched; a new one refused with why.
+    const listed = await api((a) => a.fs.listProjects());
+    const searchHeld = await api((a, root) => a.project.searchContent(root as string, 'needle'), held);
+    const addAzure = await api((a, p) => a.fs.addCustomProject(p as string), azure);
+    keep({ heldListed: listed.find((p) => p.path === held), searchHeld, addAzure });
+    expect.soft(listed.find((p) => p.path === held)?.refused).toMatch(/dot/i);
+    expect.soft(listed.find((p) => p.path === project)?.refused).toBeUndefined();
+    expect.soft(searchHeld).toMatchObject({ success: false });
+    expect.soft(searchHeld.error).toMatch(/dot/i);
+    expect.soft(addAzure).toMatchObject({ success: false });
+    expect.soft(addAzure.error).toMatch(/dot/i);
 
     keep({ addNotes, readNote, writeNote, searchProject, errors });
     expect.soft(addNotes).toMatchObject({ success: true });

@@ -13,6 +13,8 @@ import * as path from 'node:path';
  * A2. A file the user picked in the dialog is no longer attached (the Vault page's own flow).
  * A3. A picked file that is a secret (by name, where it really lies, in a folder of credentials) is copied into
  *     ~/.tars anyway, where every agent reads it.
+ * Added before its code after the Audit's Info on #648 (2026-11-26):
+ * A4. A pick lasts until quit: the same picked file is copied again and again. A pick is good for one attach.
  */
 
 const picked: string[] = [];
@@ -93,6 +95,17 @@ describe('vault:attachFile', () => {
     expect(await openFiles()).toEqual(picked);
     expect(await attach(picked[0])).toMatchObject({ success: true });
     expect(copiedText()).toBe('a picture');
+  });
+
+  it('A4. a pick is good for one attach, and a new pick for one more', async () => {
+    picked.push(path.join(home, 'Pictures', 'diagram.png'));
+    await openFiles();
+    expect(await attach(picked[0])).toMatchObject({ success: true });
+    expect(await attach(picked[0])).toMatchObject({ success: false });
+    expect(copies()).toHaveLength(1);
+    await openFiles();
+    expect(await attach(picked[0])).toMatchObject({ success: true });
+    expect(copies()).toHaveLength(2);
   });
 
   it('A3. copies no secret into ~/.tars, even one the user picked', async () => {

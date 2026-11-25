@@ -51,6 +51,17 @@ import * as path from 'node:path';
  *  W10. A CLI's settings that hold a key read: ~/.claude/settings.json and
  *      settings.local.json (their env), a project's .claude/settings.local.json,
  *      Grok CLI's ~/.grok/user-settings.json.
+ * Added before their code after the Audit's L3 on #648 (2026-11-26):
+ *  W11. A folder of the home whose name starts with a dot, other than the four
+ *      CLI folders the window reads (~/.claude, ~/.codex, ~/.gemini, ~/.grok),
+ *      taken for a project, or one inside it: ~/.azure, ~/.terraform.d,
+ *      ~/.wrangler, ~/.cargo, ~/.m2, ~/.qwen, ~/.pi, ~/.kimi-code; or the
+ *      application folders, ~/Library and ~/AppData, or one inside them; and
+ *      the window reads, as a project's, what such a folder holds.
+ *  W12. Over-correction: one of the four CLI folders, or a project inside one,
+ *      refused; or a project in iCloud Drive (~/Library/Mobile Documents) or in
+ *      a cloud drive's folder (~/Library/CloudStorage), where people keep their
+ *      documents.
  */
 
 import { windowMayRead, windowMayWrite, localFileServes, mayBeProject } from '../../../electron/utils/window-file-access';
@@ -62,7 +73,8 @@ const put = (file: string, text = 'x') => { fs.mkdirSync(path.dirname(file), { r
 let project: string;
 
 beforeEach(() => {
-  for (const d of ['.tars', '.tars-private', '.claude', '.codex', '.gemini', '.grok', '.ssh', '.gnupg', '.aws', '.config', '.kube', '.docker', 'proj', 'kube-link']) fs.rmSync(at(d), { recursive: true, force: true });
+  for (const d of ['.tars', '.tars-private', '.claude', '.codex', '.gemini', '.grok', '.ssh', '.gnupg', '.aws', '.config', '.kube', '.docker', 'proj', 'kube-link',
+    '.azure', '.terraform.d', '.wrangler', '.cargo', '.m2', '.qwen', '.pi', '.kimi-code', 'Library', 'AppData']) fs.rmSync(at(d), { recursive: true, force: true });
   project = at('proj');
   fs.mkdirSync(project, { recursive: true });
 });
@@ -184,6 +196,30 @@ describe('credentials, whatever the project (the Audit\'s L1 on #466)', () => {
     for (const f of [at('.claude', 'settings.json'), at('.claude', 'settings.local.json'), path.join(project, '.claude', 'settings.local.json'), at('.grok', 'user-settings.json')]) {
       expect(windowMayRead(put(f, '{"env":{"ANTHROPIC_API_KEY":"k"}}'), [project]), f).toBe(false);
     }
+  });
+});
+
+describe('the project rule and the home\'s other folders (the Audit\'s L3 on #648)', () => {
+  it('W11. no dot folder of the home but the four CLI folders, and no application folder, is a project', () => {
+    const places = [
+      at('.azure'), at('.terraform.d'), at('.wrangler'), at('.cargo', 'registry'), at('.m2'), at('.qwen'), at('.pi'), at('.kimi-code'),
+      at('Library'), at('Library', 'Application Support', 'gh'), at('AppData'), at('AppData', 'Roaming', 'gcloud'),
+    ];
+    for (const place of places) {
+      const file = put(path.join(place, 'notes.md'), 'a token');
+      expect(mayBeProject(place), place).toBe(false);
+      expect(windowMayRead(file, [place]), file).toBe(false);
+    }
+  });
+
+  it('W12. the four CLI folders, a project in one, and the cloud documents folders still are', () => {
+    for (const place of [at('.claude'), at('.codex'), at('.gemini'), at('.grok'), at('.claude', 'plugins', 'mine'),
+      at('Library', 'Mobile Documents', 'com~apple~CloudDocs', 'work'), at('Library', 'CloudStorage', 'Dropbox', 'work')]) {
+      fs.mkdirSync(place, { recursive: true });
+      expect(mayBeProject(place), place).toBe(true);
+    }
+    const doc = put(at('Library', 'Mobile Documents', 'com~apple~CloudDocs', 'work', 'src', 'a.ts'));
+    expect(windowMayRead(doc, [at('Library', 'Mobile Documents', 'com~apple~CloudDocs', 'work')])).toBe(true);
   });
 });
 
