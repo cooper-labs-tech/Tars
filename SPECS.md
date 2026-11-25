@@ -1067,6 +1067,24 @@ webPreferences: { preload, contextIsolation: true, nodeIntegration: false, webvi
 
 `certificate-error` is only overridden for `https://localhost`.
 
+### The window's Content Security Policy (2.0.7)
+
+`electron/core/window-csp.ts`. The app:// handler serves every page of the bundle (the main window's and the tray panel's) with this header, and nothing else carries it:
+
+```
+default-src 'none'; script-src 'self' 'sha256-…'; style-src 'self' 'unsafe-inline';
+img-src 'self' data: blob: http://127.0.0.1:<API port>; font-src 'self';
+connect-src 'self' https://raw.githubusercontent.com; manifest-src 'self'; worker-src 'none';
+object-src 'none'; base-uri 'none'; frame-ancestors 'none'; form-action 'none'
+```
+
+- A script runs only from the bundle, or as one of the page's own inline scripts, named by its SHA-256. Next's static export writes four per page (the theme boot, Turbopack's chunk list, and the two of the page's Server Components payload, which differs per page); the handler hashes the page's own file as it serves it. No `'unsafe-inline'`, no `'unsafe-eval'` for scripts: a script added to the page later, an inline event handler or a `javascript:` URL does not run.
+- Styles may be inline: the pages carry style attributes and xterm adds style elements at run time.
+- Pictures: the bundle's, `data:` (the stylesheet's icons), `blob:` (a Chat attachment's preview) and the local API's `/api/local-file` (the vault's). A picture from any other host is not shown.
+- The page connects to itself (client navigation reads the route's data) and to `raw.githubusercontent.com` (the plugin marketplace's lists). What the main process fetches (models.dev, GitHub's releases, error reports) is not the page's and is not bound by it.
+- In development the session sets the same policy on next dev's pages (`session.webRequest.onHeadersReceived`, the dev origin's frames only), with scripts allowed inline and through eval and next dev's `ws://` refresh socket added to `connect-src`: next dev writes its scripts per request and refreshes modules through eval. Every other directive is the packaged one, so the E2E suite, which fails a surface on any console error, sees a violation of those in development too.
+- `e2e/window-csp.packed.spec.ts` measures it on the packaged build: every surface of the manifest with no violation, and a script, a `data:` script and an inline handler added to the page refused.
+
 ### The `local-file://` protocol
 
 Registered as standard + secure + fetch-capable. Since 2.0.4 (the Audit's Hole 2, `electron/utils/window-file-access.ts`, `localFileServes`) it serves the vault's attachments (`~/.tars/vault/attachments`), the project-files folders (`~/.tars/project-files`) and Claude Code's memory folders (`~/.claude/projects/<project>/memory`), where the file really lies, links followed, as its only name; and never a secret: nothing under `~/.tars-private`, by spelling, by real path or by a hard link into it, and no file named as one. No page uses it in 2.0.4: the vault's previews go through `/api/local-file`. It served all of `~/.tars` and `~/.claude` and the projects before, every key `app-settings.json` held included.
