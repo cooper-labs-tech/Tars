@@ -3,7 +3,7 @@ import * as os from 'os';
 import * as path from 'path';
 import { execFile, execFileSync } from 'child_process';
 import { expect, test } from '@playwright/test';
-import { CLI_CONFIG_CONTENT, CLI_HOMES, GIT_OWN, homesOutside, landing } from './cli-homes.mjs';
+import { CLI_CONFIG_CONTENT, CLI_FAMILIES, CLI_HOMES, GIT_OWN, homesOutside, landing } from './cli-homes.mjs';
 
 export { CLI_HOMES, homesOutside };
 
@@ -497,7 +497,8 @@ function sandboxXdg(sandboxHome) {
  * lies in, and wrote its projects.json, history and tmp there; grok 1.0.92 takes
  * GROK_HOME in place of ~/.grok, wrote its files there, and resolves ~/.grok
  * through the home's real path. The rest of both families is dropped with the
- * caller's (inheritable). A spec's env may still name another.
+ * caller's (inheritable, cli-homes.mjs's CLI_FAMILIES). A spec's env may still
+ * name another, inside its sandbox (homesOutside judges both as homes).
  */
 function sandboxCliHomes(sandboxHome) {
   return {
@@ -761,16 +762,12 @@ export async function launchSandboxed(electron, sandboxHome, { env = {}, profile
  * CLAUDE_MGR_API_URL (the live Tars on 31415) and CLAUDE_MGR_API_TOKEN, with
  * TARS_CLAUDE_ACCOUNT, TARS_INSTANCE_ID and TARS_CHATS_READ, and a shell may
  * carry DOROTHY_* or ANTHROPIC_* of its own; a spec that wants one sets it in
- * its env. GEMINI_* and GROK_* go too, measured on gemini 0.70.0 and grok
- * 1.0.92 (the Audit's L4 on #638): besides each one's home, GROK_CONFIG_PATH
- * and GROK_CONFIG lay a config of the runner's over grok's own, GROK_AUTH_PATH
- * names its login, GEMINI_CLI_TRUSTED_FOLDERS_PATH and
- * GEMINI_CLI_SYSTEM_SETTINGS_PATH name gemini's trust and system settings, and
- * GEMINI_API_KEY is a key of the runner's.
+ * its env.
  */
-// The CLI homes, a CLI's config as text and git's own variables: one list with the unit tests' setup (cli-homes.mjs).
-// The caller's are never handed on, and a spec may name a home only inside its sandbox (homesOutside).
-const LEAKY = new RegExp(`^(CLAUDE|DOROTHY|ANTHROPIC|TARS_|GEMINI_|GROK_)|^CLAUDECODE$|${CLI_HOMES.source}|${CLI_CONFIG_CONTENT.source}|${GIT_OWN.source}`);
+// The CLI homes, a CLI's config as text, git's own variables and the CLIs' own families (gemini's, grok's, codex's,
+// pi's, Google's and xAI's keys): one list with the unit tests' setup (cli-homes.mjs). The caller's are never handed
+// on, and a spec may name a home only inside its sandbox (homesOutside).
+const LEAKY = new RegExp(`^(CLAUDE|DOROTHY|ANTHROPIC|TARS_)|^CLAUDECODE$|${CLI_HOMES.source}|${CLI_CONFIG_CONTENT.source}|${GIT_OWN.source}|${CLI_FAMILIES.source}`);
 export function inheritable(env) {
   return Object.fromEntries(Object.entries(env).filter(([name]) => !LEAKY.test(name)));
 }
