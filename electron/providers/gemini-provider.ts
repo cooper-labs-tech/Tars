@@ -19,11 +19,31 @@ import { servedPathMatches, shellQuote } from './cli-provider';
 import { geminiRoleArgs } from '../services/mcp-roles';
 import { writeSharedJsonSync } from '../utils/shared-file';
 
+/**
+ * The home gemini reads, as gemini 0.70.0 takes it (its paths.ts homedir(), measured isolated on 24/11): GEMINI_CLI_HOME,
+ * else the home folder. Its own folder is `.gemini` under it. A blank variable names none.
+ */
+export function geminiCliHome(env: NodeJS.ProcessEnv = process.env, homeDir: string = os.homedir()): string {
+  return env.GEMINI_CLI_HOME?.trim() || homeDir;
+}
+
+/**
+ * The home handed to the gemini Tars starts, so that it reads the folder Tars writes whatever an rc file of the agent's
+ * shell sets, as codex's CODEX_HOME is (codex-provider.ts): on macOS and Linux in the line, which no rc file runs after;
+ * on Windows, where the line's first word is the binary itself and nothing is sourced (platform/launch.ts), in the
+ * terminal's environment (getPtyEnvVars).
+ */
+function homeOnLine(home: string): string {
+  return process.platform === 'win32' ? '' : `env GEMINI_CLI_HOME=${shellQuote(home)} `;
+}
+
 export class GeminiProvider implements CLIProvider {
   readonly id = 'gemini' as const;
   readonly displayName = 'Gemini CLI';
   readonly binaryName = 'gemini';
-  readonly configDir = path.join(os.homedir(), '.gemini');
+  /** The home Tars hands gemini, and gemini's folder under it, where Tars writes its settings, hooks and servers. */
+  readonly cliHome = geminiCliHome();
+  readonly configDir = path.join(this.cliHome, '.gemini');
 
   getModels(): ProviderModel[] {
     return [
@@ -39,7 +59,7 @@ export class GeminiProvider implements CLIProvider {
   }
 
   buildInteractiveCommand(params: InteractiveCommandParams): string {
-    let command = `'${params.binaryPath.replace(/'/g, "'\\''")}'`;
+    let command = `${homeOnLine(this.cliHome)}'${params.binaryPath.replace(/'/g, "'\\''")}'`;
 
     // Model (Gemini uses -m flag)
     if (params.model) {
@@ -100,7 +120,7 @@ export class GeminiProvider implements CLIProvider {
   }
 
   buildOneShotCommand(params: OneShotCommandParams): string {
-    let command = `'${params.binaryPath.replace(/'/g, "'\\''")}'`;
+    let command = `${homeOnLine(this.cliHome)}'${params.binaryPath.replace(/'/g, "'\\''")}'`;
 
     command += ' -p';
 
@@ -125,6 +145,8 @@ export class GeminiProvider implements CLIProvider {
       CLAUDE_AGENT_ID: agentId,
       CLAUDE_PROJECT_PATH: projectPath,
       CLAUDE_PROVIDER: this.id,
+      // The home Tars reads and writes (homeOnLine says why).
+      GEMINI_CLI_HOME: this.cliHome,
       // Its API key from Settings, under the variable it reads (services/cli-keys.ts).
       ...keyEnvFor('gemini', appSettings),
     };

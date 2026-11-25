@@ -84,6 +84,8 @@ DOROTHY_ERROR_REPORTS_DSN # a development run only: where error reports go (a st
 ELECTRON_BUILD        # '1' switches next.config.ts to output: 'export' for packaging
 PATH SHELL HOME       # read when composing the PTY environment (buildFullPath, cli-paths detection)
 CODEX_HOME            # where codex keeps its config, sessions and model cache (else ~/.codex): Tars reads its sessions and model list there, writes its MCP servers and the agents' folder trust into its config.toml, and hands it to the codex it starts (in the command line on macOS and Linux, in the terminal's environment on Windows), whatever an rc file sets; the one a login shell sets is read once per run, only to say why a codex agent is not signed in
+GEMINI_CLI_HOME       # the home gemini reads (else the home folder), its folder being $GEMINI_CLI_HOME/.gemini: Tars writes gemini's settings, hooks and MCP servers there, and hands it to the gemini it starts (in the command line on macOS and Linux, in the terminal's environment on Windows), whatever an rc file sets
+GROK_HOME             # grok's home in place of ~/.grok: Tars writes its config.toml and MCP servers there, and hands it to the grok it starts, as GEMINI_CLI_HOME. GROK_CONFIG and GROK_CONFIG_PATH are not read: overlays grok only reads, GROK_CONFIG winning over GROK_CONFIG_PATH (measured on 1.0.92), left to the user
 APPLE_ID              # notarization; unset → scripts/notarize.js uses the 'Tars' keychain profile
 APPLE_APP_PASSWORD
 APPLE_TEAM_ID

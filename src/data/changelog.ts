@@ -7,6 +7,14 @@ export interface Release {
 
 export const CHANGELOG: Release[] = [
   {
+    id: 64,
+    version: '2.0.7',
+    date: '2026-11-24',
+    updates: [
+      'If you set GEMINI_CLI_HOME or GROK_HOME, Tars now writes Gemini\'s and Grok\'s settings, hooks and MCP servers into that home and starts them on it, so your Gemini and Grok agents see what Tars set up for them.',
+    ],
+  },
+  {
     id: 63,
     version: '2.0.6',
     date: '2026-10-29',
