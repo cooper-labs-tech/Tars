@@ -27,6 +27,9 @@ import { assertThrowaway } from '../../setup/throwaway-dirs';
  *     delete that ignores the attribute, else the attribute cleared first), so the withdrawal holds and there is
  *     nothing to say. A file neither removed nor emptied on Windows takes a lock or an ACL, and no witness here
  *     carries that case; the code that says it (dropPrivateFile, then the words) is the same on every system.
+ * Added before its code after the Audit's re-read at d2a4f6aa6 (its I-1, 25/11):
+ * R6. The same case: the note that stays after the answer (uploadState().unsaved, which the window keeps showing)
+ *     says only that Tars tries again, not that a restart would share again. POSIX only, as R5.
  */
 
 assertThrowaway({ DATA_DIR, PRIVATE_DIR });
@@ -107,6 +110,21 @@ describe('the back-office address, changed on settings that cannot be written', 
     expect(runtime.uploadConsentAt()).toBeUndefined();
     expect(answer.ok).toBe(false);
     expect(answer.error).toMatch(/restart/);
+  });
+
+  it.skipIf(process.platform === 'win32')('R6. the same case: the note that stays says a restart would share again', () => {
+    const file = runtime.TRACES_CONSENT_FILE;
+    const folder = path.dirname(file);
+    fs.chmodSync(file, 0o444);
+    fs.chmodSync(folder, 0o500);
+    failWith = full();
+    try {
+      call('traces:setSettings', { uploadUrl: '' });
+    } finally {
+      fs.chmodSync(folder, 0o700);
+      fs.chmodSync(file, 0o600);
+    }
+    expect(runtime.uploadPersistence().unsaved).toMatch(/restart before they are saved would share it again/);
   });
 
   it('R4. a change that drops no consent is written first, then applied', () => {
