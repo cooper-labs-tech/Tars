@@ -87,15 +87,12 @@ export function registerVaultProjectFilesHandlers(): void {
     readProjectFile(p.key, placeOf(p), p.name));
   ipcMain.handle('vault:project-file:write', async (_e, p: { key?: unknown; place?: unknown; sub?: unknown; name?: unknown; text?: unknown; mtimeSeen?: unknown } = {}) =>
     writeProjectFile(p.key, placeOf(p), p.name, p.text, p.mtimeSeen === undefined ? null : p.mtimeSeen));
-  // "show folder" opens the folder; "show in folder" shows the file in it.
+  // "show folder" and "show in folder" both show the item in its folder, never open it (2.0.7): agents write these
+  // folders, and opening a path hands it to its default application.
   ipcMain.handle('vault:project-file:show', async (_e, p: { key?: unknown; place?: unknown; sub?: unknown; name?: unknown } = {}) => {
     const at = locateProjectFile(p.key, placeOf(p), p.name);
     if ('error' in at) return at;
-    if (at.isFile) shell.showItemInFolder(at.path);
-    else {
-      const failed = await shell.openPath(at.path);
-      if (failed) return { error: failed, code: 'open_failed' };
-    }
+    shell.showItemInFolder(at.path);
     return { success: true };
   });
 }

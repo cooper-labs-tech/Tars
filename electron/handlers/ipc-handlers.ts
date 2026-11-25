@@ -86,7 +86,7 @@ import { probeVersion } from '../core/version-probe';
 import { readCodexModels } from '../providers/codex-cli';
 import { cliKeyStates, withCliKey } from '../services/cli-keys';
 import { keepSecrets, secretStates, setSecret, settingsForWindow, type SecretField } from '../services/settings-secrets';
-import { isSecretFile, mayBeProject, windowMayRead, windowMayWrite } from '../utils/window-file-access';
+import { isSecretFile, mayBeProject, windowMayRead, windowMayReveal, windowMayWrite } from '../utils/window-file-access';
 import { mcpConfigPathFor } from '../services/mcp-roles';
 import { registerFirstRunHandlers } from './first-run-handlers';
 import { setFirstTask, spendFirstTask, withFirstTask } from '../core/first-task';
@@ -2886,11 +2886,21 @@ function registerShellHandlers(deps: IpcHandlerDependencies): void {
     }
   });
 
+  /**
+   * "Reveal in Finder", "show folder": a folder Tars knows, shown in its folder (2.0.7). Judged here, since the
+   * projects' list is every agent's to write (windowMayReveal), and shown with showItemInFolder, never opened: opening
+   * a path hands it to its default application.
+   */
   ipcMain.handle('shell:reveal', async (_event, { path: target }: { path: string }) => {
-    if (!target || !fs.existsSync(target)) return { success: false, error: 'no such path' };
+    if (typeof target !== 'string' || !target || !fs.existsSync(target)) return { success: false, error: 'no such path' };
+    const known = [...readCustomProjects(), ...[...deps.agents.values()].flatMap((a) => [a.projectPath, a.worktreePath])]
+      .filter((p): p is string => typeof p === 'string' && !!p && path.isAbsolute(p));
+    if (!windowMayReveal(target, known)) {
+      return { success: false, error: 'Only a folder Tars knows (a project, an agent\'s folder, its data folder) is shown from here' };
+    }
     const { shell } = await import('electron');
-    const error = await shell.openPath(target);
-    return error ? { success: false, error } : { success: true };
+    shell.showItemInFolder(target);
+    return { success: true };
   });
 
   // Start a new quick terminal PTY
