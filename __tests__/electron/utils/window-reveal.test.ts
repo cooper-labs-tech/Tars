@@ -18,6 +18,10 @@ import * as path from 'node:path';
  *      really lies.
  *  R5. Over-correction: a project, a folder in one, an agent's worktree, the data folder or ~/.claude refused.
  *  R6. Anything but an absolute path is taken: undefined, '', a number, a relative path.
+ * Added before their code after the Audit's read of #650 at 4c791313d:
+ *  R7. (L1) Every project of the list is followed on the disk at each reveal, on the main thread, the ones the path
+ *      does not lie in too: a project on a share nobody answers for freezes the app. Only the projects the path lies
+ *      in, by spelling, may be looked at (as the Code panel's search does since #648).
  * And what no unit shows: that a folder is shown in its folder and never opened. The E2E
  * e2e/show-folder-reveals.spec.ts drives that from the Projects page.
  */
@@ -44,9 +48,9 @@ const known = () => [project, worktree];
 
 describe('what the window may have shown in its folder', () => {
   it('R1. a folder only: no file, no link to one, nothing that does not exist', () => {
-    const script = file(path.join(project, 'run.sh'));
-    fs.symlinkSync(script, path.join(project, 'link-to-file'));
-    for (const p of [script, path.join(project, 'link-to-file'), path.join(project, 'missing'), file(at('work', 'loose.txt'))]) {
+    const notes = file(path.join(project, 'notes.txt'));
+    fs.symlinkSync(notes, path.join(project, 'link-to-file'));
+    for (const p of [notes, path.join(project, 'link-to-file'), path.join(project, 'missing'), file(at('work', 'loose.txt'))]) {
       expect(windowMayReveal(p, [...known(), p]), p).toBe(false);
     }
   });
@@ -75,5 +79,21 @@ describe('what the window may have shown in its folder', () => {
 
   it('R6. only an absolute path', () => {
     for (const p of [undefined, '', 42, 'work/harbor', '.']) expect(windowMayReveal(p, known()), String(p)).toBe(false);
+  });
+
+  it('R7. a project the path does not lie in is never looked at on the disk', () => {
+    const share = path.join(path.parse(home()).root, 'offline-share-tars-r7', 'project');
+    const realpath = fs.realpathSync.native;
+    const looked: string[] = [];
+    (fs.realpathSync as unknown as { native: typeof realpath }).native = ((p: fs.PathLike, ...rest: unknown[]) => {
+      looked.push(String(p));
+      return (realpath as (...a: unknown[]) => string)(p, ...rest);
+    }) as typeof realpath;
+    try {
+      expect(windowMayReveal(project, [project, share])).toBe(true);
+    } finally {
+      (fs.realpathSync as unknown as { native: typeof realpath }).native = realpath;
+    }
+    expect(looked.filter((p) => p.includes('offline-share-tars-r7')), 'the other project was followed on the disk').toEqual([]);
   });
 });
