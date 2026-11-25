@@ -38,6 +38,9 @@ import { assertThrowaway } from '../../setup/throwaway-dirs';
  *      and takes it for a deletion.
  * V12. (Its L4.) An endpoint's address moved in the same save that turns its traces off, on settings that cannot be
  *      written: the new address, approved by the act, applies before it is written, and the answer is ok.
+ * V13. (The orchestrator's note for #599, which shows these words as they are.) While a revoke holds the consent
+ *      back, the note says only that sharing is stopped and Tars tries again: not that Tars tries once more as it
+ *      quits, nor that a start before a write holds takes the consent as withdrawn.
  */
 
 assertThrowaway({ DATA_DIR, PRIVATE_DIR });
@@ -201,6 +204,7 @@ describe('a revoke of sharing on settings that cannot be written applies at once
     }
     expect(answer.ok).toBe(true);
     expect(answer.unsaved).toMatch(/restart/);
+    expect(answer.unsaved).toMatch(/once more as it quits/);
     expect(runtime.uploadPersistence().unsaved).toMatch(/restart/);
   });
 
@@ -226,5 +230,13 @@ describe('a revoke of sharing on settings that cannot be written applies at once
     expect(ep?.allowTraces).toBe(false);
     expect(ep?.baseUrl).toBe(BASE);
     expect(answer.ok).toBe(false);
+  });
+
+  it('V13. while a revoke holds the consent back, the note says what a quit before it is saved does', () => {
+    failWith = full();
+    const answer = call('traces:removePair', { harness: 'qwen-code', models: '*' }) as { ok: boolean; unsaved?: string };
+    expect(answer.unsaved).toMatch(/once more as it quits/);
+    expect(answer.unsaved).toMatch(/the next start takes your consent as withdrawn/);
+    expect(runtime.uploadPersistence().unsaved).toBe(answer.unsaved);
   });
 });
