@@ -26,7 +26,8 @@ import { assertThrowaway } from './throwaway-dirs';
  * ~/.dorothy and ~/.tars in os.homedir() at once (core/data-dir-move.ts), so a guard called after that import comes
  * too late:
  * G6. A file whose first import is the home's guard, under a home outside the temporary folder: something is made in
- *     that home before the guard throws.
+ *     that home before the guard throws. Shown to bite on a mutant as well as on the guard missing (the Audit's I-1 at
+ *     01b73680c): with throwaway-home.ts emptied, nothing throws and the constants make `.dorothy` in that home.
  * G7. (The gap itself.) The old order, the constants loaded and the guard called after: the home gets a link before
  *     the guard throws. Shown on a stand-in home inside this test's own folder, never the real one.
  */
