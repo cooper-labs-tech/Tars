@@ -3,7 +3,7 @@ import * as os from 'os';
 import * as path from 'path';
 import { execFile, execFileSync } from 'child_process';
 import { expect, test } from '@playwright/test';
-import { CLI_CONFIG_CONTENT, CLI_HOMES, GIT_OWN, homesOutside } from './cli-homes.mjs';
+import { CLI_CONFIG_CONTENT, CLI_FAMILIES, CLI_HOMES, GIT_OWN, homesOutside, landing } from './cli-homes.mjs';
 
 export { CLI_HOMES, homesOutside };
 
@@ -474,6 +474,39 @@ const ELECTRON_PATHS = ['home', 'appData', 'userData', 'sessionData', 'cache', '
  */
 const onWindows = process.platform === 'win32';
 
+/**
+ * The XDG base folders, each at its default under the sandbox (the XDG spec's
+ * own defaults under HOME), so a runner's exported ones never reach the app or
+ * the CLIs it starts. A spec's env may still name another, inside its sandbox
+ * (homesOutside refuses one outside, cli-homes.mjs).
+ */
+function sandboxXdg(sandboxHome) {
+  return {
+    XDG_CONFIG_HOME: path.join(sandboxHome, '.config'),
+    XDG_DATA_HOME: path.join(sandboxHome, '.local', 'share'),
+    XDG_STATE_HOME: path.join(sandboxHome, '.local', 'state'),
+    XDG_CACHE_HOME: path.join(sandboxHome, '.cache'),
+  };
+}
+
+/**
+ * gemini's and grok's own homes, each the one it takes in the sandbox when
+ * none is set, so a runner's exported ones never reach the app or the CLIs it
+ * starts (the Audit's L4 on #638). Measured on 2026-11-25, each binary isolated:
+ * gemini 0.70.0 takes GEMINI_CLI_HOME before HOME as the folder its `.gemini`
+ * lies in, and wrote its projects.json, history and tmp there; grok 1.0.92 takes
+ * GROK_HOME in place of ~/.grok, wrote its files there, and resolves ~/.grok
+ * through the home's real path. The rest of both families is dropped with the
+ * caller's (inheritable, cli-homes.mjs's CLI_FAMILIES). A spec's env may still
+ * name another, inside its sandbox (homesOutside judges both as homes).
+ */
+function sandboxCliHomes(sandboxHome) {
+  return {
+    GEMINI_CLI_HOME: sandboxHome,
+    GROK_HOME: path.join(fs.realpathSync(sandboxHome), '.grok'),
+  };
+}
+
 function windowsHome(sandboxHome) {
   if (!onWindows) return {};
   const roaming = path.join(sandboxHome, 'AppData', 'Roaming');
@@ -618,7 +651,22 @@ const RENDERING_ARGS = ['--lang=fr-FR', ...(onWindows ? ['--disable-lcd-text'] :
  * DOROTHY_TAILSCALE_BIN names the sandbox's own `tailscale` (writeFakeTailscale),
  * unless the spec's env names another, or none with ''. PATH is the sandbox's
  * own (sandboxPath): its four stand-in CLIs, and nothing of the account's home,
- * unless the spec's env names another.
+ * unless the spec's env names another. git has an identity of the sandbox's
+ * own (writeSandboxGitIdentity), unless the spec wrote one. XDG_CONFIG_HOME is
+ * the sandbox's `.config`, unless the spec's env names another inside the
+ * sandbox (a CLI home a spec names outside it is refused first): a runner's own
+ * reached the app, and through it git's config and the CLIs' (the Audit's I-1
+ * on #643). XDG_DATA_HOME, XDG_STATE_HOME and XDG_CACHE_HOME are the sandbox's
+ * `.local/share`, `.local/state` and `.cache` the same way, where each CLI keeps
+ * its sessions, its logs and its caches when they are unset (the Audit's I-3).
+ * GEMINI_CLI_HOME and GROK_HOME are the sandbox's (sandboxCliHomes), and no
+ * other variable of either CLI's comes from the caller: a runner's reached the
+ * app, and gemini and grok read and wrote the runner's folders (the Audit's L4
+ * on #638).
+ *
+ * The HOME must lie inside a folder the specs make their sandboxes in, judged
+ * as removeHome judges it, or nothing is written there and no app is started
+ * (the Audit's I-2 on #643): every write above goes into it.
  *
  * GOOSE_DISABLE_KEYRING is 1, whatever the caller exported, unless the spec's env
  * names another: goose keeps its keys in the system's keychain, outside every home
@@ -629,6 +677,10 @@ const RENDERING_ARGS = ['--lang=fr-FR', ...(onWindows ? ['--disable-lcd-text'] :
  * spec that runs two Tars on one home gives the second a profile of its own.
  */
 export async function launchSandboxed(electron, sandboxHome, { env = {}, profile = 'electron-profile', ...options } = {}) {
+  const sandbox = underRoots(sandboxHome, sandboxRoots());
+  if (!sandbox.inside) {
+    throw new Error(`launchSandboxed: ${sandboxHome} is not inside a folder the specs make their sandboxes in (${sandbox.real.join(', ')}): nothing was written there and no app was started`);
+  }
   // A CLI home the spec names outside the sandbox: refused before the app, or a CLI, starts on it.
   const strays = homesOutside(env, sandboxHome);
   if (strays.length > 0) {
@@ -637,19 +689,22 @@ export async function launchSandboxed(electron, sandboxHome, { env = {}, profile
       + strays.map(([name, where]) => `  ${name}: ${where}`).join('\n'),
     );
   }
+  writeSandboxGitIdentity(sandboxHome);
   const app = await electron.launch({
     ...options,
     // A packed app (executablePath, e2e/sandbox-build.packed.spec.ts) runs its own code: no '.' to name it.
     args: [...(options.executablePath ? [] : ['.']), `--user-data-dir=${path.join(sandboxHome, profile)}`, ...RENDERING_ARGS],
-    env: withSandboxPath({ ...inheritable(process.env), PATH: sandboxPath(sandboxHome), DOROTHY_TAILSCALE_BIN: writeFakeTailscale(sandboxHome), GOOSE_DISABLE_KEYRING: '1', ...env, ...windowsHome(sandboxHome), HOME: sandboxHome, CFFIXED_USER_HOME: sandboxHome }, env),
+    env: withSandboxPath({ ...inheritable(process.env), PATH: sandboxPath(sandboxHome), DOROTHY_TAILSCALE_BIN: writeFakeTailscale(sandboxHome), GOOSE_DISABLE_KEYRING: '1', ...sandboxXdg(sandboxHome), ...sandboxCliHomes(sandboxHome), ...env, ...windowsHome(sandboxHome), HOME: sandboxHome, CFFIXED_USER_HOME: sandboxHome }, env),
   });
   // What the app inherited, checked the way its folders are below: a run
   // started by an agent inside Tars carries that agent's CLAUDE_MGR_API_URL
   // (the live Tars, 31415) and its token, and handed them to the app until
   // 2026-09-23. Anything of that family the app holds now came from the spec,
-  // or is the fixture's own DOROTHY_TAILSCALE_BIN.
+  // or is the fixture's own: DOROTHY_TAILSCALE_BIN, the four XDG folders
+  // (sandboxXdg), GEMINI_CLI_HOME and GROK_HOME (sandboxCliHomes).
+  const own = ['DOROTHY_TAILSCALE_BIN', ...Object.keys(sandboxXdg(sandboxHome)), ...Object.keys(sandboxCliHomes(sandboxHome))];
   const leaked = await app.evaluate((_electron, { allowed, pattern }) => Object.keys(process.env)
-    .filter(name => new RegExp(pattern).test(name) && !allowed.includes(name)), { allowed: [...Object.keys(env), 'DOROTHY_TAILSCALE_BIN'], pattern: LEAKY.source });
+    .filter(name => new RegExp(pattern).test(name) && !allowed.includes(name)), { allowed: [...Object.keys(env), ...own], pattern: LEAKY.source });
   if (leaked.length > 0) {
     await app.close();
     throw new Error(`the app inherited the caller's ${leaked.join(', ')}; launchSandboxed hands it nothing of that family`);
@@ -709,9 +764,10 @@ export async function launchSandboxed(electron, sandboxHome, { env = {}, profile
  * carry DOROTHY_* or ANTHROPIC_* of its own; a spec that wants one sets it in
  * its env.
  */
-// The CLI homes, a CLI's config as text and git's own variables: one list with the unit tests' setup (cli-homes.mjs).
-// The caller's are never handed on, and a spec may name a home only inside its sandbox (homesOutside).
-const LEAKY = new RegExp(`^(CLAUDE|DOROTHY|ANTHROPIC|TARS_)|^CLAUDECODE$|${CLI_HOMES.source}|${CLI_CONFIG_CONTENT.source}|${GIT_OWN.source}`);
+// The CLI homes, a CLI's config as text, git's own variables and the CLIs' own families (gemini's, grok's, codex's,
+// pi's, Google's and xAI's keys): one list with the unit tests' setup (cli-homes.mjs). The caller's are never handed
+// on, and a spec may name a home only inside its sandbox (homesOutside).
+const LEAKY = new RegExp(`^(CLAUDE|DOROTHY|ANTHROPIC|TARS_)|^CLAUDECODE$|${CLI_HOMES.source}|${CLI_CONFIG_CONTENT.source}|${GIT_OWN.source}|${CLI_FAMILIES.source}`);
 export function inheritable(env) {
   return Object.fromEntries(Object.entries(env).filter(([name]) => !LEAKY.test(name)));
 }
@@ -824,6 +880,22 @@ export function writeNodeCli(file, source) {
   return shim;
 }
 
+/**
+ * git's identity in the sandbox, unless the spec wrote a .gitconfig of its own.
+ * The app commits by itself: before it removes an agent's or a chat's worktree,
+ * it saves the uncommitted work on a wip/ branch. git takes the author from its
+ * config under HOME, as utils/safe-git.ts passes HOME and no GIT_AUTHOR_*.
+ * With none, git guesses user@hostname, and refuses
+ * on a machine whose hostname has no domain. Measured on 2026-11-24, when
+ * `hostname` answered `Mac`: new-interface-chat-send.spec.ts's delete read
+ * "git commit-tree failed: Author identity unknown" instead of what it kept.
+ */
+function writeSandboxGitIdentity(home) {
+  fs.mkdirSync(home, { recursive: true });
+  const file = path.join(home, '.gitconfig');
+  if (!fs.existsSync(file)) fs.writeFileSync(file, '[user]\n\tname = Tars e2e\n\temail = e2e@tars.invalid\n');
+}
+
 /** The tailnet the sandbox's `tailscale` reports: a name no machine has, and the first address of the tailnet range. */
 const FAKE_TAILNET = { name: 'tars-sandbox.example.ts.net', ip: '100.64.0.1' };
 
@@ -884,18 +956,21 @@ function sandboxRoots() {
 }
 
 /**
- * Where a path lands, its links and its `..` resolved as the system does: for
- * a path that does not exist, where its nearest existing parent lands, and the
- * rest of the path.
+ * Whether `dir` lies strictly under one of `roots`, judged by where it lands
+ * through its links and its `..` (cli-homes.mjs's landing; a root itself is not
+ * under it), and the roots as they land, for the refusal's words. removeHome's
+ * judgement, which launchSandboxed makes before it writes into a HOME.
  */
-function landing(p) {
-  try {
-    return fs.realpathSync.native(p);
-  } catch (error) {
-    const parent = path.dirname(p);
-    if (error.code !== 'ENOENT' || parent === p) throw error;
-    return path.join(landing(parent), path.basename(p));
-  }
+function underRoots(dir, roots) {
+  const where = landing(dir);
+  const real = roots.flatMap((root) => {
+    try {
+      return [fs.realpathSync.native(root)];
+    } catch {
+      return [];
+    }
+  });
+  return { inside: real.some((root) => where.startsWith(root + path.sep)), real };
 }
 
 /**
@@ -914,15 +989,8 @@ function landing(p) {
  * deleting (the Audit's L1 on #385). Tests: __tests__/e2e-remove-home.test.ts.
  */
 export async function removeHome(dir, roots = sandboxRoots()) {
-  const where = landing(dir);
-  const real = roots.flatMap((root) => {
-    try {
-      return [fs.realpathSync.native(root)];
-    } catch {
-      return [];
-    }
-  });
-  if (!real.some((root) => where.startsWith(root + path.sep))) {
+  const { inside, real } = underRoots(dir, roots);
+  if (!inside) {
     throw new Error(`removeHome: ${dir} is not inside a folder the specs make their sandboxes in (${real.join(', ')}): nothing was removed`);
   }
   for (let attempt = 1; ; attempt++) {

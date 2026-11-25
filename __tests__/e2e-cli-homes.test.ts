@@ -65,6 +65,33 @@ import { CLI_HOMES, homesOutside, inheritable, launchSandboxed } from '../e2e/fi
  *     sandboxed app writes its keys into the owner's keychain. The conformance sets GOOSE_DISABLE_KEYRING=1, and
  *     launchSandboxed does not, so a future spec that starts a real goose would reach it. The launch must hand
  *     GOOSE_DISABLE_KEYRING=1 down by default, whatever the caller's own value, and a spec may still name another.
+ *
+ * Added on 2026-11-25 from the Audit's L4 on #638 and L1 on #643, before the fix, each binary measured isolated:
+ * 13. gemini's, grok's, codex's and pi's own variables reach the app beyond the homes above, and so do Google's and
+ *     xAI's keys:
+ *     - gemini 0.70.0 takes GEMINI_CLI_HOME before HOME for the folder its .gemini lies in, its trust and system
+ *       settings from GEMINI_CLI_TRUSTED_FOLDERS_PATH and GEMINI_CLI_SYSTEM_SETTINGS_PATH, and Google's key, project
+ *       and Vertex switch from GOOGLE_API_KEY, GOOGLE_APPLICATION_CREDENTIALS, GOOGLE_CLOUD_PROJECT, GCLOUD_PROJECT
+ *       and GOOGLE_GENAI_USE_VERTEXAI, which would send a real gemini to Google on the runner's account;
+ *     - grok 1.0.92 takes GROK_HOME in place of ~/.grok, lays GROK_CONFIG or the file GROK_CONFIG_PATH names over
+ *       its config, signs in with GROK_AUTH_PATH's file, and sends XAI_API_KEY as its key (GROK_API_KEY it never
+ *       reads);
+ *     - codex 0.163.0 keeps its state under CODEX_SQLITE_HOME, signs in with CODEX_ACCESS_TOKEN, CODEX_AUTH or
+ *       CODEX_API_KEY, and trusts CODEX_CA_CERTIFICATE;
+ *     - pi 1.3.0 keeps its packages under PI_PACKAGE_DIR and PI_MANAGED_INSTALL_ROOT, and writes PI_SESSION_FILE and
+ *       PI_TUI_WRITE_LOG;
+ *     - and XDG_BIN_HOME, where an installer run in the sandbox (uv's) puts what it installs.
+ *     Each family must be left out whole, and the folders among them judged as homes: a spec may name one only
+ *     inside its sandbox. A key or a config given as text is never judged as a path.
+ * 14. (the orchestrator's word of 25/11, before the fix) grok 1.0.92 also sends its telemetry where OpenTelemetry's
+ *     own variables say: OTEL_EXPORTER_OTLP_ENDPOINT and the logs', metrics' and traces' endpoints, with
+ *     OTEL_EXPORTER_OTLP_HEADERS and a client certificate and key (OTEL_EXPORTER_OTLP_CLIENT_CERTIFICATE,
+ *     OTEL_EXPORTER_OTLP_CLIENT_KEY). A runner's collector would receive a test's grok telemetry. Left out whole, never
+ *     judged; the product keeps handing the user's own environment to the agents.
+ * 15. (the Audit's I-1 on #643 at 839589f31, before the fix) a family's file goes unjudged: a spec naming GROK_AUTH_PATH,
+ *     GROK_LOG_FILE, GEMINI_CLI_TRUSTED_FOLDERS_PATH, GEMINI_DEBUG_LOG_FILE, PI_SESSION_FILE or PI_TUI_WRITE_LOG outside
+ *     its sandbox is not refused, and the CLI reads or writes there. A family value that is an absolute path is judged
+ *     as a home is; a key, a switch, an endpoint or a config as text never.
  */
 
 const accountHome = os.userInfo().homedir;
@@ -191,5 +218,74 @@ describe('the keychain an E2E sandbox keeps the app\'s CLIs out of', () => {
   it('12. keeps it whatever the caller exported, and lets a spec name its own', async () => {
     expect((await handed({}, { GOOSE_DISABLE_KEYRING: '0' }))?.GOOSE_DISABLE_KEYRING).toBe('1');
     expect((await handed({ GOOSE_DISABLE_KEYRING: '0' }))?.GOOSE_DISABLE_KEYRING).toBe('0');
+  });
+});
+
+describe('the whole families of the CLIs Tars drives, and their keys (13)', () => {
+  /** Folders: judged as homes. */
+  const HOMES = ['GEMINI_CLI_HOME', 'GROK_HOME', 'CODEX_SQLITE_HOME', 'PI_PACKAGE_DIR', 'PI_MANAGED_INSTALL_ROOT', 'XDG_BIN_HOME'];
+  /** Files, keys, switches and config as text: left out, never judged. */
+  const REST = [
+    'GEMINI_CLI_TRUSTED_FOLDERS_PATH', 'GEMINI_CLI_SYSTEM_SETTINGS_PATH', 'GEMINI_DEBUG_LOG_FILE', 'GEMINI_API_KEY',
+    'GOOGLE_API_KEY', 'GOOGLE_APPLICATION_CREDENTIALS', 'GOOGLE_CLOUD_PROJECT', 'GOOGLE_GENAI_USE_VERTEXAI', 'GCLOUD_PROJECT',
+    'GROK_CONFIG', 'GROK_CONFIG_PATH', 'GROK_AUTH_PATH', 'GROK_LOG_FILE', 'XAI_API_KEY',
+    'CODEX_ACCESS_TOKEN', 'CODEX_AUTH', 'CODEX_API_KEY', 'CODEX_CA_CERTIFICATE',
+    'PI_SESSION_FILE', 'PI_TUI_WRITE_LOG',
+  ];
+
+  it('13. leaves out every one of them the caller has, and keeps the rest', () => {
+    const env = inheritable({ PATH: '/usr/bin', LANG: 'C.UTF-8', ...Object.fromEntries([...HOMES, ...REST].map(name => [name, theOwners(name)])) });
+
+    expect(env).toEqual({ PATH: '/usr/bin', LANG: 'C.UTF-8' });
+  });
+
+  it('13. judges the folders among them as homes, and a key or a config as text never', () => {
+    const home = sandbox();
+    for (const name of HOMES) {
+      expect(CLI_HOMES.test(name), `${name} is not judged as a home`).toBe(true);
+      expect(homesOutside({ [name]: theOwners(name) }, home)).toEqual([[name, theOwners(name)]]);
+      expect(homesOutside({ [name]: path.join(home, `.${name.toLowerCase()}`) }, home)).toEqual([]);
+    }
+    expect(homesOutside({ GEMINI_API_KEY: 'AIza-not-a-folder', XAI_API_KEY: 'xai-not-a-folder', CODEX_AUTH: '{"token":"x"}', GROK_CONFIG: '{"models":{}}' }, home)).toEqual([]);
+  });
+
+  it('14. leaves out the caller\'s OpenTelemetry exporter settings, and never judges an endpoint or a header', () => {
+    const OTLP = ['OTEL_EXPORTER_OTLP_ENDPOINT', 'OTEL_EXPORTER_OTLP_TRACES_ENDPOINT', 'OTEL_EXPORTER_OTLP_LOGS_ENDPOINT', 'OTEL_EXPORTER_OTLP_METRICS_ENDPOINT',
+      'OTEL_EXPORTER_OTLP_HEADERS', 'OTEL_EXPORTER_OTLP_CLIENT_CERTIFICATE', 'OTEL_EXPORTER_OTLP_CLIENT_KEY', 'OTEL_EXPORTER_OTLP_PROTOCOL'];
+    expect(inheritable({ PATH: '/usr/bin', ...Object.fromEntries(OTLP.map(name => [name, 'http://127.0.0.1:4318'])) })).toEqual({ PATH: '/usr/bin' });
+    // An endpoint, a header and a protocol are no path; a certificate or a key file is one, judged as case 15 says.
+    expect(homesOutside({ OTEL_EXPORTER_OTLP_ENDPOINT: 'http://127.0.0.1:4318', OTEL_EXPORTER_OTLP_HEADERS: 'authorization=x', OTEL_EXPORTER_OTLP_PROTOCOL: 'grpc' }, sandbox())).toEqual([]);
+  });
+
+  it('15. judges a family\'s file as a home: refused outside the sandbox, taken inside, and a value that is no path never', () => {
+    const FILES = ['GROK_AUTH_PATH', 'GROK_LOG_FILE', 'GEMINI_CLI_TRUSTED_FOLDERS_PATH', 'GEMINI_DEBUG_LOG_FILE', 'PI_SESSION_FILE', 'PI_TUI_WRITE_LOG'];
+    const home = sandbox();
+    for (const name of FILES) {
+      expect(homesOutside({ [name]: theOwners(name) }, home), `${name} outside`).toEqual([[name, theOwners(name)]]);
+      expect(homesOutside({ [name]: path.join(home, `${name.toLowerCase()}.file`) }, home), `${name} inside`).toEqual([]);
+    }
+    expect(homesOutside({ OTEL_EXPORTER_OTLP_ENDPOINT: 'http://127.0.0.1:4318', XAI_API_KEY: 'xai-not-a-path', GROK_CONFIG: '{"a":1}', GEMINI_CLI_IDE_SERVER_PORT: '3000' }, home)).toEqual([]);
+  });
+
+  it('15. refuses the launch on a spec\'s grok log outside the sandbox, before the app starts', async () => {
+    const home = sandbox();
+    let launched = 0;
+    const electron = { launch: async () => { launched++; throw new Error('the app was started'); } };
+
+    const refusal = await launchSandboxed(electron, home, { env: { GROK_LOG_FILE: theOwners('GROK_LOG_FILE') } }).then(() => null, (error: Error) => error);
+
+    expect(launched).toBe(0);
+    expect(refusal?.message).toContain(`GROK_LOG_FILE: ${theOwners('GROK_LOG_FILE')}`);
+  });
+
+  it('13. refuses the launch on a spec\'s gemini or grok home outside the sandbox, before the app starts', async () => {
+    const home = sandbox();
+    let launched = 0;
+    const electron = { launch: async () => { launched++; throw new Error('the app was started'); } };
+
+    const refusal = await launchSandboxed(electron, home, { env: { GROK_HOME: theOwners('GROK_HOME') } }).then(() => null, (error: Error) => error);
+
+    expect(launched).toBe(0);
+    expect(refusal?.message).toContain(`GROK_HOME: ${theOwners('GROK_HOME')}`);
   });
 });

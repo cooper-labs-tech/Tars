@@ -31,6 +31,16 @@ import { stripVTControlCharacters } from 'node:util';
  *    variables, which a run started from a git hook carries. Each is dropped,
  *    the list shared with the E2E fixture (e2e/cli-homes.mjs), and a decoy of
  *    each comes out byte for byte.
+ *
+ * Added on 2026-11-25 from the Audit's L4 on #638 and L1 on #643, before the
+ * fix (e2e-cli-homes.test.ts, case 13, says what each binary was measured to
+ * read):
+ * 4. The rest of gemini's, grok's, codex's and pi's own variables, Google's and
+ *    xAI's keys, and XDG_BIN_HOME, still reach the code under test: GEMINI_CLI_HOME,
+ *    GROK_HOME, CODEX_SQLITE_HOME, PI_PACKAGE_DIR and the others. Each family is
+ *    dropped whole, and a decoy of each folder comes out byte for byte. So do
+ *    OpenTelemetry's exporter settings (OTEL_EXPORTER_OTLP_*), where grok sends
+ *    its telemetry (e2e-cli-homes.test.ts, case 14).
  */
 
 const FIXTURES = '__tests__/setup/fixtures/tmpdir-guard';
@@ -79,6 +89,42 @@ describe('the environment a test file starts in', () => {
     const before = snapshot();
     const env = Object.fromEntries(Object.entries(process.env).filter(([name]) => !name.startsWith('VITEST')));
     const child = spawnSync(process.execPath, [VITEST, 'run', '--config', `${FIXTURES}/vitest.config.mts`, '--reporter=default', 'cli-homes'], {
+      cwd: process.cwd(),
+      env: { ...env, TMPDIR: tmp, TMP: tmp, TEMP: tmp, ...exported },
+      encoding: 'utf8',
+      timeout: 60_000,
+    });
+    const output = stripVTControlCharacters(`${child.stdout}${child.stderr}`);
+
+    expect(snapshot(), 'a decoy the code under test wrote').toEqual(before);
+    expect(output).toMatch(/Test Files {2}1 passed \(1\)/);
+    expect(child.status, output).toBe(0);
+  }, 90_000);
+
+  it('4. holds none of gemini\'s, grok\'s, codex\'s and pi\'s own variables, Google\'s or xAI\'s keys or XDG_BIN_HOME, and leaves their decoys as they were', () => {
+    const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'child-run-'));
+    const decoys = fs.mkdtempSync(path.join(os.tmpdir(), 'decoy-families-'));
+    const exported: Record<string, string> = {};
+    for (const name of ['GEMINI_CLI_HOME', 'GROK_HOME', 'CODEX_SQLITE_HOME', 'PI_PACKAGE_DIR', 'PI_MANAGED_INSTALL_ROOT', 'XDG_BIN_HOME']) {
+      const dir = path.join(decoys, name.toLowerCase());
+      fs.mkdirSync(dir);
+      fs.writeFileSync(path.join(dir, 'config.toml'), `# ${name}, a decoy\n`);
+      exported[name] = dir;
+    }
+    for (const name of ['GROK_CONFIG_PATH', 'GEMINI_CLI_TRUSTED_FOLDERS_PATH', 'CODEX_CA_CERTIFICATE', 'PI_SESSION_FILE']) {
+      exported[name] = path.join(decoys, `${name.toLowerCase()}.file`);
+      fs.writeFileSync(exported[name], `${name}, a decoy\n`);
+    }
+    Object.assign(exported, {
+      GEMINI_API_KEY: 'decoy', GOOGLE_API_KEY: 'decoy', GOOGLE_GENAI_USE_VERTEXAI: 'true', GCLOUD_PROJECT: 'decoy',
+      XAI_API_KEY: 'decoy', CODEX_AUTH: 'decoy', GROK_CONFIG: '{"decoy":true}',
+      OTEL_EXPORTER_OTLP_ENDPOINT: 'http://127.0.0.1:9', OTEL_EXPORTER_OTLP_HEADERS: 'authorization=decoy',
+    });
+    const snapshot = () => Object.fromEntries((fs.readdirSync(decoys, { recursive: true }) as string[]).sort()
+      .map(entry => [entry, fs.statSync(path.join(decoys, entry)).isFile() ? fs.readFileSync(path.join(decoys, entry), 'utf8') : 'folder']));
+    const before = snapshot();
+    const env = Object.fromEntries(Object.entries(process.env).filter(([name]) => !name.startsWith('VITEST')));
+    const child = spawnSync(process.execPath, [VITEST, 'run', '--config', `${FIXTURES}/vitest.config.mts`, '--reporter=default', 'cli-families'], {
       cwd: process.cwd(),
       env: { ...env, TMPDIR: tmp, TMP: tmp, TEMP: tmp, ...exported },
       encoding: 'utf8',
