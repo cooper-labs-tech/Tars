@@ -172,7 +172,7 @@ export default function AgentTerminalDialog({
 
   /** Why the last folder was not set: main's refusal word for word, or the failed call's reason, under the field. */
   const [secondaryError, setSecondaryError] = useState<string | null>(null);
-  /** When the last folder taken applies, when main answered 'next-start' (frame `Agent window · a secondary folder refused · states`). */
+  /** What becomes of the last folder taken, from main's appliesAt (frame `Agent window · a secondary folder refused · states`). */
   const [secondaryNote, setSecondaryNote] = useState<string | null>(null);
 
   // The dialog stays mounted from one agent to the next: what was said, or typed, for the last one goes with it.
@@ -190,8 +190,8 @@ export default function AgentTerminalDialog({
 
   const handleSetSecondaryProject = useCallback(async (path: string | null) => {
     if (!agent || !window.electronAPI?.agent?.setSecondaryProject) return;
-    // Main sets the folder, refuses one its CLI would never see, and types it into a running Claude Code itself
-    // (answering 'now'); the window types nothing. A refusal keeps the field filled and says why under it.
+    // Main sets the folder or refuses one its CLI would never see; nothing is typed into the agent for it. A refusal
+    // keeps the field filled and says why under it.
     let result: Awaited<ReturnType<typeof window.electronAPI.agent.setSecondaryProject>>;
     try {
       result = await window.electronAPI.agent.setSecondaryProject({ id: agent.id, secondaryProjectPath: path });
@@ -207,9 +207,14 @@ export default function AgentTerminalDialog({
     }
     setSecondaryError(null);
     setCustomSecondaryPath('');
-    setSecondaryNote(result.appliesAt === 'next-start'
-      ? (path ? 'added: the agent sees it from its next start' : 'removed: the agent stops seeing it at its next start')
-      : null);
+    // A cleared folder is 'next-start' on every CLI, one never handed it included: its words hold for all of them.
+    setSecondaryNote(!path
+      ? 'removed: from its next start, the agent’s CLI is not handed it'
+      : result.appliesAt === 'not-handed'
+        ? 'kept, but not in the agent’s workspace: its CLI is not handed a secondary folder'
+        : result.appliesAt === 'next-start'
+          ? 'added: the agent sees it from its next start'
+          : null);
     if (result.agent && onAgentUpdated) onAgentUpdated(result.agent);
   }, [agent, onAgentUpdated]);
 

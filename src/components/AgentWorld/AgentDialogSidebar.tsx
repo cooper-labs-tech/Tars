@@ -59,7 +59,7 @@ interface AgentDialogSidebarProps {
   onSetSecondaryProject: (path: string | null) => void;
   /** Why the last folder was not set: main's refusal word for word, or the failed call's message. */
   secondaryError?: string | null;
-  /** When the last folder taken applies, when it is the agent's next start. */
+  /** What becomes of the last folder taken: its next start, or never handed to its CLI. */
   secondaryNote?: string | null;
   onBrowseFolder?: () => Promise<string | null>;
   // Settings

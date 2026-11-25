@@ -43,6 +43,9 @@ import { writeFakeClis } from './fake-clis.mjs';
  * 0d. refused again, then the dialog opened on another agent: the line is gone.
  * Red on 3a6dc22b8: the window typed `/add-dir` itself, said nothing of when, and the line stayed through the edit
  * and the other agent. The artefact adds next-start-on-screen.png.
+ * 0e. a grok agent at rest, whose line hands no secondary folder (main answers `not-handed` since 5a2c458b4): the plain
+ *     folder added through its window is taken, nothing is typed, and [data-secondary-project-note] says its CLI is not
+ *     handed it. Red on 5a2c458b4's window: no line said so. The artefact adds not-handed-on-screen.png.
  *
  * The second test: a folder set while the agent's CLI runs is typed into no CLI (the Audit's point on #636 at
  * 6970bc906: the window typed `/add-dir <path>` into every CLI's terminal, and grok 1.0.92, which has no such command,
@@ -77,9 +80,10 @@ test('a gemini agent is refused a secondary folder whose name holds a comma, wit
     { id: 'gem', name: 'Gemini Agent', character: 'robot', provider: 'gemini', ...at },
     { id: 'held', name: 'Gemini Held', character: 'robot', provider: 'gemini', secondaryProjectPath: comma, obsidianVaultPaths: [vault], ...at },
     { id: 'cla', name: 'Claude Held', character: 'robot', provider: 'claude', secondaryProjectPath: comma, ...at },
+    { id: 'grk', name: 'Grok Agent', character: 'robot', provider: 'grok', ...at },
   ], null, 2));
   fs.writeFileSync(path.join(dir, 'projects.json'), JSON.stringify([project]));
-  fs.writeFileSync(path.join(dir, 'app-settings.json'), JSON.stringify({ autoStartAgentsOnLaunch: false, ollamaBaseUrl: 'http://127.0.0.1:9', geminiEnabled: true }));
+  fs.writeFileSync(path.join(dir, 'app-settings.json'), JSON.stringify({ autoStartAgentsOnLaunch: false, ollamaBaseUrl: 'http://127.0.0.1:9', geminiEnabled: true, grokEnabled: true }));
   const values: Record<string, unknown> = {};
   const keep = (more: Record<string, unknown>) => { Object.assign(values, more); recordValues(values); };
 
@@ -151,11 +155,27 @@ test('a gemini agent is refused a secondary folder whose name holds a comma, wit
     await page.locator('[data-agent-card="cla"]').click({ position: { x: 24, y: 14 } });
     await page.getByRole('radiogroup', { name: 'Agent rail' }).getByRole('radio', { name: /Memory/ }).click();
     const errorOnOtherAgent = await line.count();
-    keep({ errorAfterEdit, noteShown, windowTyped, errorOnOtherAgent });
+    // 0e. A grok agent at rest: the plain folder taken, nothing typed, and its line not handed it, said under the field.
+    await page.getByRole('button', { name: 'close', exact: true }).first().click();
+    await page.locator('[data-agent-card="grk"]').click({ position: { x: 24, y: 14 } });
+    await page.getByRole('radiogroup', { name: 'Agent rail' }).getByRole('radio', { name: /Memory/ }).click();
+    const grokTypedBefore = (await windowInputs()).length;
+    await field.fill(plain);
+    await add();
+    await expect.soft(note, 'what becomes of the folder on grok').toBeVisible({ timeout: 10_000 });
+    const grokNote = (await note.textContent({ timeout: 1_000 }).catch(() => null)) ?? null;
+    await page.screenshot({ path: test.info().outputPath('not-handed-on-screen.png') });
+    const grokWindowTyped = (await windowInputs()).slice(grokTypedBefore);
+    const grokFolder = (await page.evaluate(() => (window as unknown as Api).electronAPI.agent.get('grk')))?.secondaryProjectPath ?? null;
+    keep({ errorAfterEdit, noteShown, windowTyped, errorOnOtherAgent, grokNote, grokWindowTyped, grokFolder });
     expect.soft(errorAfterEdit, 'the line gone once the path is edited').toBe(0);
     expect.soft(noteShown ?? '', 'the folder applies at the agent\'s next start').toMatch(/next start/);
     expect.soft(windowTyped, 'nothing typed by the window').toEqual([]);
     expect.soft(errorOnOtherAgent, 'the line gone on another agent').toBe(0);
+    expect.soft(grokFolder, 'the folder kept in the record').toBe(plain);
+    expect.soft(grokNote ?? '', 'grok is not handed the folder').toMatch(/not handed/);
+    expect.soft(grokNote ?? '', 'never said to come at the next start').not.toMatch(/next start/);
+    expect.soft(grokWindowTyped, 'nothing typed into grok by the window').toEqual([]);
 
     // 1. setSecondaryProject.
     expect.soft(set.success, JSON.stringify(set)).toBe(false);
