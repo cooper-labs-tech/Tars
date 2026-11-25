@@ -885814,7 +885814,7 @@
                           "type": "text",
                           "id": "eSRCY",
                           "fill": "$status-error",
-                          "content": "not rotated: no space left on device. Rotate tries again.",
+                          "content": "not rotated: no space left on device. The old token opens nothing now; Rotate tries again.",
                           "lineHeight": 1.4,
                           "fontFamily": "$font-mono",
                           "fontSize": 10.5,
@@ -885945,7 +885945,7 @@
                           "type": "text",
                           "id": "zNNju",
                           "fill": "$status-error",
-                          "content": "not revoked: operation not permitted. Revoke tries again.",
+                          "content": "not saved: operation not permitted. The token opens nothing until Tars quits; Revoke tries again.",
                           "lineHeight": 1.4,
                           "fontFamily": "$font-mono",
                           "fontSize": 10.5,
@@ -889540,7 +889540,7 @@
                           "type": "text",
                           "id": "x1Lmxj",
                           "fill": "$status-error",
-                          "content": "not rotated: no space left on device. Rotate tries again.",
+                          "content": "not rotated: no space left on device. The old token opens nothing now; Rotate tries again.",
                           "lineHeight": 1.4,
                           "fontFamily": "$font-mono",
                           "fontSize": 10.5,
@@ -889671,7 +889671,7 @@
                           "type": "text",
                           "id": "igaLr",
                           "fill": "$status-error",
-                          "content": "not revoked: operation not permitted. Revoke tries again.",
+                          "content": "not saved: operation not permitted. The token opens nothing until Tars quits; Revoke tries again.",
                           "lineHeight": 1.4,
                           "fontFamily": "$font-mono",
                           "fontSize": 10.5,
@@ -905758,6 +905758,202 @@
                       ]
                     }
                   ]
+                },
+                {
+                  "type": "frame",
+                  "id": "sI5Jk",
+                  "name": "upload after a deletion Tars took at a start",
+                  "width": "fill_container",
+                  "fill": "$surface",
+                  "stroke": "$border",
+                  "strokeWidth": 1,
+                  "layout": "vertical",
+                  "gap": 10,
+                  "padding": [
+                    14,
+                    16
+                  ],
+                  "children": [
+                    {
+                      "type": "text",
+                      "id": "gxUh3",
+                      "fill": "$text-muted",
+                      "content": "UPLOAD",
+                      "lineHeight": 1.4,
+                      "fontFamily": "$font-mono",
+                      "fontSize": 10,
+                      "fontWeight": "normal"
+                    },
+                    {
+                      "type": "frame",
+                      "id": "FyF5X",
+                      "name": "state",
+                      "gap": 6,
+                      "alignItems": "center",
+                      "children": [
+                        {
+                          "type": "rectangle",
+                          "id": "iFf7t",
+                          "name": "d",
+                          "fill": "$status-idle",
+                          "width": 6,
+                          "height": 6
+                        },
+                        {
+                          "type": "text",
+                          "id": "o607F",
+                          "fill": "$text-muted",
+                          "content": "nothing sent since the deletion of 24/11 14:20",
+                          "lineHeight": 1.4,
+                          "fontFamily": "$font-mono",
+                          "fontSize": 10.5,
+                          "fontWeight": "normal"
+                        }
+                      ]
+                    },
+                    {
+                      "type": "text",
+                      "id": "tcxz0",
+                      "name": "deleted at a start",
+                      "fill": "$text-muted",
+                      "textGrowth": "fixed-width",
+                      "width": 700,
+                      "content": "Taken by Tars when it started: it found your consent still in its settings but not in the file that confirms it, and took that for a withdrawal it could not finish saving, so for a deletion, to be safe.",
+                      "lineHeight": 1.4,
+                      "fontFamily": "$font-ui",
+                      "fontSize": 11,
+                      "fontWeight": "normal"
+                    },
+                    {
+                      "type": "frame",
+                      "id": "yryBZ",
+                      "name": "figs",
+                      "width": "fill_container",
+                      "gap": 16,
+                      "children": [
+                        {
+                          "type": "frame",
+                          "id": "D6nflv",
+                          "name": "fig QUEUED",
+                          "width": "fill_container",
+                          "layout": "vertical",
+                          "gap": 3,
+                          "children": [
+                            {
+                              "type": "text",
+                              "id": "bBr7V",
+                              "fill": "$text-muted",
+                              "content": "QUEUED",
+                              "lineHeight": 1.4,
+                              "fontFamily": "$font-mono",
+                              "fontSize": 10,
+                              "fontWeight": "normal"
+                            },
+                            {
+                              "type": "text",
+                              "id": "JUkZy",
+                              "fill": "$text-primary",
+                              "content": "0",
+                              "lineHeight": 1.15,
+                              "fontFamily": "$font-display",
+                              "fontSize": 20,
+                              "fontWeight": "normal"
+                            },
+                            {
+                              "type": "text",
+                              "id": "CCwYy",
+                              "fill": "$text-muted",
+                              "content": "sessions to send",
+                              "lineHeight": 1.4,
+                              "fontFamily": "$font-mono",
+                              "fontSize": 10.5,
+                              "fontWeight": "normal"
+                            }
+                          ]
+                        },
+                        {
+                          "type": "frame",
+                          "id": "DK4wT",
+                          "name": "fig SENT",
+                          "width": "fill_container",
+                          "layout": "vertical",
+                          "gap": 3,
+                          "children": [
+                            {
+                              "type": "text",
+                              "id": "YjjYK",
+                              "fill": "$text-muted",
+                              "content": "SENT",
+                              "lineHeight": 1.4,
+                              "fontFamily": "$font-mono",
+                              "fontSize": 10,
+                              "fontWeight": "normal"
+                            },
+                            {
+                              "type": "text",
+                              "id": "HLWWd",
+                              "fill": "$text-primary",
+                              "content": "0",
+                              "lineHeight": 1.15,
+                              "fontFamily": "$font-display",
+                              "fontSize": 20,
+                              "fontWeight": "normal"
+                            },
+                            {
+                              "type": "text",
+                              "id": "i34ou",
+                              "fill": "$text-muted",
+                              "content": "since the deletion",
+                              "lineHeight": 1.4,
+                              "fontFamily": "$font-mono",
+                              "fontSize": 10.5,
+                              "fontWeight": "normal"
+                            }
+                          ]
+                        },
+                        {
+                          "type": "frame",
+                          "id": "ulvSp",
+                          "name": "fig LAST UPLOAD",
+                          "width": "fill_container",
+                          "layout": "vertical",
+                          "gap": 3,
+                          "children": [
+                            {
+                              "type": "text",
+                              "id": "gnZZo",
+                              "fill": "$text-muted",
+                              "content": "LAST UPLOAD",
+                              "lineHeight": 1.4,
+                              "fontFamily": "$font-mono",
+                              "fontSize": 10,
+                              "fontWeight": "normal"
+                            },
+                            {
+                              "type": "text",
+                              "id": "e5XmmW",
+                              "fill": "$text-primary",
+                              "content": "15:02",
+                              "lineHeight": 1.15,
+                              "fontFamily": "$font-display",
+                              "fontSize": 20,
+                              "fontWeight": "normal"
+                            },
+                            {
+                              "type": "text",
+                              "id": "sa1Dq",
+                              "fill": "$text-muted",
+                              "content": "19/11",
+                              "lineHeight": 1.4,
+                              "fontFamily": "$font-mono",
+                              "fontSize": 10.5,
+                              "fontWeight": "normal"
+                            }
+                          ]
+                        }
+                      ]
+                    }
+                  ]
                 }
               ]
             },
@@ -906029,6 +906225,266 @@
                                 {
                                   "type": "text",
                                   "id": "uvKwS",
+                                  "fill": "$text-primary",
+                                  "content": "Preview a session",
+                                  "lineHeight": 1.4,
+                                  "fontFamily": "$font-mono",
+                                  "fontSize": 11,
+                                  "fontWeight": "normal"
+                                }
+                              ]
+                            }
+                          ]
+                        }
+                      ]
+                    }
+                  ]
+                },
+                {
+                  "type": "text",
+                  "id": "g98k4",
+                  "fill": "$text-muted",
+                  "content": "an address main could not save: sharing stopped at once, said where the address is saved",
+                  "lineHeight": 1.4,
+                  "fontFamily": "$font-mono",
+                  "fontSize": 10,
+                  "fontWeight": "normal"
+                },
+                {
+                  "type": "frame",
+                  "id": "z2Hzi",
+                  "name": "back-office address not saved",
+                  "width": "fill_container",
+                  "fill": "$surface",
+                  "stroke": "$border",
+                  "strokeWidth": 1,
+                  "layout": "vertical",
+                  "gap": 10,
+                  "padding": [
+                    14,
+                    16
+                  ],
+                  "children": [
+                    {
+                      "type": "text",
+                      "id": "sPC9P",
+                      "fill": "$text-muted",
+                      "content": "BACK-OFFICE",
+                      "lineHeight": 1.4,
+                      "fontFamily": "$font-mono",
+                      "fontSize": 10,
+                      "fontWeight": "normal"
+                    },
+                    {
+                      "type": "text",
+                      "id": "Alk1r",
+                      "fill": "$text-secondary",
+                      "textGrowth": "fixed-width",
+                      "width": 540,
+                      "content": "Tars can upload the sessions of the projects you opt in to a back-office: a server of your own, or a hosted one. Nothing is uploaded until you set its address and read what leaves this computer.",
+                      "lineHeight": 1.4,
+                      "fontFamily": "$font-ui",
+                      "fontSize": 11.5,
+                      "fontWeight": "normal"
+                    },
+                    {
+                      "type": "frame",
+                      "id": "Mdfcp",
+                      "name": "row Address",
+                      "width": "fill_container",
+                      "stroke": "$border",
+                      "strokeWidth": {
+                        "bottom": 1
+                      },
+                      "gap": 16,
+                      "padding": [
+                        11,
+                        0
+                      ],
+                      "justifyContent": "space_between",
+                      "alignItems": "center",
+                      "children": [
+                        {
+                          "type": "frame",
+                          "id": "QiwcN",
+                          "name": "l",
+                          "width": 230,
+                          "layout": "vertical",
+                          "gap": 2,
+                          "children": [
+                            {
+                              "type": "text",
+                              "id": "r3wpVW",
+                              "fill": "$text-primary",
+                              "content": "Address",
+                              "lineHeight": 1.4,
+                              "fontFamily": "$font-ui",
+                              "fontSize": 12.5,
+                              "fontWeight": "normal"
+                            },
+                            {
+                              "type": "text",
+                              "id": "k5g0Ku",
+                              "fill": "$text-secondary",
+                              "textGrowth": "fixed-width",
+                              "width": 230,
+                              "content": "The back-office's API, yours or a hosted one. Empty: nothing leaves this computer. A new address asks for your consent again.",
+                              "lineHeight": 1.4,
+                              "fontFamily": "$font-ui",
+                              "fontSize": 11,
+                              "fontWeight": "normal"
+                            }
+                          ]
+                        },
+                        {
+                          "type": "frame",
+                          "id": "ZzX0f",
+                          "name": "input",
+                          "width": 270,
+                          "height": 26,
+                          "fill": "$surface-raised",
+                          "stroke": "$border-strong",
+                          "strokeWidth": 1,
+                          "gap": 8,
+                          "padding": [
+                            0,
+                            8
+                          ],
+                          "justifyContent": "space_between",
+                          "alignItems": "center",
+                          "children": [
+                            {
+                              "type": "text",
+                              "id": "Xe54w",
+                              "fill": "$text-primary",
+                              "lineHeight": 1.4,
+                              "fontFamily": "$font-mono",
+                              "fontSize": 11,
+                              "fontWeight": "normal"
+                            }
+                          ]
+                        }
+                      ]
+                    },
+                    {
+                      "type": "frame",
+                      "id": "N27QCr",
+                      "name": "state address not saved",
+                      "gap": 6,
+                      "alignItems": "center",
+                      "children": [
+                        {
+                          "type": "rectangle",
+                          "id": "EqkPV",
+                          "name": "d",
+                          "fill": "$status-error",
+                          "width": 6,
+                          "height": 6
+                        },
+                        {
+                          "type": "text",
+                          "id": "sS6V9",
+                          "fill": "$status-error",
+                          "content": "Tars could not save the settings (ENOSPC): sharing stopped at once, and the address was not saved.",
+                          "lineHeight": 1.4,
+                          "fontFamily": "$font-mono",
+                          "fontSize": 10.5,
+                          "fontWeight": "normal"
+                        }
+                      ]
+                    },
+                    {
+                      "type": "frame",
+                      "id": "Z2haZQ",
+                      "name": "consent",
+                      "width": "fill_container",
+                      "layout": "vertical",
+                      "gap": 8,
+                      "padding": [
+                        4,
+                        0,
+                        0,
+                        0
+                      ],
+                      "children": [
+                        {
+                          "type": "frame",
+                          "id": "hfxcv",
+                          "name": "state",
+                          "gap": 6,
+                          "alignItems": "center",
+                          "children": [
+                            {
+                              "type": "rectangle",
+                              "id": "tg2MH",
+                              "name": "d",
+                              "fill": "$status-waiting",
+                              "width": 6,
+                              "height": 6
+                            },
+                            {
+                              "type": "text",
+                              "id": "Gc9Lk",
+                              "fill": "$status-waiting",
+                              "content": "nothing is sent until you read what leaves this computer",
+                              "lineHeight": 1.4,
+                              "fontFamily": "$font-mono",
+                              "fontSize": 10.5,
+                              "fontWeight": "normal"
+                            }
+                          ]
+                        },
+                        {
+                          "type": "frame",
+                          "id": "D8Cw1l",
+                          "name": "g",
+                          "gap": 8,
+                          "children": [
+                            {
+                              "type": "frame",
+                              "id": "raPkh",
+                              "name": "b What leaves this computer",
+                              "height": 26,
+                              "fill": "$surface",
+                              "stroke": "$border",
+                              "strokeWidth": 1,
+                              "padding": [
+                                0,
+                                11
+                              ],
+                              "justifyContent": "center",
+                              "alignItems": "center",
+                              "children": [
+                                {
+                                  "type": "text",
+                                  "id": "F5pXSS",
+                                  "fill": "$text-primary",
+                                  "content": "What leaves this computer",
+                                  "lineHeight": 1.4,
+                                  "fontFamily": "$font-mono",
+                                  "fontSize": 11,
+                                  "fontWeight": "normal"
+                                }
+                              ]
+                            },
+                            {
+                              "type": "frame",
+                              "id": "vQINb",
+                              "name": "b Preview a session",
+                              "height": 26,
+                              "fill": "$surface",
+                              "stroke": "$border",
+                              "strokeWidth": 1,
+                              "padding": [
+                                0,
+                                11
+                              ],
+                              "justifyContent": "center",
+                              "alignItems": "center",
+                              "children": [
+                                {
+                                  "type": "text",
+                                  "id": "g4xDv6",
                                   "fill": "$text-primary",
                                   "content": "Preview a session",
                                   "lineHeight": 1.4,
@@ -909894,6 +910350,202 @@
                       ]
                     }
                   ]
+                },
+                {
+                  "type": "frame",
+                  "id": "e151z",
+                  "name": "upload after a deletion Tars took at a start",
+                  "width": "fill_container",
+                  "fill": "$surface",
+                  "stroke": "$border",
+                  "strokeWidth": 1,
+                  "layout": "vertical",
+                  "gap": 10,
+                  "padding": [
+                    14,
+                    16
+                  ],
+                  "children": [
+                    {
+                      "type": "text",
+                      "id": "L95kat",
+                      "fill": "$text-muted",
+                      "content": "UPLOAD",
+                      "lineHeight": 1.4,
+                      "fontFamily": "$font-mono",
+                      "fontSize": 10,
+                      "fontWeight": "normal"
+                    },
+                    {
+                      "type": "frame",
+                      "id": "wcrJ4",
+                      "name": "state",
+                      "gap": 6,
+                      "alignItems": "center",
+                      "children": [
+                        {
+                          "type": "rectangle",
+                          "id": "cgkZc",
+                          "name": "d",
+                          "fill": "$status-idle",
+                          "width": 6,
+                          "height": 6
+                        },
+                        {
+                          "type": "text",
+                          "id": "k1nwt",
+                          "fill": "$text-muted",
+                          "content": "nothing sent since the deletion of 24/11 14:20",
+                          "lineHeight": 1.4,
+                          "fontFamily": "$font-mono",
+                          "fontSize": 10.5,
+                          "fontWeight": "normal"
+                        }
+                      ]
+                    },
+                    {
+                      "type": "text",
+                      "id": "HL7Bo",
+                      "name": "deleted at a start",
+                      "fill": "$text-muted",
+                      "textGrowth": "fixed-width",
+                      "width": 700,
+                      "content": "Taken by Tars when it started: it found your consent still in its settings but not in the file that confirms it, and took that for a withdrawal it could not finish saving, so for a deletion, to be safe.",
+                      "lineHeight": 1.4,
+                      "fontFamily": "$font-ui",
+                      "fontSize": 11,
+                      "fontWeight": "normal"
+                    },
+                    {
+                      "type": "frame",
+                      "id": "x54WNV",
+                      "name": "figs",
+                      "width": "fill_container",
+                      "gap": 16,
+                      "children": [
+                        {
+                          "type": "frame",
+                          "id": "T3vYP2",
+                          "name": "fig QUEUED",
+                          "width": "fill_container",
+                          "layout": "vertical",
+                          "gap": 3,
+                          "children": [
+                            {
+                              "type": "text",
+                              "id": "BJR0h",
+                              "fill": "$text-muted",
+                              "content": "QUEUED",
+                              "lineHeight": 1.4,
+                              "fontFamily": "$font-mono",
+                              "fontSize": 10,
+                              "fontWeight": "normal"
+                            },
+                            {
+                              "type": "text",
+                              "id": "dC5Nh",
+                              "fill": "$text-primary",
+                              "content": "0",
+                              "lineHeight": 1.15,
+                              "fontFamily": "$font-display",
+                              "fontSize": 20,
+                              "fontWeight": "normal"
+                            },
+                            {
+                              "type": "text",
+                              "id": "o17vi",
+                              "fill": "$text-muted",
+                              "content": "sessions to send",
+                              "lineHeight": 1.4,
+                              "fontFamily": "$font-mono",
+                              "fontSize": 10.5,
+                              "fontWeight": "normal"
+                            }
+                          ]
+                        },
+                        {
+                          "type": "frame",
+                          "id": "w2MM45",
+                          "name": "fig SENT",
+                          "width": "fill_container",
+                          "layout": "vertical",
+                          "gap": 3,
+                          "children": [
+                            {
+                              "type": "text",
+                              "id": "Iiasm",
+                              "fill": "$text-muted",
+                              "content": "SENT",
+                              "lineHeight": 1.4,
+                              "fontFamily": "$font-mono",
+                              "fontSize": 10,
+                              "fontWeight": "normal"
+                            },
+                            {
+                              "type": "text",
+                              "id": "kzx3p",
+                              "fill": "$text-primary",
+                              "content": "0",
+                              "lineHeight": 1.15,
+                              "fontFamily": "$font-display",
+                              "fontSize": 20,
+                              "fontWeight": "normal"
+                            },
+                            {
+                              "type": "text",
+                              "id": "V23tWl",
+                              "fill": "$text-muted",
+                              "content": "since the deletion",
+                              "lineHeight": 1.4,
+                              "fontFamily": "$font-mono",
+                              "fontSize": 10.5,
+                              "fontWeight": "normal"
+                            }
+                          ]
+                        },
+                        {
+                          "type": "frame",
+                          "id": "w5frS",
+                          "name": "fig LAST UPLOAD",
+                          "width": "fill_container",
+                          "layout": "vertical",
+                          "gap": 3,
+                          "children": [
+                            {
+                              "type": "text",
+                              "id": "uZOH6",
+                              "fill": "$text-muted",
+                              "content": "LAST UPLOAD",
+                              "lineHeight": 1.4,
+                              "fontFamily": "$font-mono",
+                              "fontSize": 10,
+                              "fontWeight": "normal"
+                            },
+                            {
+                              "type": "text",
+                              "id": "hRqFx",
+                              "fill": "$text-primary",
+                              "content": "15:02",
+                              "lineHeight": 1.15,
+                              "fontFamily": "$font-display",
+                              "fontSize": 20,
+                              "fontWeight": "normal"
+                            },
+                            {
+                              "type": "text",
+                              "id": "DZymq",
+                              "fill": "$text-muted",
+                              "content": "19/11",
+                              "lineHeight": 1.4,
+                              "fontFamily": "$font-mono",
+                              "fontSize": 10.5,
+                              "fontWeight": "normal"
+                            }
+                          ]
+                        }
+                      ]
+                    }
+                  ]
                 }
               ]
             },
@@ -910165,6 +910817,266 @@
                                 {
                                   "type": "text",
                                   "id": "bimpL",
+                                  "fill": "$text-primary",
+                                  "content": "Preview a session",
+                                  "lineHeight": 1.4,
+                                  "fontFamily": "$font-mono",
+                                  "fontSize": 11,
+                                  "fontWeight": "normal"
+                                }
+                              ]
+                            }
+                          ]
+                        }
+                      ]
+                    }
+                  ]
+                },
+                {
+                  "type": "text",
+                  "id": "aoqLJ",
+                  "fill": "$text-muted",
+                  "content": "an address main could not save: sharing stopped at once, said where the address is saved",
+                  "lineHeight": 1.4,
+                  "fontFamily": "$font-mono",
+                  "fontSize": 10,
+                  "fontWeight": "normal"
+                },
+                {
+                  "type": "frame",
+                  "id": "Jkg5u",
+                  "name": "back-office address not saved",
+                  "width": "fill_container",
+                  "fill": "$surface",
+                  "stroke": "$border",
+                  "strokeWidth": 1,
+                  "layout": "vertical",
+                  "gap": 10,
+                  "padding": [
+                    14,
+                    16
+                  ],
+                  "children": [
+                    {
+                      "type": "text",
+                      "id": "pbEO8",
+                      "fill": "$text-muted",
+                      "content": "BACK-OFFICE",
+                      "lineHeight": 1.4,
+                      "fontFamily": "$font-mono",
+                      "fontSize": 10,
+                      "fontWeight": "normal"
+                    },
+                    {
+                      "type": "text",
+                      "id": "u9lUBK",
+                      "fill": "$text-secondary",
+                      "textGrowth": "fixed-width",
+                      "width": 540,
+                      "content": "Tars can upload the sessions of the projects you opt in to a back-office: a server of your own, or a hosted one. Nothing is uploaded until you set its address and read what leaves this computer.",
+                      "lineHeight": 1.4,
+                      "fontFamily": "$font-ui",
+                      "fontSize": 11.5,
+                      "fontWeight": "normal"
+                    },
+                    {
+                      "type": "frame",
+                      "id": "PwpP9",
+                      "name": "row Address",
+                      "width": "fill_container",
+                      "stroke": "$border",
+                      "strokeWidth": {
+                        "bottom": 1
+                      },
+                      "gap": 16,
+                      "padding": [
+                        11,
+                        0
+                      ],
+                      "justifyContent": "space_between",
+                      "alignItems": "center",
+                      "children": [
+                        {
+                          "type": "frame",
+                          "id": "vitsc",
+                          "name": "l",
+                          "width": 230,
+                          "layout": "vertical",
+                          "gap": 2,
+                          "children": [
+                            {
+                              "type": "text",
+                              "id": "re0Kg",
+                              "fill": "$text-primary",
+                              "content": "Address",
+                              "lineHeight": 1.4,
+                              "fontFamily": "$font-ui",
+                              "fontSize": 12.5,
+                              "fontWeight": "normal"
+                            },
+                            {
+                              "type": "text",
+                              "id": "U8uZhg",
+                              "fill": "$text-secondary",
+                              "textGrowth": "fixed-width",
+                              "width": 230,
+                              "content": "The back-office's API, yours or a hosted one. Empty: nothing leaves this computer. A new address asks for your consent again.",
+                              "lineHeight": 1.4,
+                              "fontFamily": "$font-ui",
+                              "fontSize": 11,
+                              "fontWeight": "normal"
+                            }
+                          ]
+                        },
+                        {
+                          "type": "frame",
+                          "id": "mEIp6",
+                          "name": "input",
+                          "width": 270,
+                          "height": 26,
+                          "fill": "$surface-raised",
+                          "stroke": "$border-strong",
+                          "strokeWidth": 1,
+                          "gap": 8,
+                          "padding": [
+                            0,
+                            8
+                          ],
+                          "justifyContent": "space_between",
+                          "alignItems": "center",
+                          "children": [
+                            {
+                              "type": "text",
+                              "id": "N0H9oz",
+                              "fill": "$text-primary",
+                              "lineHeight": 1.4,
+                              "fontFamily": "$font-mono",
+                              "fontSize": 11,
+                              "fontWeight": "normal"
+                            }
+                          ]
+                        }
+                      ]
+                    },
+                    {
+                      "type": "frame",
+                      "id": "pxanm",
+                      "name": "state address not saved",
+                      "gap": 6,
+                      "alignItems": "center",
+                      "children": [
+                        {
+                          "type": "rectangle",
+                          "id": "n3LDs",
+                          "name": "d",
+                          "fill": "$status-error",
+                          "width": 6,
+                          "height": 6
+                        },
+                        {
+                          "type": "text",
+                          "id": "UoAsk",
+                          "fill": "$status-error",
+                          "content": "Tars could not save the settings (ENOSPC): sharing stopped at once, and the address was not saved.",
+                          "lineHeight": 1.4,
+                          "fontFamily": "$font-mono",
+                          "fontSize": 10.5,
+                          "fontWeight": "normal"
+                        }
+                      ]
+                    },
+                    {
+                      "type": "frame",
+                      "id": "yFa8i",
+                      "name": "consent",
+                      "width": "fill_container",
+                      "layout": "vertical",
+                      "gap": 8,
+                      "padding": [
+                        4,
+                        0,
+                        0,
+                        0
+                      ],
+                      "children": [
+                        {
+                          "type": "frame",
+                          "id": "LRv1f",
+                          "name": "state",
+                          "gap": 6,
+                          "alignItems": "center",
+                          "children": [
+                            {
+                              "type": "rectangle",
+                              "id": "Z3fYc",
+                              "name": "d",
+                              "fill": "$status-waiting",
+                              "width": 6,
+                              "height": 6
+                            },
+                            {
+                              "type": "text",
+                              "id": "M6mqe",
+                              "fill": "$status-waiting",
+                              "content": "nothing is sent until you read what leaves this computer",
+                              "lineHeight": 1.4,
+                              "fontFamily": "$font-mono",
+                              "fontSize": 10.5,
+                              "fontWeight": "normal"
+                            }
+                          ]
+                        },
+                        {
+                          "type": "frame",
+                          "id": "sTneP",
+                          "name": "g",
+                          "gap": 8,
+                          "children": [
+                            {
+                              "type": "frame",
+                              "id": "EqgOD",
+                              "name": "b What leaves this computer",
+                              "height": 26,
+                              "fill": "$surface",
+                              "stroke": "$border",
+                              "strokeWidth": 1,
+                              "padding": [
+                                0,
+                                11
+                              ],
+                              "justifyContent": "center",
+                              "alignItems": "center",
+                              "children": [
+                                {
+                                  "type": "text",
+                                  "id": "V5U5bw",
+                                  "fill": "$text-primary",
+                                  "content": "What leaves this computer",
+                                  "lineHeight": 1.4,
+                                  "fontFamily": "$font-mono",
+                                  "fontSize": 11,
+                                  "fontWeight": "normal"
+                                }
+                              ]
+                            },
+                            {
+                              "type": "frame",
+                              "id": "aguVt",
+                              "name": "b Preview a session",
+                              "height": 26,
+                              "fill": "$surface",
+                              "stroke": "$border",
+                              "strokeWidth": 1,
+                              "padding": [
+                                0,
+                                11
+                              ],
+                              "justifyContent": "center",
+                              "alignItems": "center",
+                              "children": [
+                                {
+                                  "type": "text",
+                                  "id": "yYvf5",
                                   "fill": "$text-primary",
                                   "content": "Preview a session",
                                   "lineHeight": 1.4,
@@ -917331,11 +918243,11 @@
                     {
                       "type": "text",
                       "id": "aXc2Y",
-                      "name": "owed why",
+                      "name": "owed why, a deletion Tars took at a start",
                       "fill": "$text-muted",
                       "textGrowth": "fixed-width",
                       "width": 540,
-                      "content": "Asked by you, or by Tars when it started: it found your consent still in its settings but not in the file that confirms it, and takes that for a withdrawal it could not finish saving, so for a deletion, to be safe.",
+                      "content": "Taken by Tars when it started: it found your consent still in its settings but not in the file that confirms it, and took that for a withdrawal it could not finish saving, so for a deletion, to be safe.",
                       "lineHeight": 1.4,
                       "fontFamily": "$font-ui",
                       "fontSize": 11,
@@ -919383,11 +920295,11 @@
                     {
                       "type": "text",
                       "id": "ZGeVV",
-                      "name": "owed why",
+                      "name": "owed why, a deletion Tars took at a start",
                       "fill": "$text-muted",
                       "textGrowth": "fixed-width",
                       "width": 540,
-                      "content": "Asked by you, or by Tars when it started: it found your consent still in its settings but not in the file that confirms it, and takes that for a withdrawal it could not finish saving, so for a deletion, to be safe.",
+                      "content": "Taken by Tars when it started: it found your consent still in its settings but not in the file that confirms it, and took that for a withdrawal it could not finish saving, so for a deletion, to be safe.",
                       "lineHeight": 1.4,
                       "fontFamily": "$font-ui",
                       "fontSize": 11,
