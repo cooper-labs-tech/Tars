@@ -11,6 +11,9 @@ import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
  *    "no rows" where rows were drawn, the very rows the line is there to describe.
  * 2. The log outlives its launch: kept until a timer, though no reader is left once the launch is up or given up.
  *    It goes with the launch instead, which the launch poll ends within a second of its window.
+ * 3. A launch abandoned (launchAbandoned, its start failed or its CLI left) keeps its log: the launch is gone, and the
+ *    log stays until the next launch, the terminal's end or its 1 MiB, never read again (the Audit's I-1 at 984fc5eeb).
+ *    It goes with the abandoned launch too.
  */
 
 type FakePty = { pid: number; onData: (l: (d: string) => void) => { dispose(): void }; onExit: () => { dispose(): void }; emit(d: string): void };
@@ -31,7 +34,7 @@ vi.mock('../../../electron/core/agent-pty', () => ({ cliRunningIn: () => true })
 vi.mock('../../../electron/services/agent-truth', () => ({ lastInterruptAt: () => undefined }));
 
 import { attachTerminalMirror, markCliLaunch, rowsSinceLaunch } from '../../../electron/core/terminal-mirror';
-import { launchBegins, sessionStarting, resetLaunches, CLI_UP_MS } from '../../../electron/core/agent-launch';
+import { launchAbandoned, launchBegins, sessionStarting, resetLaunches, CLI_UP_MS } from '../../../electron/core/agent-launch';
 
 const LOADING = '  Gemini CLI v0.70.0\r\n  Loading the workspace...\r\n';
 const FIELD = ' >   Type your message or @path/to/file\r\n';
@@ -81,6 +84,17 @@ describe("a launch's log lives as long as the launch", () => {
     markCliLaunch(pty as never, true);
     pty.emit(LOADING + FIELD);
     expect(sessionStarting(up)).toBe(false);
+    expect(rowsSinceLaunch(pty as never)).toEqual([]);
+  });
+
+  it('3: an abandoned launch takes its log with it', () => {
+    const agent = { id: 'g4', ptyId: 'p1', provider: 'gemini' as const };
+    const launch = launchBegins('g4');
+    markCliLaunch(pty as never, true);
+    pty.emit(LOADING);
+    expect(rowsSinceLaunch(pty as never)?.length).toBeGreaterThan(0);
+    launchAbandoned(agent as never, launch);
+    expect(sessionStarting(agent)).toBe(false);
     expect(rowsSinceLaunch(pty as never)).toEqual([]);
   });
 });
