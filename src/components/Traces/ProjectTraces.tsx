@@ -1,13 +1,13 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import type { AgentStatus } from '@/types/electron';
 import { Button, Panel, PanelCaption } from '@/components/ui';
 import { comparablePath, lastPathPart } from '@/lib/display-path';
 import { Toggle } from '@/components/Settings/Toggle';
 import { StateLine } from './bits';
-import { tracesApi } from './hooks';
+import { tracesApi, useUnsavedNote } from './hooks';
 
 /**
  * A project's TRACES section in its Projects panel (frame `Projects · a project · Record traces for this project`,
@@ -19,13 +19,16 @@ export function ProjectTraces({ projectPath, agents }: { projectPath: string; ag
   const [projects, setProjects] = useState<string[] | null>(null);
   const [upload, setUpload] = useState<{ url: string; consent: boolean }>({ url: '', consent: false });
   const [error, setError] = useState<string | null>(null);
+  /** The switch turned off and held by main, not written yet: main's words under the switch until it is. */
+  const [unsaved, setUnsaved] = useUnsavedNote();
 
-  useEffect(() => {
+  const read = useCallback(() => {
     const api = tracesApi();
     if (!api) return;
     void api.settings().then(s => { setProjects(s.projects); setUpload({ url: s.uploadUrl, consent: !!s.uploadConsentAt }); })
       .catch(e => setError(e instanceof Error ? e.message : String(e)));
   }, []);
+  useEffect(() => { read(); }, [read]);
 
   if (!tracesApi()) return null;
   const key = comparablePath(projectPath);
@@ -40,8 +43,20 @@ export function ProjectTraces({ projectPath, agents }: { projectPath: string; ag
     const api = tracesApi();
     if (!api || !projects) return;
     const next = on ? projects.filter(p => comparablePath(p) !== key) : [...projects, projectPath];
-    const r = await api.setSettings({ projects: next });
-    if (r.ok) { setProjects(r.settings.projects); setError(null); } else setError(r.error);
+    let r: Awaited<ReturnType<typeof api.setSettings>>;
+    try {
+      r = await api.setSettings({ projects: next });
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
+      return;
+    }
+    if (!r.ok) { setError(r.error); return; }
+    setProjects(r.settings.projects);
+    setError(null);
+    // A switch turned off applies at once; when main could not write it yet, its words say so here, and the
+    // settings are read again, so the switch shows what main holds.
+    setUnsaved(r.unsaved ?? null);
+    if (r.unsaved) read();
   };
 
   return (
@@ -63,6 +78,7 @@ export function ProjectTraces({ projectPath, agents }: { projectPath: string; ag
         <Toggle label="Record traces for this project" enabled={on} disabled={projects === null} onChange={() => { void toggle(); }} />
       </div>
       {error && <p className="mt-2 font-mono text-[10.5px] text-status-error">{error}</p>}
+      {unsaved && <div data-project-traces-unsaved className="mt-2"><StateLine word={unsaved} tone="waiting" /></div>}
       {on && (
         <div className="mt-2.5 flex items-center gap-2">
           {upload.url && !upload.consent

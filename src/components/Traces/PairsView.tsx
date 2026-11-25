@@ -7,7 +7,7 @@ import type { TracePair } from '@/types/electron';
 import { Notice, Unread } from '@/components/Resources/bits';
 import { clauseOf } from '@/lib/traces-format';
 import { StateLine } from './bits';
-import { tracesApi } from './hooks';
+import { tracesApi, useUnsavedNote } from './hooks';
 
 const HARNESSES = ['codex', 'pi', 'qwen-code', 'opencode'];
 const COLS = 'grid grid-cols-[150px_240px_minmax(0,1fr)_90px] gap-3 items-center px-3';
@@ -33,6 +33,8 @@ export function PairsView() {
   const [note, setNote] = useState('');
   const [refusal, setRefusal] = useState<string | null>(null);
   const [removed, setRemoved] = useState<TracePair | null>(null);
+  /** A pair removed and held by main, not written yet: main's words under the removed line until it is. */
+  const [unsaved, setUnsaved] = useUnsavedNote();
 
 
   const read = useCallback(async () => {
@@ -62,10 +64,19 @@ export function PairsView() {
   const remove = async (pair: TracePair) => {
     const api = tracesApi();
     if (!api) return;
-    const r = await api.removePair({ harness: pair.harness, models: pair.models });
+    let r: Awaited<ReturnType<typeof api.removePair>>;
+    try {
+      r = await api.removePair({ harness: pair.harness, models: pair.models });
+    } catch (e) {
+      setRefusal(e instanceof Error ? e.message : String(e));
+      return;
+    }
     if (!r.ok) { setRefusal(r.error); return; }
     setPairs(r.pairs);
     setRemoved(pair);
+    // The removal applies at once; when main could not write it yet, its words say so, and the list is read again.
+    setUnsaved(r.unsaved ?? null);
+    if (r.unsaved) void read();
   };
 
   const undo = async () => {
@@ -109,6 +120,7 @@ export function PairsView() {
       {removed && (
         <Notice tone="waiting" actions={<Button size="sm" className="font-mono" onClick={() => { void undo(); }}>undo</Button>}>
           {`${pairWords(removed)} removed: its agents record nothing from their next session. Their recorded sessions stay in Traces.`}
+          {unsaved && <div data-pairs-unsaved className="mt-1.5"><StateLine word={unsaved} tone="waiting" /></div>}
         </Notice>
       )}
 

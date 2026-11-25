@@ -11,7 +11,7 @@ import { Box, Row, Unread } from '@/components/Resources/bits';
 import { Toggle } from '@/components/Settings/Toggle';
 import { clockOf, dayClockOf, dayOf, reasonOf } from '@/lib/traces-format';
 import { StateLine } from './bits';
-import { tracesApi } from './hooks';
+import { tracesApi, useUnsavedNote } from './hooks';
 
 /** One list of the notice, its items under a caption, each after a dot in its tone. */
 function Bullets({ caption, items, tone }: { caption: string; items: string[]; tone: string }) {
@@ -110,6 +110,8 @@ export function UploadView() {
   const [ackError, setAckError] = useState<string | null>(null);
   /** A consent main could not save: said in the notice, above its answers, which stays open. */
   const [consentError, setConsentError] = useState<string | null>(null);
+  /** An answer's `unsaved` (a setting that took from sharing, held and not written yet), until main has written it. */
+  const [answerUnsaved, setAnswerUnsaved] = useUnsavedNote();
 
   const read = useCallback(async () => {
     const api = tracesApi();
@@ -181,6 +183,9 @@ export function UploadView() {
     setSaveError(null);
     setSettings(r.settings);
     setUrl(r.settings.uploadUrl);
+    // A change that takes from sharing applies at once and may answer ok with `unsaved` (the Audit's I-5 on PR 599):
+    // main's words go on the unsaved line beside the consent, and the settings are read again on this path too.
+    setAnswerUnsaved(r.unsaved ?? null);
     // A new address clears the consent: the notice comes before anything is sent.
     if (r.settings.uploadUrl && r.settings.uploadUrl !== settings.uploadUrl) void openNotice();
     void read();
@@ -306,8 +311,9 @@ export function UploadView() {
    * Settings main holds and could not write (a withdrawn consent, a deletion's bookkeeping): main's own words, beside
    * the consent and the deletion, while it lasts. traces:changed says when it comes and goes, and read() reads it.
    */
-  const unsaved = state?.unsaved
-    ? <div data-upload-unsaved><StateLine word={state.unsaved} tone="waiting" /></div>
+  const unsavedWord = state?.unsaved ?? answerUnsaved;
+  const unsaved = unsavedWord
+    ? <div data-upload-unsaved><StateLine word={unsavedWord} tone="waiting" /></div>
     : null;
   /** A deletion asked for and not confirmed: sharing stays off; delete again, or give it up. */
   const owed = !!(settings?.uploadDeletionOwed || state?.deletionOwed);

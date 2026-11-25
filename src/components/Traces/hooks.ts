@@ -13,6 +13,26 @@ function useTracesChanged(onChange: () => void) {
   useEffect(() => tracesApi()?.onChanged(() => latest.current()), []);
 }
 
+/**
+ * A revoke main holds in memory but could not write yet (its answer's `unsaved`, the same words as the upload state's):
+ * said beside the control that asked it, word for word, until main has written it. 'traces:changed' comes when the
+ * note goes; the upload state then has no `unsaved`, and the note is dropped. A state that cannot be read keeps it.
+ */
+export function useUnsavedNote<T = string>() {
+  const [note, setNote] = useState<T | null>(null);
+  const check = useCallback(async () => {
+    const api = tracesApi();
+    if (!api) return;
+    const s = await api.uploadState().catch((e: unknown) => {
+      console.warn('[traces] reading the upload state for a revoke not yet written failed:', e);
+      return null;
+    });
+    if (s && !s.unsaved) setNote(null);
+  }, []);
+  useTracesChanged(() => { void check(); });
+  return [note, setNote] as const;
+}
+
 /** traces.stats: storage against the cap, retention, the oldest session, whether bodies are being dropped. */
 export function useTraceStats() {
   const [stats, setStats] = useState<TraceStats | null>(null);

@@ -1,11 +1,12 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { Button, FieldError, Input, PasswordInput, StatusSquare } from '@/components/ui';
 import type { StatusTone } from '@/components/ui';
 import type { EndpointView, EndpointWait } from '@/types/electron';
 import { useEndpoints } from '@/hooks/useEndpoints';
+import { useUnsavedNote } from '@/components/Traces/hooks';
 import { clauseOf, clockOf, clockSecondsOf, healthOf, modelsLineOf, usedByOf } from '@/lib/traces-format';
 import { SettingsCard } from './SettingsCard';
 import { SettingsRow } from './SettingsRow';
@@ -50,6 +51,10 @@ export const InferenceEndpointsSection = () => {
   /** The removal asked, refused while agents run on it, or refused by main for a reason of its own (settings not saved). */
   const [removing, setRemoving] = useState<{ id: string; refusedBy?: string[]; error?: string } | null>(null);
   const [rowError, setRowError] = useState<Record<string, string>>({});
+  /** Traces turned off for an endpoint, held by main and not written yet: main's words under its row until it is. */
+  const [rowUnsaved, setRowUnsaved] = useUnsavedNote<{ id: string; word: string }>();
+  /** An endpoint removed, held by main and not written yet: its row is gone, so main's words go above the list. */
+  const [removeUnsaved, setRemoveUnsaved] = useUnsavedNote();
 
   const list = endpoints ?? [];
   const editing = form?.id ? list.find(e => e.id === form.id) : undefined;
@@ -65,8 +70,16 @@ export const InferenceEndpointsSection = () => {
 
   const setAllowTraces = async (e: EndpointView) => {
     if (!api) return;
-    const r = await api.save({ id: e.id, name: e.name, baseUrl: e.baseUrl, allowTraces: !e.allowTraces, holdMaxSeconds: e.holdMaxSeconds, sendSessionHeaders: e.sendSessionHeaders, allowPlainHttp: e.allowPlainHttp });
+    let r: Awaited<ReturnType<typeof api.save>>;
+    try {
+      r = await api.save({ id: e.id, name: e.name, baseUrl: e.baseUrl, allowTraces: !e.allowTraces, holdMaxSeconds: e.holdMaxSeconds, sendSessionHeaders: e.sendSessionHeaders, allowPlainHttp: e.allowPlainHttp });
+    } catch (err) {
+      setRowError(m => ({ ...m, [e.id]: err instanceof Error ? err.message : String(err) }));
+      return;
+    }
     setRowError(m => ({ ...m, [e.id]: r.ok ? '' : r.error }));
+    // Traces turned off apply at once; when main could not write it yet, its words say so under the row.
+    if (r.ok) setRowUnsaved(r.unsaved ? { id: e.id, word: r.unsaved } : null);
     void reload();
   };
 
@@ -76,8 +89,15 @@ export const InferenceEndpointsSection = () => {
 
   const remove = async (id: string) => {
     if (!api) return;
-    const r = await api.remove(id);
-    if (r.ok) setRemoving(null);
+    let r: Awaited<ReturnType<typeof api.remove>>;
+    try {
+      r = await api.remove(id);
+    } catch (err) {
+      setRemoving({ id, error: err instanceof Error ? err.message : String(err) });
+      return;
+    }
+    // A removal applies at once; when main could not write it yet, its words go above the list (the row is gone).
+    if (r.ok) { setRemoving(null); setRemoveUnsaved(r.unsaved ?? null); }
     // No agent on it: main's own reason (a full disk, an endpoint already gone), never the plain question again.
     else if (r.agents && r.agents.length > 0) setRemoving({ id, refusedBy: r.agents });
     else setRemoving({ id, error: r.error });
@@ -124,6 +144,12 @@ export const InferenceEndpointsSection = () => {
 
       <ClosedModelsRow />
 
+      {removeUnsaved && (
+        <div data-endpoint-remove-unsaved className="px-4 py-[11px]">
+          <State word={removeUnsaved} tone="waiting" />
+        </div>
+      )}
+
       {list.map(e => {
         const own = waits.filter(w => w.endpointId === e.id);
         const health = own.length > 0 ? { word: waitWord(own), tone: 'waiting' as StatusTone } : healthOf(e.health, checking[e.id]);
@@ -168,6 +194,7 @@ export const InferenceEndpointsSection = () => {
             </div>
 
             {rowError[e.id] && <p data-endpoint-row-error className="mt-2 font-mono text-[10.5px] text-status-error">{rowError[e.id]}</p>}
+            {rowUnsaved?.id === e.id && <div data-endpoint-unsaved className="mt-2"><State word={rowUnsaved.word} tone="waiting" /></div>}
 
             {by && !e.allowTraces && (
               <p className="mt-2 font-mono text-[10.5px] text-status-waiting">
@@ -222,9 +249,10 @@ export const InferenceEndpointsSection = () => {
           <EndpointForm
             key={form.id ?? 'new'}
             endpoint={editing}
-            onDone={added => {
+            onDone={done => {
               setForm(null);
-              if (added) setRowError(m => ({ ...m, [added.id]: added.error }));
+              if (done?.error) setRowError(m => ({ ...m, [done.id]: done.error ?? '' }));
+              if (done?.unsaved) setRowUnsaved({ id: done.id, word: done.unsaved });
               void reload();
             }}
           />
@@ -238,7 +266,10 @@ export const InferenceEndpointsSection = () => {
  * Add an endpoint, or open one again. Adding saves it (approved by that act), stores the key, then reads its
  * models and checks it. Reopening shows only that a key is set: Replace writes a new one, Clear removes it.
  */
-function EndpointForm({ endpoint, onDone }: { endpoint?: EndpointView; onDone: (added?: { id: string; error: string }) => void }) {
+/** What a save leaves under the endpoint's row: models not listed (`error`), or traces turned off and not yet written. */
+type FormDone = { id: string; error?: string; unsaved?: string };
+
+function EndpointForm({ endpoint, onDone }: { endpoint?: EndpointView; onDone: (done?: FormDone) => void }) {
   const api = window.electronAPI?.endpoints;
   const [name, setName] = useState(endpoint?.name ?? '');
   const [baseUrl, setBaseUrl] = useState(endpoint?.baseUrl ?? '');
@@ -278,7 +309,8 @@ function EndpointForm({ endpoint, onDone }: { endpoint?: EndpointView; onDone: (
         // The endpoint is saved; its models are not (not read, or not saved): said under its row, in main's words.
         if (!models.ok) { onDone({ id, error: `added without its models: ${clauseOf(models.error)}.` }); return; }
       }
-      onDone();
+      // Traces turned off here apply at once; main's words say so under the row while they are not written.
+      onDone(saved.unsaved ? { id, unsaved: saved.unsaved } : undefined);
     } finally {
       setBusy(false);
     }
@@ -425,17 +457,32 @@ function ClosedModelsRow() {
   const [exclude, setExclude] = useState<boolean | null>(null);
   const [warning, setWarning] = useState('');
   const [error, setError] = useState<string | null>(null);
+  /** Closed models left out, held by main and not written yet: main's words under the switch until it is. */
+  const [unsaved, setUnsaved] = useUnsavedNote();
 
-  useEffect(() => {
+  const read = useCallback(() => {
     if (!api) return;
     void api.pairs().then(v => { setExclude(v.excludeClosedModels); setWarning(v.closedModelsWarning); }).catch(e => setError(String(e)));
   }, [api]);
+  useEffect(() => { read(); }, [read]);
 
   if (!api) return null;
   const toggle = async () => {
     if (exclude === null) return;
-    const r = await api.setSettings({ excludeClosedModels: !exclude });
-    if (r.ok) { setExclude(r.settings.excludeClosedModels); setError(null); } else setError(r.error);
+    let r: Awaited<ReturnType<typeof api.setSettings>>;
+    try {
+      r = await api.setSettings({ excludeClosedModels: !exclude });
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
+      return;
+    }
+    if (!r.ok) { setError(r.error); return; }
+    setExclude(r.settings.excludeClosedModels);
+    setError(null);
+    // Leaving closed models out applies at once; when main could not write it yet, its words say so, and the
+    // switch is read again from main.
+    setUnsaved(r.unsaved ?? null);
+    if (r.unsaved) read();
   };
 
   return (
@@ -460,6 +507,7 @@ function ClosedModelsRow() {
         </div>
       )}
       {error && <p className="px-4 pb-2 font-mono text-[10.5px] text-status-error">{error}</p>}
+      {unsaved && <div data-closed-models-unsaved className="px-4 pb-[11px]"><State word={unsaved} tone="waiting" /></div>}
     </div>
   );
 }
