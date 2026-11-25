@@ -28,6 +28,15 @@ import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
  *    on its way through a shim of a few hundred milliseconds.
  * 8. The window never closes, or a CLI with a surer sign waits on it too: claude (its SessionStart), kimi (its field
  *    drawn, case 1).
+ *
+ * And when the field never comes, written before the code (24/11, the Audit's L3 on #641):
+ * 9. A launch whose screen never shows what its provider looks for is given up at CLI_UP_MS without a word: a gemini
+ *    that renames its field, another locale, a terminal narrow enough to wrap the field's row, an overflowed launch
+ *    log: every start then reads starting for 180 s, and nothing says why. One line says it, once: the agent, the
+ *    CLI, what was looked for, and the shape of the rows drawn since the launch. A launch given up for another reason
+ *    (its CLI never ran), or one that came up, says nothing of the kind.
+ * 10. That line carries what the screen showed: a row can hold a path, a task or a key. Only the rows' count and
+ *     lengths are said, never their text.
  */
 
 const state = vi.hoisted(() => ({ running: true, screen: undefined as string[] | undefined, history: undefined as string[] | undefined }));
@@ -39,10 +48,11 @@ vi.mock('../../../electron/core/terminal-mirror', () => ({
   terminalText: () => state.history ?? state.screen,
   rowsSinceLaunch: () => state.screen,
   markCliLaunch: () => undefined,
+  endLaunchLog: () => undefined,
 }));
 vi.mock('../../../electron/services/agent-truth', () => ({ lastInterruptAt: () => undefined }));
 
-import { launchBegins, sessionStarting, resetLaunches, CLI_SETTLED_MS } from '../../../electron/core/agent-launch';
+import { launchBegins, sessionStarting, resetLaunches, CLI_SETTLED_MS, CLI_UP_MS, CLI_BOOT_MS } from '../../../electron/core/agent-launch';
 import { KimiCodeProvider } from '../../../electron/providers/kimi-code-provider';
 
 // Kimi Code 2.6.3's screen at rest in --auto, as the mirror reads it (19/11), and before its box is drawn.
@@ -148,6 +158,47 @@ describe('a session up on its screen', () => {
       vi.advanceTimersByTime(5);
       const claude = { id: 'cl', ptyId: 'p1', provider: 'claude' as const, sessionRegisteredAt: new Date().toISOString() };
       expect(sessionStarting(claude)).toBe(false);
+    });
+  });
+
+  describe('a launch given up on its screen says so (9 and 10)', () => {
+    beforeEach(() => { vi.useFakeTimers({ now: new Date('2026-11-24T10:00:00.000Z') }); });
+    afterEach(() => { vi.useRealTimers(); vi.restoreAllMocks(); });
+    const saidOf = (warn: { mock: { calls: unknown[][] } }, id: string) => warn.mock.calls.map((c) => c.join(' ')).filter((l) => l.includes(id));
+
+    it("9 and 10: one line, once, names what gemini's screen was read for and the rows' shape, never their text", () => {
+      const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+      const agent = { id: 'g9', ptyId: 'p1', provider: 'gemini' as const };
+      launchBegins('g9');
+      state.screen = ['  Gemini CLI v0.70.0', ' >   Tapez votre message ou @chemin/du/fichier TASK-ROW-SECRET'];
+      expect(sessionStarting(agent)).toBe(true);
+      vi.advanceTimersByTime(CLI_UP_MS);
+      expect(sessionStarting(agent)).toBe(false);
+      expect(sessionStarting(agent)).toBe(false);
+      const said = saidOf(warn, 'g9');
+      expect(said).toHaveLength(1);
+      expect(said[0]).toContain('gemini');
+      expect(said[0]).toContain('Type your message');
+      expect(said[0]).toMatch(/\b2 rows\b/);
+      expect(said[0]).not.toContain('SECRET');
+      expect(said[0]).not.toContain('Tapez');
+      expect(said[0]).not.toContain('Gemini CLI');
+    });
+
+    it('9: a gemini that came up, and a launch whose CLI never ran, say nothing of the kind', () => {
+      const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+      const up = { id: 'g9up', ptyId: 'p1', provider: 'gemini' as const };
+      launchBegins('g9up');
+      state.screen = [' >   Type your message or @path/to/file'];
+      expect(sessionStarting(up)).toBe(false);
+      const never = { id: 'g9never', ptyId: 'p1', provider: 'gemini' as const };
+      launchBegins('g9never');
+      state.running = false;
+      vi.advanceTimersByTime(CLI_BOOT_MS);
+      expect(sessionStarting(never)).toBe(false);
+      vi.advanceTimersByTime(CLI_UP_MS);
+      expect(saidOf(warn, 'g9up')).toHaveLength(0);
+      expect(saidOf(warn, 'g9never')).toHaveLength(0);
     });
   });
 

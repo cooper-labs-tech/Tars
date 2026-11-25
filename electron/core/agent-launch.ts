@@ -2,7 +2,7 @@ import { hasClaudeHooks } from './end-of-turn';
 import type { AgentPermissionMode, AgentProvider } from '../types';
 import { ptyProcesses, type MessageSender } from './pty-manager';
 import { cliRunningIn } from './agent-pty';
-import { dialogOnScreen, rowsSinceLaunch } from './terminal-mirror';
+import { dialogOnScreen, endLaunchLog, rowsSinceLaunch } from './terminal-mirror';
 import { getProvider } from '../providers';
 import { lastInterruptAt } from '../services/agent-truth';
 
@@ -176,10 +176,17 @@ export function launchBegins(agentId: string, opts: { withTask?: boolean } = {})
   return launch;
 }
 
-/** That launch failed or was refused: nothing is coming up. */
-export function launchAbandoned(agentId: string, launch: object): void {
-  if (launchesUnderWay.get(agentId) !== launch) return;
-  launchesUnderWay.delete(agentId);
+/**
+ * That launch failed or was refused: nothing is coming up. Its log goes with it, as with a launch up or given up
+ * (sessionStarting): never read again, it would stay until the next launch, the terminal's end or 1 MiB (the Audit's
+ * I-1 on #641 at 984fc5eeb). Given the agent, with its terminal, that log is let go; given its id alone, as before, the
+ * log is left to the next launch or the terminal's end.
+ */
+export function launchAbandoned(agent: string | { id: string; ptyId?: string }, launch: object): void {
+  const id = typeof agent === 'string' ? agent : agent.id;
+  if (launchesUnderWay.get(id) !== launch) return;
+  launchesUnderWay.delete(id);
+  if (typeof agent !== 'string' && agent.ptyId) endLaunchLog(ptyProcesses.get(agent.ptyId));
   launchListener?.();
 }
 
@@ -207,9 +214,29 @@ export function sessionStarting(agent: StartingAgent): boolean {
   const booting = elapsed < CLI_BOOT_MS || (elapsed < CLI_UP_MS && !!terminal && cliRunningIn(terminal));
   if (!booting || sessionUp(agent, launch)) {
     launchesUnderWay.delete(agent.id);
+    if (!booting && terminal && cliRunningIn(terminal)) sayGivenUpOnScreen(agent, terminal);
+    // The launch is over, up or given up: its log goes with it, read first above (terminal-mirror.ts, endLaunchLog).
+    endLaunchLog(terminal);
     return false;
   }
   return true;
+}
+
+/**
+ * A launch given up at CLI_UP_MS while its CLI ran, for a CLI read up on its screen: the screen never showed what its
+ * provider looks for (a field renamed, another locale, a row wrapped by a narrow terminal, an overflowed launch log),
+ * and every start of it waits that long. Said once, with the rows' shape, never their text: a row can hold a path, a
+ * task or a key (the Audit's L3 on #641).
+ */
+function sayGivenUpOnScreen(agent: StartingAgent, terminal: Parameters<typeof rowsSinceLaunch>[0]): void {
+  if (hasClaudeHooks(agent)) return;
+  const provider = getProvider(agent.provider);
+  if (!provider.upOnScreen) return;
+  const rows = rowsSinceLaunch(terminal) ?? [];
+  const shape = rows.length
+    ? `${rows.length} rows, of ${rows.map((row) => row.length).join(', ')} characters`
+    : 'no rows (the launch log was empty or overflowed, or the terminal mirror could not render it)';
+  console.warn(`[launch] agent ${agent.id}: ${agent.provider ?? 'its CLI'}'s screen never showed ${provider.upOnScreenSign ?? 'its field'} in ${CLI_UP_MS / 1000} s, so Tars stopped waiting for it and types into it from now on; drawn since its launch: ${shape}`);
 }
 
 /**

@@ -60,7 +60,9 @@ async function turn(prompt) {
 }
 log({ launched: process.argv.slice(2), hooks: Object.keys(settings.hooks ?? {}) });
 hook('SessionStart', { source: 'startup' });
-process.stdout.write('gemini stand-in ready\n');
+process.stdout.write('gemini stand-in ready\r\n');
+// gemini 0.70.0's field, the row Tars reads before it types into a gemini terminal (GeminiProvider.upOnScreen, #641).
+process.stdout.write(' >   Type your message or @path/to/file\r\n');
 process.stdin.setRawMode(true);
 // As gemini's input does: a bracketed paste is text, newlines and all, and only an Enter typed outside one submits.
 let field = '';

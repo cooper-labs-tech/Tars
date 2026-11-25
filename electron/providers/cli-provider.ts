@@ -142,6 +142,12 @@ export interface CLIProvider {
   upOnScreen?(lines: readonly string[]): boolean;
 
   /**
+   * What `upOnScreen` looks for, in words, for the line Tars logs when a launch is given up without it (CLI_UP_MS):
+   * never the screen's own text. Absent: "its field".
+   */
+  readonly upOnScreenSign?: string;
+
+  /**
    * How the CLI takes a message Tars types into its terminal while a turn runs (send_message's `auto`), as measured
    * on the CLI itself: `next-tool-round`, it reaches the model at the turn's next tool round (Claude Code);
    * `after-the-turn`, the CLI holds it and sends it as its own next turn once this one ends (Kimi Code 2.6.3).

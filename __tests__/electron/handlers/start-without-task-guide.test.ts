@@ -212,6 +212,11 @@ async function startedFromWindow(prompt: string, fields: Partial<AgentStatus> = 
   const command = commandOf(typedInto(terminal));
   // node-pty names the CLI once it runs in the terminal's foreground.
   terminal.process = agent.provider ?? 'opencode';
+  // gemini is up once its input field is drawn (gemini 0.70.0, GeminiProvider.upOnScreen): it draws it, as the
+  // terminal's own listeners receive it, the mirror's among them.
+  if (agent.provider === 'gemini') {
+    for (const [listener] of terminal.onData.mock.calls) listener(' >   Type your message or @path/to/file\r\n');
+  }
   terminal.write.mockClear();
   return { agent, terminal, command };
 }

@@ -344,7 +344,7 @@ export async function startWithTask(
     launch = await claimLaunch(agent);
     const ptyProcess = await terminalOf(fleet, agent);
     if (!ptyProcess) {
-      if (launch) launchAbandoned(agent.id, launch);
+      if (launch) launchAbandoned(agent, launch);
       await opts.reply('no-terminal');
       return;
     }
@@ -400,7 +400,7 @@ export async function startWithTask(
     typeLaunchTask(provider, cli, { prompt: withGuide(agent, provider, launchPrompt({ kind: 'channel', channel: from }, task)), skills: [...new Set(agent.skills || [])], isSuperAgent: hasOrchestratorPowers(agent) });
     await opts.reply('started');
   } catch (err) {
-    if (launch) launchAbandoned(agent.id, launch);
+    if (launch) launchAbandoned(agent, launch);
     throw err;
   } finally {
     slot.release();
@@ -457,7 +457,7 @@ export async function forwardToOrchestrator(
     launch = await claimLaunch(orchestrator);
     const ptyProcess = await terminalOf(fleet, orchestrator);
     if (!ptyProcess) {
-      if (launch) launchAbandoned(orchestrator.id, launch);
+      if (launch) launchAbandoned(orchestrator, launch);
       await opts.reply('no-terminal');
       return;
     }
@@ -516,7 +516,7 @@ export async function forwardToOrchestrator(
     typeLaunchTask(provider, cli, { prompt: withGuide(orchestrator, provider, launchPrompt(opts.sender ?? { kind: 'channel', channel: from }, prompt)), skills: [...new Set(orchestrator.skills || [])], isSuperAgent: true });
     await opts.reply('started');
   } catch (err) {
-    if (launch) launchAbandoned(orchestrator.id, launch);
+    if (launch) launchAbandoned(orchestrator, launch);
     throw err;
   }
 }

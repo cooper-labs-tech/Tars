@@ -123,28 +123,30 @@ interface LaunchLog {
   overflowed: boolean;
   /** The last reading, kept until a chunk comes. */
   cache?: { count: number; rows: string[] };
-  /** Lets it go at the launch window's end, written to or not. */
-  timer: ReturnType<typeof setTimeout>;
 }
 
-/** How much of a launch's output is kept, and for how long: the launch window (core/agent-launch.ts, CLI_UP_MS). */
+/** How much of a launch's output is kept. */
 const LAUNCH_LOG_BYTES = 1024 * 1024;
-const LAUNCH_LOG_MS = 180_000;
 
-/** A launch log from now, for the launch window and no longer, in place of any before it. */
+/**
+ * A launch log from now, in place of any before it, for as long as the launch: until core/agent-launch.ts ends it,
+ * up or given up (endLaunchLog), which the launch poll does within a second of its window (utils/agents-tick.ts), or
+ * until the next launch or the terminal's end. It had a clock of its own until 25/11, 180 s from markCliLaunch, while
+ * the launch's runs from launchBegins: a give-up checked after that clock read no rows where rows were drawn (the
+ * Audit's L1 on #641).
+ */
 function startLaunchLog(mirror: Mirror): void {
-  dropLaunchLog(mirror);
-  const log: LaunchLog = {
-    chunks: [], bytes: 0, overflowed: false,
-    timer: setTimeout(() => { if (mirror.launchLog === log) mirror.launchLog = undefined; }, LAUNCH_LOG_MS),
-  };
-  log.timer.unref?.();
-  mirror.launchLog = log;
+  mirror.launchLog = { chunks: [], bytes: 0, overflowed: false };
 }
 
 function dropLaunchLog(mirror: Mirror): void {
-  if (mirror.launchLog) clearTimeout(mirror.launchLog.timer);
   mirror.launchLog = undefined;
+}
+
+/** The launch into `pty` is over, up or given up (core/agent-launch.ts): its log is let go. */
+export function endLaunchLog(pty: IPty | undefined): void {
+  const mirror = pty && mirrors.get(pty);
+  if (mirror) dropLaunchLog(mirror);
 }
 
 function logLaunchOutput(mirror: Mirror, data: string): void {
@@ -444,7 +446,7 @@ const LAUNCH_ROWS = 8;
  * before the launch can be read: no earlier CLI's box in the history, below the cursor or on an alternate screen it
  * left on, whatever the output since does to the screen (a deleted line, reverse indexes); and only the bottom rows,
  * never a box quoted higher up in an answer (the Audit's L1 and L2 on #601). Read on the alternate screen when the CLI
- * entered one. Empty when it cannot be known: more was written than is kept, or the launch window is past. Undefined
+ * entered one. Empty when it cannot be known: more was written than is kept, or the launch is over (endLaunchLog). Undefined
  * with no mirror.
  */
 export function rowsSinceLaunch(pty: IPty | undefined, max = LAUNCH_ROWS): string[] | undefined {
