@@ -22,6 +22,16 @@ import { pinPlatform } from './win-fake-disk';
  * 5. A blank variable taken as a folder: it names none, and the default stands.
  * 6. GROK_CONFIG_PATH, or GROK_CONFIG, taken for grok's home, or handed on: each is a read-only overlay (a file, a
  *    JSON text; GROK_CONFIG wins over GROK_CONFIG_PATH, QA's measure on 1.0.92), and is left to the user.
+ *
+ * Written before the code, on the Audit's read of 85bc5c575, red there:
+ * 7. gemini handed GEMINI_CLI_HOME when Tars's own environment names none: gemini 0.70.0's launcher reads
+ *    $GEMINI_CLI_HOME/settings.json, the home itself, where the CLI reads $GEMINI_CLI_HOME/.gemini, so a user's
+ *    advanced.autoConfigureMemory: false in ~/.gemini/settings.json is lost, and gemini relaunches with a heap ceiling of
+ *    half the RAM (measured isolated on 25/11: --max-old-space-size=12288 of 24 GB with GEMINI_CLI_HOME=$HOME, none
+ *    without). Named, the value is handed; named by nobody, an rc file's is taken off the line (`env -u`). grok's one
+ *    binary reads the same with GROK_HOME unset or set to ~/.grok (`grok inspect`, measured): it is handed always.
+ * 8. A value that is not an absolute folder taken for a home (a relative one is read from wherever the CLI runs): it is
+ *    taken as unset (I-1). A value with a space, a quote, a `;` or a `$` reaching the line unquoted.
  */
 
 const saved = { ...process.env };
@@ -76,10 +86,31 @@ describe('the home handed to the CLI Tars starts (3, 4, 6)', () => {
     expect(oneShot(await grok())).toMatch(/^env GROK_HOME='\/srv\/grok' '\/opt\/bin\/cli'/);
   });
 
-  it('the default home handed too, so an rc file sends neither elsewhere', async () => {
+  it("7: gemini's line takes an rc file's GEMINI_CLI_HOME off when Tars names none, and grok's hands its default", async () => {
     const os = await import('os');
-    expect(line(await gemini())).toContain(`env GEMINI_CLI_HOME='${os.homedir()}'`);
+    const g = await gemini();
+    expect(line(g)).toMatch(/^env -u GEMINI_CLI_HOME '\/opt\/bin\/cli'/);
+    expect(oneShot(g)).toMatch(/^env -u GEMINI_CLI_HOME '\/opt\/bin\/cli'/);
+    expect(Object.keys(g.getPtyEnvVars('a1', '/p', []))).not.toContain('GEMINI_CLI_HOME');
+    expect(g.configDir).toBe(`${os.homedir()}/.gemini`);
     expect(line(await grok())).toContain(`env GROK_HOME='${os.homedir()}/.grok'`);
+  });
+
+  it('8: a relative home is taken as unset; a value with a space, a quote, a ; or a $ is quoted whole', async () => {
+    const os = await import('os');
+    const { geminiCliHome } = await import('../../../electron/providers/gemini-provider');
+    const { grokHome } = await import('../../../electron/providers/grok-provider');
+    expect(geminiCliHome({ GEMINI_CLI_HOME: 'rel/home' }, '/home/me')).toBe('/home/me');
+    expect(grokHome({ GROK_HOME: './grok' }, '/home/me')).toBe('/home/me/.grok');
+    process.env.GEMINI_CLI_HOME = 'rel/home';
+    expect(line(await gemini())).toMatch(/^env -u GEMINI_CLI_HOME /);
+    vi.resetModules();
+    const odd = "/srv/a b'c;$x";
+    process.env.GEMINI_CLI_HOME = odd;
+    process.env.GROK_HOME = odd;
+    expect(line(await gemini())).toContain(`env GEMINI_CLI_HOME='/srv/a b'\\''c;$x' '/opt/bin/cli'`);
+    expect(line(await grok())).toContain(`env GROK_HOME='/srv/a b'\\''c;$x' '/opt/bin/cli'`);
+    expect(os.homedir()).not.toBe(odd);
   });
 
   it("on Windows, in the terminal's environment, the line starting with the binary", async () => {
