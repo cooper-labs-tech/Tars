@@ -885488,6 +885488,138 @@
                       ]
                     }
                   ]
+                },
+                {
+                  "type": "frame",
+                  "id": "H1Kku",
+                  "name": "dialog Create a reader token? · the call failed",
+                  "width": 560,
+                  "fill": "$surface-elevated",
+                  "stroke": "$border-strong",
+                  "strokeWidth": 1,
+                  "layout": "vertical",
+                  "gap": 12,
+                  "padding": [
+                    16,
+                    18
+                  ],
+                  "children": [
+                    {
+                      "type": "text",
+                      "id": "tVieZ",
+                      "fill": "$text-primary",
+                      "content": "Create a reader token?",
+                      "lineHeight": 1.4,
+                      "fontFamily": "$font-ui",
+                      "fontSize": 15,
+                      "fontWeight": "normal"
+                    },
+                    {
+                      "type": "text",
+                      "id": "D3HeRG",
+                      "fill": "$text-secondary",
+                      "textGrowth": "fixed-width",
+                      "width": 520,
+                      "content": "It opens /api/traces/ and nothing else, read only: every recorded session, of every project. Revoke it to stop at once.",
+                      "lineHeight": 1.4,
+                      "fontFamily": "$font-ui",
+                      "fontSize": 12,
+                      "fontWeight": "normal"
+                    },
+                    {
+                      "type": "frame",
+                      "id": "oHMGh",
+                      "name": "state call failed",
+                      "gap": 6,
+                      "children": [
+                        {
+                          "type": "rectangle",
+                          "id": "xBrRa",
+                          "name": "d",
+                          "fill": "$status-error",
+                          "width": 6,
+                          "height": 6
+                        },
+                        {
+                          "type": "text",
+                          "id": "fMptg",
+                          "fill": "$status-error",
+                          "textGrowth": "fixed-width",
+                          "width": 500,
+                          "content": "the call failed: reply was never sent. Create tries again.",
+                          "lineHeight": 1.4,
+                          "fontFamily": "$font-mono",
+                          "fontSize": 10.5,
+                          "fontWeight": "normal"
+                        }
+                      ]
+                    },
+                    {
+                      "type": "frame",
+                      "id": "FXWEg",
+                      "name": "answers",
+                      "width": "fill_container",
+                      "gap": 8,
+                      "justifyContent": "end",
+                      "alignItems": "center",
+                      "children": [
+                        {
+                          "type": "frame",
+                          "id": "YS57u",
+                          "name": "b Cancel",
+                          "height": 32,
+                          "fill": "$surface",
+                          "stroke": "$border",
+                          "strokeWidth": 1,
+                          "padding": [
+                            0,
+                            14
+                          ],
+                          "justifyContent": "center",
+                          "alignItems": "center",
+                          "children": [
+                            {
+                              "type": "text",
+                              "id": "z2HcR",
+                              "fill": "$text-primary",
+                              "content": "Cancel",
+                              "lineHeight": 1.4,
+                              "fontFamily": "$font-ui",
+                              "fontSize": 12.5,
+                              "fontWeight": "normal"
+                            }
+                          ]
+                        },
+                        {
+                          "type": "frame",
+                          "id": "JWPl8",
+                          "name": "b Create",
+                          "height": 32,
+                          "fill": "$accent",
+                          "stroke": "$accent",
+                          "strokeWidth": 1,
+                          "padding": [
+                            0,
+                            14
+                          ],
+                          "justifyContent": "center",
+                          "alignItems": "center",
+                          "children": [
+                            {
+                              "type": "text",
+                              "id": "hrgIG",
+                              "fill": "$on-accent",
+                              "content": "Create",
+                              "lineHeight": 1.4,
+                              "fontFamily": "$font-ui",
+                              "fontSize": 12.5,
+                              "fontWeight": "normal"
+                            }
+                          ]
+                        }
+                      ]
+                    }
+                  ]
                 }
               ]
             },
@@ -885800,7 +885932,6 @@
                       "id": "WvtCX",
                       "name": "state not done",
                       "gap": 6,
-                      "alignItems": "center",
                       "children": [
                         {
                           "type": "rectangle",
@@ -885814,7 +885945,9 @@
                           "type": "text",
                           "id": "eSRCY",
                           "fill": "$status-error",
-                          "content": "not rotated: no space left on device. The old token opens nothing now; Rotate tries again.",
+                          "textGrowth": "fixed-width",
+                          "width": 500,
+                          "content": "Tars could not save a new reader token (ENOSPC): the old one opens nothing, and there is none now. Rotate tries again.",
                           "lineHeight": 1.4,
                           "fontFamily": "$font-mono",
                           "fontSize": 10.5,
@@ -885931,7 +886064,6 @@
                       "id": "XisKv",
                       "name": "state not done",
                       "gap": 6,
-                      "alignItems": "center",
                       "children": [
                         {
                           "type": "rectangle",
@@ -885945,7 +886077,9 @@
                           "type": "text",
                           "id": "zNNju",
                           "fill": "$status-error",
-                          "content": "not saved: operation not permitted. The token opens nothing until Tars quits; Revoke tries again.",
+                          "textGrowth": "fixed-width",
+                          "width": 500,
+                          "content": "Tars could not remove the reader token (EPERM): it opens nothing until Tars quits, but would again after a restart. Revoke tries again.",
                           "lineHeight": 1.4,
                           "fontFamily": "$font-mono",
                           "fontSize": 10.5,
@@ -889214,6 +889348,138 @@
                       ]
                     }
                   ]
+                },
+                {
+                  "type": "frame",
+                  "id": "O5GzOc",
+                  "name": "dialog Create a reader token? · the call failed",
+                  "width": 560,
+                  "fill": "$surface-elevated",
+                  "stroke": "$border-strong",
+                  "strokeWidth": 1,
+                  "layout": "vertical",
+                  "gap": 12,
+                  "padding": [
+                    16,
+                    18
+                  ],
+                  "children": [
+                    {
+                      "type": "text",
+                      "id": "uu4zF",
+                      "fill": "$text-primary",
+                      "content": "Create a reader token?",
+                      "lineHeight": 1.4,
+                      "fontFamily": "$font-ui",
+                      "fontSize": 15,
+                      "fontWeight": "normal"
+                    },
+                    {
+                      "type": "text",
+                      "id": "zqjB1",
+                      "fill": "$text-secondary",
+                      "textGrowth": "fixed-width",
+                      "width": 520,
+                      "content": "It opens /api/traces/ and nothing else, read only: every recorded session, of every project. Revoke it to stop at once.",
+                      "lineHeight": 1.4,
+                      "fontFamily": "$font-ui",
+                      "fontSize": 12,
+                      "fontWeight": "normal"
+                    },
+                    {
+                      "type": "frame",
+                      "id": "f8rfUY",
+                      "name": "state call failed",
+                      "gap": 6,
+                      "children": [
+                        {
+                          "type": "rectangle",
+                          "id": "LLteA",
+                          "name": "d",
+                          "fill": "$status-error",
+                          "width": 6,
+                          "height": 6
+                        },
+                        {
+                          "type": "text",
+                          "id": "siBfw",
+                          "fill": "$status-error",
+                          "textGrowth": "fixed-width",
+                          "width": 500,
+                          "content": "the call failed: reply was never sent. Create tries again.",
+                          "lineHeight": 1.4,
+                          "fontFamily": "$font-mono",
+                          "fontSize": 10.5,
+                          "fontWeight": "normal"
+                        }
+                      ]
+                    },
+                    {
+                      "type": "frame",
+                      "id": "BepkS",
+                      "name": "answers",
+                      "width": "fill_container",
+                      "gap": 8,
+                      "justifyContent": "end",
+                      "alignItems": "center",
+                      "children": [
+                        {
+                          "type": "frame",
+                          "id": "RA56S",
+                          "name": "b Cancel",
+                          "height": 32,
+                          "fill": "$surface",
+                          "stroke": "$border",
+                          "strokeWidth": 1,
+                          "padding": [
+                            0,
+                            14
+                          ],
+                          "justifyContent": "center",
+                          "alignItems": "center",
+                          "children": [
+                            {
+                              "type": "text",
+                              "id": "pBGye",
+                              "fill": "$text-primary",
+                              "content": "Cancel",
+                              "lineHeight": 1.4,
+                              "fontFamily": "$font-ui",
+                              "fontSize": 12.5,
+                              "fontWeight": "normal"
+                            }
+                          ]
+                        },
+                        {
+                          "type": "frame",
+                          "id": "zEprK",
+                          "name": "b Create",
+                          "height": 32,
+                          "fill": "$accent",
+                          "stroke": "$accent",
+                          "strokeWidth": 1,
+                          "padding": [
+                            0,
+                            14
+                          ],
+                          "justifyContent": "center",
+                          "alignItems": "center",
+                          "children": [
+                            {
+                              "type": "text",
+                              "id": "dTor8",
+                              "fill": "$on-accent",
+                              "content": "Create",
+                              "lineHeight": 1.4,
+                              "fontFamily": "$font-ui",
+                              "fontSize": 12.5,
+                              "fontWeight": "normal"
+                            }
+                          ]
+                        }
+                      ]
+                    }
+                  ]
                 }
               ]
             },
@@ -889526,7 +889792,6 @@
                       "id": "eXRsh",
                       "name": "state not done",
                       "gap": 6,
-                      "alignItems": "center",
                       "children": [
                         {
                           "type": "rectangle",
@@ -889540,7 +889805,9 @@
                           "type": "text",
                           "id": "x1Lmxj",
                           "fill": "$status-error",
-                          "content": "not rotated: no space left on device. The old token opens nothing now; Rotate tries again.",
+                          "textGrowth": "fixed-width",
+                          "width": 500,
+                          "content": "Tars could not save a new reader token (ENOSPC): the old one opens nothing, and there is none now. Rotate tries again.",
                           "lineHeight": 1.4,
                           "fontFamily": "$font-mono",
                           "fontSize": 10.5,
@@ -889657,7 +889924,6 @@
                       "id": "VmUlJ",
                       "name": "state not done",
                       "gap": 6,
-                      "alignItems": "center",
                       "children": [
                         {
                           "type": "rectangle",
@@ -889671,7 +889937,9 @@
                           "type": "text",
                           "id": "igaLr",
                           "fill": "$status-error",
-                          "content": "not saved: operation not permitted. The token opens nothing until Tars quits; Revoke tries again.",
+                          "textGrowth": "fixed-width",
+                          "width": 500,
+                          "content": "Tars could not remove the reader token (EPERM): it opens nothing until Tars quits, but would again after a restart. Revoke tries again.",
                           "lineHeight": 1.4,
                           "fontFamily": "$font-mono",
                           "fontSize": 10.5,
