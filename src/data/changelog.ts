@@ -11,7 +11,7 @@ export const CHANGELOG: Release[] = [
     version: '2.0.7',
     date: '2026-11-24',
     updates: [
-      'If you set GEMINI_CLI_HOME or GROK_HOME, Tars now writes Gemini\'s and Grok\'s settings, hooks and MCP servers into that home and starts them on it, so your Gemini and Grok agents see what Tars set up for them.',
+      'When Tars itself starts with GEMINI_CLI_HOME or GROK_HOME set, as when you open it from a shell that exports one, it writes Gemini\'s and Grok\'s settings, hooks and MCP servers into that home and starts them on it. Opened from the Dock, Tars cannot see a value your shell\'s startup files set: its agents then use the default home, and a Gemini or Grok agent says so when your sign-in is in the other one.',
     ],
   },
   {

@@ -24,25 +24,41 @@ import { writeSharedJsonSync } from '../utils/shared-file';
  * else the home folder. Its own folder is `.gemini` under it. A blank variable names none.
  */
 export function geminiCliHome(env: NodeJS.ProcessEnv = process.env, homeDir: string = os.homedir()): string {
-  return env.GEMINI_CLI_HOME?.trim() || homeDir;
+  return geminiCliHomeNamed(env) ?? homeDir;
+}
+
+/**
+ * The GEMINI_CLI_HOME Tars's own environment names, when it names an absolute folder: a relative one would be read from
+ * wherever gemini runs, so it is taken as unset (the Audit's I-1 on #645).
+ */
+export function geminiCliHomeNamed(env: NodeJS.ProcessEnv = process.env, platform: NodeJS.Platform = process.platform): string | undefined {
+  const value = env.GEMINI_CLI_HOME?.trim();
+  return value && (platform === 'win32' ? path.win32 : path.posix).isAbsolute(value) ? value : undefined;
 }
 
 /**
  * The home handed to the gemini Tars starts, so that it reads the folder Tars writes whatever an rc file of the agent's
  * shell sets, as codex's CODEX_HOME is (codex-provider.ts): on macOS and Linux in the line, which no rc file runs after;
  * on Windows, where the line's first word is the binary itself and nothing is sourced (platform/launch.ts), in the
- * terminal's environment (getPtyEnvVars).
+ * terminal's environment (getPtyEnvVars). Handed only when Tars's environment names one: gemini 0.70.0's launcher reads
+ * $GEMINI_CLI_HOME/settings.json, the home itself, where the CLI reads $GEMINI_CLI_HOME/.gemini, so a home handed for
+ * the default one loses the user's advanced.autoConfigureMemory in ~/.gemini/settings.json, and gemini relaunches with a
+ * heap ceiling of half the RAM (measured isolated on 25/11, the Audit's L1 on #645). Named by nobody, an rc file's is
+ * taken off the line instead (`env -u`), which leaves gemini on its default home, the one Tars writes.
  */
-function homeOnLine(home: string): string {
-  return process.platform === 'win32' ? '' : `env GEMINI_CLI_HOME=${shellQuote(home)} `;
+function homeOnLine(named: string | undefined): string {
+  if (process.platform === 'win32') return '';
+  return named ? `env GEMINI_CLI_HOME=${shellQuote(named)} ` : 'env -u GEMINI_CLI_HOME ';
 }
 
 export class GeminiProvider implements CLIProvider {
   readonly id = 'gemini' as const;
   readonly displayName = 'Gemini CLI';
   readonly binaryName = 'gemini';
-  /** The home Tars hands gemini, and gemini's folder under it, where Tars writes its settings, hooks and servers. */
-  readonly cliHome = geminiCliHome();
+  /** The GEMINI_CLI_HOME Tars's environment names, if any, handed to gemini (homeOnLine says why only then). */
+  readonly cliHomeNamed = geminiCliHomeNamed();
+  /** gemini's home, and its folder under it, where Tars writes its settings, hooks and servers. */
+  readonly cliHome = this.cliHomeNamed ?? os.homedir();
   readonly configDir = path.join(this.cliHome, '.gemini');
 
   getModels(): ProviderModel[] {
@@ -59,7 +75,7 @@ export class GeminiProvider implements CLIProvider {
   }
 
   buildInteractiveCommand(params: InteractiveCommandParams): string {
-    let command = `${homeOnLine(this.cliHome)}'${params.binaryPath.replace(/'/g, "'\\''")}'`;
+    let command = `${homeOnLine(this.cliHomeNamed)}'${params.binaryPath.replace(/'/g, "'\\''")}'`;
 
     // Model (Gemini uses -m flag)
     if (params.model) {
@@ -120,7 +136,7 @@ export class GeminiProvider implements CLIProvider {
   }
 
   buildOneShotCommand(params: OneShotCommandParams): string {
-    let command = `${homeOnLine(this.cliHome)}'${params.binaryPath.replace(/'/g, "'\\''")}'`;
+    let command = `${homeOnLine(this.cliHomeNamed)}'${params.binaryPath.replace(/'/g, "'\\''")}'`;
 
     command += ' -p';
 
@@ -145,8 +161,8 @@ export class GeminiProvider implements CLIProvider {
       CLAUDE_AGENT_ID: agentId,
       CLAUDE_PROJECT_PATH: projectPath,
       CLAUDE_PROVIDER: this.id,
-      // The home Tars reads and writes (homeOnLine says why).
-      GEMINI_CLI_HOME: this.cliHome,
+      // The home Tars reads and writes, when its environment names one (homeOnLine says why only then).
+      ...(this.cliHomeNamed ? { GEMINI_CLI_HOME: this.cliHomeNamed } : {}),
       // Its API key from Settings, under the variable it reads (services/cli-keys.ts).
       ...keyEnvFor('gemini', appSettings),
     };

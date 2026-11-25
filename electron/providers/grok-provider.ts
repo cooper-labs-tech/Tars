@@ -44,8 +44,12 @@ import { safeEffort } from './cli-provider';
  * GROK_CONFIG_PATH, the overlay unchanged; GROK_CONFIG wins over it, QA's measure), so both are left to the user,
  * never read here nor handed on.
  */
-export function grokHome(env: NodeJS.ProcessEnv = process.env, homeDir: string = os.homedir()): string {
-  return env.GROK_HOME?.trim() || path.join(homeDir, '.grok');
+export function grokHome(env: NodeJS.ProcessEnv = process.env, homeDir: string = os.homedir(), platform: NodeJS.Platform = process.platform): string {
+  // A relative value would be read from wherever grok runs: taken as unset (the Audit's I-1 on #645). Handed always,
+  // the default included: grok's one binary reads the same with GROK_HOME unset or set to ~/.grok (`grok inspect`,
+  // measured isolated on 25/11), where gemini's launcher does not (gemini-provider.ts, homeOnLine).
+  const value = env.GROK_HOME?.trim();
+  return value && (platform === 'win32' ? path.win32 : path.posix).isAbsolute(value) ? value : path.join(homeDir, '.grok');
 }
 
 export class GrokProvider implements CLIProvider {

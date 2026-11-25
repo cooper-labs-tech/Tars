@@ -41,16 +41,23 @@ export async function codexSignedIn(binaryPath: string, home: string, timeoutMs 
 }
 
 /** The line a login shell prints its CODEX_HOME on, among whatever its rc files print. */
-const SHELL_MARK = '__TARS_CODEX_HOME__=';
+/** The line a login shell prints a variable's value on, among whatever its rc files print. */
+const shellMark = (name: string) => `__TARS_${name}__=`;
+
+/** The value a login shell printed on its marked line for `name` (the last one), or none when it sets none. */
+export function valueFromShell(output: string, name: string): string | undefined {
+  const mark = shellMark(name);
+  let found: string | undefined;
+  for (const line of output.split(/\r?\n/)) {
+    const at = line.indexOf(mark);
+    if (at >= 0) found = line.slice(at + mark.length).trim();
+  }
+  return found || undefined;
+}
 
 /** The CODEX_HOME a login shell printed on its marked line (the last one), or none when it sets none. */
 export function codexHomeFromShell(output: string): string | undefined {
-  let found: string | undefined;
-  for (const line of output.split(/\r?\n/)) {
-    const at = line.indexOf(SHELL_MARK);
-    if (at >= 0) found = line.slice(at + SHELL_MARK.length).trim();
-  }
-  return found || undefined;
+  return valueFromShell(output, 'CODEX_HOME');
 }
 
 const shellHomes = new Map<string, Promise<string | undefined>>();
@@ -63,15 +70,27 @@ const shellHomes = new Map<string, Promise<string | undefined>>();
  * which runs no rc file.
  */
 export function loginShellCodexHome(shell: string = defaultShell(), platform: NodeJS.Platform = process.platform, timeoutMs = 20_000): Promise<string | undefined> {
-  if (platform === 'win32') return Promise.resolve(undefined);
-  let asked = shellHomes.get(shell);
+  return loginShellValue('CODEX_HOME', shell, platform, timeoutMs);
+}
+
+/**
+ * The value the user's own login shell gives one variable, as loginShellCodexHome reads CODEX_HOME: once per run once it
+ * has answered, off the main thread, asked again after a failure or a hang, undefined on Windows. Read for gemini's
+ * GEMINI_CLI_HOME and grok's GROK_HOME too, only to say why an agent is not signed in (services/home-sign-in-gap.ts).
+ * `name` is a variable's name, nothing else: it reaches the shell's command line.
+ */
+export function loginShellValue(name: string, shell: string = defaultShell(), platform: NodeJS.Platform = process.platform, timeoutMs = 20_000): Promise<string | undefined> {
+  if (platform === 'win32' || !/^[A-Z_][A-Z0-9_]*$/.test(name)) return Promise.resolve(undefined);
+  const mark = shellMark(name);
+  const key = `${shell}\0${name}`;
+  let asked = shellHomes.get(key);
   if (!asked) {
     asked = new Promise<string | undefined>((resolve, reject) => {
       // The shell leads a process group of its own, ended whole at its time, and is given up on then: interactive,
       // it ignores SIGTERM (macOS's zsh, measured), and what its rc files start can hold its output open after it.
       // Its answer is its marked line, whatever comes after. An rc file that asks something (compinit's insecure
       // folders) reads no answer from its input, and no terminal: it is not a wait.
-      const child = spawn(shell, ['-ilc', `printf '\\n%s%s\\n' '${SHELL_MARK}' "$CODEX_HOME"`], { detached: true, stdio: ['ignore', 'pipe', 'ignore'] });
+      const child = spawn(shell, ['-ilc', `printf '\\n%s%s\\n' '${mark}' "$${name}"`], { detached: true, stdio: ['ignore', 'pipe', 'ignore'] });
       let out = '';
       let settled = false;
       const settle = (done: () => void) => { if (!settled) { settled = true; clearTimeout(timer); done(); } };
@@ -82,26 +101,26 @@ export function loginShellCodexHome(shell: string = defaultShell(), platform: No
       child.stdout?.setEncoding('utf8');
       child.stdout?.on('data', (chunk: string) => {
         out = (out + chunk).slice(-65_536);
-        const at = out.lastIndexOf(SHELL_MARK);
-        if (at >= 0 && out.includes('\n', at)) settle(() => resolve(codexHomeFromShell(out)));
+        const at = out.lastIndexOf(mark);
+        if (at >= 0 && out.includes('\n', at)) settle(() => resolve(valueFromShell(out, name)));
       });
       child.on('error', (err) => settle(() => reject(err)));
-      child.on('close', (code) => settle(() => (code === 0 ? resolve(codexHomeFromShell(out)) : reject(new Error(`${shell} exited with ${code}`)))));
+      child.on('close', (code) => settle(() => (code === 0 ? resolve(valueFromShell(out, name)) : reject(new Error(`${shell} exited with ${code}`)))));
     });
     const kept = asked;
-    shellHomes.set(shell, kept);
-    kept.catch(() => { if (shellHomes.get(shell) === kept) shellHomes.delete(shell); });
+    shellHomes.set(key, kept);
+    kept.catch(() => { if (shellHomes.get(key) === kept) shellHomes.delete(key); });
   }
   return asked.catch(() => undefined);
 }
 
 /** A folder as the window names it: under the user's home, from ~. */
-function tilde(dir: string, homeDir: string): string {
+export function tilde(dir: string, homeDir: string): string {
   return dir === homeDir || dir.startsWith(`${homeDir}${path.sep}`) ? `~${dir.slice(homeDir.length)}` : dir;
 }
 
 /** Two writings of one folder: the same real path, or the same resolved path where it does not exist. */
-function sameFolder(a: string, b: string): boolean {
+export function sameFolder(a: string, b: string): boolean {
   const real = (dir: string) => { try { return fs.realpathSync(dir); } catch { return path.resolve(dir); } };
   return real(a) === real(b);
 }

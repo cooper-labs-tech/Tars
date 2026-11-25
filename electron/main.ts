@@ -143,7 +143,8 @@ import { filesOpenBy, openFilesReadable } from './platform/open-files';
 import { startCodexSessionWatch, type HookPost } from './services/codex-sessions';
 import { startPiSessionWatch, piSessionDir } from './services/pi-sessions';
 import { codexHome, codexSignInGap, loginShellCodexHome } from './providers/codex-cli';
-import { codexKeyConfig } from './services/cli-keys';
+import { codexKeyConfig, keyEnvFor } from './services/cli-keys';
+import { setHomeGapDeps } from './services/home-sign-in-gap';
 import { getProvider } from './providers';
 import { scheduleTick } from './utils/agents-tick';
 import { terminalTokenOf } from './core/agent-tokens';
@@ -910,6 +911,23 @@ app.whenReady().then(async () => {
       const agent = agents.get(agentId);
       if (!agent) return;
       console.warn(`[codex] ${agent.name || agentId}: ${text}`);
+      agent.status = 'error';
+      agent.error = text;
+      agent.lastActivity = new Date().toISOString();
+      saveAgents();
+      scheduleTick();
+      emitAgentStatus(agentId);
+    },
+  });
+  // The same for gemini and grok (the Audit's L3 on #645): Tars hands each the home it writes, and the user's sign-in
+  // may be in the GEMINI_CLI_HOME or GROK_HOME their shell exports, which a Tars started from the Dock never reads.
+  // Said in the agent's status, once its launch shows it (services/home-sign-in-gap.ts).
+  setHomeGapDeps({
+    keyed: (cli) => Object.keys(keyEnvFor(cli, appSettings)).length > 0,
+    notSignedIn: (agentId, text) => {
+      const agent = agents.get(agentId);
+      if (!agent) return;
+      console.warn(`[${agent.provider}] ${agent.name || agentId}: ${text}`);
       agent.status = 'error';
       agent.error = text;
       agent.lastActivity = new Date().toISOString();

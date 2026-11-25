@@ -23,6 +23,7 @@ import { keptSender } from '../services/agent-queues';
 import { dialogOpen, dialogShown } from './agent-launch';
 import type * as pty from 'node-pty';
 import { cliStoppedIn, spawnAgentPty, agentShell, codexLaunching } from './agent-pty';
+import { noteHomeLaunch } from '../services/home-sign-in-gap';
 import { killPty } from './pty-kill';
 import { withPath, type DirectLaunch, type Launch } from '../platform';
 import { buildFullPath } from '../utils/path-builder';
@@ -1222,7 +1223,9 @@ export async function launchIntoTerminal(
   if (start.platform === 'win32') return startCliInTerminal(agent, start, opts);
   if (opts.ready) await opts.ready(ptyProcess);
   // codex typed into a shell already there, one reused too: noted as it starts (core/agent-pty.ts).
-  if (getProvider(agent.provider).binaryName === 'codex') codexLaunching(agent.id, start.cwd);
+  const binaryName = getProvider(agent.provider).binaryName;
+  if (binaryName === 'codex') codexLaunching(agent.id, start.cwd);
+  else if (binaryName === 'gemini' || binaryName === 'grok') noteHomeLaunch(agent.id, binaryName);
   if (opts.delayMs) {
     await new Promise<void>((resolve) => {
       setTimeout(() => {

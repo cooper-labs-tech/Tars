@@ -6,6 +6,9 @@ import { addMcpServerToJson, removeMcpServerFromJson } from '../utils/mcp-json';
 import { updateSharedTextSync, writeSharedJsonSync } from '../utils/shared-file';
 import { removeTomlTable } from '../utils/toml-tables';
 import { parse as parseToml } from 'smol-toml';
+import { codexHome } from '../providers/codex-cli';
+import { geminiCliHome } from '../providers/gemini-provider';
+import { grokHome } from '../providers/grok-provider';
 
 // Tars-managed MCP servers, hidden from the Custom MCP UI
 const DOROTHY_MANAGED_MCPS = new Set([
@@ -31,12 +34,14 @@ function getConfigPath(provider: string): string {
   switch (provider) {
     case 'claude':
       return path.join(os.homedir(), '.claude', 'mcp.json');
+    // The file each CLI reads, in the home its variable names (the Audit's L2 on #645): the plain ~/.codex, ~/.gemini
+    // and ~/.grok are not read by a CLI whose CODEX_HOME, GEMINI_CLI_HOME or GROK_HOME names another.
     case 'codex':
-      return path.join(os.homedir(), '.codex', 'config.toml');
+      return path.join(codexHome(), 'config.toml');
     case 'gemini':
-      return path.join(os.homedir(), '.gemini', 'settings.json');
+      return path.join(geminiCliHome(), '.gemini', 'settings.json');
     case 'grok':
-      return path.join(os.homedir(), '.grok', 'config.toml');
+      return path.join(grokHome(), 'config.toml');
     case 'opencode':
       return path.join(os.homedir(), '.opencode', 'mcp.json');
     case 'pi':
