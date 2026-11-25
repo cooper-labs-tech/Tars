@@ -22,14 +22,25 @@ import { safeEffort } from './cli-provider';
  * Install:  curl -fsSL https://x.ai/cli/install.sh | bash
  *           (installs to ~/.grok/bin/grok, also symlinked into ~/.local/bin)
  * Binary:   `grok`
- * Auth:     `grok login` (interactive) or the GROK_DEPLOYMENT_KEY env var;
- *           credentials are cached in ~/.grok/auth.json.
+ * Auth, measured on grok 1.0.92 (25/11, isolated against a loopback stand-in of every base it names,
+ * reports/grok-key/measure-grok-key.sh and measure-grok-auth.sh):
+ *   - `grok login` (interactive, or `--device-code`), its session kept in ~/.grok/auth.json (its docs);
+ *   - XAI_API_KEY, sent as `Authorization: Bearer` to the xAI API (/v1/models, /v1/api-key): the key Tars
+ *     hands it (services/cli-keys.ts). GROK_CODE_XAI_API_KEY too, its older name, which XAI_API_KEY wins
+ *     over. Never GROK_API_KEY, nor OPENAI_API_KEY: with either alone it sends nothing, not signed in.
+ *   - GROK_DEPLOYMENT_KEY is no inference key: an enterprise management key, sent as Bearer to the
+ *     managed config and the session service's bundles only, never to the xAI API; alone, grok is not
+ *     signed in, and beside XAI_API_KEY each goes to its own base.
+ *   - GROK_DISABLE_API_KEY_AUTH=1, an enterprise's own setting: XAI_API_KEY still goes to /v1/models, but
+ *     grok no longer checks it as a sign-in (no /v1/api-key), as its docs say it refuses API-key auth.
+ *   Its docs: a signed-in session wins over XAI_API_KEY (unmeasured: it takes a real account).
  * Config:   ~/.grok/config.toml (TOML: MCP servers under [mcp_servers.<name>]).
  *
- * Flags verified against grok 0.2.64:
+ * Flags, as grok 1.0.92's --help names them:
  *   Interactive:  grok [-m <model>] [--permission-mode <mode>] [--effort <lvl>] [--debug] "<prompt>"
- *   Headless:     grok -p "<prompt>" [--output-format plain|json|streaming-json]
- *   Models:       grok models            (default model: grok-build)
+ *                 (--effort is an alias of --reasoning-effort)
+ *   Headless:     grok -p "<prompt>" [--output-format plain|json|streaming-json|streaming-messages-json]
+ *   Models:       grok models
  *   MCP:          grok mcp add <name> <command> -- <args> | grok mcp remove <name> | grok mcp list
  *
  * Grok's CLI semantics closely mirror Claude Code / Codex, so MCP handling

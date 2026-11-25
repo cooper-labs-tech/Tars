@@ -41,6 +41,17 @@ import * as path from 'node:path';
  *      one set since.
  *  K10. (the Audit's L3 on #459) A variable chosen for a CLI whose variable is
  *      its own (codex, amp) is stored, or changes where its key goes.
+ *  K11. (QA's measure of 25/11, then mine) Grok's key goes under a variable
+ *      grok never reads. grok 1.0.92, isolated against a loopback stand-in of
+ *      xAI's API, sends XAI_API_KEY as its key (`Authorization: Bearer`),
+ *      takes GROK_CODE_XAI_API_KEY too (its older name, which XAI_API_KEY
+ *      wins over), and never reads GROK_API_KEY: with that one alone it sends
+ *      nothing and says it is not signed in. Tars's default and first choice
+ *      was GROK_API_KEY. Failing ways: the key goes under GROK_API_KEY; an
+ *      install that stored GROK_API_KEY as grok's variable (the old default
+ *      picked, or the first choice of the list) still gets it there after the
+ *      update; a variable can still be chosen, so another name grok does not
+ *      read can be picked; the window is told GROK_API_KEY.
  */
 
 import { CLI_KEYS, keyEnvFor, keyVariableOf, cliKeyStates, withCliKey, withoutCliKeys, keepCliKeys, codexKeyConfig, qwenEnvKey } from '../../../electron/services/cli-keys';
@@ -70,7 +81,7 @@ describe('a key per CLI, in its agents\' environment', () => {
     }
     expect(getProvider('codex').getPtyEnvVars('a', '/p', [], s)).toMatchObject({ CODEX_API_KEY: 'k-codex' });
     expect(getProvider('gemini').getPtyEnvVars('a', '/p', [], s)).toMatchObject({ GEMINI_API_KEY: 'k-gemini' });
-    expect(getProvider('grok').getPtyEnvVars('a', '/p', [], s)).toMatchObject({ GROK_API_KEY: 'k-grok' });
+    expect(getProvider('grok').getPtyEnvVars('a', '/p', [], s)).toMatchObject({ XAI_API_KEY: 'k-grok' });
     expect(getProvider('amp').getPtyEnvVars('a', '/p', [], s)).toMatchObject({ AMP_API_KEY: 'k-amp' });
     expect(getProvider('codex').getPtyEnvVars('a', '/p', [], s).OPENAI_API_KEY).toBeUndefined();
   });
@@ -189,6 +200,25 @@ describe('a key per CLI, in its agents\' environment', () => {
       const forged = { ...r.settings, cliApiKeys: { [cli]: { key: KEY, envVar: 'OPENAI_API_KEY' } } } as AppSettings;
       expect(keyEnvFor(cli, forged)).toEqual({ [cli === 'codex' ? 'CODEX_API_KEY' : 'AMP_API_KEY']: KEY });
     }
+  });
+
+  it('K11. grok\'s key goes under XAI_API_KEY, the one grok reads, whatever name an install stored before', () => {
+    const r = withCliKey(settings(), 'grok', { key: KEY });
+    if (!r.ok) throw new Error(r.error);
+    expect(getProvider('grok').getPtyEnvVars('a', '/p', [], r.settings)).toMatchObject({ XAI_API_KEY: KEY });
+    expect(getProvider('grok').getPtyEnvVars('a', '/p', [], r.settings).GROK_API_KEY).toBeUndefined();
+    // An install of before: GROK_API_KEY stored as grok's variable, the old default picked or the list's first choice.
+    for (const stored of ['GROK_API_KEY', 'OPENAI_API_KEY']) {
+      const old = { cliApiKeys: { grok: { key: KEY, envVar: stored } } } as unknown as AppSettings;
+      expect(keyEnvFor('grok', old), stored).toEqual({ XAI_API_KEY: KEY });
+      expect(keyVariableOf('grok', old), stored).toEqual({ name: 'XAI_API_KEY', from: 'default' });
+    }
+    // No other name can be chosen: grok reads XAI_API_KEY, or its older GROK_CODE_XAI_API_KEY, which XAI_API_KEY wins over.
+    const changed = withCliKey(r.settings, 'grok', { envVar: 'GROK_API_KEY' });
+    expect(changed).toMatchObject({ ok: false });
+    if (!changed.ok) expect(changed.error).toContain('XAI_API_KEY');
+    // The window is told the variable grok reads, fixed, with nothing to choose from.
+    expect(cliKeyStates(r.settings).find((c) => c.id === 'grok')).toMatchObject({ envVar: 'XAI_API_KEY', envVarFrom: 'default', envVarFixed: true, envVarChoices: [], hasKey: true });
   });
 });
 
