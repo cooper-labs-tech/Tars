@@ -7,6 +7,14 @@ export interface Release {
 
 export const CHANGELOG: Release[] = [
   {
+    id: 64,
+    version: '2.0.7',
+    date: '2026-11-24',
+    updates: [
+      'A Gemini agent no longer loses its first task to Gemini\'s folder trust questions, for its own folder and the folders Tars adds, no longer waits on an approval for every tool, and continues its own conversation when Tars starts again. A folder you refused in Gemini stays refused.',
+    ],
+  },
+  {
     id: 63,
     version: '2.0.6',
     date: '2026-10-29',

@@ -22,6 +22,8 @@ import { writeSharedJsonSync } from '../utils/shared-file';
 
 /** A session of gemini's own, as its hooks report it: a uuid. */
 const GEMINI_SESSION_ID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+/** The folders already said to be left out of a gemini line, so each is said once per run of Tars. */
+const unpassableSaid = new Set<string>();
 
 /**
  * A permission mode onto gemini's --approval-mode (0.70.0 --help: default, auto_edit, yolo, plan); normal: none.
@@ -103,11 +105,23 @@ export class GeminiProvider implements CLIProvider {
       if (handedSecondaryFolder(vp) && fs.existsSync(vp)) added.push(vp);
     }
     added.push(DATA_DIR);
-    for (const folder of added) command += ` --include-directories ${shellQuote(folder)}`;
+    // gemini splits every --include-directories value at commas and trims each piece (`coerceCommaSeparated`, 0.70.0),
+    // with no way to escape one: a folder whose path holds a comma, or ends in a space, would reach it as other
+    // folders, untrusted, and gemini would ask. Such a folder is left out of the line, and of gemini's store, and said
+    // once per run of Tars (the Audit's I-3 on #636).
+    const passed = added.filter((folder) => {
+      if (!/,|\s$/.test(folder)) return true;
+      if (!unpassableSaid.has(folder)) {
+        unpassableSaid.add(folder);
+        console.warn(`[gemini] ${folder} is not added to a gemini agent's workspace: gemini splits --include-directories at commas and trims each piece, so no spelling of that folder reaches it whole`);
+      }
+      return false;
+    });
+    for (const folder of passed) command += ` --include-directories ${shellQuote(folder)}`;
     // Each trusted in gemini's own store as the line is built (0.70.0, measured 24/11): an added folder it does not
     // trust opens "Do you trust the following folders being added to this workspace?", which --skip-trust does not
     // cover, and the first task typed into the terminal answered it and was lost.
-    trustGeminiFolders(added, this.configDir);
+    trustGeminiFolders(passed, this.configDir);
 
     // Prompt with skills directive
     // No task, no prompt: the skills line alone was a turn nobody asked for.
