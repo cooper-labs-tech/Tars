@@ -44,15 +44,16 @@ import { writeFakeClis } from './fake-clis.mjs';
  * Red on 3a6dc22b8: the window typed `/add-dir` itself, said nothing of when, and the line stayed through the edit
  * and the other agent. The artefact adds next-start-on-screen.png.
  *
- * The second test: a folder set while the agent's CLI runs, typed by main as that CLI's own command, and only where
- * one was measured to take it (the Audit's point on #636 at 6970bc906: the window typed `/add-dir <path>` into every
- * CLI's terminal, and grok 1.0.92, which has no such command, took it as a prompt). Claude Code 2.1.332 takes
- * `/add-dir <path>` asking nothing; grok has none (the measures are in __tests__/electron/handlers/
- * secondary-folder-live.test.ts). The stand-ins of e2e/fake-clis.mjs log every line typed into them. Asserted:
- * 6. a claude agent whose CLI runs is typed `/add-dir <folder>` by main, and the answer says `now`;
- * 7. a grok agent whose CLI runs is typed nothing, and the answer says `next-start`;
+ * The second test: a folder set while the agent's CLI runs is typed into no CLI (the Audit's point on #636 at
+ * 6970bc906: the window typed `/add-dir <path>` into every CLI's terminal, and grok 1.0.92, which has no such command,
+ * took it as a prompt; then its M1 at f68f7901c: Claude Code 2.1.332's interactive `/add-dir` asks a question nobody
+ * answers before it adds anything; the measures are in __tests__/electron/handlers/secondary-folder-live.test.ts). The
+ * stand-ins of e2e/fake-clis.mjs log every line typed into them, and cannot ask: what is asserted is what main types.
+ * 6. a claude agent whose CLI runs is typed nothing, and the answer says `next-start`, its line handing the folder;
+ * 7. a grok agent whose CLI runs is typed nothing, and the answer says `not-handed`, grok's line handing none;
  * 8. ~/.tars-private is refused for the running claude agent, its reason naming it, and nothing is typed for it.
- * Red on e4d550b48: main typed nothing, its answer said nothing of when, and it took ~/.tars-private.
+ * Red on e4d550b48: main typed nothing, its answer said nothing of when, and it took ~/.tars-private. Red on
+ * f68f7901c: main typed `/add-dir <folder>` into claude and answered `now`, and answered `next-start` for grok.
  */
 
 type Api = { electronAPI: { agent: {
@@ -199,7 +200,7 @@ type LiveApi = { electronAPI: { agent: {
 } } };
 type Rec = { agent?: string; kind?: string; launch?: unknown; typed?: string };
 
-test("a folder set while the agent's CLI runs is typed into it as that CLI's own command, and only claude's", async () => {
+test("a folder set while the agent's CLI runs is typed into no CLI, and the answer says when it reaches it", async () => {
   test.setTimeout(150_000);
   const home = fs.mkdtempSync(path.join(os.tmpdir(), 'dorothy-e2e-live-folder-'));
   const project = path.join(home, 'projects', 'demo');
@@ -241,9 +242,10 @@ test("a folder set while the agent's CLI runs is typed into it as that CLI's own
     await expect.poll(async () => !!(await get('live-grok'))?.cliRunning, { timeout: 60_000, message: "grok's CLI up" }).toBe(true);
     const before = { claude: typedBy('live-claude').length, grok: typedBy('live-grok').length };
 
-    // 6. claude.
+    // 6. claude, given the time main's writer takes to paste and submit (300 ms), many times over.
     const claudeAnswer = await setFor('live-claude', shared);
-    await expect.poll(() => typedBy('live-claude').slice(before.claude), { timeout: 15_000, message: 'what claude was typed' }).toContain(`/add-dir ${shared}`);
+    await page.waitForTimeout(3_000);
+    const claudeTyped = typedBy('live-claude').slice(before.claude);
     // 7. grok, given the same time.
     const grokAnswer = await setFor('live-grok', shared);
     await page.waitForTimeout(3_000);
@@ -254,12 +256,13 @@ test("a folder set while the agent's CLI runs is typed into it as that CLI's own
     await page.waitForTimeout(3_000);
     const privateTyped = typedBy('live-claude').slice(claudeTypedBefore);
     const claudeAfter = await get('live-claude');
-    keep({ claudeAnswer, claudeTyped: typedBy('live-claude').slice(before.claude), grokAnswer, grokTyped, privateAnswer, privateTyped, claudeFolder: claudeAfter?.secondaryProjectPath ?? null });
+    keep({ claudeAnswer, claudeTyped, grokAnswer, grokTyped, privateAnswer, privateTyped, claudeFolder: claudeAfter?.secondaryProjectPath ?? null });
 
     expect.soft(claudeAnswer.success, JSON.stringify(claudeAnswer)).toBe(true);
-    expect.soft(claudeAnswer.appliesAt).toBe('now');
+    expect.soft(claudeAnswer.appliesAt).toBe('next-start');
+    expect.soft(claudeTyped, 'nothing typed into claude').toEqual([]);
     expect.soft(grokAnswer.success, JSON.stringify(grokAnswer)).toBe(true);
-    expect.soft(grokAnswer.appliesAt).toBe('next-start');
+    expect.soft(grokAnswer.appliesAt).toBe('not-handed');
     expect.soft(grokTyped, 'nothing typed into grok').toEqual([]);
     expect.soft(privateAnswer.success, JSON.stringify(privateAnswer)).toBe(false);
     expect.soft(privateAnswer.error ?? '').toMatch(/tars-private/);

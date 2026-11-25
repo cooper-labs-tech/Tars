@@ -3,36 +3,42 @@ import * as fs from 'node:fs';
 import * as path from 'node:path';
 
 /**
- * A secondary folder set from the agent's window while its CLI runs: main types the CLI's own command for it, and only
- * the one it was measured to take cleanly (the Audit's point on #636 at 6970bc906: the window typed `/add-dir <path>`
- * into every CLI, and grok 1.0.92 took it as a prompt and started a turn).
+ * A secondary folder set from the agent's window while its CLI runs: nothing is typed into any CLI, and the answer
+ * says when the folder reaches it, at its next start, or that its CLI is never handed one (the Audit's point on #636
+ * at 6970bc906: the window typed `/add-dir <path>` into every CLI, and grok 1.0.92 took it as a prompt; then its M1 at
+ * f68f7901c: main's own `/add-dir` into Claude Code asks a question nobody answers).
  *
- * Measured on 25/11, each read in its own binary or bundle, none run:
- * - Claude Code 2.1.332: `/add-dir <path>` ("Add a working directory"), immediate when given a path, which it answers
- *   "Added <path> as a working directory for this session", asking nothing. Every provider on the claude binary has it.
- * - gemini 0.70.0: `/directory add <path>`, but its trust store is read once per process (loadTrustedFolders caches
- *   it), so a folder set after its start is untrusted to it and opens its MultiFolderTrustDialog, which nobody answers
- *   in an agent's terminal. Nothing typed: the folder goes on its line, trusted by Tars, at its next start.
- * - Qwen Code 0.28.4: `/directory add <path>`, asking nothing, but it writes the folder into the project's own
- *   settings (context.includeDirectories, Workspace scope), a file of the user's repository that clearing the folder in
- *   Tars would never undo. Nothing typed.
- * - grok 1.0.92: no such command (its `/cd <path>` moves the session to another folder). Nothing typed.
- * - codex 0.163.0: none either (`--add-dir` at launch, `/cd`). Nothing typed.
- * - OpenCode, Pi, Amp: not installed here, not measured. Nothing typed.
+ * Measured, each read in its own binary or bundle, none run:
+ * - Claude Code 2.1.332 registers `/add-dir` twice. The `local` one ("Added <path> as a working directory for this
+ *   session", asking nothing) is enabled by `ge()`, which its module chunk-bhankhfx.js defines as
+ *   `return!n().host.launchOptions.isInteractive()`: non-interactive sessions only, and hidden in the others. An
+ *   agent's terminal, interactive, gets the `local-jsx` one, which shows the folder's trust question if it needs one,
+ *   else "Yes, for this session" / "Yes, and remember this directory" / "No", and adds nothing until it is answered.
+ * - gemini 0.70.0: `/directory add <path>` opens its MultiFolderTrustDialog for a folder set after its start, its
+ *   trust store being read once per process (loadTrustedFolders caches it).
+ * - Qwen Code 0.28.4: `/directory add <path>` writes the folder into the project's own settings
+ *   (context.includeDirectories, Workspace scope), which clearing the folder in Tars would never undo.
+ * - grok 1.0.92 and codex 0.163.0: none (each has `/cd <path>`, which moves the session elsewhere).
+ * - OpenCode, Pi, Amp: not installed here, not measured.
+ *
+ * Which launch lines hand the folder, read in each provider's buildInteractiveCommand: claude's, codex's (--add-dir),
+ * gemini's and Qwen Code's (--include-directories). grok's says it does not; OpenCode's, Pi's and Amp's name none;
+ * the thirteen API-key providers on the claude binary hand ~/.tars only.
  *
  * How it fails, written before the code (25/11):
- * 1. A CLI with no command Tars may type gets a line typed: grok and codex take it as a prompt, gemini opens a dialog
- *    nobody answers, Qwen Code writes the user's project settings.
- * 2. Claude Code, or a provider on the claude binary, running with its field free, gets nothing typed, or a line
- *    other than its own `/add-dir <folder>` and one Enter: the folder waits for a restart it does not need.
- * 3. A line typed where no CLI runs (the shell would run it as a command), or while a launch is on its way.
- * 4. A folder holding a control character typed: its newline would submit the rest of the path as a prompt.
- * 5. The answer does not say when the folder applies, or says it wrong: `now` only when the line went in, or waits in
- *    the writer for the field; `next-start` otherwise, so the window can say so.
- * 6. A cleared folder typed as anything: no CLI has a command that takes one away.
- * 7. ~/.tars-private, a folder inside it or one holding it, taken here as agent:update refuses it: typed live, it
- *    would hand an agent what agents are never handed.
- * 8. A dialog on the agent's screen: the line goes in and its Enter answers the dialog.
+ * 1. A live command typed that asks a question nobody answers: Claude Code's interactive /add-dir holds the agent's
+ *    terminal on its question, which holds every message and delegation to it, and a message let through before the
+ *    screen is read could answer it. The answer says the folder was added while nothing was.
+ * 2. Any other CLI typed a line: grok and codex take it as a prompt, gemini opens a dialog nobody answers, Qwen Code
+ *    writes the user's project settings.
+ * 3. The answer says the folder applies at the next start for a CLI whose launch line never hands it (grok, OpenCode,
+ *    Pi, Amp, the API-key providers), or says it is never handed to one whose line does.
+ * 4. The answer and the provider's own launch line disagree: a provider taught to hand the folder, or to stop, and
+ *    the answer left as it was.
+ * 5. A registered provider in neither list.
+ * 6. A cleared folder answered as anything but the next start.
+ * 7. ~/.tars-private, a folder inside it or one holding it, taken by agent:setSecondaryProject, or stored by the
+ *    window's agent:create, as agent:update refuses it.
  */
 
 const { tmpHome } = vi.hoisted(() => ({
@@ -88,8 +94,8 @@ import { registerIpcHandlers, type IpcHandlerDependencies } from '../../../elect
 import { agents, initAgentPty } from '../../../electron/core/agent-manager';
 import { ptyProcesses } from '../../../electron/core/pty-manager';
 import { spawnAgentPty } from '../../../electron/core/agent-pty';
-import { launchBegins, resetLaunches } from '../../../electron/core/agent-launch';
-import { getProvider } from '../../../electron/providers';
+import { resetLaunches } from '../../../electron/core/agent-launch';
+import { getAllProviders, getProvider } from '../../../electron/providers';
 import { PRIVATE_DIR } from '../../../electron/constants';
 import type { AgentProvider, AgentStatus, AppSettings } from '../../../electron/types';
 
@@ -142,8 +148,12 @@ async function typedInto(terminal: FakePty): Promise<string> {
   return terminal.write.mock.calls.map(([d]) => String(d)).join('').replace(/\x1b\[20[01]~/g, '');
 }
 
-const ON_CLAUDE: AgentProvider[] = ['claude', 'local', 'openrouter', 'deepseek', 'moonshot', 'qwen', 'zhipu', 'minimax', 'ollama', 'custom-openai'];
-const WITHOUT: AgentProvider[] = ['gemini', 'qwen-code', 'grok', 'codex', 'opencode', 'pi', 'amp'];
+/** The providers whose launch line hands the agent its secondary folder, and the ones whose line never does. */
+const HANDED: AgentProvider[] = ['claude', 'local', 'codex', 'gemini', 'qwen-code'];
+const NOT_HANDED: AgentProvider[] = [
+  'grok', 'opencode', 'pi', 'amp',
+  'openrouter', 'deepseek', 'mimo', 'moonshot', 'qwen', 'zhipu', 'minimax', 'nvidia', 'nous-portal', 'ollama', 'venice', 'ollama-cloud', 'custom-openai',
+];
 
 beforeEach(() => {
   fs.mkdirSync(project, { recursive: true });
@@ -156,16 +166,8 @@ beforeEach(() => {
 });
 afterEach(() => { fs.rmSync(tmpHome, { recursive: true, force: true }); });
 
-describe("the CLI's own command, typed by main into a session that runs (1, 2, 5)", () => {
-  it.each(ON_CLAUDE)('2. %s, on the claude binary: /add-dir <folder> and one Enter, and the answer says now', async (provider) => {
-    const { agent, terminal } = agentOn(provider);
-    const answer = await setFolder(agent.id, folder);
-    expect(answer.success, JSON.stringify(answer)).toBe(true);
-    expect(answer.appliesAt).toBe('now');
-    expect(await typedInto(terminal)).toBe(`/add-dir ${folder}\r`);
-  });
-
-  it.each(WITHOUT)('1. %s: nothing typed, and the answer says the next start', async (provider) => {
+describe('nothing typed into any CLI that runs, and the answer says when the folder reaches it (1 to 3)', () => {
+  it.each(HANDED)('1 to 3. %s: nothing typed, at its next start', async (provider) => {
     const { agent, terminal } = agentOn(provider);
     const answer = await setFolder(agent.id, folder);
     expect(answer.success, JSON.stringify(answer)).toBe(true);
@@ -173,52 +175,37 @@ describe("the CLI's own command, typed by main into a session that runs (1, 2, 5
     expect(await typedInto(terminal)).toBe('');
     expect(agents.get(agent.id)!.secondaryProjectPath).toBe(folder);
   });
+
+  it.each(NOT_HANDED)('2 and 3. %s: nothing typed, and its CLI is never handed it', async (provider) => {
+    const { agent, terminal } = agentOn(provider);
+    const answer = await setFolder(agent.id, folder);
+    expect(answer.success, JSON.stringify(answer)).toBe(true);
+    expect(answer.appliesAt).toBe('not-handed');
+    expect(await typedInto(terminal)).toBe('');
+    expect(agents.get(agent.id)!.secondaryProjectPath).toBe(folder);
+  });
 });
 
-describe('where nothing may be typed (3, 4, 6, 8)', () => {
-  it('3. no CLI in the terminal, its shell at the prompt: nothing typed, the next start', async () => {
-    const { agent, terminal } = agentOn('claude', { cli: false });
+describe("the answer agrees with each provider's own launch line (4, 5)", () => {
+  it.each([...HANDED, ...NOT_HANDED])('4. %s: the folder on its line exactly when the answer says the next start', async (provider) => {
+    const { agent } = agentOn(provider, { cli: false });
     const answer = await setFolder(agent.id, folder);
-    expect(answer.appliesAt).toBe('next-start');
-    expect(await typedInto(terminal)).toBe('');
+    const line = getProvider(provider).buildInteractiveCommand({ agentId: agent.id, binaryPath: '/opt/bin/cli', prompt: 'go', secondaryProjectPath: folder } as never);
+    expect(answer.appliesAt, line).toBe(line.includes(folder) ? 'next-start' : 'not-handed');
   });
 
-  it('3. a launch on its way: nothing typed, the next start', async () => {
-    const { agent, terminal } = agentOn('claude');
-    launchBegins(agent.id);
-    const answer = await setFolder(agent.id, folder);
-    expect(answer.appliesAt).toBe('next-start');
-    expect(await typedInto(terminal)).toBe('');
+  it('5. every registered provider is in one list', () => {
+    const listed = new Set<string>([...HANDED, ...NOT_HANDED]);
+    expect(getAllProviders().map((p) => p.id).filter((id) => !listed.has(id))).toEqual([]);
   });
+});
 
-  it('3. no terminal at all: the next start', async () => {
-    const { agent } = agentOn('claude');
-    agent.ptyId = undefined;
-    expect((await setFolder(agent.id, folder)).appliesAt).toBe('next-start');
-  });
-
-  it('4. a folder holding a newline: nothing typed, the next start', async () => {
-    const odd = path.join(tmpHome, 'two\nlines');
-    fs.mkdirSync(odd);
-    const { agent, terminal } = agentOn('claude');
-    const answer = await setFolder(agent.id, odd);
-    expect(answer.appliesAt).toBe('next-start');
-    expect(await typedInto(terminal)).toBe('');
-  });
-
-  it('6. a cleared folder: nothing typed, the next start', async () => {
-    const { agent, terminal } = agentOn('claude');
+describe('a cleared folder (6)', () => {
+  it.each(['claude', 'grok'] as const)('6. %s: nothing typed, the next start', async (provider) => {
+    const { agent, terminal } = agentOn(provider);
     agent.secondaryProjectPath = folder;
     const answer = await setFolder(agent.id, null);
     expect(answer.success).toBe(true);
-    expect(answer.appliesAt).toBe('next-start');
-    expect(await typedInto(terminal)).toBe('');
-  });
-
-  it('8. a dialog the agent shows: nothing typed, the next start', async () => {
-    const { agent, terminal } = agentOn('claude', { status: 'waiting' });
-    agent.waitingReason = 'permission';
-    const answer = await setFolder(agent.id, folder);
     expect(answer.appliesAt).toBe('next-start');
     expect(await typedInto(terminal)).toBe('');
   });
@@ -235,5 +222,13 @@ describe('~/.tars-private is never handed this way (7)', () => {
     }
     expect(agents.get(agent.id)!.secondaryProjectPath).toBeUndefined();
     expect(await typedInto(terminal)).toBe('');
+  });
+
+  it("7. the window's agent:create refuses it too, and creates nothing", async () => {
+    fs.mkdirSync(PRIVATE_DIR, { recursive: true });
+    const before = agents.size;
+    const created = handlers.get('agent:create')!({}, { projectPath: project, skills: [], secondaryProjectPath: PRIVATE_DIR });
+    await expect(created).rejects.toThrow(/tars-private/);
+    expect(agents.size).toBe(before);
   });
 });
