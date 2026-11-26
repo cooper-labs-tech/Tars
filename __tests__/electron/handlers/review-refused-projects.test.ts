@@ -20,6 +20,10 @@ import * as path from 'node:path';
  *     folder there, a repository a scan found there.
  * R4. Over-correction: a project the rule allows is no longer scanned and searched, or an agent's
  *     folder it allows no longer reviewed.
+ * Added before its code, after review-every-repository.spec turned red on b05149c51 (2026-11-26):
+ * R5. Over-correction: a project gone from the disk is refused as one that cannot be followed,
+ *     instead of scanned and said `gone`, as the rule judges a missing folder by the folder it
+ *     would be in.
  *
  * Real git, real folders in the suite's throwaway home, the real handlers.
  */
@@ -111,5 +115,15 @@ describe('Review and the project rule', () => {
     await until(() => events.some((e) => e.scanId === answer.scanId && e.kind === 'done'));
     expect(events.some((e) => e.scanId === answer.scanId && e.kind === 'found' && e.repo === allowedRepo)).toBe(true);
     expect(refuseUnknownRepository(allowedRepo)).toBeNull();
+  });
+
+  it('R5. a project gone from the disk is still scanned, and said gone', async () => {
+    const gone = path.join(home, 'work', 'old-shop');
+    fs.writeFileSync(path.join(DATA_DIR, 'projects.json'), JSON.stringify([held, allowed, gone]));
+    const answer = await handlers.get('review:repositories')!({}, { projectPath: gone, refresh: true }) as { scanId?: string; code?: string };
+    expect(answer.code).toBeUndefined();
+    expect(answer.scanId).toBeDefined();
+    await until(() => events.some((e) => e.scanId === answer.scanId && e.kind === 'done'));
+    expect(events.find((e) => e.scanId === answer.scanId && e.kind === 'done')).toMatchObject({ state: 'gone' });
   });
 });
