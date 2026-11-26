@@ -24,9 +24,13 @@ import * as crypto from 'crypto';
  * - style-src 'unsafe-inline': the exported pages carry style attributes (React's), xterm and the tray panel
  *   add style elements at run time, and none of those can be hashed. A style runs no script.
  * - img-src data: the stylesheet's own SVG icons; blob: a picture attached in the Chat, previewed before it is
- *   sent; http://127.0.0.1:<port>/api/local-file: the vault's pictures and attachments, which the window
- *   asks as /api/local-file?path=…. The route, not the API's origin: a source's path is matched exactly and
- *   the query is not part of the match, so no other route of the API loads as a picture.
+ *   sent; http://127.0.0.1:<port>/api/local-file: a vault note's pictures, which the window asks as
+ *   /api/local-file?path=… (MarkdownRenderer's resolveLocalSrc; an attachment's link opens in a new window and
+ *   is no picture). The route, not the API's origin: a source's path is matched exactly and the query is not
+ *   part of the match, so no other route of the API loads as a picture. A redirect drops the path check, as
+ *   the CSP specification has it, and /api/local-file never redirects. An encoded path (/api/local-fil%65)
+ *   matches the source, which is compared decoded, but the API compares the raw path: such a request is not
+ *   the exempt route, and without a token it is refused.
  * - connect-src https://raw.githubusercontent.com: the plugin marketplace's lists (src/lib/plugins-database.ts).
  *   'self' is the page's own route data, which client navigation reads.
  * - manifest-src 'self': the pages link /manifest.json.

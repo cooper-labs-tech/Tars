@@ -40,7 +40,7 @@ test('next dev\'s pages get the development policy: scripts as next dev needs th
     await page.goto(`${DEV_URL}/`, { waitUntil: 'domcontentloaded' });
     await splashGone(page);
     const api = `http://127.0.0.1:${port}`;
-    // A file that is not there: the route answers 404, a load error, never a policy refusal.
+    // A file outside the vault's attachments: the route answers 403, a load error, never a policy refusal.
     const vaultPicture = `${api}/api/local-file?path=${encodeURIComponent(path.join(home, 'no-such-picture.png'))}`;
     const seen = await page.evaluate(async (pictures) => {
       const w = window as unknown as { __cspViolations: Violation[]; __cspDevInline?: boolean };
