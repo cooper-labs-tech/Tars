@@ -41,10 +41,12 @@ export function useQuickTerminal({
 
   const hasActiveTerminal = agentId ? persistentTerminals.has(agentId) : false;
 
-  // Initialize quick terminal when "Shell" panel opens
+  // Initialize quick terminal when "Shell" panel opens. On whether it is open, never on the whole set of open panels:
+  // a tab click that opened another panel made a new set, which disposed the shell and built it again, and the new one
+  // took the focus (the Audit's L1 on #649).
+  const shellOpen = expandedPanels.has('terminal');
   useEffect(() => {
-    const isOpen = expandedPanels.has('terminal');
-    if (!isOpen || !agentId || !projectPath) return;
+    if (!open || !shellOpen || !agentId || !projectPath) return;
     if (quickXtermRef.current && quickPtyIdRef.current) return;
 
     let cancelled = false;
@@ -170,7 +172,7 @@ export function useQuickTerminal({
       }
       setQuickTerminalReady(false);
     };
-  }, [expandedPanels, agentId, projectPath]);  
+  }, [open, shellOpen, agentId, projectPath]);
 
   // Follow the app theme without tearing down the PTY session
   useEffect(() => {
