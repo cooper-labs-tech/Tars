@@ -21,7 +21,10 @@ import { DEV_URL, apiPort } from './ports.mjs';
  * 3. an agent on a cliPath of its own runs that binary, not the provider's;
  * 4. refused, each with its reason, and nothing made: an unknown provider (with the providers' ids), an API-key
  *    provider without its key, a cliPath that is not absolute, one that is not executable, and plan on a provider
- *    that has none (the Audit's Low 2 on #407).
+ *    that has none (the Audit's Low 2 on #407);
+ * 5. (2.0.7, the owner's decision of 2026-11-26) a project the window's rule refuses is refused here too, with the
+ *    sentence the window shows and nothing made: a folder of the home whose name starts with a dot, and a link into
+ *    one; another plain folder still takes a new agent.
  * The artefact: values.json (each tool's answer, agents.json's records, each launch) and launches.jsonl.
  */
 
@@ -157,6 +160,28 @@ setInterval(() => {}, 1 << 30);
     expect(relative.text).toContain('absolute path');
     expect(notExecutable.text).toContain('is not executable');
     expect(records().map((a) => a.id).sort()).toEqual(['o1', codexId, ownId].sort());
+
+    // 5. The window's project rule, over the API too.
+    const dotted = path.join(home, '.dotfiles', 'shared');
+    const linkToDot = path.join(home, 'projects', 'to-dotfiles');
+    const plainOther = path.join(home, 'projects', 'other');
+    for (const d of [dotted, plainOther]) fs.mkdirSync(d, { recursive: true });
+    // A junction where the type is read (Windows), a link elsewhere.
+    fs.symlinkSync(dotted, linkToDot, 'junction');
+    const inDot = await tool('create_agent', { name: 'Dotted', projectPath: dotted, allowCrossProject: true });
+    const throughLink = await tool('create_agent', { name: 'Linked', projectPath: linkToDot, allowCrossProject: true });
+    const plain = await tool('create_agent', { name: 'Plain', projectPath: plainOther, allowCrossProject: true });
+    keep({ inDot, throughLink, plain });
+    for (const refused of [inDot, throughLink]) {
+      expect(refused.isError).toBe(true);
+      expect(refused.text).toContain('cannot be a project');
+      expect(refused.text).not.toContain(home);
+    }
+    expect(plain.isError).toBe(false);
+    const plainRecord = await recordOf(idIn(plain.text)!);
+    keep({ plainRecord, ruleRecords: records().map((a) => ({ id: a.id, projectPath: a.projectPath })) });
+    expect(plainRecord.projectPath).toBe(plainOther);
+    expect(records().some((a) => a.projectPath === dotted || a.projectPath === linkToDot)).toBe(false);
   } finally {
     mcp?.kill();
     await app.close();

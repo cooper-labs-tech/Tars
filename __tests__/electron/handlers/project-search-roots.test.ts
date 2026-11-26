@@ -31,6 +31,10 @@ import * as path from 'node:path';
  *     no word of why, or dropped from fs:list-projects without a trace. It is
  *     listed with the reason, the channels answer with it, and
  *     fs:add-custom-project refuses a new one with it.
+ * Added before its code after the owner's decision of 2026-11-26 (the same rule through the API):
+ * S7. agent:create (the window's New agent, and every member of teams:deploy) creates an agent in a project the rule
+ *     refuses, or hands it such a folder besides its project, when the page names one; it is refused with the rule's
+ *     sentence before anything is made.
  */
 
 vi.mock('node-pty', () => ({ spawn: vi.fn() }));
@@ -154,6 +158,20 @@ describe('the Code panel\'s channels', () => {
       expect(r.success, root).toBe(false);
       expect(JSON.stringify(r)).not.toContain(TOKEN);
     }
+  });
+
+  it('S7. agent:create makes no agent in a folder the rule refuses, as project or as the folder it is handed', async () => {
+    const dot = path.join(home, '.dotfiles', 'proj');
+    fs.mkdirSync(dot, { recursive: true });
+    const plain = path.join(home, 'work', 'plain');
+    fs.mkdirSync(plain, { recursive: true });
+    const before = agents.size;
+    for (const config of [{ projectPath: dot, skills: [] }, { projectPath: plain, secondaryProjectPath: dot, skills: [] }]) {
+      const made = await call('agent:create', config).then(() => 'made', (e: Error) => e.message);
+      expect(made).toMatch(/cannot be a project/);
+      expect(made).not.toContain(home);
+    }
+    expect(agents.size).toBe(before);
   });
 
   it('S6. a project under a folder the rule refuses is not searched, and every answer says why', async () => {
