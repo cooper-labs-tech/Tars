@@ -1110,3 +1110,51 @@ says around them, in a message of its own, is the owner's; anything the owner
 typed by hand into a terminal, or said in Slack or Discord. The mark says
 "these are words the owner sent Tars, at that time, for that project or chat,
 as that kind of word", and no more.
+
+---
+
+## 9. The window's Content Security Policy (2.0.7)
+
+The window's renderer holds the whole preload bridge: terminals, files, agents.
+`contextIsolation` on, and `nodeIntegration` and `webviewTag` off, keep Node out
+of the page; they do not stop a script that reached the page from calling that
+bridge the way the app's own code does. Until 2.0.7 the window had no Content
+Security Policy. Since 2.0.7 every page of the bundle is served with one
+(`electron/core/window-csp.ts`, SPECS §11).
+
+**What it is.**
+
+- A script runs if it is a file of the bundle, or one of the page's own inline
+  scripts, named by its SHA-256 in the header the page comes with. No
+  `'unsafe-inline'` and no `'unsafe-eval'` for scripts: a script element added
+  to the page, an inline event handler, a `javascript:` URL, a `data:` or a
+  remote script do not run.
+- Pictures, fonts, connections and the manifest come from the bundle, plus
+  `data:` and `blob:` pictures, the local API's `/api/local-file` and
+  `raw.githubusercontent.com` (the plugin marketplace's lists). No plugin, no
+  worker, no base URL, no form target, no frame parent.
+
+**What it is not.**
+
+- It binds the page only. The main process fetches models.dev, GitHub's
+  releases and the error reports itself.
+- Styles may be inline: the pages carry style attributes and xterm adds style
+  elements as it runs. A style runs no script, and with pictures, fonts and
+  connections closed to other hosts it has nowhere to send what it reads.
+- A file of the bundle is trusted whole: a module that is itself bad ships as
+  `'self'`. What the policy stops is what reaches the page from outside the
+  bundle.
+- In development (`next dev`) scripts may be inline and use eval. The packaged
+  build is the boundary.
+
+**Measured** on 26/11/2026, on a packaged build (`electron:pack`, unsigned) of
+`4503e4020`, by `e2e/window-csp.packed.spec.ts`: the 43 surfaces of the
+manifest showed no violation and no refusal in the console, in two runs; an
+inline script, a `data:` script and an inline `onerror` handler added to the
+Dashboard did not run, and each was reported (`script-src-elem` twice,
+`script-src-attr` once). On the same renderer packed with the main process of
+`b5f207bcf`, the train before it, no policy is served and the three run, in
+two runs out of two. In development, `e2e/window-csp-dev.spec.ts` shows the
+policy in force on next dev's pages: an inline script runs, a picture from
+another host is refused and reported; on `b5f207bcf`'s main process nothing is
+reported.
