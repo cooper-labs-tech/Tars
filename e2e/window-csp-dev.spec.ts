@@ -88,7 +88,7 @@ test('next dev\'s pages get the development policy: scripts as next dev needs th
  */
 test('a vault note\'s local picture is read from this Tars\'s own API port, never 31415', async () => {
   test.setTimeout(180_000);
-  const home = fs.mkdtempSync(path.join(os.tmpdir(), 'dorothy-e2e-csp-picture-'));
+  const home = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'dorothy-e2e-csp-picture-')));
   const attachments = path.join(home, '.tars', 'vault', 'attachments');
   fs.mkdirSync(attachments, { recursive: true });
   const picture = path.join(fs.realpathSync(attachments), 'pixel.png');
