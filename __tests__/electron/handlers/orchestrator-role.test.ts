@@ -230,7 +230,7 @@ describe('the Orchestrator toggle', () => {
     expect(launchedAs(next)).toContain(instructions());
     expect(launchedAs(next)).toContain(TOOL_BLOCK);
     expect(launchedAs(current)).not.toContain('--append-system-prompt-file');
-    expect(launchedAs(current)).not.toContain('--disallowed-tools');
+    expect(launchedAs(current)).not.toContain(TOOL_BLOCK);
   });
 
   it('reads the toggle under its old name, as the renderer still sends it', async () => {
@@ -254,7 +254,7 @@ describe('the Orchestrator toggle', () => {
     const typed = launchedAs(agent);
     expect(typed).toContain("'claude'");
     expect(typed).not.toContain('--append-system-prompt-file');
-    expect(typed).not.toContain('--disallowed-tools');
+    expect(typed).not.toContain(TOOL_BLOCK);
   });
 
   it('is left alone by a save that sends the role the agent already has', async () => {
@@ -306,7 +306,7 @@ describe('the name', () => {
     const typed = launchedAs(worker);
     expect(typed).toContain("'claude'");
     expect(typed).not.toContain('--append-system-prompt-file');
-    expect(typed).not.toContain('--disallowed-tools');
+    expect(typed).not.toContain(TOOL_BLOCK);
   });
 });
 
@@ -332,7 +332,7 @@ describe('one orchestrator per project', () => {
     expect(agents.get(created.id)).toMatchObject({ role: 'orchestrator', orchestratorMode: true });
     expect(current).toMatchObject({ role: 'worker', orchestratorMode: false });
     expect(terminal.kill).toHaveBeenCalled();
-    expect(launchedAs(current)).not.toContain('--disallowed-tools');
+    expect(launchedAs(current)).not.toContain(TOOL_BLOCK);
   });
 });
 
@@ -435,7 +435,7 @@ describe('two promotions at once', () => {
     expect(launchedAs(second)).toContain(TOOL_BLOCK);
     expect(launchedAs(second)).toContain(instructions());
     for (const agent of [current, first]) {
-      expect(launchedAs(agent), agent.id).not.toContain('--disallowed-tools');
+      expect(launchedAs(agent), agent.id).not.toContain(TOOL_BLOCK);
       expect(launchedAs(agent), agent.id).not.toContain('--append-system-prompt-file');
     }
   });
@@ -460,7 +460,7 @@ describe('two promotions at once', () => {
     expect([...agents.values()].filter(a => a.projectPath === project && a.role === 'orchestrator').map(a => a.id)).toEqual(['second']);
     expect(launchedAs(second)).toContain(TOOL_BLOCK);
     for (const agent of [current, first]) {
-      expect(launchedAs(agent), agent.id).not.toContain('--disallowed-tools');
+      expect(launchedAs(agent), agent.id).not.toContain(TOOL_BLOCK);
       expect(launchedAs(agent), agent.id).not.toContain('--append-system-prompt-file');
     }
   });

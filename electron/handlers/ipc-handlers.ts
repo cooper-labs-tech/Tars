@@ -411,7 +411,7 @@ function registerAgentHandlers(deps: IpcHandlerDependencies): void {
 
     // Get provider-specific env vars
     const agentProvider = getProvider(config.provider);
-    const providerEnvVars = agentProvider.getPtyEnvVars(id, config.projectPath, allSkills, currentSettings, { model: config.model, effort: config.effort, orchestratorMode: role === 'orchestrator' });
+    const providerEnvVars = agentProvider.getPtyEnvVars(id, config.projectPath, allSkills, currentSettings, { model: config.model, effort: config.effort, orchestratorMode: hasOrchestratorPowers({ role }) });
 
     // BUG 6: pre-accept Claude Code's workspace trust dialog for this cwd so
     // bypass/auto-mode agents never see the first-launch trust prompt.

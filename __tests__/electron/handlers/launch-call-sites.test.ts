@@ -248,6 +248,9 @@ import { registerIpcHandlers, type IpcHandlerDependencies } from '../../../elect
 import { broadcastToAllWindows } from '../../../electron/utils/broadcast';
 import { agentForToken } from '../../../electron/core/agent-tokens';
 import { API_PORT } from '../../../electron/constants';
+// A worker's line carries the worker's flags (worker-peer-channels.test.ts) after its permission mode.
+import { workerPeerFlags } from '../../../electron/providers/cli-provider';
+import { posixWords } from '../../../electron/platform/posix-words';
 import { agents, initAgentPty } from '../../../electron/core/agent-manager';
 import { ptyProcesses, createQuickPty } from '../../../electron/core/pty-manager';
 import { launchAgent, resetLaunches } from '../../../electron/core/agent-launch';
@@ -324,7 +327,7 @@ const launchedLine = (typedLine: string): string => {
   const script = /^\. '([^']+)'\r$/.exec(typedLine)?.[1];
   return script ? fs.readFileSync(script, 'utf8').split('\n').slice(1).join('\n').replace(/\n$/, '') : typedLine.replace(/\r$/, '');
 };
-const claudeCommand = (prompt: string) => `'claude' --permission-mode default --add-dir ${q(DATA_DIR)} -- ${q(prompt)}`;
+const claudeCommand = (prompt: string) => `'claude' --permission-mode default${workerPeerFlags(false)} --add-dir ${q(DATA_DIR)} -- ${q(prompt)}`;
 
 beforeEach(() => {
   resetLaunches();
@@ -382,7 +385,7 @@ describe.each(['darwin', 'linux'] as const)('1. on %s, what each call site start
     expect(spawned).toHaveLength(2);
     expect([spawned[1].file, spawned[1].args]).toEqual(['/bin/bash', ['-l']]);
     expect(spawned[1].opts.env.PATH).toBe(withSlotBin(POSIX_PATH));
-    expect(typed(spawned[1])).toBe(`cd ${q(project)} && 'claude' --permission-mode default --add-dir ${q(DATA_DIR)} -- ${q(TASK)}\r`);
+    expect(typed(spawned[1])).toBe(`cd ${q(project)} && 'claude' --permission-mode default${workerPeerFlags(false)} --add-dir ${q(DATA_DIR)} -- ${q(TASK)}\r`);
   });
 
   it('8. the local switch\'s terminal, once replaced, exits without a completion; while named, with one', async () => {
@@ -553,7 +556,7 @@ describe('2-6. on win32', () => {
     expect(shell.kill).toHaveBeenCalled();
     expect(spawned).toHaveLength(2);
     expect([spawned[1].file, spawned[1].args, spawned[1].opts.cwd])
-      .toEqual([CLAUDE_EXE, cliLine('--permission-mode', 'default', '--add-dir', DATA_DIR, '--', TASK), project]);
+      .toEqual([CLAUDE_EXE, cliLine('--permission-mode', 'default', ...posixWords(workerPeerFlags(false)), '--add-dir', DATA_DIR, '--', TASK), project]);
     expect(ptyProcesses.get(agent.ptyId!)).toBe(spawned[1]);
     expect(pathOf(spawned[1].opts.env)).toEqual({ value: withSlotBin(WIN_PATH), keys: 1 });
   });
@@ -700,7 +703,7 @@ describe('2-6. on win32', () => {
     expect(reply).toHaveBeenCalledWith('started');
     expect(spawned.every(t => typed(t) === '')).toBe(true);
     const cli = spawned.at(-1)!;
-    expect([cli.file, cli.args, cli.opts.cwd]).toEqual([CLAUDE_EXE, cliLine('--permission-mode', 'default', '--add-dir', DATA_DIR, '--', BOT_TASK), project]);
+    expect([cli.file, cli.args, cli.opts.cwd]).toEqual([CLAUDE_EXE, cliLine('--permission-mode', 'default', ...posixWords(workerPeerFlags(false)), '--add-dir', DATA_DIR, '--', BOT_TASK), project]);
     expect(ptyProcesses.get(agent.ptyId!)).toBe(cli);
   });
 
@@ -826,7 +829,7 @@ const API_PROMPT = 'from the api';
 function apiCommand(): string {
   const header = `[Tars: you are agent "${API_AGENT.name}" (id ${API_AGENT.id}), worker of project ${project}. `
     + 'Work autonomously without asking for confirmation and end with a clear report of your results: an orchestrator reads your final message.]';
-  return `'claude' --permission-mode default --add-dir ${q(DATA_DIR)} -- ${q(`${header}\n\n${API_PROMPT}`)}`;
+  return `'claude' --permission-mode default${workerPeerFlags(false)} --add-dir ${q(DATA_DIR)} -- ${q(`${header}\n\n${API_PROMPT}`)}`;
 }
 
 async function apiStart(): Promise<{ file: string; args: string[] | string; env: Record<string, string>; cwd: string }> {

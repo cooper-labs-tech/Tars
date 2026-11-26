@@ -85,6 +85,7 @@ interface Site {
 const SITES: Site[] = [
   // core/
   { file: 'electron/core/agent-manager.ts', line: 'const conversing = …;', is: 'powers', why: 'no desktop notification for the turns of the user\'s own conversations' },
+  { file: 'electron/core/agent-manager.ts', line: '{ model: agent.model, effort: agent.effort, orchestratorMode: … },', is: 'powers', why: 'a worker\'s door to other sessions shut: the role the settings of Tars\'s a CLI runs with are written for (Qwen Code)' },
   { file: 'electron/core/agent-restart.ts', line: 'orchestrator: …,', is: 'powers', why: 'the launch flag a restart compares: the instructions and the denied tools' },
   { file: 'electron/services/api-routes/heavy-slot-routes.ts', line: 'orchestrator: …, terminalPid: terminal?.pid,', is: 'powers', why: 'the heavy-run slot: who may ask for a release gate, ahead of ordinary work' },
   { file: 'electron/services/api-routes/owner-words-routes.ts', line: 'id: agent.id, name: agent.name, projectPath: agent.projectPath, orchestrator: …,', is: 'powers', why: 'who may relay the owner\'s words, and receive them under Tars\'s mark (2.0.6): a chat\'s runner too, within its own chat (the Audit\'s M2 on #569)' },
@@ -113,6 +114,7 @@ const SITES: Site[] = [
   // handlers/
   { file: 'electron/handlers/chat-handlers.ts', line: 'const orchestrators = (): OrchestratorFacts[] => [...agents.values()].filter((a) => … && a.kind !== \'chat\').map((a) => ({', is: 'identity', why: 'the orchestrators whose conversation is their project\'s chat #1, Main' },
   { file: 'electron/handlers/ipc-handlers.ts', line: 'const isSuperAgentCheck = …;', is: 'powers', why: 'agent:start: the instructions, the skills prefix, the denied tools' },
+  { file: 'electron/handlers/ipc-handlers.ts', line: 'effort: config.effort, orchestratorMode: … });', is: 'powers', why: 'agent:create: the role the settings of Tars\'s a CLI runs with are written for (Qwen Code)' },
   { file: 'electron/handlers/team-template-handlers.ts', line: 'if (… || member.role === \'worker\') return member;', is: 'identity', why: 'a template\'s orchestrator member' },
   { file: 'electron/handlers/team-template-handlers.ts', line: 'return { ...member, role, orchestratorMode: … || undefined };', is: 'identity', why: 'a template\'s orchestrator member' },
   { file: 'electron/handlers/team-template-handlers.ts', line: 'orchestratorMode: … || undefined,', is: 'identity', why: 'a template\'s orchestrator member' },
@@ -130,6 +132,7 @@ const SITES: Site[] = [
   { file: 'electron/services/agent-sleep.ts', line: 'orchestrator: …,', is: 'identity', why: 'the sleep rule: the orchestrator never sleeps' },
   { file: 'electron/services/agent-sleep.ts', line: "if (…) held(agent, 'orchestrator');", is: 'identity', why: 'who may be put to sleep, and why an orchestrator is not (sleepHeld)' },
   { file: 'electron/services/api-routes/agent-routes.ts', line: 'const isSuperAgentApi = …;', is: 'powers', why: 'spawnAgentSession: the instructions, the denied tools' },
+  { file: 'electron/services/api-routes/agent-routes.ts', line: 'agent.skills, ctx.getAppSettings(), { orchestratorMode: … })', is: 'powers', why: 'update_agent: a new provider\'s key checked, its settings of Tars\'s written for the agent\'s role (Qwen Code)' },
   { file: 'electron/services/api-routes/agent-routes.ts', line: '|| (… && agent.projectPath === caller.projectPath))) return undefined;', is: 'powers', why: 'a worker writing to it reports, and asks nothing' },
   { file: 'electron/services/api-routes/agent-routes.ts', line: 'if (!caller || … || isReportTo(caller, agent)) return undefined;', is: 'powers', why: 'what a worker sends another worker is a note, typed once its turn ends' },
   { file: 'electron/services/api-routes/agent-routes.ts', line: 'return caller && !… && isReportTo(caller, agent) ? caller : undefined;', is: 'powers', why: 'a worker writing to whoever leads it reports: information, never a task in that agent\'s queue' },

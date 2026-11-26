@@ -126,9 +126,11 @@ describe('generateTaskFromPrompt', () => {
     expect(calls).toHaveLength(1);
     const [argv] = calls;
     expect(argv.slice(0, 3)).toEqual(['-p', '--model', 'haiku']);
-    expect(argv).toHaveLength(4);
-    expect(argv[3]).toContain(`User's request:\n${HOSTILE}\n`);
-    expect(argv[3]).toContain(`- "${PROJECTS[0].name}" (${PROJECTS[0].path})`);
+    // No session's peer, then `--` before the prompt (worker-peer-channels.test.ts, 8): the setting's JSON whole.
+    expect(argv.slice(3, 9)).toEqual(['--settings', '{"crossSessionInbound":"refuse"}', '--disallowed-tools', 'SendMessage', 'ListAgents', '--']);
+    expect(argv).toHaveLength(10);
+    expect(argv[9]).toContain(`User's request:\n${HOSTILE}\n`);
+    expect(argv[9]).toContain(`- "${PROJECTS[0].name}" (${PROJECTS[0].path})`);
     expect(task.title).toBe('from the fake');
     expect(task.priority).toBe('high');
     // darwin/linux: through /bin/sh, as before, which reads the quoted line back to the same argv.
