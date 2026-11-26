@@ -413,7 +413,9 @@ export class TraceUploader {
         ...own.map(l => ({ position: l.position + shift, hash: remote.get(l.message_hash)!.hash, direction: l.direction as 'input' | 'output' })),
       ];
       return {
-        requestId: String(r.request_id), sessionId: traceId, turnId: String(r.turn_id), seq: i, upstreamRequestId: opt(r.upstream_request_id as string),
+        // A side request (a title, a memory call: the export's own mark) is never sent as a main one.
+        requestId: String(r.request_id), sessionId: traceId, turnId: String(r.turn_id), seq: i, side: r.side === true || r.side === 1,
+        upstreamRequestId: opt(r.upstream_request_id as string),
         surface: String(r.surface), toolsHash: tools?.hash, startedAt: Number(r.started_at), ttftMs: opt(r.ttft_ms as number),
         totalMs: opt(r.total_ms as number), tokensIn: Number(r.tokens_in), tokensCached: Number(r.tokens_cached), tokensOut: Number(r.tokens_out),
         status: Number(r.status), error: r.error ? String(scrub(String(r.error))).slice(0, 2000) : undefined,

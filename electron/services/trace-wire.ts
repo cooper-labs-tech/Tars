@@ -9,7 +9,9 @@ import { createHash } from 'crypto';
  * - the request as its system prompt, its tools, its history (one entry per message or input item, as the harness
  *   sent it, so the history resent on every request is stored once by its hash), and every other param, kept;
  * - the response as one output (the assistant message, or Responses' output items, put back together from the
- *   stream), its usage, its finish reason and the model that served it.
+ *   stream), its usage, its finish reason and the model that served it;
+ * - for a stream, where its first event carrying text, reasoning or a tool call ends (firstContentEnd), which the
+ *   proxy turns into the time of the model's first token (TTFT).
  *
  * Nothing here changes a byte that goes to the harness or to the endpoint.
  */
@@ -237,12 +239,76 @@ function readMessages(streamed: boolean, text: string): WireResponse {
   return { output: { role: 'assistant', content }, usage, finishReason: finish, modelServed: model, toolCalls: content.filter(c => c.type === 'tool_use').length };
 }
 
+/** Whether a response body is a stream (SSE), by its content type or, failing that, its first line. */
+export function isStreamed(contentType: string | undefined, text: string): boolean {
+  return /text\/event-stream/i.test(contentType ?? '') || /^\s*(event|data):/.test(text);
+}
+
+const filled = (v: unknown): boolean => (typeof v === 'string' ? v.length > 0 : Array.isArray(v) && v.length > 0);
+
+/**
+ * Whether a stream event carries something the model produced: text, reasoning or a tool call (TTFT measures the
+ * model, the owner's decision of 26/11). A chunk with only a role, an empty delta, usage, `ping`, the stream's own
+ * bookkeeping (`response.created`, `message_start`, a text or message block opened empty) carries nothing.
+ */
+function carriesContent(surface: Surface, e: Json): boolean {
+  if (surface === 'openai_chat') {
+    return asArr(e.choices).some(c => {
+      const d = asObj(asObj(c).delta);
+      return filled(d.content) || filled(d.reasoning_content) || filled(d.reasoning) || filled(d.refusal) || filled(d.tool_calls);
+    });
+  }
+  const type = asStr(e.type);
+  if (surface === 'openai_responses') {
+    if (type.endsWith('.delta')) return filled(e.delta);
+    if (type === 'response.output_item.added') {
+      const item = asStr(asObj(e.item).type);
+      // A tool call item (a function, custom or built-in tool) is the model's choice; a message or reasoning item is
+      // opened empty and fills in with deltas.
+      return item !== '' && item !== 'message' && item !== 'reasoning';
+    }
+    return false;
+  }
+  if (type === 'content_block_delta') {
+    const d = asObj(e.delta);
+    return filled(d.text) || filled(d.thinking) || filled(d.partial_json);
+  }
+  if (type === 'content_block_start') {
+    const b = asObj(e.content_block);
+    return /tool_use$/.test(asStr(b.type)) || filled(b.text) || filled(b.thinking);
+  }
+  return false;
+}
+
+/**
+ * Where, in bytes, the first stream event carrying content ends (its blank line included), so the time it arrived
+ * can be read from when each chunk came: the proxy's TTFT. Null for a body that is not streamed, or a stream with no
+ * such event that ended.
+ */
+export function firstContentEnd(surface: Surface, contentType: string | undefined, body: Buffer): number | null {
+  const text = body.toString('utf8');
+  if (!isStreamed(contentType, text)) return null;
+  const boundary = /\r?\n\r?\n/g;
+  let start = 0;
+  for (let m = boundary.exec(text); m; m = boundary.exec(text)) {
+    const block = text.slice(start, m.index);
+    const end = m.index + m[0].length;
+    start = end;
+    const data = block.split(/\r?\n/).filter(l => l.startsWith('data:')).map(l => l.slice(5).trimStart()).join('\n');
+    if (!data || data === '[DONE]') continue;
+    let event: Json;
+    try { event = asObj(JSON.parse(data)); } catch { continue; }
+    if (carriesContent(surface, event)) return Buffer.byteLength(text.slice(0, end));
+  }
+  return null;
+}
+
 /** A response read as a trace reads it. Never throws: what cannot be read is an error with its first bytes. */
 export function parseResponse(surface: Surface, status: number, contentType: string | undefined, body: Buffer): WireResponse {
   const text = body.toString('utf8');
   const empty: WireResponse = { output: null, usage: { input: 0, cached: 0, output: 0 }, toolCalls: 0 };
   if (status < 200 || status >= 300) return { ...empty, error: `HTTP ${status}: ${text.slice(0, 500)}` };
-  const streamed = /text\/event-stream/i.test(contentType ?? '') || /^\s*(event|data):/.test(text);
+  const streamed = isStreamed(contentType, text);
   try {
     if (surface === 'openai_chat') return readChat(streamed, text);
     if (surface === 'openai_responses') return readResponses(streamed, text);

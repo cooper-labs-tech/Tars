@@ -234,15 +234,23 @@ The proxy:
 - swaps the token for the endpoint's key;
 - adds `X-Session-Id` (the trace id) and `X-Agent-Id` when the endpoint's "send session headers" is on (off by
   default);
+- adds the endpoint's extra headers, a fixed map of at most 16 (`extraHeaders`), to every request, over a harness's
+  header of the same name. None may be the credential (Authorization, x-api-key, Cookie), the connection's own or the
+  body's framing (Host, Content-Length, Content-Type, Transfer-Encoding, Connection, Accept-Encoding, any hop-by-hop
+  or `Proxy-` header), or a session header; a name or value with CR or LF is refused. They are kept with the endpoint's
+  record, which agents read, so never a credential;
 - passes chat completions, Responses, Anthropic Messages and `/v1/models` unchanged, streams included, chunk by chunk.
 
-**Pause, not fail.** Before any byte has reached the harness, a 503, 429, 502 or refused connection is held. It is
+**Pause, not fail.** Before any byte has reached the harness, a 503 or 429, which an endpoint answers before the
+request reaches its engine, or a refused connection is held, for any method. A 502 or a reset is held for a GET only:
+either can come once a POST reached the engine, so sending it again could run the generation twice. A held request is
 tried again as `Retry-After` says, up to the endpoint's `holdMaxSeconds` (120 by default: several standard 503 or 429
 answers, under the harnesses' own request timeouts), and the window shows the wait.
 
 **Endpoints and approval.** The user adds endpoints in Settings, and agents add them through `endpoint_*`. A new or
-re-pointed base URL from an agent waits for the owner's approval in the window. Keys come from the window, or from an
-agent's drop file (`~/.tars/endpoint-keys/<name>.key`). SECURITY.md § 9.
+re-pointed base URL from an agent, or extra headers an agent adds or changes, wait for the owner's approval in the
+window: a header goes out with the owner's key, and may route or bill the requests at the endpoint. Keys come from the
+window, or from an agent's drop file (`~/.tars/endpoint-keys/<name>.key`). SECURITY.md § 9.
 
 **Traces.** A session is traced only when all of these hold (`trace-gate.ts`):
 - the project's switch and the agent's are both on (both off by default);
@@ -254,7 +262,11 @@ agent's drop file (`~/.tars/endpoint-keys/<name>.key`). SECURITY.md § 9.
 `~/.tars/traces/traces.db` holds one row per terminal session:
 - turns open on a user instruction, never on a tool result or a harness's reminder, and side calls (a title, a memory
   summary) open none;
-- requests carry their timing, usage, attempts and the endpoint's `X-Request-Id`;
+- requests carry their timing, usage, attempts and the endpoint's `X-Request-Id`. The time to the first token
+  (`ttft_ms`) measures the model: for a stream, when the first chunk with text, reasoning or a tool call came, on
+  chat completions, Responses and Anthropic Messages alike (a chunk with only a role, or empty, is not one; a stream
+  with no content has none); for a response that is not streamed, its first byte. It is read on the copy once the
+  response has ended, never on the relay's path;
 - messages, system prompts and tool sets are stored once by content hash, compressed;
 - authorship comes from what Tars typed into the terminal. A closed model's words set `mixed`, and an instruction
   Tars did not type counts in `unknown_turns`;
@@ -269,6 +281,10 @@ consent, opted-in sessions are uploaded:
 - projects and endpoints as HMAC keys;
 - blobs by the hash of their scrubbed content, sent once;
 - one idempotent batch per session state;
+- each request marked `side: true` or `false` (a title or memory call is a side request, as in the export), so a side
+  request is never counted as a step of its turn. A back-office refuses fields it does not know (422
+  `invalid_batch`), so it takes `side` before Tars sends it: the back-office is updated first. A batch it refuses
+  stays unsent and is tried again on the backoff, never sent without the mark;
 - resumed after a restart, with backoff.
 
 `deleteEverywhere` asks the back-office to delete all of it.

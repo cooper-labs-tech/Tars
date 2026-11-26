@@ -1104,6 +1104,9 @@ the health: the API's `/api/endpoints` and the `endpoint_*` tools of mcp-orchest
   - The reason: it is where an agent's whole context would go, and an injected agent could otherwise point any agent
     at its own server in two calls.
   - No API route approves: `endpoints:approve` is the window's alone.
+- Extra headers an agent adds or changes wait for the owner's approval the same way (the owner's decision of 26/11):
+  they go out with the owner's key, and a header can route or bill the requests at the endpoint. The key stays, since
+  the address does not change.
 - A key, the models, the name or the hold ceiling keep the approval.
 - An agent may turn traces off for an endpoint, never on.
 
@@ -1170,6 +1173,12 @@ their outputs.
 
 **Session headers.** `X-Session-Id` and `X-Agent-Id` name the agent and its session to the endpoint. The proxy adds
 them only for an endpoint whose "send session headers" option is on, which is off by default.
+
+**Extra headers.** An endpoint may carry up to 16 fixed headers, sent with every request to it and with its probes,
+to the approved address only. They are not a secret: they are kept in `app-settings.json` with the endpoint, and every
+agent reads them, so a credential never goes there (the key has its own path, above). None may name the credential
+(Authorization, x-api-key, Cookie), the connection's own headers or the body's framing, or the session headers, and a
+name or value holding CR or LF is refused; the proxy skips a refused name again when it sends.
 
 **The upload** (`services/trace-upload.ts`). Opted-in sessions go to the back-office address the user sets, empty by
 default. Nothing goes before the user has read, in the window, what leaves the machine, with one session shown as it

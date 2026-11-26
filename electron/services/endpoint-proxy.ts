@@ -1,6 +1,6 @@
 import * as http from 'http';
 import * as https from 'https';
-import { surfaceOf, type Surface } from './trace-wire';
+import { firstContentEnd, surfaceOf, type Surface } from './trace-wire';
 import type { WireRecord } from './trace-store';
 
 /**
@@ -13,16 +13,24 @@ import type { WireRecord } from './trace-store';
  *   per request: it never reaches a harness, an environment, a config file, a log or a record.
  * - When the endpoint asks for them (its "send session headers" option, off by default, since they name the agent and
  *   its session to the endpoint), it adds `X-Session-Id` (the trace id) and `X-Agent-Id`, overwriting any a harness
- *   sent; off, a harness's own go through as they are. Nothing else changes: unknown params and response fields go through as they are,
- *   and a stream is relayed chunk by chunk as it comes (a relay in front of the endpoint may measure TTFT too). The one header it
- *   sets besides is `Accept-Encoding: identity`, so the copy it records is readable.
- * - **Pause, not fail**: before any byte of a response has reached the harness, a 503 (endpoint_busy),
- *   a 429 (rate_limited), a 502 or a connection that never reached the endpoint (refused, unreachable, a name not yet resolved; a reset too,
- *   for a GET only) is held and tried again, as `Retry-After` says (at most
- *   60 s a wait), up to the endpoint's `holdMaxSeconds`. Past it, the last error passes as it came. The window is
- *   told while a request is held (onHold). Once a response has started, everything passes through unchanged.
+ *   sent; off, a harness's own go through as they are. The endpoint's extra headers (a small fixed map the owner
+ *   sets, never a credential: agents can read it) go with every request, over a harness's header of the same name;
+ *   none may name the credential, the hop or the session headers (REFUSED_EXTRA_HEADERS). Nothing else changes:
+ *   unknown params and response fields go through as they are, and a stream is relayed chunk by chunk as it comes. The
+ *   one header it sets besides is `Accept-Encoding: identity`, so the copy it records is readable.
+ * - **Pause, not fail**: before any byte of a response has reached the harness, a 503 (endpoint_busy) or a 429
+ *   (rate_limited), which an endpoint answers before the request reaches its engine, or a connection that never
+ *   reached the endpoint (refused, unreachable, a name not yet resolved), is held and tried again, for any method. A
+ *   502 or a reset is tried again for a GET only: either can come once a POST reached the engine (a 502 after it
+ *   timed out there), and sending it again would run and bill the generation twice (the owner's decision of 26/11).
+ *   The wait is as `Retry-After` says (at most 60 s a wait), up to the endpoint's `holdMaxSeconds`. Past it, the last
+ *   error passes as it came. The window is told while a request is held (onHold). Once a response has started,
+ *   everything passes through unchanged.
  * - Once a traced response has ended, a copy of both bodies goes to the recorder, off the response's path; a
- *   recorder that fails changes nothing for the harness.
+ *   recorder that fails changes nothing for the harness. With it go the time of the first byte and the time of the
+ *   first token: when the chunk holding the first stream event with text, reasoning or a tool call came (a chunk
+ *   with only a role, or empty, is not one), found on the copy once the response has ended, never on the relay's
+ *   path. A response that is not streamed has its first byte as its first token.
  *
  * It speaks the three protocols the endpoints serve, chat completions, Responses and Anthropic Messages (with
  * count_tokens), plus `GET /v1/models`. Nothing else is forwarded.
@@ -44,6 +52,8 @@ export interface ProxyTarget {
   holdMaxSeconds: number;
   /** Add X-Session-Id and X-Agent-Id (the endpoint's option, off by default). */
   sendSessionHeaders?: boolean;
+  /** The endpoint's extra headers, sent with every request (a refused name is skipped here too). */
+  extraHeaders?: Record<string, string>;
 }
 
 export type HoldEvent =
@@ -69,8 +79,10 @@ const ROUTES: Record<string, string> = {
   '/v1/messages/count_tokens': 'POST',
 };
 
-/** Statuses that mean "not now" rather than "no". */
-const PAUSE_STATUSES = new Set([429, 502, 503]);
+/** Statuses that mean "not now", answered before the request reaches the engine: held for any method. */
+const PAUSE_STATUSES = new Set([429, 503]);
+/** A 502 can come once the request reached the engine: held for a GET only, like a reset. */
+const PAUSE_FOR_GET_STATUSES = new Set([502]);
 /** Failures where the request never reached the endpoint: held and tried again, whatever the method. */
 const NOT_SENT_ERRORS = new Set(['ECONNREFUSED', 'EHOSTUNREACH', 'ENETUNREACH', 'EAI_AGAIN']);
 /**
@@ -87,6 +99,18 @@ const DROP_REQUEST = new Set(['host', 'connection', 'keep-alive', 'proxy-authori
   'transfer-encoding', 'upgrade', 'authorization', 'x-api-key', 'content-length', 'accept-encoding']);
 /** Set by Tars when the endpoint asks for them, never a harness's then. */
 const SESSION_HEADERS = new Set(['x-session-id', 'x-agent-id']);
+/**
+ * Never an extra header (the owner's decision of 26/11): the credential (Tars sets the key), the hop's own and the
+ * framing of the body (Node and Tars set them), the encoding Tars asks for, and the session headers Tars sets. Any
+ * `proxy-` header too. Checked where an endpoint is saved, and skipped here as well.
+ */
+export const REFUSED_EXTRA_HEADERS = new Set(['authorization', 'x-api-key', 'cookie', 'set-cookie', 'host', 'content-length',
+  'content-type', 'content-encoding', 'transfer-encoding', 'connection', 'keep-alive', 'te', 'trailer', 'upgrade', 'expect',
+  'accept-encoding', ...SESSION_HEADERS]);
+export const isRefusedExtraHeader = (name: string): boolean => {
+  const lower = name.toLowerCase();
+  return REFUSED_EXTRA_HEADERS.has(lower) || lower.startsWith('proxy-');
+};
 const DROP_RESPONSE = new Set(['connection', 'keep-alive', 'transfer-encoding', 'proxy-connection', 'upgrade']);
 
 /** How long to wait before the next try: Retry-After in seconds or as a date, else a backoff with jitter. */
@@ -197,6 +221,12 @@ export function createEndpointProxy(deps: ProxyDeps): http.Server {
       const lower = name.toLowerCase();
       if (value !== undefined && !DROP_REQUEST.has(lower) && !(target.sendSessionHeaders && SESSION_HEADERS.has(lower))) headers[name] = value;
     }
+    // The endpoint's own extra headers, over a harness's header of the same name.
+    for (const [name, value] of Object.entries(target.extraHeaders ?? {})) {
+      if (isRefusedExtraHeader(name) || typeof value !== 'string') continue;
+      for (const own of Object.keys(headers)) if (own.toLowerCase() === name.toLowerCase()) delete headers[own];
+      headers[name] = value;
+    }
     if (target.key) {
       if (presented.form === 'x-api-key') headers['x-api-key'] = target.key;
       else headers.authorization = `Bearer ${target.key}`;
@@ -232,8 +262,9 @@ export function createEndpointProxy(deps: ProxyDeps): http.Server {
       if (controller.signal.aborted) { reply?.res.destroy(); clearHold(); return; }
 
       const code = failure?.code ?? '';
+      const status = reply?.res.statusCode ?? 0;
       const pausing = reply
-        ? PAUSE_STATUSES.has(reply.res.statusCode ?? 0)
+        ? PAUSE_STATUSES.has(status) || (req.method === 'GET' && PAUSE_FOR_GET_STATUSES.has(status))
         : NOT_SENT_ERRORS.has(code) || (req.method === 'GET' && MAYBE_SENT_ERRORS.has(code));
       if (pausing) {
         const retryAfter = reply?.res.headers['retry-after'];
@@ -271,11 +302,15 @@ export function createEndpointProxy(deps: ProxyDeps): http.Server {
       // (the Audit's L3 on #596).
       const keepCopy = session.traced && !!surface && !!deps.record;
       const copy: Buffer[] = [];
+      // For each chunk of the copy, where it ends in the body and when it came: the first token's time is read from
+      // these once the response has ended (record), so nothing is parsed on the relay's path.
+      const marks: number[] = [];
+      let copied = 0;
       let firstByteAt: number | undefined;
       let broken: string | undefined;
       upstream.on('data', (chunk: Buffer) => {
         if (firstByteAt === undefined) firstByteAt = now();
-        if (keepCopy) copy.push(chunk);
+        if (keepCopy) { copy.push(chunk); copied += chunk.length; marks.push(copied, now()); }
         if (!res.write(chunk)) {
           upstream.pause();
           res.once('drain', () => upstream.resume());
@@ -287,12 +322,12 @@ export function createEndpointProxy(deps: ProxyDeps): http.Server {
         if (!upstream.complete && !broken) broken = 'the endpoint closed the stream';
         if (broken) res.destroy(); else res.end();
         const rid = upstream.headers['x-request-id'];
-        record(upstream, Buffer.concat(copy), firstByteAt, broken, Array.isArray(rid) ? rid[0] : rid);
+        record(upstream, Buffer.concat(copy), firstByteAt, broken, Array.isArray(rid) ? rid[0] : rid, marks);
       });
       return;
     }
 
-    function record(upstream: http.IncomingMessage | null, responseBody: Buffer, firstByteAt: number | undefined, error?: string, upstreamRequestId?: string): void {
+    function record(upstream: http.IncomingMessage | null, responseBody: Buffer, firstByteAt: number | undefined, error?: string, upstreamRequestId?: string, marks: number[] = []): void {
       if (!session!.traced || !surface || !deps.record) return;
       const rec: WireRecord = {
         traceId: session!.traceId, agentId: session!.agentId, surface, startedAt, firstByteAt, endedAt: now(),
@@ -300,7 +335,14 @@ export function createEndpointProxy(deps: ProxyDeps): http.Server {
         upstreamRequestId, attempts, heldMs, error,
       };
       setImmediate(() => {
-        try { deps.record!(rec); } catch (err) { console.error(`[endpoint-proxy] not recorded: ${(err as Error).message}`); }
+        try {
+          // The first token: the chunk that held the end of the first event with content (trace-wire.ts).
+          const end = firstContentEnd(surface, rec.contentType, responseBody);
+          if (end !== null) {
+            for (let i = 0; i < marks.length; i += 2) if (marks[i] >= end) { rec.firstContentAt = marks[i + 1]; break; }
+          }
+          deps.record!(rec);
+        } catch (err) { console.error(`[endpoint-proxy] not recorded: ${(err as Error).message}`); }
       });
     }
   });

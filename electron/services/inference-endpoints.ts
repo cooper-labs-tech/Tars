@@ -4,7 +4,7 @@ import { randomBytes } from 'crypto';
 import { DATA_DIR } from '../constants';
 import { isValidOpenAIBaseUrl } from '../providers/cli-provider';
 import type { AgentStatus, AppSettings, InferenceEndpoint } from '../types';
-import type { ProxyTarget } from './endpoint-proxy';
+import { isRefusedExtraHeader, type ProxyTarget } from './endpoint-proxy';
 
 /**
  * Inference endpoints (native traces): OpenAI-compatible endpoints an open harness runs
@@ -18,8 +18,14 @@ import type { ProxyTarget } from './endpoint-proxy';
  *   the agents of one project tune another project's).
  * - **The approval guard** (the orchestrator's decision, 19/11). An endpoint an agent adds, or whose base URL an
  *   agent changes, is unusable until the owner approves it once in the window: it is where an agent's whole context
- *   would go, and an injected agent could otherwise point any agent at its own server in two calls. A key, the
- *   models, the name or the ceiling keep the approval. An agent may turn traces off for an endpoint, never on.
+ *   would go, and an injected agent could otherwise point any agent at its own server in two calls. The same for
+ *   the extra headers an agent adds or changes (the owner's decision of 26/11): they go out with the owner's key, and
+ *   may route or bill the requests at the endpoint, so the owner sees them first; the key stays, since the address
+ *   does not change. A key, the models, the name or the ceiling keep the approval. An agent may turn traces off for
+ *   an endpoint, never on.
+ * - **Extra headers** (cleanExtraHeaders) are a small fixed map, at most 16 names, never the credential, the hop, the
+ *   body's framing or the session headers (endpoint-proxy.ts REFUSED_EXTRA_HEADERS). They are kept with the record,
+ *   not with the secrets, and every agent reads them: never a credential there.
  * - **Keys from agents** come through a drop file only (readKeyFromDropFile, taken away once saved): never through a prompt or a tool
  *   argument, and from no other path, so no argument can make Tars read ~/.tars-private, ~/.ssh or any other file
  *   and send it out as a Bearer. The macOS keychain is never read: the key path is the same on every system.
@@ -38,6 +44,42 @@ const MAX_NAME = 60;
 const MAX_KEY_BYTES = 8 * 1024;
 const DROP_NAME = /^[A-Za-z0-9._-]{1,64}\.key$/;
 const ENDPOINT_ID = /^ep-[0-9a-f]{6}$/;
+export const MAX_EXTRA_HEADERS = 16;
+export const MAX_EXTRA_HEADER_VALUE = 1024;
+/** An HTTP header name (RFC 9110 token), 64 characters at most. */
+const HEADER_NAME = /^[!#$%&'*+.^_`|~0-9A-Za-z-]{1,64}$/;
+/** A header value: printable ASCII, spaces and tabs, never CR, LF or another control character. */
+const HEADER_VALUE = /^[\x20-\x7e\t]+$/;
+
+/**
+ * An endpoint's extra headers, as saved, or why not: a plain object of names to strings, at most 16, each a header
+ * token of 64 characters at most whose value is 1 to 1024 printable characters, no name refused
+ * (isRefusedExtraHeader), no two equal but for case.
+ */
+export function cleanExtraHeaders(raw: unknown): { ok: true; headers: Record<string, string> } | { ok: false; error: string } {
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return { ok: false, error: 'Extra headers are a map of header names to values.' };
+  const entries = Object.entries(raw as Record<string, unknown>);
+  if (entries.length > MAX_EXTRA_HEADERS) return { ok: false, error: `An endpoint takes ${MAX_EXTRA_HEADERS} extra headers at most.` };
+  const seen = new Set<string>();
+  const headers: Record<string, string> = {};
+  for (const [name, value] of entries) {
+    if (!HEADER_NAME.test(name)) return { ok: false, error: 'An extra header\'s name is one header token (letters, digits and - _ . ! # $ % & \' * + ^ ` | ~), 64 characters at most.' };
+    if (isRefusedExtraHeader(name)) return { ok: false, error: `${name} cannot be an extra header: Tars sets the key, the session headers and the connection's own headers itself.` };
+    if (seen.has(name.toLowerCase())) return { ok: false, error: `${name} is given twice.` };
+    seen.add(name.toLowerCase());
+    if (typeof value !== 'string' || !HEADER_VALUE.test(value) || Buffer.byteLength(value) > MAX_EXTRA_HEADER_VALUE) {
+      return { ok: false, error: `The value of ${name} is 1 to ${MAX_EXTRA_HEADER_VALUE} printable characters on one line.` };
+    }
+    headers[name] = value;
+  }
+  return { ok: true, headers };
+}
+
+/** Whether two maps of extra headers send the same thing: names compared without case, values exactly. */
+export function sameExtraHeaders(a: Record<string, string> | undefined, b: Record<string, string> | undefined): boolean {
+  const norm = (m: Record<string, string> | undefined) => JSON.stringify(Object.entries(m ?? {}).map(([k, v]) => [k.toLowerCase(), v]).sort());
+  return norm(a) === norm(b);
+}
 
 /** The harnesses an endpoint can run, and how each measured. */
 export const ENDPOINT_HARNESSES = ['codex', 'pi', 'qwen-code', 'opencode'] as const;
@@ -56,6 +98,10 @@ export interface EndpointView {
   /** The traffic is plain http, not encrypted at the HTTP level (a private network, or the owner's allowance). */
   plainHttp: boolean;
   allowPlainHttp: boolean;
+  /** Sent with every request; never a credential (every agent reads them). */
+  extraHeaders: Record<string, string>;
+  /** What the owner approved, to show beside a change an agent made. */
+  approvedExtraHeaders?: Record<string, string>;
 }
 
 type Result = { ok: true; settings: AppSettings; endpoint: InferenceEndpoint } | { ok: false; error: string };
@@ -107,7 +153,7 @@ export function cleanBaseUrl(raw: unknown): string | null {
 /** Adds an endpoint, or changes one (`id`), as the owner or an agent may. */
 export function saveEndpoint(
   settings: AppSettings,
-  input: { id?: string; name?: string; baseUrl?: string; allowTraces?: boolean; holdMaxSeconds?: number; sendSessionHeaders?: boolean; allowPlainHttp?: boolean },
+  input: { id?: string; name?: string; baseUrl?: string; allowTraces?: boolean; holdMaxSeconds?: number; sendSessionHeaders?: boolean; allowPlainHttp?: boolean; extraHeaders?: unknown },
   actor: EndpointActor,
   now: string = new Date().toISOString(),
 ): Result {
@@ -140,16 +186,25 @@ export function saveEndpoint(
   if (transportOf(baseUrl!) === 'http-public' && !allowPlainHttp) {
     return { ok: false, error: 'A public address takes https. Plain http goes to loopback and private networks only, unless the owner allows it for this endpoint in the window.' };
   }
+  let extraHeaders = current?.extraHeaders ?? {};
+  if (input.extraHeaders !== undefined) {
+    const clean = cleanExtraHeaders(input.extraHeaders);
+    if (!clean.ok) return { ok: false, error: clean.error };
+    extraHeaders = clean.headers;
+  }
+  const headersChanged = !sameExtraHeaders(extraHeaders, current?.extraHeaders);
   const next: InferenceEndpoint = {
     ...(current ?? { id: newId(list), models: [], approved: false }),
     name, baseUrl: baseUrl!, allowTraces, holdMaxSeconds: hold,
     sendSessionHeaders: input.sendSessionHeaders ?? current?.sendSessionHeaders ?? false,
-    allowPlainHttp,
+    allowPlainHttp, extraHeaders,
   } as InferenceEndpoint;
   if (owner) {
     next.approved = true;
     next.approvedBaseUrl = baseUrl;
-  } else if (movedTo) {
+    next.approvedExtraHeaders = extraHeaders;
+  } else if (movedTo || headersChanged) {
+    // An address or extra headers an agent set wait for the owner (the approval guard, above).
     next.approved = false;
     next.changedBy = { agentId: actor.agentId, agentName: actor.agentName, at: now };
   }
@@ -176,7 +231,7 @@ export function approveEndpoint(settings: AppSettings, id: string): Result {
   const list = endpointsOf(settings);
   const current = list.find(e => e.id === id);
   if (!current) return { ok: false, error: 'There is no such endpoint.' };
-  const next: InferenceEndpoint = { ...current, approved: true, approvedBaseUrl: current.baseUrl };
+  const next: InferenceEndpoint = { ...current, approved: true, approvedBaseUrl: current.baseUrl, approvedExtraHeaders: current.extraHeaders ?? {} };
   return { ok: true, settings: { ...settings, inferenceEndpoints: list.map(e => (e.id === id ? next : e)) }, endpoint: next };
 }
 
@@ -215,6 +270,7 @@ export function endpointViews(settings: AppSettings, agents: AgentStatus[]): End
     holdMaxSeconds: typeof e.holdMaxSeconds === 'number' ? e.holdMaxSeconds : DEFAULT_HOLD_SECONDS,
     sendSessionHeaders: e.sendSessionHeaders === true, health: e.health,
     plainHttp: transportOf(e.baseUrl) !== 'https', allowPlainHttp: e.allowPlainHttp === true,
+    extraHeaders: { ...(e.extraHeaders ?? {}) }, ...(e.approvedExtraHeaders ? { approvedExtraHeaders: { ...e.approvedExtraHeaders } } : {}),
   }));
 }
 
@@ -228,6 +284,7 @@ export function endpointTarget(settings: AppSettings, id: string): ProxyTarget |
   return {
     baseUrl: e.approvedBaseUrl, key: settings.endpointKeys?.[id] || null,
     holdMaxSeconds: typeof e.holdMaxSeconds === 'number' ? e.holdMaxSeconds : DEFAULT_HOLD_SECONDS, sendSessionHeaders: e.sendSessionHeaders === true,
+    extraHeaders: { ...(e.extraHeaders ?? {}) },
   };
 }
 
@@ -333,9 +390,11 @@ function withoutKey(text: string, key: string | null): string {
  * Where a probe goes, and with which key: the key only to the address the owner approved, as the proxy sends it
  * (the Audit's H1 on #596). An endpoint whose address an agent changed is probed at its new address with no key.
  */
-function probeOf(settings: AppSettings, e: InferenceEndpoint): { url: string; key: string | null } {
+function probeOf(settings: AppSettings, e: InferenceEndpoint): { url: string; key: string | null; headers: Record<string, string> } {
   const approvedNow = e.approved === true && !!e.approvedBaseUrl && e.approvedBaseUrl === e.baseUrl;
-  return { url: `${e.baseUrl}/models`, key: approvedNow ? settings.endpointKeys?.[e.id] || null : null };
+  // The extra headers go where the key goes: an endpoint that needs them would refuse the probe without them.
+  const extra = approvedNow ? Object.fromEntries(Object.entries(e.extraHeaders ?? {}).filter(([n]) => !isRefusedExtraHeader(n))) : {};
+  return { url: `${e.baseUrl}/models`, key: approvedNow ? settings.endpointKeys?.[e.id] || null : null, headers: extra };
 }
 
 /** A redirect is never followed: the key, or the probe, would go to an address nobody approved. */
@@ -350,10 +409,10 @@ export async function readModels(settings: AppSettings, id: string, fetchImpl: t
   const e = endpointsOf(settings).find(x => x.id === id);
   if (!e) return { ok: false, error: 'There is no such endpoint.', patch: {} };
   const probed = e.baseUrl;
-  const { url, key } = probeOf(settings, e);
+  const { url, key, headers } = probeOf(settings, e);
   let error: string;
   try {
-    const res = await fetchImpl(url, { headers: { Accept: 'application/json', ...(key ? { Authorization: `Bearer ${key}` } : {}) }, redirect: 'manual', signal: AbortSignal.timeout(15_000) });
+    const res = await fetchImpl(url, { headers: { ...headers, Accept: 'application/json', ...(key ? { Authorization: `Bearer ${key}` } : {}) }, redirect: 'manual', signal: AbortSignal.timeout(15_000) });
     const text = await res.text();
     if (res.status >= 300 && res.status < 400) error = REDIRECT_REFUSED;
     else if (!res.ok) error = `HTTP ${res.status}: ${text.slice(0, 200)}`;
@@ -378,11 +437,11 @@ export async function checkHealth(settings: AppSettings, id: string, fetchImpl: 
   const e = endpointsOf(settings).find(x => x.id === id);
   if (!e) return { health: { ok: false, at: now, error: 'There is no such endpoint.' }, patch: {} };
   const probed = e.baseUrl;
-  const { url, key } = probeOf(settings, e);
+  const { url, key, headers } = probeOf(settings, e);
   const started = clock();
   let health: NonNullable<InferenceEndpoint['health']>;
   try {
-    const res = await fetchImpl(url, { headers: key ? { Authorization: `Bearer ${key}` } : {}, redirect: 'manual', signal: AbortSignal.timeout(15_000) });
+    const res = await fetchImpl(url, { headers: { ...headers, ...(key ? { Authorization: `Bearer ${key}` } : {}) }, redirect: 'manual', signal: AbortSignal.timeout(15_000) });
     const latencyMs = clock() - started;
     const text = await res.text().catch(() => '');
     const redirect = res.status >= 300 && res.status < 400;

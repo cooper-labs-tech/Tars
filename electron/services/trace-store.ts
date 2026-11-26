@@ -4,7 +4,7 @@ import * as path from 'path';
 import * as zlib from 'zlib';
 import { randomBytes } from 'crypto';
 import {
-  hashOf, instructionText, opensTurn, parseRequest, parseResponse, type Surface,
+  hashOf, instructionText, isStreamed, opensTurn, parseRequest, parseResponse, type Surface,
 } from './trace-wire';
 
 /**
@@ -50,6 +50,11 @@ export interface WireRecord {
   surface: Surface;
   startedAt: number;
   firstByteAt?: number;
+  /**
+   * For a stream: when the chunk came that held the first event with text, reasoning or a tool call (the model's
+   * first token; endpoint-proxy.ts). The ttft is this, or, for a response that is not streamed, the first byte.
+   */
+  firstContentAt?: number;
   endedAt: number;
   status: number;
   contentType?: string;
@@ -499,13 +504,18 @@ export class TraceStore {
     }
 
     const total = rec.endedAt - rec.startedAt;
+    // TTFT measures the model (the owner's decision of 26/11): a stream's first token, never its first byte, which
+    // may be a chunk with only a role; none when it carried no content. A response that is not streamed: its first byte.
+    const ttft = rec.firstContentAt !== undefined ? rec.firstContentAt - rec.startedAt
+      : isStreamed(rec.contentType, rec.responseBody.subarray(0, 64).toString('utf8')) ? null
+        : rec.firstByteAt !== undefined ? rec.firstByteAt - rec.startedAt : null;
     this.db.prepare(`INSERT INTO requests (request_id, upstream_request_id, trace_id, turn_id, seq, side, surface, model_requested,
       model_served, params_json, system_hash, tools_hash, started_at, ttft_ms, total_ms, tokens_in, tokens_cached, tokens_out, status, error,
       finish_reason, streamed, req_bytes, resp_bytes, new_messages, attempts, held_ms, bodies_dropped)
       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`).run(
       requestId, rec.upstreamRequestId ?? null, rec.traceId, turnId ?? null, seqRow.n, side ? 1 : 0, rec.surface, req?.model ?? null,
       resp.modelServed ?? null, req ? JSON.stringify(req.params) : null, systemHash ?? null, toolsHash ?? null, rec.startedAt,
-      rec.firstByteAt !== undefined ? rec.firstByteAt - rec.startedAt : null, total, resp.usage.input, resp.usage.cached, resp.usage.output,
+      ttft, total, resp.usage.input, resp.usage.cached, resp.usage.output,
       rec.status, rec.error ?? resp.error ?? null, resp.finishReason ?? null, req?.stream ? 1 : 0, rec.requestBody.length, rec.responseBody.length,
       newMessages, rec.attempts, rec.heldMs, dropped ? 1 : 0);
 

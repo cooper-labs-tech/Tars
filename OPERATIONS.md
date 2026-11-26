@@ -1270,8 +1270,8 @@ one carries the new session.
   `endpoint_set_key` with `key_file: "<name>.key"`. The file is deleted once the key is taken.
 - An endpoint an agent adds, or re-points, shows Approve in Settings: nothing reaches it before the owner approves.
 
-**When the endpoint pauses.** The proxy holds a request on 503, 429, 502 or a refused connection, as `Retry-After`
-says (60 s at most per wait), up to the endpoint's hold ceiling (120 s by default, 0 to 3600). The agent shows
+**When the endpoint pauses.** The proxy holds a request on 503, 429 or a refused connection, and a GET on a 502 too
+(a 502 to a POST passes at once: it may have run on the engine), as `Retry-After` says (60 s at most per wait), up to the endpoint's hold ceiling (120 s by default, 0 to 3600). The agent shows
 "waiting on <endpoint>". Past the ceiling, the last error reaches the harness as it came. For hours-long gaps, stop
 the agents rather than raising the ceiling.
 

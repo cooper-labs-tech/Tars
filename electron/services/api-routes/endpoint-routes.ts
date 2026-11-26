@@ -11,8 +11,9 @@ import type { TraceFilter } from '../trace-store';
  * Inference endpoints for agents, and the traces for the external reader.
  *
  * - `/api/endpoints`: any agent, of any project, lists the endpoints (never a key), adds one, changes one, rotates a
- *   key from its drop file, reads the models and checks the health. An endpoint an agent adds, or whose base URL it
- *   changes, waits for the owner's approval in the window (services/inference-endpoints.ts); no route approves. The
+ *   key from its drop file, reads the models and checks the health. An endpoint an agent adds, or whose base URL or
+ *   extra headers (`extraHeaders`, a map of names to values, never a credential) it changes, waits for the owner's
+ *   approval in the window (services/inference-endpoints.ts); no route approves. The
  *   shared token reads and changes nothing but the list.
  * - `/api/traces/*`: the external trace reader's token only (api-server.ts resolveCaller), read-only.
  */
@@ -76,6 +77,7 @@ export function registerEndpointRoutes(app: RouteApp, ctx: RouteContext): void {
       name: typeof b.name === 'string' ? b.name : undefined, baseUrl: typeof b.baseUrl === 'string' ? b.baseUrl : undefined,
       allowTraces: typeof b.allowTraces === 'boolean' ? b.allowTraces : false,
       holdMaxSeconds: typeof b.holdMaxSeconds === 'number' ? b.holdMaxSeconds : undefined,
+      extraHeaders: b.extraHeaders,
     }, who);
     if (!r.ok) { send({ error: r.error }, 400); return; }
     let settings = r.settings;
@@ -104,6 +106,7 @@ export function registerEndpointRoutes(app: RouteApp, ctx: RouteContext): void {
       id: req.params.id, name: typeof b.name === 'string' ? b.name : undefined, baseUrl: typeof b.baseUrl === 'string' ? b.baseUrl : undefined,
       allowTraces: typeof b.allowTraces === 'boolean' ? b.allowTraces : undefined,
       holdMaxSeconds: typeof b.holdMaxSeconds === 'number' ? b.holdMaxSeconds : undefined,
+      extraHeaders: b.extraHeaders,
     }, who);
     if (!r.ok) { send({ error: r.error }, r.error.startsWith('There is no') ? 404 : 400); return; }
     if (!saved(r.settings, send)) return;
