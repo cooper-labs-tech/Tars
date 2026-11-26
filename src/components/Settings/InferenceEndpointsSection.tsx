@@ -13,6 +13,22 @@ import { SettingsRow } from './SettingsRow';
 import { Toggle } from './Toggle';
 
 const DEFAULT_HOLD = 120;
+/** main's ceiling on an endpoint's extra headers (services/inference-endpoints.ts, cleanExtraHeaders). */
+const MAX_EXTRA_HEADERS = 16;
+
+/** Whether two maps of extra headers send the same thing, as main compares them: names without case, values exactly. */
+function sameHeaders(a: Record<string, string> | undefined, b: Record<string, string> | undefined): boolean {
+  const norm = (m: Record<string, string> | undefined) => JSON.stringify(Object.entries(m ?? {}).map(([k, v]) => [k.toLowerCase(), v]).sort());
+  return norm(a) === norm(b);
+}
+
+/** A map of extra headers on one line, as the notice shows both lists whole. */
+const headersLineOf = (m: Record<string, string> | undefined) => Object.entries(m ?? {}).map(([k, v]) => `${k}: ${v}`).join(' · ') || 'none';
+
+const countOf = (m: Record<string, string>) => {
+  const n = Object.keys(m).length;
+  return n > 0 ? ` · ${n} extra header${n === 1 ? '' : 's'}` : '';
+};
 
 /**
  * A state word in its tone, with its square: the frames' `state` line. One line, cut at its end; `wrap` keeps every
@@ -127,11 +143,18 @@ export const InferenceEndpointsSection = () => {
     void reload();
   };
 
+  // Puts back all the owner approved: the base URL and the extra headers. A save from the window approves what it
+  // saves, so whatever of an agent's change it left in place would be approved unseen.
   const putBack = async (e: EndpointView) => {
-    if (!api || !e.approvedBaseUrl) return;
+    if (!api) return;
+    const baseUrl = e.approvedBaseUrl ?? e.baseUrl;
+    const headersWait = e.approvedExtraHeaders !== undefined && !sameHeaders(e.approvedExtraHeaders, e.extraHeaders);
     let r: Awaited<ReturnType<typeof api.save>>;
     try {
-      r = await api.save({ id: e.id, name: e.name, baseUrl: e.approvedBaseUrl, allowTraces: e.allowTraces, holdMaxSeconds: e.holdMaxSeconds, sendSessionHeaders: e.sendSessionHeaders, allowPlainHttp: e.allowPlainHttp });
+      r = await api.save({
+        id: e.id, name: e.name, baseUrl, allowTraces: e.allowTraces, holdMaxSeconds: e.holdMaxSeconds, sendSessionHeaders: e.sendSessionHeaders, allowPlainHttp: e.allowPlainHttp,
+        ...(headersWait ? { extraHeaders: e.approvedExtraHeaders } : {}),
+      });
     } catch (err) {
       setRowError(m => ({ ...m, [e.id]: reasonOf(err) }));
       return;
@@ -176,9 +199,16 @@ export const InferenceEndpointsSection = () => {
         const own = waits.filter(w => w.endpointId === e.id);
         const health = own.length > 0 ? { word: waitWord(own), tone: 'waiting' as StatusTone } : healthOf(e.health, checking[e.id]);
         const baseUrlWaits = !e.approved && !!e.approvedBaseUrl && e.approvedBaseUrl !== e.baseUrl;
+        const headersWait = !e.approved && e.approvedExtraHeaders !== undefined && !sameHeaders(e.approvedExtraHeaders, e.extraHeaders);
         const state = !e.approved
-          ? { word: baseUrlWaits ? 'new base URL waiting for your approval' : 'waiting for your approval', tone: 'waiting' as StatusTone }
+          ? { word: baseUrlWaits ? 'new base URL waiting for your approval' : headersWait ? 'new extra headers waiting for your approval' : 'waiting for your approval', tone: 'waiting' as StatusTone }
           : health;
+        const headerLines = headersWait && (
+          <>
+            <p className="font-mono text-[11px] text-text-secondary whitespace-pre-wrap">{`approved   ${headersLineOf(e.approvedExtraHeaders)}`}</p>
+            <p className="font-mono text-[11px] text-status-waiting whitespace-pre-wrap">{`new        ${headersLineOf(e.extraHeaders)}`}</p>
+          </>
+        );
         const read = e.modelsReadAt ? ` · read ${clockOf(e.modelsReadAt)}` : '';
         const by = changedBy[e.id];
         return (
@@ -190,7 +220,7 @@ export const InferenceEndpointsSection = () => {
                 </button>
                 <State word={state.word} tone={state.tone} />
                 <p className="font-mono text-[10.5px] text-muted-foreground truncate">{e.plainHttp ? `${e.baseUrl} · unencrypted` : e.baseUrl}</p>
-                <p className="font-mono text-[10.5px] text-muted-foreground">{`${e.keySet ? 'a key is set · never shown' : e.changedBy && !e.approved ? 'key to set again: it went with the old address' : 'no key'}${e.sendSessionHeaders ? ' · session headers sent' : ''}`}</p>
+                <p className="font-mono text-[10.5px] text-muted-foreground">{`${e.keySet ? 'a key is set · never shown' : e.changedBy && !e.approved ? 'key to set again: it went with the old address' : 'no key'}${e.sendSessionHeaders ? ' · session headers sent' : ''}${countOf(e.extraHeaders ?? {})}`}</p>
                 <p className="font-mono text-[10.5px] text-muted-foreground truncate">{usedByOf(e.agents)}</p>
               </div>
               <div className="w-[250px] shrink-0 min-w-0 space-y-0.5">
@@ -224,7 +254,7 @@ export const InferenceEndpointsSection = () => {
               </p>
             )}
 
-            {!e.approved && !baseUrlWaits && (
+            {!e.approved && !baseUrlWaits && !headersWait && (
               <Notice answers={<>
                 <Button size="sm" variant="primary" className="font-mono lowercase" onClick={() => { void approve(e.id); }}>approve</Button>
                 <Button size="sm" className="font-mono lowercase" onClick={() => askRemove(e)}>remove</Button>
@@ -239,9 +269,20 @@ export const InferenceEndpointsSection = () => {
                 <Button size="sm" variant="primary" className="font-mono lowercase" onClick={() => { void approve(e.id); }}>approve the new URL</Button>
                 <Button size="sm" className="font-mono lowercase" onClick={() => { void putBack(e); }}>put back the approved one</Button>
               </>}>
-                <p>{`${e.changedBy?.agentName ?? 'An agent'} changed its base URL${e.changedBy ? ` at ${clockOf(e.changedBy.at)}` : ''}.${e.keySet ? ' Requests still go to the approved one until you approve the new one.' : ' Its key went with the old address: set it again, then approve the new one.'}`}</p>
+                <p>{`${e.changedBy?.agentName ?? 'An agent'} changed its base URL${headersWait ? ' and its extra headers' : ''}${e.changedBy ? ` at ${clockOf(e.changedBy.at)}` : ''}.${e.keySet ? ' Requests still go to the approved one until you approve the new one.' : ' Its key went with the old address: set it again, then approve the new one.'}`}</p>
                 <p className="font-mono text-[11px] text-text-secondary">{`approved   ${e.approvedBaseUrl}`}</p>
                 <p className="font-mono text-[11px] text-status-waiting">{`new        ${e.baseUrl}`}</p>
+                {headerLines}
+              </Notice>
+            )}
+
+            {headersWait && !baseUrlWaits && (
+              <Notice answers={<>
+                <Button size="sm" variant="primary" className="font-mono lowercase" onClick={() => { void approve(e.id); }}>approve the new headers</Button>
+                <Button size="sm" className="font-mono lowercase" onClick={() => { void putBack(e); }}>put back the approved ones</Button>
+              </>}>
+                <p>{`${e.changedBy?.agentName ?? 'An agent'} changed its extra headers${e.changedBy ? ` at ${clockOf(e.changedBy.at)}` : ''}. No agent can use this endpoint until you approve them, or put back the approved ones. Its key stays: the address did not change.`}</p>
+                {headerLines}
               </Notice>
             )}
 
@@ -288,6 +329,21 @@ export const InferenceEndpointsSection = () => {
  * Add an endpoint, or open one again. Adding saves it (approved by that act), stores the key, then reads its
  * models and checks it. Reopening shows only that a key is set: Replace writes a new one, Clear removes it.
  */
+/**
+ * Which row of the extra headers main's refusal names, -1 for the field as a whole, or null when it is about
+ * something else. main's sentences (cleanExtraHeaders): "<name> cannot be an extra header: ...", "<name> is given
+ * twice.", "The value of <name> is ...", and the field's own ("An endpoint takes 16 extra headers at most.", "An extra
+ * header's name is one header token ...", "Extra headers are a map ...").
+ */
+function refusedRowOf(error: string, rows: Array<{ name: string }>): number | null {
+  const named = rows.findIndex(r => {
+    const n = r.name.trim();
+    return n !== '' && (error.startsWith(`${n} cannot be an extra header`) || error.startsWith(`${n} is given twice`) || error.startsWith(`The value of ${n} is`));
+  });
+  if (named >= 0) return named;
+  return /extra header/i.test(error) ? -1 : null;
+}
+
 /** What a save leaves under the endpoint's row: models not listed (`error`), or traces turned off and not yet written. */
 type FormDone = { id: string; error?: string; unsaved?: string };
 
@@ -301,6 +357,12 @@ function EndpointForm({ endpoint, onDone }: { endpoint?: EndpointView; onDone: (
   const [allowTraces, setAllowTraces] = useState(endpoint?.allowTraces ?? false);
   const [sessionHeaders, setSessionHeaders] = useState(endpoint?.sendSessionHeaders ?? false);
   const [plainHttp, setPlainHttp] = useState(endpoint?.allowPlainHttp ?? false);
+  /** The extra headers as rows; saving sends them all (main replaces the whole map), an empty row left out. */
+  const [headers, setHeaders] = useState<Array<{ name: string; value: string }>>(
+    () => Object.entries(endpoint?.extraHeaders ?? {}).map(([name, value]) => ({ name, value })),
+  );
+  /** main's refusal of the headers, in its words, and the row it names (-1: the field as a whole). */
+  const [headersError, setHeadersError] = useState<{ text: string; row: number } | null>(null);
   const isHttp = /^http:\/\//i.test(baseUrl.trim());
   const [urlError, setUrlError] = useState<string | null>(null);
   const [note, setNote] = useState<{ text: string; tone: StatusTone } | null>(null);
@@ -315,10 +377,26 @@ function EndpointForm({ endpoint, onDone }: { endpoint?: EndpointView; onDone: (
     if (!api) return;
     setBusy(true);
     setUrlError(null);
+    setHeadersError(null);
     setNote(null);
+    // Two rows of one name would fold into one key before main sees them: said here in main's own sentence.
+    const twice = headers.findIndex((h, i) => h.name.trim() !== '' && headers.slice(0, i).some(o => o.name.trim().toLowerCase() === h.name.trim().toLowerCase()));
+    if (twice >= 0) {
+      setHeadersError({ text: `${headers[twice].name.trim()} is given twice.`, row: twice });
+      setNote({ text: 'not saved: see the refused header', tone: 'error' });
+      setBusy(false);
+      return;
+    }
     try {
-      const saved = await api.save({ id: endpoint?.id, name: name.trim(), baseUrl: baseUrl.trim(), allowTraces, holdMaxSeconds: holdSeconds, sendSessionHeaders: sessionHeaders, allowPlainHttp: isHttp && plainHttp });
-      if (!saved.ok) { setUrlError(saved.error); return; }
+      const extraHeaders = Object.fromEntries(headers.filter(h => h.name.trim() !== '' || h.value !== '').map(h => [h.name.trim(), h.value]));
+      const saved = await api.save({ id: endpoint?.id, name: name.trim(), baseUrl: baseUrl.trim(), allowTraces, holdMaxSeconds: holdSeconds, sendSessionHeaders: sessionHeaders, allowPlainHttp: isHttp && plainHttp, extraHeaders });
+      if (!saved.ok) {
+        // main's refusal of a header goes under the row it names; any other, under the base URL as before.
+        const row = refusedRowOf(saved.error, headers);
+        if (row !== null) { setHeadersError({ text: saved.error, row }); setNote({ text: 'not saved: see the refused header', tone: 'error' }); }
+        else setUrlError(saved.error);
+        return;
+      }
       const id = saved.endpoint.id;
       if (replacingKey && key !== '') {
         const k = await api.setKey(id, key);
@@ -456,6 +534,36 @@ function EndpointForm({ endpoint, onDone }: { endpoint?: EndpointView; onDone: (
           </p>
         </div>
         <Toggle label="Send session headers" enabled={sessionHeaders} onChange={() => setSessionHeaders(v => !v)} />
+      </div>
+
+      <div data-extra-headers className="space-y-2">
+        <div className="flex items-center gap-3">
+          <div className="min-w-0 flex-1">
+            <p className="text-[12.5px] text-foreground">Extra headers</p>
+            <p className="mt-0.5 max-w-[620px] text-[11px] leading-tight text-muted-foreground">
+              Fixed headers sent with every request to this endpoint, for a server that asks for one. Not secret: every agent can read them. Never put a key, a token or a password here; the key above is the place for one.
+            </p>
+          </div>
+          <span className="font-mono text-[10.5px] text-muted-foreground">{`${headers.length} of ${MAX_EXTRA_HEADERS}`}</span>
+        </div>
+        {headers.map((h, i) => (
+          <div key={i} className="space-y-1">
+            <div className="flex items-center gap-2">
+              <div className="w-[240px] shrink-0">
+                <Input aria-label="Header name" mono compact value={h.name} maxLength={64} placeholder="Header-Name" error={headersError?.row === i}
+                  onChange={ev => { const v = ev.target.value; setHeaders(rows => rows.map((r, j) => (j === i ? { ...r, name: v } : r))); setHeadersError(null); }} />
+              </div>
+              <Input aria-label="Header value" mono compact value={h.value} maxLength={1024} placeholder="value"
+                onChange={ev => { const v = ev.target.value; setHeaders(rows => rows.map((r, j) => (j === i ? { ...r, value: v } : r))); setHeadersError(null); }} />
+              <Button size="sm" className="font-mono lowercase" onClick={() => { setHeaders(rows => rows.filter((_, j) => j !== i)); setHeadersError(null); }}>remove</Button>
+            </div>
+            {headersError?.row === i && <p data-extra-headers-refused className="font-mono text-[10.5px] text-status-error">{headersError.text}</p>}
+          </div>
+        ))}
+        {headersError?.row === -1 && <p data-extra-headers-refused className="font-mono text-[10.5px] text-status-error">{headersError.text}</p>}
+        <Button size="sm" className="font-mono lowercase" disabled={headers.length >= MAX_EXTRA_HEADERS} onClick={() => setHeaders(rows => [...rows, { name: '', value: '' }])}>
+          add a header
+        </Button>
       </div>
 
       <div className="flex items-center gap-3">
