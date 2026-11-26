@@ -158,6 +158,18 @@ export const PROVIDER_REGISTRY: ProviderDef[] = [
     defaultModel: 'default',
   },
   {
+    // Hermes Agent (Nous Research), #654: on an inference endpoint only, so no model of its own (they are the
+    // endpoint's), and no plan mode (plan-mode.ts gives plan to claude and qwen-code only). Its mark is Nous's, as
+    // Nous Portal's, the label telling the two apart. Frame: `Providers · Hermes Agent, the entry (PR 1)`.
+    id: 'hermes',
+    label: 'Hermes Agent',
+    icon: { type: 'svg-nous' },
+    accent: 'teal-500',
+    requiresCli: true,
+    models: [],
+    defaultModel: '',
+  },
+  {
     id: 'pi',
     label: 'Pi',
     icon: { type: 'cpu' },
@@ -405,6 +417,9 @@ export function computeProviderAvailability(
     opencode: !!paths?.opencode,
     amp: !!paths?.amp,
     pi: !!paths?.pi,
+    // Not ready until Tars can run a Hermes Agent: setting it up is #654's PR 2, which reports it here. Listed
+    // false, not left out, or a team's member table (which keeps all but false) would offer it.
+    hermes: false,
     local: true,
     openrouter: viaOpenRouter,
     deepseek: keyed(settings?.deepSeekEnabled, 'deepSeekApiKey') || viaOpenRouter,
