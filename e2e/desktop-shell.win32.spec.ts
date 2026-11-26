@@ -319,7 +319,13 @@ test.describe('the Windows desktop shell', () => {
       shots.push(await shotWindow(app, `window-dark${route === '/' ? '-dashboard' : route.replace(/\//g, '-')}`));
     }
 
-    await page.getByRole('button', { name: 'Light Mode' }).click();
+    // The theme is a row of Settings, Preferences since 2.1.0 (the classic sidebar's Light/Dark button went with it).
+    const theme = async (want: 'Light' | 'Dark') => {
+      await page.goto(`${DEV_URL}/settings`, { waitUntil: 'domcontentloaded' });
+      const row = page.locator('[data-settings-row]').filter({ has: page.locator('[data-settings-label]', { hasText: 'Appearance' }) });
+      await row.getByRole('radio', { name: want, exact: true }).click({ timeout: 60_000 });
+    };
+    await theme('Light');
     await page.waitForTimeout(800);
     colours.light = await screenColour(app, probe.x, probe.y, 'caption-light');
     for (const route of ['/agents', '/settings', '/', '/kanban']) {
@@ -327,7 +333,7 @@ test.describe('the Windows desktop shell', () => {
       await page.waitForTimeout(2500);
       shots.push(await shotWindow(app, `window-light${route === '/' ? '-dashboard' : route.replace(/\//g, '-')}`));
     }
-    await page.getByRole('button', { name: 'Dark Mode' }).click();
+    await theme('Dark');
     await page.waitForTimeout(800);
     colours.darkAgain = await screenColour(app, probe.x, probe.y, 'caption-dark-again');
     const calls = await app.evaluate(() => (globalThis as unknown as { __overlayCalls: unknown[] }).__overlayCalls);
