@@ -66,6 +66,8 @@ import { cannotSymlink } from '../setup/symlink-privilege';
  * 25. The same race with the extra headers.
  * 26. A save from the window on an endpoint that exists, with no `shown`, is taken; or a fresh form (shown equal to the
  *     record) no longer behaves as before.
+ * 27. (The window's work on #599, which shows main's words as they come.) The refusal of a save or an approval says
+ *     when the agent changed the endpoint as a raw ISO time, not as the other notices do ("12:00 UTC (16:00 +04)").
  */
 
 const NOW = '2026-11-19T12:00:00.000Z';
@@ -297,6 +299,22 @@ describe('saving endpoints', () => {
     const own = saveEndpoint(p.settings, { id: p.id, baseUrl: 'https://owner.example/v1', extraHeaders: {}, shown } as Parameters<typeof saveEndpoint>[1], OWNER, NOW);
     if (!own.ok) throw new Error(own.error);
     expect(own.endpoint).toMatchObject({ approved: true, approvedBaseUrl: 'https://owner.example/v1' });
+  });
+
+  it('27: a refusal says when the agent changed the endpoint as the notices do, UTC then local with its offset', () => {
+    const p = pendingAfterAgent();
+    const shown = seenOf(p.settings, p.id);
+    const again = saveEndpoint(p.settings, { id: p.id, baseUrl: 'https://again.example/v1' }, AGENT, NOW);
+    if (!again.ok) throw new Error(again.error);
+    const save = saveEndpoint(again.settings, { id: p.id, ...shown, allowTraces: false, shown }, OWNER, NOW);
+    const approve = approveEndpoint(again.settings, p.id, shown);
+    for (const [what, r] of [['save', save], ['approve', approve]] as const) {
+      expect(r.ok, what).toBe(false);
+      if (r.ok) continue;
+      // utils/two-zones.ts: "12:00 UTC (16:00 +04)", or "12:00 UTC" alone on a machine on UTC.
+      expect(r.error, what).toMatch(/\(Remote-Tuner, 12:00 UTC( \(\d\d:\d\d [+-]\d\d(:\d\d)?\))?\)/);
+      expect(r.error, what).not.toMatch(/\d{4}-\d\d-\d\dT/);
+    }
   });
 
   it('4: the key is never in a view nor in the endpoint record', () => {
