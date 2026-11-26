@@ -190,7 +190,7 @@ test('an endpoint\'s extra headers: added by the owner and sent, a credential\'s
     keep({ changedTwice });
     await stepShot(page, '3b-changed-since-shown');
     expect.soft(changedTwice.stale, 'the notice the owner read').toContain('X-Route: green-pool');
-    expect.soft(changedTwice.refused, 'main\'s sentence').toMatch(/^The endpoint "Remote host" changed since it was shown \(Lead, [^)]+\): look at it again before you approve\.$/);
+    expect.soft(changedTwice.refused, 'main\'s sentence, its time in two zones').toMatch(/^The endpoint "Remote host" changed since it was shown \(Lead, \d\d:\d\d UTC \(\d\d:\d\d [+-]\d\d(:?\d\d)?\)\): look at it again before you approve\.$/);
     expect.soft(changedTwice.notice, 'the new lists').toContain('new        X-Route: amber-pool · X-Batch: nightly');
     expect.soft(changedTwice.view, 'nothing approved').toMatchObject({ approved: false, approvedExtraHeaders: { 'X-Route': 'blue-pool' } });
 
@@ -238,7 +238,8 @@ test('an endpoint\'s extra headers: added by the owner and sent, a credential\'s
     expect.soft(race.moved, 'Lead\'s move').toMatchObject({ status: 200, body: { needsApproval: true } });
     expect.soft(race.refused, 'main\'s sentence, its time in two zones').toMatch(/^The endpoint "Remote host" changed since it was shown \(Lead, \d\d:\d\d UTC \(\d\d:\d\d [+-]\d\d(:?\d\d)?\)\): look at it again before you save\.$/);
     expect.soft(race.view, 'nothing approved, traces as they were').toMatchObject({ approved: false, approvedBaseUrl: beforeRace.approvedBaseUrl, allowTraces: beforeRace.allowTraces });
-    expect.soft(race.row, 'the move shown, waiting').toContain('approved   ' + beforeRace.approvedBaseUrl);
+    // The notice's address lines do not keep their spaces in innerText: any run of them between the word and the URL.
+    expect.soft(race.row, 'the move shown, waiting').toMatch(new RegExp(`approved\\s+${String(beforeRace.approvedBaseUrl).replace(/[.*+?^${}()|[\]\\/]/g, '\\$&')}\\s+new\\s+http://127\\.0\\.0\\.1:9/v1`));
     expect.soft(race.sent, 'no request sent').toBe(0);
 
     // 7.

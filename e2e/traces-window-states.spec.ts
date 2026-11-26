@@ -771,9 +771,11 @@ test('a revoke main holds but could not write is said beside the control that as
         const gammaView = (await call<EndpointView[]>(page, 'endpoints', 'list')).find(e => e.name === 'Gamma')!;
         await endpointRow(page, 'Gamma').getByRole('switch', { name: 'Gamma allows traces', exact: true }).click();
         await expect(endpointRow(page, 'Gamma').locator('[data-endpoint-row-error]')).toBeVisible({ timeout: 15_000 });
+        // As the window sends it: what the row showed goes as `shown` (#596 at 7a651ed95), so main reaches the write.
         const granted = await call<Answer>(page, 'endpoints', 'save', {
           id: gammaView.id, name: gammaView.name, baseUrl: gammaView.baseUrl, allowTraces: true,
           holdMaxSeconds: gammaView.holdMaxSeconds, sendSessionHeaders: gammaView.sendSessionHeaders, allowPlainHttp: gammaView.allowPlainHttp,
+          shown: { baseUrl: gammaView.baseUrl, extraHeaders: (gammaView as { extraHeaders?: Record<string, string> }).extraHeaders ?? {} },
         });
         expect(granted, JSON.stringify(granted)).toMatchObject({ ok: false });
         await expect(endpointRow(page, 'Gamma').locator('[data-endpoint-row-error]'), "main's refusal, word for word").toHaveText(String(granted.error));
