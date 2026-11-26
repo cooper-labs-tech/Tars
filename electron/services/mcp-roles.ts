@@ -2,6 +2,7 @@ import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
 import type { CLIProvider } from '../providers/cli-provider';
+import { parse as parseToml } from 'smol-toml';
 import { writeAtomicSync } from '../utils/secret-file';
 
 /**
@@ -16,7 +17,7 @@ import { writeAtomicSync } from '../utils/secret-file';
  *   `~/.claude/mcp.json` for an orchestrator and `~/.claude/mcp-worker.json`, the same minus the two, for a
  *   worker. That holds only because no Tars server is in Claude Code's user scope (`~/.claude.json`), which
  *   every session loads whatever --mcp-config says (claude-provider.ts registers into the file only).
- * - codex: `-c mcp_servers.<name>.enabled=false` (0.163), Qwen Code: `--disable-mcp-server <name>` (0.25.2),
+ * - codex: `-c mcp_servers.<name>.enabled=false` (0.163) for each its config holds, Qwen Code: `--disable-mcp-server <name>` (0.25.2),
  *   gemini: `--allowed-mcp-server-names`, its other servers (codex-provider.ts, qwen-code-provider.ts,
  *   gemini-provider.ts).
  * - opencode, amp, grok and pi read their servers from their own config with no per-run switch Tars could
@@ -83,9 +84,25 @@ export function mcpConfigPathFor(
   return worker;
 }
 
-/** codex: the two switched off for a worker, for this run (0.163 takes `-c` after `resume` too). */
-export function codexRoleArgs(orchestrator: boolean): string[] {
-  return orchestrator ? [] : ORCHESTRATOR_ONLY_MCP.flatMap(name => ['-c', `mcp_servers.${name}.enabled=false`]);
+/**
+ * codex: the two switched off for a worker, for this run (0.163 takes `-c` after `resume` too), each only where the
+ * config Tars hands codex (`configFile`, CODEX_HOME's config.toml) holds it. codex 0.163 refuses to start on such a
+ * switch for a server its config lacks ("invalid transport in `mcp_servers.claude-mgr-telegram`"), and Telegram is no
+ * longer shipped: on a CODEX_HOME that never ran 2.0.4 no codex worker started. A config that does not exist or does
+ * not parse holds none.
+ */
+export function codexRoleArgs(orchestrator: boolean, configFile: string): string[] {
+  if (orchestrator) return [];
+  let held: Record<string, unknown>;
+  try {
+    const servers = (parseToml(fs.readFileSync(configFile, 'utf-8')) as { mcp_servers?: unknown }).mcp_servers;
+    held = servers && typeof servers === 'object' ? servers as Record<string, unknown> : {};
+  } catch {
+    return [];
+  }
+  return ORCHESTRATOR_ONLY_MCP
+    .filter(name => Object.prototype.hasOwnProperty.call(held, name))
+    .flatMap(name => ['-c', `mcp_servers.${name}.enabled=false`]);
 }
 
 /** Qwen Code: the two disabled for a worker, for this invocation (0.25.2). */

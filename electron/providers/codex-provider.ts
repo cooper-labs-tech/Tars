@@ -106,8 +106,9 @@ export class CodexProvider implements CLIProvider {
     if (permission.length) command += ` ${permission.join(' ')}`;
 
     // A worker's codex starts without the orchestrator's own servers, Telegram and X (services/mcp-roles.ts):
-    // `-c mcp_servers.<name>.enabled=false`, this run only (measured on 0.163, `codex mcp list` says disabled).
-    const role = codexRoleArgs(params.orchestratorMode === true);
+    // `-c mcp_servers.<name>.enabled=false`, this run only (measured on 0.163, `codex mcp list` says disabled), for each
+    // server the config this line hands codex holds: one it lacks stops codex at start (codexRoleArgs).
+    const role = codexRoleArgs(params.orchestratorMode === true, path.join(this.configDir, 'config.toml'));
     for (let i = 0; i < role.length; i += 2) command += ` ${role[i]} ${shellQuote(role[i + 1])}`;
 
     // Secondary project, never ~/.tars-private (utils/handed-folder.ts)
