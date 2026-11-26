@@ -27,7 +27,10 @@ import * as path from 'path';
  *   P6. development: next dev's inline scripts, eval or refresh socket are refused (next dev breaks), or the
  *       development policy differs from the packaged one anywhere else, so a picture or a connection the
  *       packaged build refuses works in development and nobody sees it before a release;
- *   P7. the header carries a line break, which no header may.
+ *   P7. the header carries a line break, which no header may;
+ *   P8. img-src names the local API's whole origin, so any of its routes (/api/health) can be loaded as a picture,
+ *       where the window's pictures only ever come from /api/local-file?path=… (a source's path is matched
+ *       exactly, its query is not part of the match).
  * Where it is served:
  *   S1. the packaged app:// handler serves a page without the policy, or with another page's hashes, or the
  *       page-route fallback (/agents served from agents/index.html) without it;
@@ -133,7 +136,7 @@ describe('windowCsp, packaged', () => {
   });
 
   it('P4: keeps what the window loads: the API\'s pictures, data: and blob: pictures, the marketplace, the manifest', () => {
-    expect(directives.get('img-src')).toEqual(["'self'", 'data:', 'blob:', 'http://127.0.0.1:31415']);
+    expect(directives.get('img-src')).toEqual(["'self'", 'data:', 'blob:', 'http://127.0.0.1:31415/api/local-file']);
     expect(directives.get('connect-src')).toEqual(["'self'", 'https://raw.githubusercontent.com']);
     expect(directives.get('font-src')).toEqual(["'self'"]);
     expect(directives.get('manifest-src')).toEqual(["'self'"]);
@@ -141,7 +144,15 @@ describe('windowCsp, packaged', () => {
   });
 
   it('P4: follows the port the API answers on', () => {
-    expect(directivesOf(windowCsp({ apiPort: 31499 })).get('img-src')).toContain('http://127.0.0.1:31499');
+    expect(directivesOf(windowCsp({ apiPort: 31499 })).get('img-src')).toContain('http://127.0.0.1:31499/api/local-file');
+  });
+
+  it('P8: names the API\'s picture route, never its whole origin', () => {
+    const api = (directives.get('img-src') ?? []).filter((source) => source.startsWith('http://127.0.0.1'));
+    expect(api).toEqual(['http://127.0.0.1:31415/api/local-file']);
+    for (const wide of ['http://127.0.0.1:31415', 'http://127.0.0.1:31415/', 'http://127.0.0.1:31415/api/', 'http://127.0.0.1:*']) {
+      expect(directives.get('img-src'), wide).not.toContain(wide);
+    }
   });
 
   it('P5: leaves out a port that is not one', () => {
