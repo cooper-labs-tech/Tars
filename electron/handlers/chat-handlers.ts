@@ -62,8 +62,6 @@ const argsOf = (raw: unknown): Record<string, unknown> => (raw && typeof raw ===
 export function registerChatHandlers(deps: {
   agents: Map<string, AgentStatus>;
   file?: string;
-  /** Whether a window can show chats (the new interface): the follower reads nothing otherwise. */
-  chatsShown?: () => boolean;
 }): ChatStore {
   const { agents } = deps;
   const store = createChatStore({ file: deps.file ?? CHATS_FILE });
@@ -150,7 +148,6 @@ export function registerChatHandlers(deps: {
     runnerOf: (chat) => runnerOf(chat),
     isLive: (agent) => isLive(agent),
     nameOf,
-    enabled: deps.chatsShown ?? (() => true),
   });
 
   ipcMain.handle('chat:list', () => {

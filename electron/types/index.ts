@@ -521,9 +521,6 @@ export interface AppSettings {
   /** Resume idle agents once, when the app launches. Not on navigation - that
    *  was the old behaviour and it spawned sessions on every visit home. */
   autoStartAgentsOnLaunch?: boolean;
-  /** The 2.0 interface (PLAN-2.0.0). Off unless chosen: a file written before
-   *  the switch existed reads false. */
-  newInterface: boolean;
   /**
    * A project's chats may read one another (ORCHESTRATOR-PER-CHAT.md v2.2,
    * 4.4 item 5): chat_list and chat_read, given to a chat's runner and to the

@@ -23,10 +23,12 @@ const SECRETS_FILE = () => privatePath('settings-secrets.json');
 const SENT_LOG = () => privatePath('telegram-sent.json');
 
 /**
- * Settings nothing reads any more, which a save drops whatever a window still sends: the bot's, and
- * `defaultProvider`, whose only use was the Settings row #547 removes (read nowhere already on 2.0.4).
+ * Settings nothing reads any more, which a save drops whatever a window still sends: the bot's,
+ * `defaultProvider`, whose only use was the Settings row #547 removes (read nowhere already on 2.0.4), and
+ * `newInterface`, the preview's switch, since the new interface is the only one (2.1.0): true or false, a file that
+ * still holds it is read as if it did not, and the first save drops it.
  */
-const RETIRED_SETTINGS: readonly string[] = [...TELEGRAM_BOT_FIELDS, 'defaultProvider'];
+const RETIRED_SETTINGS: readonly string[] = [...TELEGRAM_BOT_FIELDS, 'defaultProvider', 'newInterface'];
 
 /** The settings without the retired ones: what a save writes, whatever a window still sends. */
 export function withoutRetiredSettings<T extends object>(settings: T): T {

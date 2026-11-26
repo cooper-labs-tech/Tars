@@ -295,7 +295,6 @@ function loadAppSettings(): AppSettings {
     chromeEnabled: false,
     autoCheckUpdates: true,
     autoStartAgentsOnLaunch: true,
-    newInterface: false,
     chatsReadEachOther: false,
     opencodeEnabled: false,
     opencodeDefaultModel: '',
@@ -327,10 +326,12 @@ function loadAppSettings(): AppSettings {
       const saved = JSON.parse(fs.readFileSync(APP_SETTINGS_FILE, 'utf-8'));
       // The Sentry token is kept in ~/.tars-private (services/sentry-token.ts),
       // and so are the other secrets (settings-secrets.json).
-      // The switch is on only for the boolean true: the file is in ~/.tars,
-      // which every agent can write, and "false" or 1 would read as on to a
-      // page that tests it for truth (the Audit's L1 on #360).
-      return { ...defaults, ...sentryTokenOutOf(saved), ...readSecrets(), newInterface: saved.newInterface === true, chatsReadEachOther: saved.chatsReadEachOther === true };
+      // chatsReadEachOther is on only for the boolean true: the file is in
+      // ~/.tars, which every agent can write, and "false" or 1 would read as
+      // on to a page that tests it for truth (the Audit's L1 on #360). A
+      // newInterface the file still holds is read by nothing since 2.1.0, and
+      // the first save drops it (RETIRED_SETTINGS, services/telegram-retired.ts).
+      return { ...defaults, ...sentryTokenOutOf(saved), ...readSecrets(), chatsReadEachOther: saved.chatsReadEachOther === true };
     }
   } catch (err) {
     console.error(`Failed to load app settings: ${describeSecretFileError(err)}`);
@@ -700,7 +701,8 @@ app.whenReady().then(async () => {
   registerBusHandlers();
   // The chats' records, and the migration that makes each project's
   // orchestrator's conversation its chat #1, Main (handlers/chat-handlers.ts).
-  registerChatHandlers({ agents, chatsShown: () => appSettings.newInterface === true });
+  // Its follower always runs: every window shows chats since 2.1.0.
+  registerChatHandlers({ agents });
 
   // The overseer's watch timer: an unprompted briefing reaches the Chat page
   // through the same broadcast channel every other live update uses.

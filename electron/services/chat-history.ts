@@ -244,23 +244,22 @@ export function resetChatHistory(): void {
 
 /**
  * Following the chats a window follows, while their runner's CLI is live: the
- * items each gained, and a runner whose state changed, as events. Nothing
- * while `enabled` says no (the new interface off: no window shows chats).
- * One tick at a time. Returns what stops it, and a tick to run now.
+ * items each gained, and a runner whose state changed, as events. Always on
+ * since 2.1.0, where every window shows chats; until then it waited on the
+ * new interface's switch. One tick at a time. Returns what stops it, and a
+ * tick to run now.
  */
 export function followChats(deps: {
   chats: () => Chat[];
   runnerOf: (chat: Chat) => AgentStatus | undefined;
   isLive: (agent: AgentStatus) => boolean;
   nameOf: (agentId: string) => string | undefined;
-  enabled: () => boolean;
   homeDir?: string;
   everyMs?: number;
 }): { stop: () => void; tick: () => Promise<void> } {
   const states = new Map<string, string>();
   let running: Promise<void> | null = null;
   const once = async () => {
-    if (!deps.enabled()) return;
     for (const chat of deps.chats()) {
       const runner = deps.runnerOf(chat);
       const state = runner ? `${runner.id}:${runner.status}:${deps.isLive(runner)}` : 'none';
