@@ -25,6 +25,15 @@ function sameHeaders(a: Record<string, string> | undefined, b: Record<string, st
 /** A map of extra headers on one line, as the notice shows both lists whole. */
 const headersLineOf = (m: Record<string, string> | undefined) => Object.entries(m ?? {}).map(([k, v]) => `${k}: ${v}`).join(' · ') || 'none';
 
+/**
+ * What the window showed of an endpoint, which main checks a save or an approval against (#596 at 7a651ed95): a
+ * change an agent made since is refused, never taken for the owner's.
+ */
+const shownOf = (e: EndpointView) => ({ baseUrl: e.baseUrl, extraHeaders: { ...(e.extraHeaders ?? {}) } });
+
+/** main's refusal of a save or an approval of what an agent changed since it was shown. */
+const isStale = (error: string) => error.includes('changed since it was shown');
+
 const countOf = (m: Record<string, string>) => {
   const n = Object.keys(m).length;
   return n > 0 ? ` · ${n} extra header${n === 1 ? '' : 's'}` : '';
@@ -97,7 +106,7 @@ export const InferenceEndpointsSection = () => {
     if (!api) return;
     let r: Awaited<ReturnType<typeof api.save>>;
     try {
-      r = await api.save({ id: e.id, name: e.name, baseUrl: e.baseUrl, allowTraces: !e.allowTraces, holdMaxSeconds: e.holdMaxSeconds, sendSessionHeaders: e.sendSessionHeaders, allowPlainHttp: e.allowPlainHttp });
+      r = await api.save({ id: e.id, name: e.name, baseUrl: e.baseUrl, allowTraces: !e.allowTraces, holdMaxSeconds: e.holdMaxSeconds, sendSessionHeaders: e.sendSessionHeaders, allowPlainHttp: e.allowPlainHttp, shown: shownOf(e) });
     } catch (err) {
       setRowError(m => ({ ...m, [e.id]: reasonOf(err) }));
       return;
@@ -137,7 +146,7 @@ export const InferenceEndpointsSection = () => {
     if (!api) return;
     let r: Awaited<ReturnType<typeof api.approve>>;
     try {
-      r = await api.approve(e.id, { baseUrl: e.baseUrl, extraHeaders: e.extraHeaders ?? {} });
+      r = await api.approve(e.id, shownOf(e));
     } catch (err) {
       setRowError(m => ({ ...m, [e.id]: reasonOf(err) }));
       return;
@@ -155,7 +164,7 @@ export const InferenceEndpointsSection = () => {
     let r: Awaited<ReturnType<typeof api.save>>;
     try {
       r = await api.save({
-        id: e.id, name: e.name, baseUrl, allowTraces: e.allowTraces, holdMaxSeconds: e.holdMaxSeconds, sendSessionHeaders: e.sendSessionHeaders, allowPlainHttp: e.allowPlainHttp,
+        id: e.id, name: e.name, baseUrl, allowTraces: e.allowTraces, holdMaxSeconds: e.holdMaxSeconds, sendSessionHeaders: e.sendSessionHeaders, allowPlainHttp: e.allowPlainHttp, shown: shownOf(e),
         ...(headersWait ? { extraHeaders: e.approvedExtraHeaders } : {}),
       });
     } catch (err) {
@@ -360,6 +369,8 @@ function EndpointForm({ endpoint, onDone }: { endpoint?: EndpointView; onDone: (
   const [allowTraces, setAllowTraces] = useState(endpoint?.allowTraces ?? false);
   const [sessionHeaders, setSessionHeaders] = useState(endpoint?.sendSessionHeaders ?? false);
   const [plainHttp, setPlainHttp] = useState(endpoint?.allowPlainHttp ?? false);
+  /** What the editor showed as it opened: its save names it, so a change an agent made since is refused, not taken. */
+  const [shown] = useState(() => (endpoint ? shownOf(endpoint) : undefined));
   /** The extra headers as rows; saving sends them all (main replaces the whole map), an empty row left out. */
   const [headers, setHeaders] = useState<Array<{ name: string; value: string }>>(
     () => Object.entries(endpoint?.extraHeaders ?? {}).map(([name, value]) => ({ name, value })),
@@ -392,8 +403,11 @@ function EndpointForm({ endpoint, onDone }: { endpoint?: EndpointView; onDone: (
     }
     try {
       const extraHeaders = Object.fromEntries(headers.filter(h => h.name.trim() !== '' || h.value !== '').map(h => [h.name.trim(), h.value]));
-      const saved = await api.save({ id: endpoint?.id, name: name.trim(), baseUrl: baseUrl.trim(), allowTraces, holdMaxSeconds: holdSeconds, sendSessionHeaders: sessionHeaders, allowPlainHttp: isHttp && plainHttp, extraHeaders });
+      const saved = await api.save({ id: endpoint?.id, name: name.trim(), baseUrl: baseUrl.trim(), allowTraces, holdMaxSeconds: holdSeconds, sendSessionHeaders: sessionHeaders, allowPlainHttp: isHttp && plainHttp, extraHeaders, ...(shown ? { shown } : {}) });
       if (!saved.ok) {
+        // An agent changed the endpoint since this editor opened: nothing was saved. The editor closes, main's
+        // sentence goes under the row, and the list read again shows the change, to approve or put back.
+        if (endpoint && isStale(saved.error)) { onDone({ id: endpoint.id, error: saved.error }); return; }
         // main's refusal of a header goes under the row it names; any other, under the base URL as before.
         const row = refusedRowOf(saved.error, headers);
         if (row !== null) { setHeadersError({ text: saved.error, row }); setNote({ text: 'not saved: see the refused header', tone: 'error' }); }
