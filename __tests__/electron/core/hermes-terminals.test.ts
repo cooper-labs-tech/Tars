@@ -1,5 +1,6 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import * as fs from 'node:fs';
+import * as os from 'node:os';
 import * as path from 'node:path';
 import { spawn, type ChildProcess } from 'node:child_process';
 
@@ -16,6 +17,12 @@ import { spawn, type ChildProcess } from 'node:child_process';
  * 4. A terminal with no endpoint writes a profile, or a `.env` with no token, instead of refusing.
  * 5. A value of the terminal's environment that is a secret reaches the config (only the agent's id, name, project,
  *    Tars's address and instance go there; the token by `${...}`).
+ * Written before its code (27/11, the Audit's L1 on #654):
+ * 6. A record in Tars's home naming the user's own gateway (forged by an agent, or left by a crash and its pid taken)
+ *    stops it: the user's gateway runs the same command line, its HERMES_HOME theirs. Read from the live process here
+ *    (/bin/ps -E on macOS, /proc/<pid>/environ on Linux): it must survive, and Tars's own must not.
+ * 7. Hermes as a worker, while the owner has not chosen (SECURITY.md § 10): either answer is one switch. With
+ *    orchestrators only, a worker's Hermes terminal is refused before anything is written; an orchestrator's opens.
  */
 
 const endpoint = vi.hoisted(() => ({ on: true, agent: { id: 'a', role: 'worker', permissionMode: 'normal' } as Record<string, unknown> }));
@@ -49,9 +56,12 @@ afterEach(async () => {
   fs.rmSync(hermesRoot(), { recursive: true, force: true });
 });
 
-/** A process whose command line reads as a Hermes gateway's, recorded as this home's. */
-async function startGateway(): Promise<ChildProcess> {
-  const p = spawn(process.execPath, ['-e', 'setInterval(() => {}, 1000)', 'hermes_cli.main', 'gateway', 'run', '--quiet'], { stdio: 'ignore' });
+/**
+ * A process whose command line reads as a Hermes gateway's, its own HERMES_HOME `home` (Tars's: a profile of its home,
+ * as a gateway started from a profile's chat has), recorded as this home's.
+ */
+async function startGateway(home = path.join(hermesRoot(), 'profiles', 'a')): Promise<ChildProcess> {
+  const p = spawn(process.execPath, ['-e', 'setInterval(() => {}, 1000)', 'hermes_cli.main', 'gateway', 'run', '--quiet'], { stdio: 'ignore', env: { PATH: process.env.PATH ?? '', HERMES_HOME: home } });
   await new Promise(r => setTimeout(r, 200));
   fs.writeFileSync(path.join(hermesRoot(), 'gateway.pid'), JSON.stringify({ pid: p.pid, hermes_home: hermesRoot(), kind: 'hermes-gateway' }));
   return p;
@@ -116,4 +126,35 @@ describe.skipIf(process.platform === 'win32')('the gateway they share', () => {
     closeHermesTerminal('b', 'tep_b');
     expect(await ended(gateway)).toBe(true);
   });
+
+  it('6: a record naming the user\'s own gateway stops nothing; Tars\'s own is stopped', async () => {
+    const users = await startGateway(path.join(os.homedir(), '.hermes'));
+    try {
+      await endHermesOnQuit();
+      await new Promise(r => setTimeout(r, 500));
+      expect(users.exitCode === null && users.signalCode === null, "the user's gateway").toBe(true);
+    } finally {
+      users.kill('SIGKILL');
+    }
+    gateway = await startGateway();
+    await endHermesOnQuit();
+    expect(await ended(gateway), "Tars's gateway").toBe(true);
+  });
 });
+
+describe('Hermes as a worker', () => {
+  it('7: either answer of the owner is one switch', () => {
+    expect(() => openHermesTerminal('a', { apiToken: 't', endpointToken: 'tep_w', env }, 'stated-exception')).not.toThrow();
+    closeHermesTerminal('a', 'tep_w');
+    removeProfile('a');
+    expect(() => openHermesTerminal('a', { apiToken: 't', endpointToken: 'tep_w', env }, 'orchestrators-only')).toThrow(/orchestrator/);
+    expect(fs.existsSync(hermesProfileDir(hermesRoot(), 'a'))).toBe(false);
+    endpoint.agent = { id: 'a', role: 'orchestrator', permissionMode: 'auto' };
+    expect(() => openHermesTerminal('a', { apiToken: 't', endpointToken: 'tep_o', env }, 'orchestrators-only')).not.toThrow();
+    closeHermesTerminal('a', 'tep_o');
+  });
+});
+
+function removeProfile(id: string): void {
+  fs.rmSync(hermesProfileDir(hermesRoot(), id), { recursive: true, force: true });
+}

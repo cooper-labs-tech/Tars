@@ -1279,6 +1279,28 @@ profile of that home, `~/.tars/hermes/profiles/<agent id>` (`services/hermes-hom
 - What it changes against the environment: a token in a file outlives a process that is killed with no exit heard.
   The sweep at the next start bounds that, and the token itself is revoked when its terminal exits.
 
+**The gateway socket: an open door into every Hermes agent, workers included.**
+- Every `hermes chat` reaches its home's gateway through `$HERMES_HOME/gateway.sock`, a Unix socket that any process
+  of the user can open; the root's gateway serves every profile (`gateway.multiplex_profiles: true`, which Tars sets
+  and Hermes needs).
+- So any process of the user can run `HERMES_HOME=~/.tars/hermes/profiles/<agent id> hermes chat -q "..."`. That is a
+  turn in that agent's profile: its model calls carry that agent's proxy token, so the endpoint bills them to it and
+  its traces record them as its, and its MCP servers start with that agent's Tars token, so Tars takes their calls as
+  that agent's.
+- Measured on 27/11 with the installed Hermes 0.23.4: a chat started by a script with no token in its environment,
+  `HERMES_HOME` set to a profile, sent that profile's proxy token on every model call and handed that profile's Tars
+  token to its MCP server.
+- Every other CLI's worker refuses what other sessions of the machine send it (the cross-session rule). Hermes 0.23.4
+  has no way to refuse: no per-session or per-profile setting closes the socket to other processes, and the socket is
+  how the agent's own terminal talks to its gateway.
+- **The owner chooses**, and either is one setting in `services/hermes-home.ts` (`HERMES_WORKER_POLICY`):
+  - `stated-exception`: Hermes workers run, this exception stated here, until Hermes can refuse. What PR #654 ran with.
+  - `orchestrators-only`: only an agent with the orchestrator's powers starts Hermes until then; a worker's Hermes
+    terminal is refused before anything is written.
+- If Hermes takes a per-session or per-profile refuse, every worker's profile sets it.
+- A same-user process could already read the profile's `.env` and use its tokens directly (above): the socket is the
+  same reach without reading anything.
+
 **What Hermes reaches besides the endpoint, and what Tars turns off.**
 - The profile's config answers the telemetry question (no), turns off `auth.adopt_external_logins` and update checks.
   `adopt_external_logins` would borrow, and refresh, the Codex CLI's and Claude Code's logins; their refresh tokens are
@@ -1291,9 +1313,12 @@ profile of that home, `~/.tars/hermes/profiles/<agent id>` (`services/hermes-hom
   measured), into Tars's Hermes home.
 
 **Its gateway.** It outlives the terminal that started it. Tars stops it when the last Hermes terminal ends, at quit,
-and at the next start. It stops only the pid the record in Tars's own home names, and only once that pid is checked
-to run a Hermes gateway. The user's own gateway runs the same command line, but its record is in their home, never in
-Tars's.
+and at the next start, by the pid the record in Tars's own home names. The record is not believed on its own word: a
+crash can leave it while the pid goes to another process, and any agent can write it. The user's own gateway runs the
+same command line. So the process itself decides: on macOS and Linux its own `HERMES_HOME`, read from its environment
+(`ps -E`, `/proc/<pid>/environ`), must be Tars's home or one of its profiles; on Windows, where another process's
+environment cannot be read, it must have started within two minutes of the record's writing. Anything else stops
+nothing, and an environment that cannot be read stops nothing either.
 
 Measured by:
 - `__tests__/electron/services/hermes-home.test.ts` (the `.env`'s names and mode, two agents' files, the sweep, the

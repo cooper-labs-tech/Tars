@@ -65,6 +65,23 @@ export function hermesProfileDir(root: string, agentId: string): string {
   return path.join(root, 'profiles', agentId);
 }
 
+/**
+ * Whether a worker may run Hermes, which the owner has yet to choose (SECURITY.md § 10). Hermes 0.23.4 has no way to
+ * refuse what other processes send its sessions: any process of the user can start a turn in an agent's profile
+ * through its home's gateway, while the rule for every other CLI is that a worker refuses all of it.
+ * - `stated-exception`: Hermes workers run, the exception stated, until Hermes can refuse.
+ * - `orchestrators-only`: only an agent with the orchestrator's powers starts Hermes until then.
+ * Set here, once the owner has chosen; this is what PR 1 ran with.
+ */
+export type HermesWorkerPolicy = 'stated-exception' | 'orchestrators-only';
+export const HERMES_WORKER_POLICY: HermesWorkerPolicy = 'stated-exception';
+
+/** Why this agent may not start Hermes under the policy, or null. */
+export function hermesRoleRefusal(orchestrator: boolean, policy: HermesWorkerPolicy = HERMES_WORKER_POLICY): string | null {
+  if (orchestrator || policy === 'stated-exception') return null;
+  return 'Hermes runs as an orchestrator only for now: it cannot refuse what other processes send its sessions, which a worker must.';
+}
+
 /** normal (and plan, which Hermes does not have) ask before a dangerous command; auto and bypass let Hermes judge. */
 export function approvalsModeFor(permissionMode: string | undefined): 'manual' | 'smart' {
   return permissionMode === 'auto' || permissionMode === 'bypass' ? 'smart' : 'manual';
@@ -199,10 +216,18 @@ export function sweepHermesSecrets(root: string, isLive: (agentId: string) => bo
 }
 
 export interface GatewayStopDeps {
+  platform?: NodeJS.Platform;
   /** The command line of the process under the pid, or null when there is none (or it cannot be read). */
   commandOf: (pid: number) => Promise<string | null>;
+  /** macOS and Linux: the HERMES_HOME of the process's own environment; null when it has none or it cannot be read. */
+  homeOf: (pid: number) => Promise<string | null>;
+  /** Windows: when the process started (ms since the epoch); null when it cannot be read. */
+  startedAt: (pid: number) => Promise<number | null>;
   stop: (pid: number) => Promise<void>;
 }
+
+/** How far a gateway's start may be from its record's writing: it writes the record as it starts (seconds). */
+const RECORD_SLACK_MS = 120_000;
 
 const samePath = (a: string, b: string) => {
   const norm = (p: string) => path.resolve(p).replace(/[\\/]+$/, '');
@@ -214,20 +239,44 @@ const samePath = (a: string, b: string) => {
 /** A Hermes gateway's command line: `python3 -m hermes_cli.main [--profile <p>] gateway run ...` (measured). */
 const GATEWAY_COMMAND = /\bhermes_cli[./\\]main\b.*\bgateway\s+run\b/;
 
+/** This home, or a profile of it: where a gateway of Tars's runs from. */
+function inThisHome(home: string, root: string): boolean {
+  if (samePath(home, root)) return true;
+  const rel = path.relative(path.join(root, 'profiles'), home);
+  return !!rel && !rel.startsWith('..') && !path.isAbsolute(rel) && !rel.includes(path.sep);
+}
+
 /**
  * Stops the gateway of Tars's home: the pid its record (`<home>/gateway.pid`, `{"pid", "hermes_home", ...}`) names,
- * only when that record is this home's and the process under the pid runs a Hermes gateway. Anything else stops
- * nothing: the user's own gateway has a record in their home, never in this one.
+ * only when the process under that pid runs a Hermes gateway of this home. The record alone is not believed (the
+ * Audit's L1 on #654): a crash can leave it while the pid goes to another process, the user's own gateway included,
+ * whose command line is the same, and any agent can write it (~/.tars is in every agent's --add-dir). So the process
+ * decides: on macOS and Linux its own HERMES_HOME is this home or one of its profiles; on Windows, where another
+ * process's environment cannot be read, it started when the record was written. Anything else stops nothing.
  */
 export async function stopHermesGateway(root: string, deps: GatewayStopDeps): Promise<'stopped' | 'none' | 'not-this-home' | 'not-a-gateway'> {
+  const file = path.join(root, 'gateway.pid');
   let record: unknown;
-  try { record = JSON.parse(fs.readFileSync(path.join(root, 'gateway.pid'), 'utf8')); } catch { return 'none'; }
+  let written: number;
+  try {
+    record = JSON.parse(fs.readFileSync(file, 'utf8'));
+    written = fs.statSync(file).mtimeMs;
+  } catch {
+    return 'none';
+  }
   const { pid, hermes_home: home } = (record && typeof record === 'object' ? record : {}) as { pid?: unknown; hermes_home?: unknown };
   if (typeof pid !== 'number' || !Number.isSafeInteger(pid) || pid <= 1 || pid === process.pid) return 'none';
   if (typeof home !== 'string' || !samePath(home, root)) return 'not-this-home';
   const command = await deps.commandOf(pid);
   if (!command) return 'none';
   if (!GATEWAY_COMMAND.test(command)) return 'not-a-gateway';
+  if ((deps.platform ?? process.platform) === 'win32') {
+    const started = await deps.startedAt(pid);
+    if (started === null || Math.abs(started - written) > RECORD_SLACK_MS) return 'not-this-home';
+  } else {
+    const own = await deps.homeOf(pid);
+    if (!own || !inThisHome(own, root)) return 'not-this-home';
+  }
   await deps.stop(pid);
   return 'stopped';
 }

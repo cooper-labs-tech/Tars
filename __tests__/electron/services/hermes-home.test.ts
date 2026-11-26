@@ -32,6 +32,12 @@ import {
  * 10. The gateway stop signals a process that is not this home's gateway: no record, a malformed one, a record of
  *    another home (the user's `~/.hermes`), a pid now held by another program, or this Tars itself.
  * 11. A model, an MCP command or argument with quotes, colons, `#`, backslashes or non-ASCII breaks the YAML.
+ * 12. (The Audit's L1 on #654.) The record is believed about its home: a record a crash left, whose pid the user's own
+ *    gateway later took, or one an agent wrote into ~/.tars naming the user's gateway, stops the user's gateway, whose
+ *    command line is the same. The process itself decides: on macOS and Linux its own HERMES_HOME must be this home
+ *    or one of its profiles (an environment that cannot be read stops nothing); on Windows, where it cannot be read,
+ *    it must have started when the record was written (within two minutes), which neither a reused pid nor a record
+ *    written after the fact does.
  */
 
 let tmp: string;
@@ -180,10 +186,54 @@ describe('when the terminal is gone', () => {
 describe('the gateway it leaves', () => {
   const GATEWAY = '/x/python3 -m hermes_cli.main --profile default gateway run --quiet --idle-exit';
   const record = (o: unknown) => { fs.mkdirSync(root, { recursive: true }); fs.writeFileSync(path.join(root, 'gateway.pid'), JSON.stringify(o)); };
-  const deps = (command: string | null) => {
+  const deps = (command: string | null, o: { home?: string | null; platform?: NodeJS.Platform; startedAt?: number | null } = {}) => {
     const stopped: number[] = [];
-    return { stopped, deps: { commandOf: async () => command, stop: async (pid: number) => { stopped.push(pid); } } };
+    return {
+      stopped,
+      deps: {
+        platform: o.platform ?? 'darwin',
+        commandOf: async () => command,
+        homeOf: async () => (o.home === undefined ? path.join(root, 'profiles', 'agent-a') : o.home),
+        startedAt: async () => (o.startedAt === undefined ? null : o.startedAt),
+        stop: async (pid: number) => { stopped.push(pid); },
+      },
+    };
   };
+  const recordTime = () => fs.statSync(path.join(root, 'gateway.pid')).mtimeMs;
+
+  it('12: on macOS and Linux, stops it only when its own HERMES_HOME is this home or one of its profiles', async () => {
+    for (const [home, outcome] of [
+      [path.join(root, 'profiles', 'agent-a'), 'stopped'], [root, 'stopped'],
+      [path.join(os.homedir(), '.hermes'), 'not-this-home'], [path.join(root, '..', 'hermes-other'), 'not-this-home'],
+      [`${root}-x`, 'not-this-home'], [null, 'not-this-home'],
+    ] as const) {
+      record({ pid: 4242, hermes_home: root });
+      const d = deps(GATEWAY, { home, platform: 'linux' });
+      expect(await stopHermesGateway(root, d.deps), String(home)).toBe(outcome);
+      expect(d.stopped, String(home)).toEqual(outcome === 'stopped' ? [4242] : []);
+    }
+  });
+
+  it('12: a record forged, or left by a crash, naming the user\'s own gateway stops nothing', async () => {
+    // The user's gateway: the same command line, its home theirs.
+    record({ pid: 4242, hermes_home: root });
+    const d = deps(GATEWAY, { home: path.join(os.homedir(), '.hermes') });
+    expect(await stopHermesGateway(root, d.deps)).toBe('not-this-home');
+    expect(d.stopped).toEqual([]);
+  });
+
+  it('12: on Windows, stops it only when it started when its record was written', async () => {
+    record({ pid: 4242, hermes_home: root });
+    const written = recordTime();
+    for (const [startedAt, outcome] of [
+      [written - 3_000, 'stopped'], [written + 1_000, 'stopped'],
+      [written - 6 * 3600_000, 'not-this-home'], [written + 600_000, 'not-this-home'], [null, 'not-this-home'],
+    ] as const) {
+      const d = deps(GATEWAY, { platform: 'win32', startedAt, home: null });
+      expect(await stopHermesGateway(root, d.deps), String(startedAt)).toBe(outcome);
+      expect(d.stopped).toEqual(outcome === 'stopped' ? [4242] : []);
+    }
+  });
 
   it('10: stops the pid its record names, when it is this home\'s gateway', async () => {
     record({ pid: 4242, hermes_home: root });

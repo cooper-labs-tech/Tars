@@ -1,7 +1,11 @@
 import { execFile } from 'child_process';
 import * as path from 'path';
 import { endpointAgentOf, endpointLaunchForAgent } from '../services/traces-runtime';
-import { hermesProfileDir, hermesRoot, removeHermesSecrets, stopHermesGateway, sweepHermesSecrets, writeHermesProfile } from '../services/hermes-home';
+import * as fs from 'fs';
+import {
+  HERMES_WORKER_POLICY, hermesProfileDir, hermesRoleRefusal, hermesRoot, removeHermesSecrets, stopHermesGateway, sweepHermesSecrets,
+  writeHermesProfile, type HermesWorkerPolicy,
+} from '../services/hermes-home';
 import { hermesMcpServers } from '../providers/hermes-provider';
 import { ORCHESTRATOR_ONLY_MCP } from '../services/mcp-roles';
 import { TARS_MCP_ENV } from '../services/mcp-orchestrator-env';
@@ -27,12 +31,19 @@ const live = new Map<string, string>();
 /** The variables of Tars's MCP servers that are not secrets, as the terminal's environment holds them. */
 const NOT_SECRET = TARS_MCP_ENV.filter(v => v !== 'CLAUDE_MGR_API_TOKEN');
 
-export function openHermesTerminal(agentId: string, o: { apiToken?: string; endpointToken?: string; env: Record<string, string | undefined> }): void {
+export function openHermesTerminal(
+  agentId: string,
+  o: { apiToken?: string; endpointToken?: string; env: Record<string, string | undefined> },
+  policy: HermesWorkerPolicy = HERMES_WORKER_POLICY,
+): void {
   const endpoint = endpointLaunchForAgent(agentId, 'hermes')?.profile;
   if (!endpoint || !o.endpointToken) throw new Error('A Hermes agent runs on an inference endpoint: choose one, and one of its models, in the agent\'s settings.');
   if (!o.apiToken) throw new Error('A Hermes agent\'s terminal has no token of its own.');
   const agent = endpointAgentOf(agentId);
   const orchestrator = !!agent && hasOrchestratorPowers(agent);
+  // The owner's choice for workers (SECURITY.md § 10), before anything is written.
+  const refusal = hermesRoleRefusal(orchestrator, policy);
+  if (refusal) throw new Error(refusal);
   const servers = Object.fromEntries(Object.entries(hermesMcpServers()).filter(([name]) => orchestrator || !ORCHESTRATOR_ONLY_MCP.includes(name)));
   const values: Record<string, string> = {};
   for (const name of NOT_SECRET) {
@@ -94,11 +105,47 @@ function commandOf(pid: number): Promise<string | null> {
   });
 }
 
+/**
+ * The HERMES_HOME of a process's own environment (macOS and Linux), null when it has none or it cannot be read:
+ * Linux /proc/<pid>/environ, exact; macOS `/bin/ps -E`, which prints the command and then the environment, readable
+ * for a same-user process that is no platform binary (SECURITY.md § 3 and § 10), the last HERMES_HOME= being the
+ * environment's.
+ */
+function homeOf(pid: number): Promise<string | null> {
+  if (process.platform === 'linux') {
+    return fs.promises.readFile(`/proc/${pid}/environ`, 'utf8')
+      .then(text => text.split('\0').find(v => v.startsWith('HERMES_HOME='))?.slice('HERMES_HOME='.length) || null)
+      .catch(() => null);
+  }
+  return new Promise((resolve) => {
+    execFile('/bin/ps', ['-E', '-ww', '-o', 'command=', '-p', String(pid)], { timeout: 5_000, maxBuffer: 4 * 1024 * 1024, env: { ...process.env, LC_ALL: 'C' } }, (err, out) => {
+      if (err) return resolve(null);
+      const found = [...String(out).matchAll(/ HERMES_HOME=(.*?)(?= [A-Za-z_][A-Za-z0-9_]*=|\n|$)/g)];
+      resolve(found.length ? found[found.length - 1][1] : null);
+    });
+  });
+}
+
+/** When a process started (Windows, Win32_Process.CreationDate), null when it cannot be read. */
+function startedAt(pid: number): Promise<number | null> {
+  return new Promise((resolve) => {
+    const root = envValue(process.env, 'SystemRoot', 'win32') || 'C:\\Windows';
+    const powershell = path.win32.join(root, 'System32', 'WindowsPowerShell', 'v1.0', 'powershell.exe');
+    const script = `(Get-CimInstance Win32_Process -Filter "ProcessId = ${pid}").CreationDate.ToUniversalTime().ToString('o')`;
+    execFile(powershell, ['-NoProfile', '-NonInteractive', '-Command', script], { windowsHide: true, timeout: 10_000 }, (err, out) => {
+      const at = err ? NaN : Date.parse(String(out).trim());
+      resolve(Number.isFinite(at) ? at : null);
+    });
+  });
+}
+
 /** Tars's Hermes gateway, by the pid its record names, once checked (services/hermes-home.ts, stopHermesGateway). */
 export async function stopTarsHermesGateway(): Promise<void> {
   try {
     const outcome = await stopHermesGateway(hermesRoot(), {
       commandOf,
+      homeOf,
+      startedAt,
       stop: async (pid) => {
         if (process.platform === 'win32') await killTree(pid);
         else process.kill(pid, 'SIGTERM');

@@ -70,7 +70,15 @@ async function hermesAgents(real: string | undefined): Promise<void> {
   const fakeLog = path.join(home, 'fake-cli.jsonl');
   const standinLog = test.info().outputPath('endpoint-requests.jsonl');
   const key = `e2e-endpoint-key-${randomBytes(6).toString('hex')}`;
-  const standin = await startStandIn({ key, log: standinLog });
+  // B works in a worktree of the project, A in the project itself: where each one's tools run is told apart. On the
+  // real binary, the probe prints the folder and the variables its tool ran with.
+  const bTree = path.join(project, '.worktrees', 'hermes-b');
+  fs.mkdirSync(bTree, { recursive: true });
+  const standin = await startStandIn({ key, log: standinLog, commandPrefix: real ? 'printf \'cwd=%s agent=%s tmp=%s\\n\' "$PWD" "$CLAUDE_AGENT_ID" "$TMPDIR"; ' : '' });
+  // The real binary's one download goes through the proxy this names, when set (a logging proxy of the runner's).
+  const proxy = real && process.env.TARS_HARNESS_HERMES_PROXY
+    ? { HTTPS_PROXY: process.env.TARS_HARNESS_HERMES_PROXY, HTTP_PROXY: process.env.TARS_HARNESS_HERMES_PROXY, https_proxy: process.env.TARS_HARNESS_HERMES_PROXY, http_proxy: process.env.TARS_HARNESS_HERMES_PROXY, NO_PROXY: '127.0.0.1,localhost', no_proxy: '127.0.0.1,localhost' }
+    : {};
 
   const agent = (id: string, name: string, extra: Record<string, unknown>) => ({
     id, name, character: 'robot', status: 'idle', projectPath: project, skills: [],
@@ -79,13 +87,13 @@ async function hermesAgents(real: string | undefined): Promise<void> {
   fs.writeFileSync(path.join(dir, 'agents.json'), JSON.stringify([
     agent(LEAD, 'Lead', { provider: 'claude', role: 'orchestrator', permissionMode: 'bypass' }),
     agent(A, 'Hermes A', { provider: 'hermes', model: MODEL_ID, endpointId: EP, permissionMode: 'normal', cliPath: real ?? fakes.hermes }),
-    agent(B, 'Hermes B', { provider: 'hermes', model: MODEL_ID, endpointId: EP, permissionMode: 'bypass', cliPath: fakes.hermes }),
+    agent(B, 'Hermes B', { provider: 'hermes', model: MODEL_ID, endpointId: EP, permissionMode: 'bypass', worktreePath: bTree, cliPath: real ?? fakes.hermes }),
   ], null, 2));
   fs.writeFileSync(path.join(dir, 'projects.json'), JSON.stringify([project]));
   fs.writeFileSync(path.join(dir, 'hermes-connection.json'), JSON.stringify({ mode: 'local', localPort: 9, authMode: 'token' }));
   fs.writeFileSync(path.join(dir, 'app-settings.json'), JSON.stringify({
     autoStartAgentsOnLaunch: false, ollamaBaseUrl: 'http://127.0.0.1:9',
-    inferenceEndpoints: [{ id: EP, name: 'Remote host', baseUrl: standin.baseUrl, allowTraces: false, models: [MODEL_ID], approved: true, approvedBaseUrl: standin.baseUrl, holdMaxSeconds: 30 }],
+    inferenceEndpoints: [{ id: EP, name: 'Remote host', baseUrl: standin.baseUrl, allowTraces: false, models: [MODEL_ID], approved: true, approvedBaseUrl: standin.baseUrl, holdMaxSeconds: 30, sendSessionHeaders: !!real }],
   }, null, 2));
   // The endpoint's real key, where Tars keeps it: the settings' secrets, which no agent is handed.
   fs.writeFileSync(path.join(priv, 'settings-secrets.json'), JSON.stringify({ endpointKeys: { [EP]: key } }), { mode: 0o600 });
@@ -104,7 +112,7 @@ async function hermesAgents(real: string | undefined): Promise<void> {
     try { return Object.fromEntries(fs.readFileSync(path.join(profile(id), '.env'), 'utf8').trim().split('\n').map(l => [l.slice(0, l.indexOf('=')), l.slice(l.indexOf('=') + 1)])); } catch { return {}; }
   };
   try {
-    app = await launchSandboxed(electron, home, { env: { NODE_ENV: 'development', DOROTHY_DEV_URL: DEV_URL, DOROTHY_API_PORT: port, DOROTHY_E2E: '1' } });
+    app = await launchSandboxed(electron, home, { env: { NODE_ENV: 'development', DOROTHY_DEV_URL: DEV_URL, DOROTHY_API_PORT: port, DOROTHY_E2E: '1', ...proxy } });
     const appLog = test.info().outputPath('app.log');
     app.process().stdout?.on('data', (d) => fs.appendFileSync(appLog, d));
     app.process().stderr?.on('data', (d) => fs.appendFileSync(appLog, d));
@@ -168,7 +176,7 @@ async function hermesAgents(real: string | undefined): Promise<void> {
     // A, then B while A's terminal is open: each started, each given the probe and WHOAMI.
     const env: Record<string, Record<string, string>> = {};
     const done: Record<string, { text: string; isError: boolean }> = {};
-    for (const id of real ? [A] : [A, B]) {
+    for (const id of [A, B]) {
       await call('agent', 'start', { id, prompt: '' });
       if (real) {
         // The real one sets its home up first (its packages, once), then shows its prompt.
@@ -181,10 +189,39 @@ async function hermesAgents(real: string | undefined): Promise<void> {
       done[id] = await lead('wait_for_agent', { id, timeoutSeconds: real ? 300 : 90 });
     }
     if (real) {
+      // The real binary. Where each agent's tool ran, and with whose variables: the probe's line in each tool result
+      // the endpoint got, by the agent the proxy named (X-Agent-Id). One gateway runs both, started by A's terminal.
+      const probes = () => standinEntries().filter(e => e.method === 'POST' && e.headers?.['x-agent-id']).flatMap((e) => {
+        const body = (typeof e.body === 'string' ? (() => { try { return JSON.parse(e.body as string); } catch { return {}; } })() : e.body) as { messages?: Array<{ role?: string; content?: unknown }> };
+        return (body.messages ?? []).filter(m => m.role === 'tool').map((m) => {
+          const line = /cwd=(\S*) agent=(\S*) tmp=(\S*)/.exec(typeof m.content === 'string' ? m.content : JSON.stringify(m.content));
+          return line ? { by: e.headers!['x-agent-id'], cwd: line[1], agentVar: line[2], tmp: line[3] } : null;
+        }).filter(Boolean) as Array<{ by: string; cwd: string; agentVar: string; tmp: string }>;
+      });
+      const ran = probes();
+      const of = (id: string) => ran.find(p => p.by === id);
+      // Any process of the user, holding no token: `HERMES_HOME=<A's profile> hermes chat -q`, as anything could run it.
+      const outsideLog = test.info().outputPath('outside-chat.txt');
+      const outside = spawn(real, ['chat', '-q', 'Run the probe and report what it printed.', '--oneshot', '--format', 'stream-json', '--source', 'tool'], {
+        cwd: home, env: { PATH: process.env.PATH ?? '', HOME: home, HERMES_HOME: profile(A), ...proxy },
+      });
+      outside.stdout.on('data', (d) => fs.appendFileSync(outsideLog, d));
+      outside.stderr.on('data', (d) => fs.appendFileSync(outsideLog, d));
+      const outsideExit = await Promise.race([new Promise<number | null>(r => outside.on('exit', r)), sleep(300_000).then(() => 'timeout' as const)]);
+      if (outsideExit === 'timeout') outside.kill();
+      const fromOutside = probes().filter(p => p.cwd === home || p.cwd === fs.realpathSync(home));
       // The real binary: what it says and what it leaves, then its gateway at quit.
       const record = (() => { try { return JSON.parse(fs.readFileSync(path.join(hermesRoot, 'gateway.pid'), 'utf8')) as { pid?: number; hermes_home?: string }; } catch { return {}; } })();
       const alive = (pid?: number) => { if (!pid) return false; try { process.kill(pid, 0); return true; } catch { return false; } };
       const gatewayBefore = alive(record.pid);
+      // The gateway's own HERMES_HOME, which the stop now checks (the Audit's L1): read here as Tars reads it.
+      const gatewayEnv = record.pid ? execFileSync('/bin/ps', ['-E', '-ww', '-o', 'command=', '-p', String(record.pid)], { encoding: 'utf8' }) : '';
+      const gatewayHome = [...gatewayEnv.matchAll(/ HERMES_HOME=(.*?)(?= [A-Za-z_][A-Za-z0-9_]*=|\n|$)/g)].pop()?.[1] ?? null;
+      keep({ probes: ran, outsideExit, fromOutside, gatewayHome, folders: { A: project, B: bTree } });
+      expect.soft(of(A)?.cwd, "A's tool ran in A's folder").toBe(fs.realpathSync(project));
+      expect.soft(of(B)?.cwd, "B's tool ran in B's folder").toBe(fs.realpathSync(bTree));
+      expect.soft(of(B)?.agentVar, "B's tool had A's agent id").not.toBe(A);
+      expect.soft(of(B)?.tmp && of(A)?.tmp && of(B)!.tmp === of(A)!.tmp, "B's tool had A's temporary folder").toBeFalsy();
       await page.screenshot({ path: test.info().outputPath('real-hermes-agent.png') });
       await app.close();
       app = undefined;
