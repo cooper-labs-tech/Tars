@@ -122,6 +122,9 @@ test('with the new interface on, the shell of the frames: the main menu, Tars fi
     await expect(page).toHaveURL(/\/chat\/?$/);
     await expect(tars).toHaveAttribute('aria-current', 'page');
     await expect(chat).not.toHaveAttribute('aria-current', 'page');
+    // Chat stays boxed beside it, its section (hongt, chat-redesign-a.pen): the current item of the menu, not its page.
+    await expect(chat).toHaveAttribute('aria-current', 'true');
+    expect(await chat.evaluate(el => el.className.includes('bg-accent-dim'))).toBe(true);
     await expect(page.getByRole('heading', { name: 'Chat', exact: true })).toBeVisible();
     await stepShot(page, '05-tars-all-projects');
 

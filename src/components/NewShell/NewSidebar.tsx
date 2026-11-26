@@ -120,7 +120,11 @@ export default function NewSidebar({ onOpenPage }: { onOpenPage: (id: MorePageId
 
       <nav aria-label="Main menu" className="px-2 pt-1 pb-1 space-y-px shrink-0">
         {MAIN.map((item, index) => {
-          const current = place === item.place;
+          const page = place === item.place;
+          // Tars, all projects is a chat too, the first of Chat's: on /chat the Chat row is boxed beside it, as
+          // `Chat · chats · Tars, all projects` (hongt) draws it, the page itself being Tars's own entry.
+          const section = item.place === 'chat' && place === 'tars';
+          const current = page || section;
           return (
             <Fragment key={item.href}>
               {index === 2 && (
@@ -128,7 +132,7 @@ export default function NewSidebar({ onOpenPage }: { onOpenPage: (id: MorePageId
                   <div className="h-px bg-border" />
                 </div>
               )}
-              <Link href={hrefOf(item)} aria-current={current ? 'page' : undefined} className={rowClass(current)}
+              <Link href={hrefOf(item)} aria-current={page ? 'page' : section ? 'true' : undefined} className={rowClass(current)}
                 onPointerEnter={() => hoverStart(item.href)} onPointerLeave={hoverEnd}>
                 <item.icon className={iconClass(current)} />
                 <span className={labelClass(current)}>{item.label}</span>
