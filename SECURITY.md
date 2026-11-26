@@ -822,6 +822,11 @@ folder as a project and then read it, GitHub's token in `~/.config/gh` or a
 cluster's in `~/.kube` (the Audit's L1 on #466). `fs:add-custom-project` refuses
 such a folder, and since 2.0.7 any folder of the home whose name starts with a
 dot but `~/.claude`, `~/.codex`, `~/.gemini` and `~/.grok`, with the reason.
+The same rule sets every agent's folders since 2.0.7, its project and the
+folder it is handed besides it, wherever it is created or moved: the window's
+`agent:create`, `POST /api/agents` (an agent's `create_agent`), and the update
+path `update_agent` shares with the window; an agent already in such a folder
+keeps it, and only a change of folder is judged.
 Since the projects' list lives in `~/.tars`, which every agent can write, each
 read judges its own target as well, and each use judges the projects the target
 lies in: a project the rule now refuses is read (`fs:read-text-file`,

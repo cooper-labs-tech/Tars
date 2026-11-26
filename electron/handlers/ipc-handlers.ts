@@ -354,6 +354,11 @@ function registerAgentHandlers(deps: IpcHandlerDependencies): void {
   };
   // The one creation of an agent from the window: agent:create, and every member of teams:deploy (first-run-handlers.ts).
   const createAgentFromConfig = async (config: AgentCreateConfig) => {
+    // The window's project rule, for the project and the folder handed besides it, before anything is made (2.0.7):
+    // the page lists a refused project but lets nobody choose it, and this holds it for every page that calls.
+    const folderRefused = projectRefusal(config.projectPath)
+      ?? (config.secondaryProjectPath ? projectRefusal(config.secondaryProjectPath) : undefined);
+    if (folderRefused) throw new Error(folderRefused);
     const id = uuidv4();
     const { shell, args: shellArgv } = agentShell({ setting: getAppSettings().terminalShell });
 
