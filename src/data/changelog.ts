@@ -7,6 +7,14 @@ export interface Release {
 
 export const CHANGELOG: Release[] = [
   {
+    id: 64,
+    version: '2.0.7',
+    date: '2026-11-25',
+    updates: [
+      'An agent\'s window no longer takes what you type into one of its fields as it opens: its terminal, and its shell when open, take the focus only if you have not typed, clicked or put the focus in a field since. Until now the keys typed in that first moment went to the agent, or to the shell.',
+    ],
+  },
+  {
     id: 63,
     version: '2.0.6',
     date: '2026-10-29',

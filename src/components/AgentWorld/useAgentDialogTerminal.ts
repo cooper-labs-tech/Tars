@@ -4,7 +4,7 @@ import { useState, useEffect, useRef, useCallback } from 'react';
 import type { AgentStatus } from '@/types/electron';
 import { isElectron } from '@/hooks/useElectron';
 import { onAgentMoveLine } from '@/hooks/useClaudeAccounts';
-import { attachShiftEnterHandler, connectionLine, disposeTerminalSafely, keySender, passWheelToProgram, stripCursorSequences, stripTerminalReplies, suppressMouseTracking } from '@/lib/terminal';
+import { attachShiftEnterHandler, connectionLine, disposeTerminalSafely, keySender, noteUserMoves, passWheelToProgram, stripCursorSequences, stripTerminalReplies, suppressMouseTracking } from '@/lib/terminal';
 import { createXtermOptions, useTerminalTheme } from '@/lib/terminal-theme';
 
 interface UseAgentDialogTerminalOptions {
@@ -50,6 +50,13 @@ export function useAgentDialogTerminal({
     setIsAtBottom(true);
 
     let cancelled = false;
+
+    // The terminal takes the focus a moment after it starts, but never over the user (noteUserMoves): keys typed into a
+    // field in that moment used to go to the agent, a running one's prompt included. The footer's own autoFocus, given
+    // as the window mounts, is before these listeners and is not the user's move: the terminal still takes the focus.
+    const userMoves = noteUserMoves();
+    /** The fits and the focus, cleared with the effect so none acts on a terminal already disposed. */
+    const timers: ReturnType<typeof setTimeout>[] = [];
 
     const initTerminal = async () => {
       await new Promise((resolve) => setTimeout(resolve, 150));
@@ -121,14 +128,17 @@ export function useAgentDialogTerminal({
         };
 
         fitAndResize();
-        setTimeout(fitAndResize, 50);
-        setTimeout(fitAndResize, 200);
+        timers.push(setTimeout(fitAndResize, 50), setTimeout(fitAndResize, 200));
         // Not an asleep agent's: a key typed into it wakes the agent, and a
         // terminal with the focus keeps Escape, so the Escape that closes this
         // window would not have closed it (a lone Escape no longer wakes it,
         // #322). A click in the terminal is how to type there. Frame: `Agent
         // asleep · and how it wakes`.
-        setTimeout(() => { fitAndResize(); if (agent.status !== 'asleep') term.focus(); }, 350);
+        timers.push(setTimeout(() => {
+          fitAndResize();
+          userMoves.stop();
+          if (agent.status !== 'asleep' && !userMoves.moved()) term.focus();
+        }, 350));
 
         // Keys that reach no terminal (an idle agent has none since #164) are
         // said so in the panel rather than dropped. See keySender.
@@ -189,7 +199,7 @@ export function useAgentDialogTerminal({
             term.writeln('\x1b[33m--- Previous output ---\x1b[0m');
             latestAgent.output.forEach(writeLine);
           }
-          setTimeout(fitAndResize, 50);
+          timers.push(setTimeout(fitAndResize, 50));
         }
       } catch (e) {
         console.error('Failed to initialize terminal:', e);
@@ -200,6 +210,8 @@ export function useAgentDialogTerminal({
 
     return () => {
       cancelled = true;
+      userMoves.stop();
+      timers.forEach(clearTimeout);
       if (xtermRef.current) {
         const term = xtermRef.current;
         xtermRef.current = null;

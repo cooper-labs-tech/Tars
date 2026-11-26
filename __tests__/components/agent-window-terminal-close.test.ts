@@ -36,6 +36,7 @@ vi.mock('@/lib/terminal', () => ({
   connectionLine: () => '',
   disposeTerminalSafely: () => {},
   keySender: () => () => {},
+  noteUserMoves: () => ({ moved: () => false, stop: () => {} }),
   passWheelToProgram: () => {},
   stripCursorSequences: (s: string) => s,
   stripTerminalReplies: (s: string) => s,
