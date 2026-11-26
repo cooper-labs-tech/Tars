@@ -925752,6 +925752,450 @@
               ]
             }
           ]
+        },
+        {
+          "type": "frame",
+          "id": "B0bqF",
+          "name": "changed again",
+          "width": "fill_container",
+          "gap": 24,
+          "children": [
+            {
+              "type": "frame",
+              "id": "BPrPj",
+              "name": "rows",
+              "width": 914,
+              "layout": "vertical",
+              "gap": 8,
+              "children": [
+                {
+                  "type": "text",
+                  "id": "Hq26u",
+                  "name": "t",
+                  "fill": "$text-muted",
+                  "content": "approve refused: an agent changed them again since the notice was shown",
+                  "lineHeight": 1.4,
+                  "fontFamily": "$font-mono",
+                  "fontSize": 10,
+                  "fontWeight": "normal"
+                },
+                {
+                  "type": "frame",
+                  "id": "jVGUu",
+                  "name": "endpoint Remote inference host",
+                  "width": "fill_container",
+                  "stroke": "$border",
+                  "strokeWidth": {
+                    "bottom": 1
+                  },
+                  "layout": "vertical",
+                  "gap": 8,
+                  "padding": [
+                    11,
+                    0
+                  ],
+                  "children": [
+                    {
+                      "type": "frame",
+                      "id": "jq0xo",
+                      "name": "line",
+                      "width": "fill_container",
+                      "gap": 16,
+                      "alignItems": "center",
+                      "children": [
+                        {
+                          "type": "frame",
+                          "id": "cKtdw",
+                          "name": "who",
+                          "width": 330,
+                          "layout": "vertical",
+                          "gap": 2,
+                          "children": [
+                            {
+                              "type": "text",
+                              "id": "yHvXr",
+                              "name": "t",
+                              "fill": "$text-primary",
+                              "content": "Remote inference host",
+                              "lineHeight": 1.4,
+                              "fontFamily": "$font-ui",
+                              "fontSize": 12.5,
+                              "fontWeight": "normal"
+                            },
+                            {
+                              "type": "frame",
+                              "id": "cQqQ3",
+                              "name": "state",
+                              "gap": 6,
+                              "alignItems": "center",
+                              "children": [
+                                {
+                                  "type": "rectangle",
+                                  "id": "vNtOv",
+                                  "name": "d",
+                                  "fill": "$status-waiting",
+                                  "width": 6,
+                                  "height": 6
+                                },
+                                {
+                                  "type": "text",
+                                  "id": "MgrN3",
+                                  "name": "t",
+                                  "fill": "$status-waiting",
+                                  "content": "new extra headers waiting for your approval",
+                                  "lineHeight": 1.4,
+                                  "fontFamily": "$font-mono",
+                                  "fontSize": 10.5,
+                                  "fontWeight": "normal"
+                                }
+                              ]
+                            },
+                            {
+                              "type": "text",
+                              "id": "dh9ih",
+                              "name": "t",
+                              "fill": "$text-muted",
+                              "content": "https://inference.example.com/v1",
+                              "lineHeight": 1.4,
+                              "fontFamily": "$font-mono",
+                              "fontSize": 10.5,
+                              "fontWeight": "normal"
+                            },
+                            {
+                              "type": "text",
+                              "id": "DcY1l",
+                              "name": "t",
+                              "fill": "$text-muted",
+                              "content": "a key is set · never shown · 3 extra headers",
+                              "lineHeight": 1.4,
+                              "fontFamily": "$font-mono",
+                              "fontSize": 10.5,
+                              "fontWeight": "normal"
+                            },
+                            {
+                              "type": "text",
+                              "id": "Cx5Zf",
+                              "name": "t",
+                              "fill": "$text-muted",
+                              "content": "used by Harbor-Codex and Atlas-Qwen",
+                              "lineHeight": 1.4,
+                              "fontFamily": "$font-mono",
+                              "fontSize": 10.5,
+                              "fontWeight": "normal"
+                            }
+                          ]
+                        },
+                        {
+                          "type": "frame",
+                          "id": "qxAFR",
+                          "name": "models",
+                          "width": 250,
+                          "layout": "vertical",
+                          "gap": 2,
+                          "children": [
+                            {
+                              "type": "text",
+                              "id": "S2Jv2M",
+                              "name": "t",
+                              "fill": "$text-secondary",
+                              "content": "12 models · read 14:02",
+                              "lineHeight": 1.4,
+                              "fontFamily": "$font-mono",
+                              "fontSize": 10.5,
+                              "fontWeight": "normal"
+                            },
+                            {
+                              "type": "text",
+                              "id": "B6WLt",
+                              "name": "t",
+                              "fill": "$text-muted",
+                              "textGrowth": "fixed-width",
+                              "width": 250,
+                              "content": "qwen3-coder-480b · glm-4.6 · kimi-k2 · and 9 more",
+                              "lineHeight": 1.4,
+                              "fontFamily": "$font-mono",
+                              "fontSize": 10.5,
+                              "fontWeight": "normal"
+                            }
+                          ]
+                        },
+                        {
+                          "type": "frame",
+                          "id": "Upn4q",
+                          "name": "sp",
+                          "width": "fill_container",
+                          "height": 1
+                        },
+                        {
+                          "type": "frame",
+                          "id": "gCy1f",
+                          "name": "controls",
+                          "gap": 8,
+                          "alignItems": "center",
+                          "children": [
+                            {
+                              "type": "text",
+                              "id": "q1KGXG",
+                              "name": "t",
+                              "fill": "$text-muted",
+                              "content": "allows traces",
+                              "lineHeight": 1.4,
+                              "fontFamily": "$font-mono",
+                              "fontSize": 10.5,
+                              "fontWeight": "normal"
+                            },
+                            {
+                              "type": "frame",
+                              "id": "UZM8N",
+                              "name": "Toggle off",
+                              "width": 30,
+                              "height": 16,
+                              "fill": "$surface-raised",
+                              "stroke": "$border",
+                              "strokeWidth": 1,
+                              "layout": "none",
+                              "children": [
+                                {
+                                  "type": "rectangle",
+                                  "id": "ucV3z",
+                                  "x": 2,
+                                  "y": 1,
+                                  "name": "knob",
+                                  "fill": "$text-secondary",
+                                  "width": 12,
+                                  "height": 12
+                                }
+                              ]
+                            },
+                            {
+                              "type": "frame",
+                              "id": "Sn03x",
+                              "name": "b check",
+                              "height": 26,
+                              "fill": "$surface",
+                              "stroke": "$border",
+                              "strokeWidth": 1,
+                              "padding": [
+                                0,
+                                11
+                              ],
+                              "justifyContent": "center",
+                              "alignItems": "center",
+                              "children": [
+                                {
+                                  "type": "text",
+                                  "id": "C7CqP",
+                                  "name": "t",
+                                  "fill": "$text-primary",
+                                  "content": "check",
+                                  "lineHeight": 1.4,
+                                  "fontFamily": "$font-mono",
+                                  "fontSize": 11,
+                                  "fontWeight": "normal"
+                                }
+                              ]
+                            },
+                            {
+                              "type": "frame",
+                              "id": "K3jWA5",
+                              "name": "b remove",
+                              "height": 26,
+                              "fill": "$surface",
+                              "stroke": "$border",
+                              "strokeWidth": 1,
+                              "padding": [
+                                0,
+                                11
+                              ],
+                              "justifyContent": "center",
+                              "alignItems": "center",
+                              "children": [
+                                {
+                                  "type": "text",
+                                  "id": "qMh6u",
+                                  "name": "t",
+                                  "fill": "$text-primary",
+                                  "content": "remove",
+                                  "lineHeight": 1.4,
+                                  "fontFamily": "$font-mono",
+                                  "fontSize": 11,
+                                  "fontWeight": "normal"
+                                }
+                              ]
+                            }
+                          ]
+                        }
+                      ]
+                    },
+                    {
+                      "type": "text",
+                      "id": "JCGt0",
+                      "name": "refused",
+                      "fill": "$status-error",
+                      "textGrowth": "fixed-width",
+                      "width": 900,
+                      "content": "The endpoint \"Remote inference host\" changed since it was shown (Atlas-Qwen, 15:07): look at it again before you approve.",
+                      "lineHeight": 1.4,
+                      "fontFamily": "$font-mono",
+                      "fontSize": 10.5,
+                      "fontWeight": "normal"
+                    },
+                    {
+                      "type": "frame",
+                      "id": "AdAjk",
+                      "name": "notice",
+                      "width": "fill_container",
+                      "fill": "$surface-raised",
+                      "stroke": "$border-strong",
+                      "strokeWidth": 1,
+                      "layout": "vertical",
+                      "gap": 10,
+                      "padding": [
+                        12,
+                        14
+                      ],
+                      "children": [
+                        {
+                          "type": "text",
+                          "id": "mcv1i",
+                          "name": "t",
+                          "fill": "$text-secondary",
+                          "textGrowth": "fixed-width",
+                          "width": 860,
+                          "content": "Atlas-Qwen changed its extra headers at 15:07. No agent can use this endpoint until you approve them, or put back the approved ones. Its key stays: the address did not change.",
+                          "lineHeight": 1.4,
+                          "fontFamily": "$font-ui",
+                          "fontSize": 12,
+                          "fontWeight": "normal"
+                        },
+                        {
+                          "type": "text",
+                          "id": "csNrp",
+                          "name": "t",
+                          "fill": "$text-secondary",
+                          "content": "approved   X-Route: blue-pool · X-Tenant: harbor",
+                          "lineHeight": 1.4,
+                          "fontFamily": "$font-mono",
+                          "fontSize": 11,
+                          "fontWeight": "normal"
+                        },
+                        {
+                          "type": "text",
+                          "id": "N7T4P",
+                          "name": "t",
+                          "fill": "$status-waiting",
+                          "content": "new        X-Route: amber-pool · X-Tenant: harbor",
+                          "lineHeight": 1.4,
+                          "fontFamily": "$font-mono",
+                          "fontSize": 11,
+                          "fontWeight": "normal"
+                        },
+                        {
+                          "type": "frame",
+                          "id": "yf5Zt",
+                          "name": "answers",
+                          "gap": 8,
+                          "alignItems": "center",
+                          "children": [
+                            {
+                              "type": "frame",
+                              "id": "g0mzy",
+                              "name": "b approve the new headers",
+                              "height": 26,
+                              "fill": "$accent",
+                              "stroke": "$accent",
+                              "strokeWidth": 1,
+                              "padding": [
+                                0,
+                                11
+                              ],
+                              "justifyContent": "center",
+                              "alignItems": "center",
+                              "children": [
+                                {
+                                  "type": "text",
+                                  "id": "bzZy0",
+                                  "name": "t",
+                                  "fill": "$on-accent",
+                                  "content": "approve the new headers",
+                                  "lineHeight": 1.4,
+                                  "fontFamily": "$font-mono",
+                                  "fontSize": 11,
+                                  "fontWeight": "normal"
+                                }
+                              ]
+                            },
+                            {
+                              "type": "frame",
+                              "id": "t6AuC",
+                              "name": "b put back the approved ones",
+                              "height": 26,
+                              "fill": "$surface",
+                              "stroke": "$border",
+                              "strokeWidth": 1,
+                              "padding": [
+                                0,
+                                11
+                              ],
+                              "justifyContent": "center",
+                              "alignItems": "center",
+                              "children": [
+                                {
+                                  "type": "text",
+                                  "id": "HsK3Q",
+                                  "name": "t",
+                                  "fill": "$text-primary",
+                                  "content": "put back the approved ones",
+                                  "lineHeight": 1.4,
+                                  "fontFamily": "$font-mono",
+                                  "fontSize": 11,
+                                  "fontWeight": "normal"
+                                }
+                              ]
+                            }
+                          ]
+                        }
+                      ]
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "type": "frame",
+              "id": "X3de4",
+              "name": "what it is",
+              "width": "fill_container",
+              "layout": "vertical",
+              "gap": 8,
+              "children": [
+                {
+                  "type": "text",
+                  "id": "FnZwU",
+                  "name": "t",
+                  "fill": "$text-muted",
+                  "content": "approve what you saw, only",
+                  "lineHeight": 1.4,
+                  "fontFamily": "$font-mono",
+                  "fontSize": 10,
+                  "fontWeight": "normal"
+                },
+                {
+                  "type": "text",
+                  "id": "l06to",
+                  "name": "t",
+                  "fill": "$text-secondary",
+                  "textGrowth": "fixed-width",
+                  "width": 400,
+                  "content": "Approve sends the address and the headers the notice showed, and main approves only those. When an agent changed them again in between, main refuses in its own words, shown above the notice, and the notice is read again: it now shows the new lists, to approve or put back. Saving the editor, or turning traces on or off, approves nothing an agent changed.",
+                  "lineHeight": 1.5,
+                  "fontFamily": "$font-ui",
+                  "fontSize": 12,
+                  "fontWeight": "normal"
+                }
+              ]
+            }
+          ]
         }
       ]
     },
@@ -927692,6 +928136,450 @@
                   "textGrowth": "fixed-width",
                   "width": 400,
                   "content": "Headers go out with your key and may route or bill the requests, so an agent’s change waits for you, as a new address does, and the endpoint takes no request meanwhile. Approve takes the new ones; put back saves the approved ones again. Both lists are shown whole.",
+                  "lineHeight": 1.5,
+                  "fontFamily": "$font-ui",
+                  "fontSize": 12,
+                  "fontWeight": "normal"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "type": "frame",
+          "id": "ejJLw",
+          "name": "changed again",
+          "width": "fill_container",
+          "gap": 24,
+          "children": [
+            {
+              "type": "frame",
+              "id": "V9Be2K",
+              "name": "rows",
+              "width": 914,
+              "layout": "vertical",
+              "gap": 8,
+              "children": [
+                {
+                  "type": "text",
+                  "id": "IjYdG",
+                  "name": "t",
+                  "fill": "$text-muted",
+                  "content": "approve refused: an agent changed them again since the notice was shown",
+                  "lineHeight": 1.4,
+                  "fontFamily": "$font-mono",
+                  "fontSize": 10,
+                  "fontWeight": "normal"
+                },
+                {
+                  "type": "frame",
+                  "id": "ASud0",
+                  "name": "endpoint Remote inference host",
+                  "width": "fill_container",
+                  "stroke": "$border",
+                  "strokeWidth": {
+                    "bottom": 1
+                  },
+                  "layout": "vertical",
+                  "gap": 8,
+                  "padding": [
+                    11,
+                    0
+                  ],
+                  "children": [
+                    {
+                      "type": "frame",
+                      "id": "HAa23",
+                      "name": "line",
+                      "width": "fill_container",
+                      "gap": 16,
+                      "alignItems": "center",
+                      "children": [
+                        {
+                          "type": "frame",
+                          "id": "c82GO",
+                          "name": "who",
+                          "width": 330,
+                          "layout": "vertical",
+                          "gap": 2,
+                          "children": [
+                            {
+                              "type": "text",
+                              "id": "BqYd6",
+                              "name": "t",
+                              "fill": "$text-primary",
+                              "content": "Remote inference host",
+                              "lineHeight": 1.4,
+                              "fontFamily": "$font-ui",
+                              "fontSize": 12.5,
+                              "fontWeight": "normal"
+                            },
+                            {
+                              "type": "frame",
+                              "id": "akxgF",
+                              "name": "state",
+                              "gap": 6,
+                              "alignItems": "center",
+                              "children": [
+                                {
+                                  "type": "rectangle",
+                                  "id": "xusrd",
+                                  "name": "d",
+                                  "fill": "$status-waiting",
+                                  "width": 6,
+                                  "height": 6
+                                },
+                                {
+                                  "type": "text",
+                                  "id": "BVEVf",
+                                  "name": "t",
+                                  "fill": "$status-waiting",
+                                  "content": "new extra headers waiting for your approval",
+                                  "lineHeight": 1.4,
+                                  "fontFamily": "$font-mono",
+                                  "fontSize": 10.5,
+                                  "fontWeight": "normal"
+                                }
+                              ]
+                            },
+                            {
+                              "type": "text",
+                              "id": "mfYgK",
+                              "name": "t",
+                              "fill": "$text-muted",
+                              "content": "https://inference.example.com/v1",
+                              "lineHeight": 1.4,
+                              "fontFamily": "$font-mono",
+                              "fontSize": 10.5,
+                              "fontWeight": "normal"
+                            },
+                            {
+                              "type": "text",
+                              "id": "KAX4C",
+                              "name": "t",
+                              "fill": "$text-muted",
+                              "content": "a key is set · never shown · 3 extra headers",
+                              "lineHeight": 1.4,
+                              "fontFamily": "$font-mono",
+                              "fontSize": 10.5,
+                              "fontWeight": "normal"
+                            },
+                            {
+                              "type": "text",
+                              "id": "qDhxW",
+                              "name": "t",
+                              "fill": "$text-muted",
+                              "content": "used by Harbor-Codex and Atlas-Qwen",
+                              "lineHeight": 1.4,
+                              "fontFamily": "$font-mono",
+                              "fontSize": 10.5,
+                              "fontWeight": "normal"
+                            }
+                          ]
+                        },
+                        {
+                          "type": "frame",
+                          "id": "wGdDP",
+                          "name": "models",
+                          "width": 250,
+                          "layout": "vertical",
+                          "gap": 2,
+                          "children": [
+                            {
+                              "type": "text",
+                              "id": "x1wEdy",
+                              "name": "t",
+                              "fill": "$text-secondary",
+                              "content": "12 models · read 14:02",
+                              "lineHeight": 1.4,
+                              "fontFamily": "$font-mono",
+                              "fontSize": 10.5,
+                              "fontWeight": "normal"
+                            },
+                            {
+                              "type": "text",
+                              "id": "a5Qoe",
+                              "name": "t",
+                              "fill": "$text-muted",
+                              "textGrowth": "fixed-width",
+                              "width": 250,
+                              "content": "qwen3-coder-480b · glm-4.6 · kimi-k2 · and 9 more",
+                              "lineHeight": 1.4,
+                              "fontFamily": "$font-mono",
+                              "fontSize": 10.5,
+                              "fontWeight": "normal"
+                            }
+                          ]
+                        },
+                        {
+                          "type": "frame",
+                          "id": "s1nX25",
+                          "name": "sp",
+                          "width": "fill_container",
+                          "height": 1
+                        },
+                        {
+                          "type": "frame",
+                          "id": "gRDmM",
+                          "name": "controls",
+                          "gap": 8,
+                          "alignItems": "center",
+                          "children": [
+                            {
+                              "type": "text",
+                              "id": "JKNDV",
+                              "name": "t",
+                              "fill": "$text-muted",
+                              "content": "allows traces",
+                              "lineHeight": 1.4,
+                              "fontFamily": "$font-mono",
+                              "fontSize": 10.5,
+                              "fontWeight": "normal"
+                            },
+                            {
+                              "type": "frame",
+                              "id": "D1HCLI",
+                              "name": "Toggle off",
+                              "width": 30,
+                              "height": 16,
+                              "fill": "$surface-raised",
+                              "stroke": "$border",
+                              "strokeWidth": 1,
+                              "layout": "none",
+                              "children": [
+                                {
+                                  "type": "rectangle",
+                                  "id": "hIVDi",
+                                  "x": 2,
+                                  "y": 1,
+                                  "name": "knob",
+                                  "fill": "$text-secondary",
+                                  "width": 12,
+                                  "height": 12
+                                }
+                              ]
+                            },
+                            {
+                              "type": "frame",
+                              "id": "DSkz6",
+                              "name": "b check",
+                              "height": 26,
+                              "fill": "$surface",
+                              "stroke": "$border",
+                              "strokeWidth": 1,
+                              "padding": [
+                                0,
+                                11
+                              ],
+                              "justifyContent": "center",
+                              "alignItems": "center",
+                              "children": [
+                                {
+                                  "type": "text",
+                                  "id": "xzLi0",
+                                  "name": "t",
+                                  "fill": "$text-primary",
+                                  "content": "check",
+                                  "lineHeight": 1.4,
+                                  "fontFamily": "$font-mono",
+                                  "fontSize": 11,
+                                  "fontWeight": "normal"
+                                }
+                              ]
+                            },
+                            {
+                              "type": "frame",
+                              "id": "v9nZN",
+                              "name": "b remove",
+                              "height": 26,
+                              "fill": "$surface",
+                              "stroke": "$border",
+                              "strokeWidth": 1,
+                              "padding": [
+                                0,
+                                11
+                              ],
+                              "justifyContent": "center",
+                              "alignItems": "center",
+                              "children": [
+                                {
+                                  "type": "text",
+                                  "id": "m8tFBp",
+                                  "name": "t",
+                                  "fill": "$text-primary",
+                                  "content": "remove",
+                                  "lineHeight": 1.4,
+                                  "fontFamily": "$font-mono",
+                                  "fontSize": 11,
+                                  "fontWeight": "normal"
+                                }
+                              ]
+                            }
+                          ]
+                        }
+                      ]
+                    },
+                    {
+                      "type": "text",
+                      "id": "ezUtb",
+                      "name": "refused",
+                      "fill": "$status-error",
+                      "textGrowth": "fixed-width",
+                      "width": 900,
+                      "content": "The endpoint \"Remote inference host\" changed since it was shown (Atlas-Qwen, 15:07): look at it again before you approve.",
+                      "lineHeight": 1.4,
+                      "fontFamily": "$font-mono",
+                      "fontSize": 10.5,
+                      "fontWeight": "normal"
+                    },
+                    {
+                      "type": "frame",
+                      "id": "GQ2X4",
+                      "name": "notice",
+                      "width": "fill_container",
+                      "fill": "$surface-raised",
+                      "stroke": "$border-strong",
+                      "strokeWidth": 1,
+                      "layout": "vertical",
+                      "gap": 10,
+                      "padding": [
+                        12,
+                        14
+                      ],
+                      "children": [
+                        {
+                          "type": "text",
+                          "id": "n3DxcL",
+                          "name": "t",
+                          "fill": "$text-secondary",
+                          "textGrowth": "fixed-width",
+                          "width": 860,
+                          "content": "Atlas-Qwen changed its extra headers at 15:07. No agent can use this endpoint until you approve them, or put back the approved ones. Its key stays: the address did not change.",
+                          "lineHeight": 1.4,
+                          "fontFamily": "$font-ui",
+                          "fontSize": 12,
+                          "fontWeight": "normal"
+                        },
+                        {
+                          "type": "text",
+                          "id": "lEioo",
+                          "name": "t",
+                          "fill": "$text-secondary",
+                          "content": "approved   X-Route: blue-pool · X-Tenant: harbor",
+                          "lineHeight": 1.4,
+                          "fontFamily": "$font-mono",
+                          "fontSize": 11,
+                          "fontWeight": "normal"
+                        },
+                        {
+                          "type": "text",
+                          "id": "UtbaW",
+                          "name": "t",
+                          "fill": "$status-waiting",
+                          "content": "new        X-Route: amber-pool · X-Tenant: harbor",
+                          "lineHeight": 1.4,
+                          "fontFamily": "$font-mono",
+                          "fontSize": 11,
+                          "fontWeight": "normal"
+                        },
+                        {
+                          "type": "frame",
+                          "id": "d9jMS",
+                          "name": "answers",
+                          "gap": 8,
+                          "alignItems": "center",
+                          "children": [
+                            {
+                              "type": "frame",
+                              "id": "Ynvwp",
+                              "name": "b approve the new headers",
+                              "height": 26,
+                              "fill": "$accent",
+                              "stroke": "$accent",
+                              "strokeWidth": 1,
+                              "padding": [
+                                0,
+                                11
+                              ],
+                              "justifyContent": "center",
+                              "alignItems": "center",
+                              "children": [
+                                {
+                                  "type": "text",
+                                  "id": "W6o73m",
+                                  "name": "t",
+                                  "fill": "$on-accent",
+                                  "content": "approve the new headers",
+                                  "lineHeight": 1.4,
+                                  "fontFamily": "$font-mono",
+                                  "fontSize": 11,
+                                  "fontWeight": "normal"
+                                }
+                              ]
+                            },
+                            {
+                              "type": "frame",
+                              "id": "BvXIn",
+                              "name": "b put back the approved ones",
+                              "height": 26,
+                              "fill": "$surface",
+                              "stroke": "$border",
+                              "strokeWidth": 1,
+                              "padding": [
+                                0,
+                                11
+                              ],
+                              "justifyContent": "center",
+                              "alignItems": "center",
+                              "children": [
+                                {
+                                  "type": "text",
+                                  "id": "E6wgi",
+                                  "name": "t",
+                                  "fill": "$text-primary",
+                                  "content": "put back the approved ones",
+                                  "lineHeight": 1.4,
+                                  "fontFamily": "$font-mono",
+                                  "fontSize": 11,
+                                  "fontWeight": "normal"
+                                }
+                              ]
+                            }
+                          ]
+                        }
+                      ]
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "type": "frame",
+              "id": "M1HPP5",
+              "name": "what it is",
+              "width": "fill_container",
+              "layout": "vertical",
+              "gap": 8,
+              "children": [
+                {
+                  "type": "text",
+                  "id": "DH7PI",
+                  "name": "t",
+                  "fill": "$text-muted",
+                  "content": "approve what you saw, only",
+                  "lineHeight": 1.4,
+                  "fontFamily": "$font-mono",
+                  "fontSize": 10,
+                  "fontWeight": "normal"
+                },
+                {
+                  "type": "text",
+                  "id": "wqxyf",
+                  "name": "t",
+                  "fill": "$text-secondary",
+                  "textGrowth": "fixed-width",
+                  "width": 400,
+                  "content": "Approve sends the address and the headers the notice showed, and main approves only those. When an agent changed them again in between, main refuses in its own words, shown above the notice, and the notice is read again: it now shows the new lists, to approve or put back. Saving the editor, or turning traces on or off, approves nothing an agent changed.",
                   "lineHeight": 1.5,
                   "fontFamily": "$font-ui",
                   "fontSize": 12,
