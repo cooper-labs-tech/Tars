@@ -220,7 +220,7 @@ export const InferenceEndpointsSection = () => {
                 </button>
                 <State word={state.word} tone={state.tone} />
                 <p className="font-mono text-[10.5px] text-muted-foreground truncate">{e.plainHttp ? `${e.baseUrl} · unencrypted` : e.baseUrl}</p>
-                <p className="font-mono text-[10.5px] text-muted-foreground">{`${e.keySet ? 'a key is set · never shown' : e.changedBy && !e.approved ? 'key to set again: it went with the old address' : 'no key'}${e.sendSessionHeaders ? ' · session headers sent' : ''}${countOf(e.extraHeaders ?? {})}`}</p>
+                <p className="font-mono text-[10.5px] text-muted-foreground">{`${e.keySet ? 'a key is set · never shown' : baseUrlWaits ? 'key to set again: it went with the old address' : 'no key'}${e.sendSessionHeaders ? ' · session headers sent' : ''}${countOf(e.extraHeaders ?? {})}`}</p>
                 <p className="font-mono text-[10.5px] text-muted-foreground truncate">{usedByOf(e.agents)}</p>
               </div>
               <div className="w-[250px] shrink-0 min-w-0 space-y-0.5">
@@ -248,7 +248,7 @@ export const InferenceEndpointsSection = () => {
             {rowError[e.id] && <p data-endpoint-row-error className="mt-2 font-mono text-[10.5px] text-status-error">{rowError[e.id]}</p>}
             {rowUnsaved?.[e.id] && <div data-endpoint-unsaved className="mt-2"><State wrap word={rowUnsaved[e.id]} tone="waiting" /></div>}
 
-            {by && !e.allowTraces && (
+            {by && by.tracesWereOn && !e.allowTraces && (
               <p className="mt-2 font-mono text-[10.5px] text-status-waiting">
                 {`Changed by ${by.agentName} at ${clockOf(by.at)}. Recording stopped for its agents; the sessions already recorded stay in Traces. Only you can turn traces on again.`}
               </p>

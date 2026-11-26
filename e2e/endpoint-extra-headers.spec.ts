@@ -20,6 +20,8 @@ import { DEV_URL, apiPort } from './ports.mjs';
  *    editor closes as if saved.
  * 4. An agent's change over the API does not show as waiting: the row reads approved, no notice shows the approved
  *    and the new headers, or no answer approves them. Approved, the new ones are not what the next request carries.
+ *    4b. (found at be9ec24ad) the waiting row says what a change of headers is not: its key gone with an old address,
+ *        or recording stopped for an endpoint whose traces were already off.
  * 5. Put back the approved ones does not restore them, or leaves the endpoint waiting.
  * 6. An uncaught error in the page.
  * The artefact: values.json (each step's view, the stand-in's requests as seen), step screenshots, the app's log.
@@ -130,7 +132,7 @@ test('an endpoint\'s extra headers: added by the owner and sent, a credential\'s
     const notice = row.locator('[data-endpoint-notice]');
     await expect(row).toContainText('new extra headers waiting for your approval', { timeout: 15_000 });
     await expect(notice).toBeVisible();
-    const waiting = { notice: await notice.innerText(), view: await view() };
+    const waiting = { notice: await notice.innerText(), view: await view(), row: await row.innerText() };
     keep({ changed, waiting });
     await stepShot(page, '3-waiting-for-approval');
     expect.soft(changed, 'Lead\'s change').toMatchObject({ status: 200, body: { needsApproval: true } });
@@ -138,6 +140,10 @@ test('an endpoint\'s extra headers: added by the owner and sent, a credential\'s
     expect.soft(waiting.notice, 'the approved list').toContain('approved   X-Route: blue-pool');
     expect.soft(waiting.notice, 'the new list').toContain('new        X-Route: green-pool · X-Batch: nightly');
     expect.soft(waiting.notice, 'who changed them').toContain('Lead changed its extra headers');
+    // Red at be9ec24ad, seen on its screenshot 3: the row said the key went with the old address, and that recording
+    // stopped, rules of a moved address and of traces turned off that a change of headers is neither.
+    expect.soft(waiting.row, 'the key line: the address did not move').not.toContain('key to set again');
+    expect.soft(waiting.row, 'no traces note: traces were already off').not.toContain('Recording stopped');
 
     await notice.getByRole('button', { name: 'approve the new headers', exact: true }).click();
     await expect(row).not.toContainText('waiting for your approval', { timeout: 15_000 });

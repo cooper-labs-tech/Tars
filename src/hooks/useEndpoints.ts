@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import type { EndpointView, EndpointWait, HarnessSupport } from '@/types/electron';
 import { reasonOf } from '@/lib/traces-format';
 
@@ -15,15 +15,23 @@ export function useEndpoints() {
   const [waits, setWaits] = useState<EndpointWait[]>([]);
   const [harnesses, setHarnesses] = useState<HarnessSupport[]>([]);
   const [error, setError] = useState<string | null>(null);
-  /** The last change an agent made, per endpoint, as 'endpoints:changed' told it. */
-  const [changedBy, setChangedBy] = useState<Record<string, { agentName: string; at: number }>>({});
+  /**
+   * The last change an agent made, per endpoint, as 'endpoints:changed' told it, with whether the endpoint allowed
+   * traces just before: an agent may turn them off, and only that change is said as recording stopped (a change of
+   * its address or its extra headers is said by its own notice).
+   */
+  const [changedBy, setChangedBy] = useState<Record<string, { agentName: string; at: number; tracesWereOn: boolean }>>({});
+  /** The endpoints as last read, for what an endpoint allowed before an agent's change. */
+  const last = useRef<EndpointView[] | null>(null);
 
   const api = typeof window !== 'undefined' ? window.electronAPI?.endpoints : undefined;
 
   const reload = useCallback(async () => {
     if (!api) return;
     try {
-      setEndpoints(await api.list());
+      const list = await api.list();
+      last.current = list;
+      setEndpoints(list);
       setError(null);
     } catch (e) {
       setError(reasonOf(e));
@@ -36,7 +44,10 @@ export function useEndpoints() {
     void api.waits().then(setWaits).catch(() => undefined);
     void api.harnesses().then(setHarnesses).catch(() => undefined);
     const offChanged = api.onChanged(e => {
-      if (e.by) setChangedBy(prev => ({ ...prev, [e.id]: { agentName: e.by?.agentName || e.by?.agentId || 'an agent', at: Date.now() } }));
+      if (e.by) {
+        const tracesWereOn = last.current?.find(x => x.id === e.id)?.allowTraces === true;
+        setChangedBy(prev => ({ ...prev, [e.id]: { agentName: e.by?.agentName || e.by?.agentId || 'an agent', at: Date.now(), tracesWereOn } }));
+      }
       void reload();
     });
     const offWaiting = api.onWaiting(setWaits);
