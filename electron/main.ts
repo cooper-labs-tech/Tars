@@ -143,6 +143,7 @@ import { startStallWatch, stopStallWatch, readProcesses, cliProcess, processTree
 import { filesOpenBy, openFilesReadable } from './platform/open-files';
 import { startCodexSessionWatch, type HookPost } from './services/codex-sessions';
 import { startPiSessionWatch, piSessionDir } from './services/pi-sessions';
+import { startKimiSessionWatch } from './services/kimi-sessions';
 import { codexHome, codexSignInGap, loginShellCodexHome } from './providers/codex-cli';
 import { codexKeyConfig } from './services/cli-keys';
 import { getProvider } from './providers';
@@ -311,6 +312,7 @@ function loadAppSettings(): AppSettings {
       qwencode: '',
       opencode: '',
       pi: '',
+      kimi: '',
       gws: '',
       gcloud: '',
       gh: '',
@@ -877,6 +879,20 @@ app.whenReady().then(async () => {
     dirOf: (agentId) => piSessionDir(DATA_DIR, agentId),
     post: postAsTerminal('pi-sessions'),
     interrupted: (agentId, sessionId) => turnInterrupted(agentId, sessionId),
+  });
+  // Kimi Code's turns, read from its session log; a session is the agent's when its lock names a process of the
+  // agent's terminal (services/kimi-sessions.ts). On Windows the terminal's process is the CLI itself.
+  startKimiSessionWatch({
+    post: postAsTerminal('kimi-sessions'),
+    interrupted: (agentId, sessionId) => turnInterrupted(agentId, sessionId),
+    pidsOf: async (agentId) => {
+      const agent = agents.get(agentId);
+      const terminal = agent?.ptyId ? ptyProcesses.get(agent.ptyId) : undefined;
+      if (!terminal) return [];
+      if (process.platform === 'win32') return [terminal.pid];
+      const procs = await readProcesses();
+      return procs ? processTreeOf(terminal.pid, procs) : undefined;
+    },
   });
   startCodexSessionWatch({
     post: postAsTerminal('codex-sessions'),

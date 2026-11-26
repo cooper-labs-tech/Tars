@@ -23,3 +23,14 @@ export function planModeRefusal(provider: string | null | undefined, permissionM
   if (permissionMode !== 'plan' || hasPlanMode(provider)) return null;
   return `${getProvider(provider as AgentProvider).displayName} has no plan mode here: plan would run as manual. Ask for normal, auto or bypass.`;
 }
+
+/**
+ * Plan refused at a launch, with planModeRefusal's reason, for a CLI that would start in a mode it cannot keep: Kimi
+ * Code, whose --plan runs commands after dialogs nobody answers (measured, the Audit's I3 on #601). Every other
+ * provider saved in plan launches as before (the Audit's L3): main moves plan to normal nowhere on load, and each CLI's
+ * builder decides what plan is for it. Asked by every launch before anything is killed or spent.
+ */
+export function launchPlanRefusal(provider: string | null | undefined, permissionMode: string | null | undefined): string | null {
+  if (getProvider((provider ?? undefined) as AgentProvider | undefined).id !== 'kimi-code') return null;
+  return planModeRefusal(provider, permissionMode);
+}

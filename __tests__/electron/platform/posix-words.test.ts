@@ -200,9 +200,9 @@ async function commandOf(providerId: string, prompt: string, binaryPath: string)
 }
 
 describe('9. every provider round-trips', () => {
-  it('covers the 21 providers', async () => {
+  it('covers the 22 providers', async () => {
     const { getAllProviders } = await import('../../../electron/providers');
-    expect(getAllProviders()).toHaveLength(21);
+    expect(getAllProviders()).toHaveLength(22);
   });
 
   it('first word the binary, last word the prompt, the rest from the grammar, for every adversarial prompt', async () => {
@@ -211,8 +211,11 @@ describe('9. every provider round-trips', () => {
     for (const provider of getAllProviders()) {
       for (const [label, prompt] of ADVERSARIAL) {
         const all = posixWords(await commandOf(provider.id, prompt, bin));
-        // codex's line hands it Tars's home first, on macOS and Linux (`env CODEX_HOME=<home>`, the Audit's L4 on #465).
-        const words = all[0] === 'env' && all[1]?.startsWith('CODEX_HOME=') ? all.slice(2) : all;
+        // A line may set variables before its binary, on macOS and Linux (`env NAME=value ...`): codex's Tars's home (the
+        // Audit's L4 on #465), and the switch that turns a CLI's own update check off (update-check-off.test.ts).
+        let lead = 0;
+        if (all[0] === 'env') for (lead = 1; /^[A-Z_][A-Z0-9_]*=/.test(all[lead] ?? ''); lead++);
+        const words = all.slice(lead);
         if (provider.taskTypedAfterLaunch) {
           // Amp's line never carries the task: it is typed in once its TUI runs (core/typed-task.ts, 2.0.4).
           expect([provider.id, label, words[0], words.includes(prompt)]).toEqual([provider.id, label, bin, false]);

@@ -30,6 +30,12 @@ import {
  * anew after every restart; an id resumed whose rollout is gone; the rollout
  * looked for under today's folder only, when a session resumed days later
  * lives under the day it began; a Claude agent resumed on a codex rollout.
+ *
+ * A Kimi Code agent (19/11): kimi lists its sessions in $KIMI_CODE_HOME/session_index.jsonl, ids of the form
+ * `session_<uuid>`, which `kimi --session <id>` resumes (measured on 2.6.3). How it fails: its id refused for not
+ * being a bare UUID, so it began anew after every restart; an id resumed that the index no longer lists, or whose
+ * session folder is gone; an id of another form reaching the command line; a Claude agent resumed on a kimi session.
+ * Tars keeps it as the UUID the hook routes took (kimi's own name is session_<uuid>), and gives that back.
  */
 
 const home = fs.mkdtempSync(path.join(os.tmpdir(), 'tars-resume-'));
@@ -129,6 +135,42 @@ describe("a codex agent's session", () => {
     expect(resolveResumeSessionId({ provider: 'codex', resumableSessionId: CODEX, projectPath: PROJECT }, home)).toBeNull();
     rollout('2026/10/15');
     expect(resolveResumeSessionId({ provider: 'claude', resumableSessionId: CODEX, projectPath: PROJECT }, home)).toBeNull();
+  });
+});
+
+describe("a Kimi Code agent's session", () => {
+  // Tars knows it by its UUID (the hook routes take nothing else); kimi lists it as session_<uuid>.
+  const KIMI = 'feabbac1-fc87-4756-8076-0c6adc57127b';
+  const kimiHome = path.join(home, '.kimi-code-home');
+  const listed = (uuid: string, withFolder = true) => {
+    const id = `session_${uuid}`;
+    const dir = path.join(kimiHome, 'sessions', 'wd_tars_0123456789ab', id);
+    if (withFolder) fs.mkdirSync(path.join(dir, 'agents', 'main'), { recursive: true });
+    if (withFolder) fs.writeFileSync(path.join(dir, 'agents', 'main', 'wire.jsonl'), '{"type":"metadata"}\n');
+    fs.mkdirSync(kimiHome, { recursive: true });
+    fs.appendFileSync(path.join(kimiHome, 'session_index.jsonl'), `${JSON.stringify({ sessionId: id, sessionDir: dir, workDir: PROJECT })}\n`);
+  };
+  beforeEach(() => {
+    fs.rmSync(kimiHome, { recursive: true, force: true });
+    vi.stubEnv('KIMI_CODE_HOME', kimiHome);
+  });
+  afterEach(() => vi.unstubAllEnvs());
+
+  it('resumes a session kimi lists and still has', () => {
+    listed(KIMI);
+    expect(resolveResumeSessionId({ provider: 'kimi-code', resumableSessionId: KIMI, projectPath: PROJECT }, home)).toBe(KIMI);
+  });
+
+  it('refuses one gone from the index or from the disk, one of another form, and a Claude agent on a kimi session', () => {
+    expect(resolveResumeSessionId({ provider: 'kimi-code', resumableSessionId: KIMI, projectPath: PROJECT }, home)).toBeNull();
+    listed(KIMI, false);
+    expect(resolveResumeSessionId({ provider: 'kimi-code', resumableSessionId: KIMI, projectPath: PROJECT }, home)).toBeNull();
+    fs.rmSync(kimiHome, { recursive: true, force: true });
+    listed(KIMI);
+    for (const bad of [`${KIMI}'; rm -rf /`, `session_${KIMI}`, 'session_../x']) {
+      expect(resolveResumeSessionId({ provider: 'kimi-code', resumableSessionId: bad, projectPath: PROJECT }, home)).toBeNull();
+    }
+    expect(resolveResumeSessionId({ provider: 'claude', resumableSessionId: KIMI, projectPath: PROJECT }, home)).toBeNull();
   });
 });
 

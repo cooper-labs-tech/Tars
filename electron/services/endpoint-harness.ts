@@ -55,6 +55,14 @@ export function endpointLaunchFor(harness: string, o: { proxyBase: string; model
       };
     case 'pi':
       return { args: ['--provider', p], env: {}, tokenVars: [ENDPOINT_TOKEN_VAR] };
+    case 'kimi-code':
+      // Kimi Code takes a whole model from its environment, KIMI_MODEL_NAME being the switch (kimi-code 2.6.3,
+      // docs/en/configuration/env-vars.md): chat completions, measured with a tool call; nothing written.
+      return {
+        args: [],
+        env: { KIMI_MODEL_NAME: o.model, KIMI_MODEL_PROVIDER_TYPE: 'openai', KIMI_MODEL_BASE_URL: o.proxyBase },
+        tokenVars: ['KIMI_MODEL_API_KEY'],
+      };
     case 'opencode':
       return {
         args: [],

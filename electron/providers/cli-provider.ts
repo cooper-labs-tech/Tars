@@ -114,6 +114,14 @@ export interface CLIProvider {
    */
   prepareLaunch?(binaryPath: string, permissionMode?: string): Promise<void>;
 
+  /**
+   * For a CLI whose own fork is a command of its own that makes the new session and exits (Kimi Code's `kimi fork -y
+   * <id>`): the session a launch that forks `sessionId` goes on in, made off the main thread, in the agent's folder
+   * `cwd`, before the line is built, which then resumes it plainly (resumeOfLaunch, core/agent-launch.ts). Null when it
+   * could not be made. Absent: the line forks, or not, by itself.
+   */
+  forkAhead?(binaryPath: string, sessionId: string, cwd: string): Promise<string | null>;
+
   /** Build command string for interactive PTY sessions */
   buildInteractiveCommand(params: InteractiveCommandParams): string;
 
@@ -125,6 +133,21 @@ export interface CLIProvider {
   readonly taskTypedAfterLaunch?: boolean;
   /** With taskTypedAfterLaunch: the text a launch types in for this task ('' for none). */
   typedTask?(params: Pick<InteractiveCommandParams, 'prompt' | 'skills' | 'isSuperAgent'>): string;
+
+  /**
+   * For a CLI that sends no SessionStart and takes keys only once its TUI has drawn its field: whether the screen's
+   * lines (core/terminal-mirror.ts, terminalText) show it so. A session is up then, not at the CLI's exec
+   * (core/agent-launch.ts, sessionUp). Absent: up at its exec.
+   */
+  upOnScreen?(lines: readonly string[]): boolean;
+
+  /**
+   * How the CLI takes a message Tars types into its terminal while a turn runs (send_message's `auto`), as measured
+   * on the CLI itself: `next-tool-round`, it reaches the model at the turn's next tool round (Claude Code);
+   * `after-the-turn`, the CLI holds it and sends it as its own next turn once this one ends (Kimi Code 2.6.3).
+   * Absent: not measured.
+   */
+  readonly noteDuringTurn?: 'next-tool-round' | 'after-the-turn';
 
   /** Build command string for quick one-shot prompts */
   buildOneShotCommand(params: OneShotCommandParams): string;
@@ -165,6 +188,13 @@ export interface CLIProvider {
    * (`mcp-telegram/dist/bundle.js`), matched wherever its install lives (servedPathMatches).
    */
   isMcpServerRegistered(name: string, expectedServerPath: string, envVars?: readonly string[]): boolean;
+
+  /**
+   * Whether that server is written as this Tars writes it now (pi: with `"exposure": "direct"`), which decides a
+   * rewrite at setup (services/mcp-orchestrator.ts). Kept apart from isMcpServerRegistered, which only says the server
+   * is there, by name and path: a retirement and Settings' "configured" ask that. Absent: registered is current.
+   */
+  isMcpServerCurrent?(name: string, expectedServerPath: string, envVars?: readonly string[]): boolean;
 
   /** Directories where this provider reads skills from */
   getSkillDirectories(): string[];

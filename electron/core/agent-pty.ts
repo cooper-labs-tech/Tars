@@ -17,6 +17,9 @@ import { chatsReadEnv } from './chat-inbox';
 import { cliLaunchExit, reportHandledError } from '../services/error-reports/handled';
 import { noteCodexLaunch } from '../services/codex-sessions';
 import { piSessionWatch } from '../services/pi-sessions';
+import { kimiSessionWatch } from '../services/kimi-sessions';
+import { kimiSessionOfCommand } from '../providers/kimi-code-provider';
+import { getAllProviders } from '../providers';
 import { ensureCodexProjectTrusted } from '../providers/codex-cli';
 import { slotEnv } from '../services/heavy-slot-cli';
 
@@ -222,6 +225,12 @@ export function spawnAgentPty(opts: {
   if (agentId && opts.binaryName === 'codex') codexLaunching(agentId, opts.cwd);
   // pi's, from the session file it writes in the agent's own folder (services/pi-sessions.ts).
   if (agentId && opts.binaryName === 'pi') piSessionWatch.noteLaunch(agentId);
+  // Kimi Code's, from its session log; the session its kimi holds is the agent's (services/kimi-sessions.ts).
+  // With the session its line resumes, when it runs the CLI itself (an exec launch, every terminal on Windows); a kimi
+  // typed into this shell later is noted again then (agent-manager.ts, launchIntoTerminal).
+  if (agentId && opts.binaryName === 'kimi') {
+    kimiSessionWatch.noteLaunch(agentId, opts.cwd, kimiSessionOfCommand(Array.isArray(opts.args) ? opts.args.join(' ') : opts.args));
+  }
   // And what it held goes when it does: a message queued for a terminal whose
   // CLI has exited would be probed for, and later typed into nothing.
   spawned.onExit(({ exitCode, signal }: { exitCode?: number; signal?: number } = {}) => {
@@ -246,7 +255,9 @@ export function spawnAgentPty(opts: {
   // left-fullscreen watch only for the claude binary, whose two renderers it
   // was measured on.
   if (agentId) {
-    attachTerminalMirror(spawned, { ...size, watchRepaint: opts.binaryName === 'claude', label: agentId });
+    // A launch log only for a CLI that reads as up from its screen (CLIProvider.upOnScreen): no other terminal keeps one.
+    const logLaunch = !!(agentId && getAllProviders().some((p) => p.binaryName === opts.binaryName && p.upOnScreen));
+    attachTerminalMirror(spawned, { ...size, watchRepaint: opts.binaryName === 'claude', label: agentId, logLaunch });
     // What shellReady waits on: a launch typed before the shell has printed its
     // prompt goes through the terminal's canonical mode (see shellReady).
     listening.add(spawned);

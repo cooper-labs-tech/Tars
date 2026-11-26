@@ -150,6 +150,7 @@ const SITES: Site[] = [
   { file: 'electron/services/bot-core.ts', line: 'typeLaunchTask(provider, cli, { prompt: withGuide(agent, provider, launchPrompt({ kind: \'channel\', channel: from }, task)), skills: [...new Set(agent.skills || [])], isSuperAgent: … });', is: 'powers', why: 'a start from a bot on amp: the skills prefix of the task typed in' },
   { file: 'electron/core/typed-task.ts', line: "params: Pick<InteractiveCommandParams, 'prompt' | 'skills' | 'isSuperAgent'>,", is: 'definition', why: 'handed on to the provider, for the skills prefix of a typed task' },
   { file: 'electron/providers/amp-provider.ts', line: "typedTask(params: Pick<InteractiveCommandParams, 'prompt' | 'skills' | 'isSuperAgent'>): string {", is: 'definition', why: 'the skills prefix of the task typed into amp' },
+  { file: 'electron/providers/kimi-code-provider.ts', line: "typedTask(params: Pick<InteractiveCommandParams, 'prompt' | 'skills' | 'isSuperAgent'>): string {", is: 'definition', why: 'the skills prefix of the task typed into Kimi Code' },
   { file: 'electron/providers/cli-provider.ts', line: "typedTask?(params: Pick<InteractiveCommandParams, 'prompt' | 'skills' | 'isSuperAgent'>): string;", is: 'type', why: 'the task a launch types in' },
   { file: 'electron/services/bus-store.ts', line: 'return all.filter(…).map(a => a.id);', is: 'identity', why: 'the global room\'s members: the projects\' orchestrators' },
   { file: 'electron/services/discord-bot.ts', line: 'const faceOrCrown = (a: AgentStatus) => … ?', is: 'team-list', why: 'the crown' },

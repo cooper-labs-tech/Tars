@@ -389,6 +389,25 @@ not be re-baselining thirty.
 The HTML report is written to `e2e/report/` (gitignored); open `e2e/report/index.html`.
 Traces are `retain-on-failure`.
 
+### Harness conformance: `e2e/harness-conformance.spec.ts`
+
+One run per harness, the same steps for each, so a harness ships only once delegate_task, task_status and
+get_agent_output behave on it as on the others. A real binary of the harness runs its TUI in an agent's terminal, on
+the stand-in endpoint of `e2e/stand-in-openai-endpoint.mjs` through Tars's endpoint proxy: loopback, a dummy key, a
+scripted tool call, no network and no token spent. The steps: it starts; `delegate_task` returns its own final answer
+after a real tool round on the wire; `task_status` and `get_agent_output` give the same answer; Tars quits and starts
+again and the agent's first start continues its session, then answers a second task.
+
+```bash
+npx tsc -p electron/tsconfig.json && (cd mcp-orchestrator && npm run build)
+TARS_HARNESS_KIMI_CODE=/path/to/kimi npx playwright test e2e/harness-conformance.spec.ts -g kimi-code
+TARS_HARNESS_CODEX=/path/to/codex TARS_HARNESS_PI=/path/to/pi npx playwright test e2e/harness-conformance.spec.ts
+```
+
+Opt-in: a harness whose `TARS_HARNESS_<ID>` names no binary is skipped and says so. Install each binary pinned, from
+its own registry or release, into a folder of its own, never over the user's own CLI. Each run leaves `values.json`,
+`endpoint-requests.jsonl`, the app's logs and `reproduce.txt` in its output folder.
+
 ### The CLI matrix: `npm run e2e:matrix`
 
 ```bash
@@ -1962,6 +1981,8 @@ orchestrator a whole turn to read what it has been handed. Every other way it is
 | a codex agent's turns are not seen: its status rests, `delegate_task` says delivered | its session was not taken for its own, which takes evidence: Tars's identity line in its first message, its file held open by the agent's own codex (`lsof -p <its codex's pid> \| grep rollout`), or a fork of its own session. On macOS and Linux a lookup that fails (ps or lsof failed, or took more than its 5 s on a loaded machine) is asked again, 1, 2, 4, 8 and 16 s later; after the sixth, the log says `whose codex holds <file> was not learned in 6 lookups` and that session is not followed: restart the agent. On Windows a session its user began by typing into its terminal names nobody, and no tool there lists a process's files: it is not followed until a session Tars begins. A codex run outside Tars in the same folder is never the agent's, by design |
 | a codex agent's status: "codex asks to sign in: Tars starts it on ~/.codex, and your login is in <folder>, the CODEX_HOME your shell sets" | Tars hands the codex it starts its own home (`env CODEX_HOME=<Tars's home>` on the line), so that Tars and codex share one config and one sessions folder, and Tars started from the Dock or Finder reads no rc file: its home is `~/.codex`, where codex has no login. Sign in from the agent's terminal (codex shows its sign-in screen there; that writes `~/.codex/auth.json`, and every codex agent is then signed in), or give Tars the same `CODEX_HOME`: on macOS `launchctl setenv CODEX_HOME <folder>`, then quit and reopen Tars (until the next login; a LaunchAgent that runs it makes it last); on Linux in the session's environment (`~/.config/environment.d/codex.conf`: `CODEX_HOME=<folder>`), then log in again; or start Tars from that shell. Check with `CODEX_HOME=~/.codex codex login status`. Not said with a codex key in Settings, which codex takes instead of a login, nor on Windows, which reads no rc file |
 | a codex agent in auto starts with `--ask-for-approval never --sandbox workspace-write`, not `--approve-for-me` | that codex has no `--approve-for-me` (`codex --help \| grep approve-for-me`), or it did not answer `--help` within 10 s at that launch, on a loaded machine. The answer is read beside the window before each launch's line is built, kept per binary and version, and a codex that did not answer is asked again at the next launch: restart the agent |
+| a codex agent exits as it starts, `Error: invalid transport in mcp_servers.<name>` on its screen, and its task lands in the shell | codex was told to switch off a server its config.toml does not define, which it refuses. Tars switches off only the servers that file defines (`services/mcp-roles.ts`); a line typed by hand with such a `-c mcp_servers.<name>.enabled=false` fails the same way |
+| a codex agent's commands go on after it was stopped, or `codex app-server` processes outlive Tars | that codex was started without `--no-daemon`: its turn ran in codex's shared background server, not in the terminal Tars ended. Tars passes it where `codex --help` lists it, read before the launch; a codex that did not answer `--help` in time was started without it. `ps -axo pid,command \| grep 'codex app-server'` shows the daemon: stop it by its pid |
 | `delegate_task` says a task was delivered, with no answer | the agent's CLI gives Tars no prompt hook (gemini, opencode, amp, pi, grok; codex, the row above): the task went into its terminal and Tars cannot see its turn end. Read the terminal (`get_agent_output`), or have it report with `send_message` to "requester" |
 | a delegated task's answer stops at 4000 characters | the transcript was not found, and the hooks' copy was returned: an API-key provider whose CLI keeps its transcripts outside `~/.claude` and the Claude account folders. `GET /api/tasks/<id>` shows what was read |
 | a delegated task never started: "its turn did not begin within 15 minutes" | the task was typed into the terminal but no UserPromptSubmit came: a field or a dialog held it, or the CLI's hooks are not installed. The queue moved on |
