@@ -107,7 +107,7 @@ describe('a key a failed save kept stays kept', () => {
     expect(set.error).toMatch(/kept/);
     room();
 
-    expect(call('endpoints:save', { ...EP, id, name: 'Remote 2' })).toMatchObject({ ok: true });
+    expect(call('endpoints:save', { ...EP, id, name: 'Remote 2', shown: { baseUrl: EP.baseUrl, extraHeaders: {} } })).toMatchObject({ ok: true });
     expect((secrets.loadSettingsWithSecrets() as AppSettings).endpointKeys?.[id]).toBe('ep-key-new');
     expect((memory as AppSettings).endpointKeys?.[id]).toBe('ep-key-new');
   });

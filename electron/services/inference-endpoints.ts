@@ -5,6 +5,7 @@ import { DATA_DIR } from '../constants';
 import { isValidOpenAIBaseUrl } from '../providers/cli-provider';
 import type { AgentStatus, AppSettings, InferenceEndpoint } from '../types';
 import { isRefusedExtraHeader, type ProxyTarget } from './endpoint-proxy';
+import { twoZones } from '../utils/two-zones';
 
 /**
  * Inference endpoints (native traces): OpenAI-compatible endpoints an open harness runs
@@ -13,7 +14,9 @@ import { isRefusedExtraHeader, type ProxyTarget } from './endpoint-proxy';
  * - **Where things are kept.** The records are in `app-settings.json` (`inferenceEndpoints`), with no secret. Each
  *   key is in the settings' secrets (`endpointKeys`, ~/.tars-private/settings-secrets.json), read by the proxy per
  *   request and never handed to an agent, a CLI or the window, which only learns `keySet`.
- * - **Who changes what.** The owner, in the window, adds and changes anything, and approves by that act. Any agent,
+ * - **Who changes what.** The owner, in the window, adds and changes anything; an address or extra headers the
+ *   owner types there are approved by that act, while a save of another field leaves an agent's change pending
+ *   until the owner approves exactly what the window showed (approveEndpoint). Any agent,
  *   through the API or its MCP tools, may list them, add one, change one and rotate a key (the owner's word of 19/11:
  *   the agents of one project tune another project's).
  * - **The approval guard** (the orchestrator's decision, 19/11). An endpoint an agent adds, or whose base URL an
@@ -153,7 +156,11 @@ export function cleanBaseUrl(raw: unknown): string | null {
 /** Adds an endpoint, or changes one (`id`), as the owner or an agent may. */
 export function saveEndpoint(
   settings: AppSettings,
-  input: { id?: string; name?: string; baseUrl?: string; allowTraces?: boolean; holdMaxSeconds?: number; sendSessionHeaders?: boolean; allowPlainHttp?: boolean; extraHeaders?: unknown },
+  input: {
+    id?: string; name?: string; baseUrl?: string; allowTraces?: boolean; holdMaxSeconds?: number; sendSessionHeaders?: boolean; allowPlainHttp?: boolean; extraHeaders?: unknown;
+    /** The window's save of an endpoint that exists: the address and extra headers its form showed when opened. */
+    shown?: { baseUrl?: unknown; extraHeaders?: unknown };
+  },
   actor: EndpointActor,
   now: string = new Date().toISOString(),
 ): Result {
@@ -161,6 +168,13 @@ export function saveEndpoint(
   const current = input.id !== undefined ? list.find(e => e.id === input.id) : undefined;
   if (input.id !== undefined && !current) return { ok: false, error: 'There is no such endpoint.' };
   const owner = fromWindow(actor);
+  // The owner's save of an endpoint that exists names what its form showed (the Audit's M-b at c31811361): what the
+  // owner "typed" is what differs from that, so a form opened before an agent's latest change could otherwise send
+  // the agent's earlier values back as the owner's own, and approve them. Refused unless it is the endpoint now.
+  if (owner && current) {
+    const stale = shownDiffers(current, input.shown);
+    if (stale) return { ok: false, error: stale };
+  }
 
   const name = input.name !== undefined ? String(input.name).trim().slice(0, MAX_NAME) : current?.name;
   if (!name) return { ok: false, error: 'An endpoint has a name.' };
@@ -200,9 +214,16 @@ export function saveEndpoint(
     allowPlainHttp, extraHeaders,
   } as InferenceEndpoint;
   if (owner) {
-    next.approved = true;
-    next.approvedBaseUrl = baseUrl;
-    next.approvedExtraHeaders = extraHeaders;
+    // Approval stays apart from saving (found in the window's work on #599, 27/11). What the owner typed in the
+    // window (a new address, new extra headers, or the approved values put back) is the owner's own, so approved by
+    // that act. What an agent changed and the owner's form only sends back as it showed it stays pending: a save of
+    // another field (traces, the name, the hold) never approves it. Only approveEndpoint does, for what was shown.
+    const approvedHeaders = current ? approvedHeadersOf(current) : extraHeaders;
+    const addressOk = !current || movedTo || current.approvedBaseUrl === baseUrl;
+    const headersOk = !current || headersChanged || sameExtraHeaders(approvedHeaders, extraHeaders);
+    next.approvedBaseUrl = addressOk ? baseUrl : current!.approvedBaseUrl;
+    next.approvedExtraHeaders = headersOk ? extraHeaders : approvedHeaders;
+    next.approved = addressOk && headersOk;
   } else if (movedTo || headersChanged) {
     // An address or extra headers an agent set wait for the owner (the approval guard, above).
     next.approved = false;
@@ -226,11 +247,42 @@ function newId(list: InferenceEndpoint[]): string {
   return id;
 }
 
-/** The owner's approval, from the window only: the base URL in the record now is the one approved. */
-export function approveEndpoint(settings: AppSettings, id: string): Result {
+/**
+ * Why what the window showed of an endpoint (its address and extra headers) is not the endpoint now, or null when it
+ * is: an agent changed it while the form or the notice was open, and the owner must see that change first.
+ */
+function shownDiffers(current: InferenceEndpoint, shown: { baseUrl?: unknown; extraHeaders?: unknown } | undefined, act: 'save' | 'approve' = 'save'): string | null {
+  const headers = shown?.extraHeaders;
+  if (!shown || typeof shown.baseUrl !== 'string' || !headers || typeof headers !== 'object' || Array.isArray(headers)) {
+    return act === 'approve'
+      ? 'An approval names the address and the extra headers it approves, as the window showed them.'
+      : 'A save names the address and the extra headers the form showed, so a change made meanwhile is not taken for yours.';
+  }
+  if (shown.baseUrl === current.baseUrl && sameExtraHeaders(headers as Record<string, string>, current.extraHeaders)) return null;
+  // The time as the notices say it, UTC then the machine's own with its offset (utils/two-zones.ts): the window shows
+  // these words as they come.
+  const at = current.changedBy ? Date.parse(current.changedBy.at) : NaN;
+  const by = current.changedBy ? ` (${current.changedBy.agentName ?? current.changedBy.agentId}${Number.isNaN(at) ? '' : `, ${twoZones(at)}`})` : '';
+  return `The endpoint "${current.name}" changed since it was shown${by}: look at it again before you ${act}.`;
+}
+
+/** The extra headers the owner approved; for an endpoint approved before they were recorded, its own. */
+function approvedHeadersOf(e: InferenceEndpoint): Record<string, string> {
+  return e.approvedExtraHeaders ?? (e.approved ? e.extraHeaders ?? {} : {});
+}
+
+/**
+ * The owner's approval, from the window only, of exactly what the window showed (`seen`: the address and the extra
+ * headers). Refused when they are not the endpoint's now: an agent changed it again while the notice was open, and
+ * the owner must see that change before approving it.
+ */
+export function approveEndpoint(settings: AppSettings, id: string, seen?: { baseUrl?: unknown; extraHeaders?: unknown }): Result {
   const list = endpointsOf(settings);
   const current = list.find(e => e.id === id);
   if (!current) return { ok: false, error: 'There is no such endpoint.' };
+  if (!seen) return { ok: false, error: 'An approval names the address and the extra headers it approves, as the window showed them.' };
+  const stale = shownDiffers(current, seen, 'approve');
+  if (stale) return { ok: false, error: stale };
   const next: InferenceEndpoint = { ...current, approved: true, approvedBaseUrl: current.baseUrl, approvedExtraHeaders: current.extraHeaders ?? {} };
   return { ok: true, settings: { ...settings, inferenceEndpoints: list.map(e => (e.id === id ? next : e)) }, endpoint: next };
 }
