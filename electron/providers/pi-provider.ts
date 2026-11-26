@@ -12,6 +12,7 @@ import type {
   ProviderModel,
   HookConfig,
 } from './cli-provider';
+import { lineEnvPrefix, updateCheckOffEnv } from './cli-provider';
 import { updateSharedJsonSync } from '../utils/shared-file';
 
 /**
@@ -62,7 +63,9 @@ export class PiProvider implements CLIProvider {
   }
 
   buildInteractiveCommand(params: InteractiveCommandParams): string {
-    let command = `'${params.binaryPath.replace(/'/g, "'\\''")}'`;
+    // Its own update check off (cli-provider.ts updateCheckOffEnv), on the line where a shell runs it.
+    let command = lineEnvPrefix(updateCheckOffEnv(this.binaryName));
+    command += `'${params.binaryPath.replace(/'/g, "'\\''")}'`;
 
     // For interactive PTY sessions, launch the TUI (no subcommand).
     if (params.model && params.model !== 'default') {

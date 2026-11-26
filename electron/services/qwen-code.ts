@@ -197,14 +197,17 @@ export function underAdministrator(tars: unknown, admin: unknown, where: string[
   return admin;
 }
 
-/** The administrator's settings, null when there are none; throws, saying why, when they cannot be read. */
-function administratorSettings(file: string): Record<string, unknown> | null {
+/**
+ * The administrator's settings, null when there are none; throws, saying why, when they cannot be read. For the
+ * CLIs whose system settings slot Tars fills with a file of its own: Qwen Code here, gemini (gemini-settings.ts).
+ */
+export function administratorSettings(file: string, cli = 'Qwen Code'): Record<string, unknown> | null {
   let raw: string;
   try {
     raw = fs.readFileSync(file, 'utf8');
   } catch (err) {
     if ((err as NodeJS.ErrnoException)?.code === 'ENOENT') return null;
-    throw new Error(`Qwen Code's system settings file ${file} cannot be read (${(err as NodeJS.ErrnoException)?.code ?? 'error'}): its administrator's controls would be lost, so Tars does not start a Qwen Code agent`);
+    throw new Error(`${cli}'s system settings file ${file} cannot be read (${(err as NodeJS.ErrnoException)?.code ?? 'error'}): its administrator's controls would be lost, so Tars does not start a ${cli} agent`);
   }
   let parsed: unknown;
   try {
@@ -213,7 +216,7 @@ function administratorSettings(file: string): Record<string, unknown> | null {
     parsed = undefined;
   }
   if (!isPlain(parsed)) {
-    throw new Error(`Qwen Code's system settings file ${file} is not a JSON object: its administrator's controls would be lost, so Tars does not start a Qwen Code agent`);
+    throw new Error(`${cli}'s system settings file ${file} is not a JSON object: its administrator's controls would be lost, so Tars does not start a ${cli} agent`);
   }
   return parsed;
 }

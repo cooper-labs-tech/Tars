@@ -313,12 +313,55 @@ export function enforcesOrchestratorMode(binaryName: string): boolean {
  * offering a click that does nothing here.
  *
  * Only for the binary that reads them. The fourteen providers that re-point the
- * claude binary get them; codex, gemini, grok, opencode and pi have their own
- * updaters and would silently ignore them.
+ * claude binary get them; a binary of its own gets its own update switch, where
+ * it reads one from its environment (updateCheckOffEnv), and nothing else.
  */
 export function managedCliEnv(binaryName: string): Record<string, string> {
-  if (binaryName !== 'claude') return {};
+  if (binaryName !== 'claude') return updateCheckOffEnv(binaryName);
   return { DISABLE_AUTOUPDATER: '1', CLAUDE_CODE_DISABLE_MOUSE_CLICKS: '1' };
+}
+
+/**
+ * The variable that turns a CLI's own update check off, for the CLIs that read
+ * one (27/11). Tars types tasks into an agent's terminal, a bracketed paste then
+ * Enter, and whatever the CLI draws at that moment takes them: codex 0.163's
+ * update menu took a task's Enter as "Update now" and ran npm install -g. So no
+ * CLI's own update flow runs in a terminal Tars starts, whether it asks, only
+ * says so, or installs by itself. Tars's own updates of claude and Amp are
+ * services/cli-updater.ts's, under the owner's switch in Settings.
+ *
+ * Read in each CLI's own documentation or code:
+ * - grok: GROK_DISABLE_AUTOUPDATER=1, "Process" scope in its update-check
+ *   suppression table (its `--no-auto-update` is per session).
+ * - opencode 1.19: OPENCODE_DISABLE_AUTOUPDATE, the same as its config's
+ *   `autoupdate: false` ("Set to false to disable update checks").
+ * - pi 1.6: PI_SKIP_VERSION_CHECK, read by checkForNewPiVersion before it asks
+ *   npm (PI_OFFLINE would also stop its other start-up network calls).
+ * codex takes a -c on its line (check_for_update_on_startup=false), gemini its
+ * system settings (gemini-settings.ts), Qwen Code its per-agent system settings,
+ * Amp its managed settings file: none of them reads a variable for it.
+ */
+const UPDATE_CHECK_OFF: Record<string, Record<string, string>> = {
+  grok: { GROK_DISABLE_AUTOUPDATER: '1' },
+  opencode: { OPENCODE_DISABLE_AUTOUPDATE: '1' },
+  pi: { PI_SKIP_VERSION_CHECK: '1' },
+};
+
+export function updateCheckOffEnv(binaryName: string): Record<string, string> {
+  return { ...(UPDATE_CHECK_OFF[binaryName] ?? {}) };
+}
+
+/**
+ * Variables set on an agent's line, before its binary: `env A=1 B=2 `. On macOS
+ * and Linux the terminal runs a login shell, whose rc files run after Tars's
+ * environment and could set them back; nothing runs after the line. On Windows
+ * the line's first word is the binary itself (platform/launch.ts) and nothing is
+ * sourced: the terminal's environment carries them, and the line takes none.
+ */
+export function lineEnvPrefix(vars: Record<string, string>, platform: NodeJS.Platform = process.platform): string {
+  const entries = Object.entries(vars);
+  if (platform === 'win32' || entries.length === 0) return '';
+  return `env ${entries.map(([name, value]) => `${name}=${shellQuote(value)}`).join(' ')} `;
 }
 
 /**
