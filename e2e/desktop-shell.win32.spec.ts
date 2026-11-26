@@ -204,6 +204,88 @@ test.describe('the Windows desktop shell', () => {
     fs.rmSync(home, { recursive: true, force: true });
   });
 
+  /**
+   * 2.1.0, the new interface the only one (QA, written before the code, red on main): the sandbox's
+   * settings say nothing of it, as a fresh install's, and the caption draws over the new shell as it did
+   * over the classic one. How it can fail: WindowsCaption is mounted with the classic shell only, so
+   * with the new one the window moves by the sidebar's top rows alone; the page header is no drag
+   * region; the caption buttons keep their dark colour when the theme, switched from Settings,
+   * Preferences now, turns light; a card's close button lies under the caption band, where a real click
+   * reaches the native buttons and not the card. First of the serial block, so it runs whatever the
+   * tests after it meet.
+   */
+  test('title bar: the caption draws over the new shell, follows the theme from Settings, and a card closes under it', async () => {
+    test.setTimeout(180_000);
+    const seen: Record<string, unknown> = {};
+    await page.goto(`${DEV_URL}/kanban`, { waitUntil: 'domcontentloaded' });
+    await splashGone(page);
+    const sidebar = page.getByRole('complementary', { name: 'Sidebar' });
+    await expect(sidebar.getByRole('navigation', { name: 'Main menu' }), 'the new shell, with no setting').toBeVisible({ timeout: 60_000 });
+    await captionRulesInForce(page, '/kanban');
+
+    // The strip across the top, from the left edge up to the caption buttons.
+    const strip = await page.evaluate(() => {
+      const bar = (navigator as unknown as { windowControlsOverlay: { getTitlebarAreaRect(): DOMRect } }).windowControlsOverlay.getTitlebarAreaRect();
+      const strips = [...document.querySelectorAll('.window-drag')]
+        .map(el => el.getBoundingClientRect())
+        .filter(r => r.top === 0 && r.left === 0 && r.height >= 28)
+        .map(r => ({ width: Math.round(r.width), height: Math.round(r.height) }));
+      return { bar: { width: Math.round(bar.width), height: Math.round(bar.height) }, strips };
+    });
+    seen.strip = strip;
+    expect(strip.strips.some(s => Math.abs(s.width - strip.bar.width) <= 1), 'a drag strip up to the caption buttons').toBe(true);
+
+    // The theme, switched from Settings, Preferences: the caption buttons follow it.
+    await inMain(app, `
+      globalThis.__newShellOverlayCalls = [];
+      const orig = w.setTitleBarOverlay.bind(w);
+      w.setTitleBarOverlay = (o) => { globalThis.__newShellOverlayCalls.push(o); return orig(o); };`);
+    const lastCall = () => app.evaluate(() => {
+      const calls = (globalThis as unknown as { __newShellOverlayCalls: { color: string; symbolColor: string; height: number }[] }).__newShellOverlayCalls;
+      const c = calls.at(-1);
+      return c ? { color: c.color.toLowerCase(), symbolColor: c.symbolColor.toLowerCase(), height: c.height } : null;
+    });
+    const openCard = async (label: string) => {
+      await sidebar.getByRole('button', { name: 'More' }).click();
+      await page.getByRole('menu', { name: 'More' }).getByRole('menuitem', { name: label, exact: true }).click();
+      const card = page.getByRole('dialog', { name: label });
+      await expect(card).toBeVisible({ timeout: 30_000 });
+      return card;
+    };
+    const isDark = () => page.evaluate(() => document.documentElement.classList.contains('dark'));
+    const settings = await openCard('Settings');
+    await expect(settings.locator('[data-settings-row]', { hasText: 'Start agents when Tars opens' })).toBeVisible({ timeout: 60_000 });
+    const row = settings.locator('[data-settings-row]')
+      .filter({ has: page.locator('[data-settings-label]', { hasText: /\b(theme|appearance|light|dark)\b/i }) });
+    await expect(row, 'one theme row in Settings, Preferences').toHaveCount(1);
+    const choose = async (want: 'light' | 'dark') => {
+      const option = row.getByRole('radio', { name: new RegExp(`^${want}`, 'i') });
+      if (await option.count() === 1) return option.click();
+      if ((await isDark()) === (want === 'light')) await row.getByRole('switch').or(row.getByRole('button')).click();
+    };
+    await choose('light');
+    await expect.poll(lastCall, { timeout: 10_000 }).toEqual({ color: '#faf9f7', symbolColor: '#1e1e1e', height: 32 });
+    seen.light = await lastCall();
+    await choose('dark');
+    await expect.poll(lastCall, { timeout: 10_000 }).toEqual({ color: '#121212', symbolColor: '#f5f4f2', height: 32 });
+    seen.darkAgain = await lastCall();
+    await page.keyboard.press('Escape');
+    await expect(settings).toHaveCount(0);
+
+    // A card's close button: out of the drag region, and a real click on it closes the card.
+    const agents = await openCard('Agents');
+    const close = agents.getByRole('button', { name: 'Close' });
+    seen.closeButton = await close.evaluate(el => {
+      const r = el.getBoundingClientRect();
+      return { top: Math.round(r.top), right: Math.round(r.right), region: getComputedStyle(el).getPropertyValue('-webkit-app-region') };
+    });
+    expect((seen.closeButton as { region: string }).region).not.toBe('drag');
+    seen.closeClick = await osClick(app, page, close);
+    await expect(agents, 'a real click on the card\'s close button closes it').toHaveCount(0, { timeout: 10_000 });
+    seen.shot = await shotWindow(app, 'new-shell-caption');
+    recordValues({ command: COMMAND, newShellCaption: seen });
+  });
+
   test('title bar: the caption overlay is there, 32 px, and follows the theme', async () => {
     test.setTimeout(180_000);
     await page.goto(`${DEV_URL}/agents`, { waitUntil: 'domcontentloaded' });
