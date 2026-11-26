@@ -217,6 +217,9 @@ test('an endpoint\'s extra headers: added by the owner and sent, a credential\'s
     // 6. The owner opens the editor; Lead moves the address meanwhile; the owner turns traces off in the editor and
     // saves. The save names what the editor showed (`shown`), so main refuses it in its words and approves nothing,
     // the editor closes, the row says main's sentence and shows Lead's move waiting, and no request leaves.
+    // It is also the Audit's "blindShown" case (L-b on #596): the editor's address field still holds the old address,
+    // so a window that sent a fresh read of endpoints.list as `shown` would have that old address taken as typed by
+    // the owner and approved. Only the editor's snapshot, taken as it opened, makes this save refused.
     const beforeRace = await view();
     await row.getByRole('button', { name: ENDPOINT, exact: true }).click();
     await expect(form).toBeVisible();
