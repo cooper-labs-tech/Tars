@@ -156,8 +156,9 @@ test('an open harness runs on an inference endpoint through Tars, held while the
 
     // 9. An extra header from the window; a credential header refused.
     const owned = { id: EP, name: 'Remote host', baseUrl: standin.baseUrl, allowTraces: true, holdMaxSeconds: 30, sendSessionHeaders: true };
-    const withHeader = await api<{ ok: boolean; error?: string }>('endpoints', 'save', { ...owned, extraHeaders: { 'X-Tenant': 'e2e-tenant' } });
-    const credential = await api<{ ok: boolean; error?: string }>('endpoints', 'save', { ...owned, extraHeaders: { Authorization: 'Bearer not-the-key' } });
+    // Each save names what the form showed (the Audit's M-b at c31811361).
+    const withHeader = await api<{ ok: boolean; error?: string }>('endpoints', 'save', { ...owned, extraHeaders: { 'X-Tenant': 'e2e-tenant' }, shown: { baseUrl: standin.baseUrl, extraHeaders: {} } });
+    const credential = await api<{ ok: boolean; error?: string }>('endpoints', 'save', { ...owned, extraHeaders: { Authorization: 'Bearer not-the-key' }, shown: { baseUrl: standin.baseUrl, extraHeaders: { 'X-Tenant': 'e2e-tenant' } } });
     const headerView = (await api<Array<Record<string, unknown>>>('endpoints', 'list')).find(v => v.id === EP);
     keep({ withHeader, credential, headerView });
     expect.soft(withHeader.ok, `the extra header: ${withHeader.error}`).toBe(true);
@@ -333,6 +334,7 @@ test('an open harness runs on an inference endpoint through Tars, held while the
       const pending = (await api<Array<Record<string, unknown>>>('endpoints', 'list')).find(v => v.id === EP)!;
       const flipped = await api<{ ok: boolean; error?: string }>('endpoints', 'save', {
         id: EP, name: String(pending.name), baseUrl: String(pending.baseUrl), allowTraces: false, holdMaxSeconds: 30, sendSessionHeaders: true, extraHeaders: pending.extraHeaders,
+        shown: { baseUrl: pending.baseUrl, extraHeaders: pending.extraHeaders },
       });
       const afterFlip = (await api<Array<Record<string, unknown>>>('endpoints', 'list')).find(v => v.id === EP);
       const attackerPosts = () => (fs.existsSync(attackerLog) ? fs.readFileSync(attackerLog, 'utf8').trim().split('\n').filter(Boolean).map(l => JSON.parse(l)) : []).filter((r: { method?: string }) => r.method === 'POST').length;
