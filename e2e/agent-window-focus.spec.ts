@@ -29,6 +29,15 @@ import { DEV_URL, apiPort } from './ports.mjs';
  * 4. then, the window settled, the "Rail section" tab already shown clicked, and a key pressed a moment later: neither
  *    the shell nor the agent gets it.
  * Red on 65457d56f: the shell took the field's keys in 3, and the key in 4.
+ * And the moves that are neither a key nor a click (QA), each on an agent of its own, its window's terminal built (its
+ * listeners on) and its focus not yet given:
+ * 5. the footer field focused, then its text put in with no key event once the terminal's moment has passed: what
+ *    Playwright's fill does, its two halves stretched apart as load stretched them in comma-folder-refused.spec.ts
+ *    step 0. The field keeps the focus and the text, and nothing reaches the agent;
+ * 6. text put into the footer field at once with no key, no click and no change of focus, as dictation or Paste from
+ *    the Edit menu put it: the field keeps the focus and the text, and nothing reaches the agent.
+ * Shown on QA's mutants of noteUserMoves (src/lib/terminal.ts): 5 red alone without its focusin listener, 6 red alone
+ * without beforeinput.
  * The artefact: values.json (the field, the focus, what the agent and the shell were sent) and focus-kept.png.
  */
 
@@ -45,6 +54,8 @@ test('an agent window gives its terminal the focus, but never over a field the u
     { id: 'left', name: 'Left Alone', ...at },
     { id: 'typed', name: 'Typed Into', ...at },
     { id: 'shelly', name: 'Shell Open', ...at },
+    { id: 'focused', name: 'Focused In', ...at },
+    { id: 'dictated', name: 'Dictated In', ...at },
   ], null, 2));
   fs.writeFileSync(path.join(dir, 'projects.json'), JSON.stringify([project]));
   fs.writeFileSync(path.join(dir, 'app-settings.json'), JSON.stringify({ autoStartAgentsOnLaunch: false, ollamaBaseUrl: 'http://127.0.0.1:9' }));
@@ -156,6 +167,41 @@ test('an agent window gives its terminal the focus, but never over a field the u
     expect.soft(shellAgentGot, 'with the shell open, nothing reaches the agent').toEqual([]);
     expect.soft(railShellGot, 'a tab click does not hand the shell the next key').toEqual([]);
     expect.soft(railAgentGot, 'a tab click does not hand the agent the next key').toEqual([]);
+
+    // 5. (QA) Focused with no key and no click, then filled with no key event once the terminal's moment has passed:
+    //    the window's terminal built (its listeners on), and its focus not yet given.
+    await field.fill('');
+    await page.getByRole('button', { name: 'close', exact: true }).first().click();
+    await page.locator('[data-agent-card="focused"]').click({ position: { x: 24, y: 14 } });
+    await page.locator('.xterm').first().waitFor({ state: 'attached', timeout: 15_000 });
+    await page.evaluate(() => (document.activeElement as HTMLElement | null)?.blur());
+    await field.focus();
+    await page.waitForTimeout(1_000);
+    const focusedBefore = await focusIs();
+    await page.keyboard.insertText(TEXT);
+    const focusedValue = await field.inputValue();
+    const focusedSent = await sentTo('focused');
+
+    // 6. (QA) Text put in at once with no key, no click and no change of focus, as dictation puts it.
+    await field.fill('');
+    await page.getByRole('button', { name: 'close', exact: true }).first().click();
+    await page.locator('[data-agent-card="dictated"]').click({ position: { x: 24, y: 14 } });
+    await page.locator('.xterm').first().waitFor({ state: 'attached', timeout: 15_000 });
+    const dictatedFocusFirst = await focusIs();
+    await page.keyboard.insertText(TEXT);
+    await page.waitForTimeout(1_000);
+    const dictatedFocus = await focusIs();
+    const dictatedValue = await field.inputValue();
+    const dictatedSent = await sentTo('dictated');
+
+    keep({ focusedBefore, focusedValue, focusedSent, dictatedFocusFirst, dictatedFocus, dictatedValue, dictatedSent });
+    expect.soft(focusedBefore, 'a field focused with no key or click keeps the focus').toBe('field');
+    expect.soft(focusedValue, 'the text put in with no key event is in the field').toBe(TEXT);
+    expect.soft(focusedSent, 'nothing reaches the agent').toEqual([]);
+    expect.soft(dictatedFocusFirst, 'the footer field has the focus as the window opens').toBe('field');
+    expect.soft(dictatedFocus, 'text from an input method keeps the focus in the field').toBe('field');
+    expect.soft(dictatedValue, 'the dictated text is in the field').toBe(TEXT);
+    expect.soft(dictatedSent, 'nothing reaches the agent').toEqual([]);
   } finally {
     await app.close();
     await removeHome(home);
