@@ -22,6 +22,12 @@ import { DEV_URL, apiPort } from './ports.mjs';
  *    and the new headers, or no answer approves them. Approved, the new ones are not what the next request carries.
  *    4b. (found at be9ec24ad) the waiting row says what a change of headers is not: its key gone with an old address,
  *        or recording stopped for an endpoint whose traces were already off.
+ *    (main's explicit approval, #596 at c31811361, the Audit's gap on #599, written before the window's part)
+ *    4c. The owner turns traces on for a row whose headers wait: the save approves them, the notice goes, or a
+ *        request is sent to the endpoint.
+ *    4d. An agent changes them again while the notice shows the last ones: approve goes through on what the owner
+ *        never saw, or main's refusal is not said, or the notice keeps the old lists.
+ *    4e. Approve on what the notice shows now does not approve it, or the next request does not carry it.
  * 5. Put back the approved ones does not restore them, or leaves the endpoint waiting.
  * 6. An uncaught error in the page.
  * The artefact: values.json (each step's view, the stand-in's requests as seen), step screenshots, the app's log.
@@ -31,7 +37,7 @@ const LEAD = 'dddd4444-0000-4000-8000-0000000000b1';
 /** main keeps an endpoint whose id is `ep-` and six hex digits only. */
 const EP = 'ep-0e2e5a';
 const ENDPOINT = 'Remote host';
-type View = { id: string; approved: boolean; extraHeaders: Record<string, string>; approvedExtraHeaders?: Record<string, string> };
+type View = { id: string; approved: boolean; allowTraces: boolean; extraHeaders: Record<string, string>; approvedExtraHeaders?: Record<string, string> };
 type Api = { electronAPI: Record<string, Record<string, (...a: unknown[]) => Promise<unknown>>> };
 const lines = (file: string) => (fs.existsSync(file) ? fs.readFileSync(file, 'utf8').trim().split('\n').filter(Boolean).map(l => JSON.parse(l)) : []) as Array<{ method?: string; url?: string; headers?: Record<string, string> }>;
 
@@ -145,13 +151,54 @@ test('an endpoint\'s extra headers: added by the owner and sent, a credential\'s
     expect.soft(waiting.row, 'the key line: the address did not move').not.toContain('key to set again');
     expect.soft(waiting.row, 'no traces note: traces were already off').not.toContain('Recording stopped');
 
+    // 4c. The owner turns traces on for the row while the headers wait: a save of another field approves nothing.
+    const sentBeforeFlip = lines(endpointLog).length;
+    await row.getByRole('switch', { name: `${ENDPOINT} allows traces`, exact: true }).click();
+    await expect.poll(async () => (await view()).allowTraces, { timeout: 15_000 }).toBe(true);
+    await page.waitForTimeout(1_500);
+    const flipped = { view: await view(), noticeShown: await notice.count(), sentAfterFlip: lines(endpointLog).length - sentBeforeFlip };
+    keep({ flipped });
+    expect.soft(flipped.view, 'still waiting after the switch').toMatchObject({ approved: false, approvedExtraHeaders: { 'X-Route': 'blue-pool' } });
+    expect.soft(flipped.noticeShown, 'the notice still shown').toBe(1);
+    expect.soft(flipped.sentAfterFlip, 'nothing sent to the endpoint').toBe(0);
+
+    // 4d. Lead changes them again while the notice shows the last ones: main's word that it changed is held back from
+    // the window (its webContents.send wrapped, then put back), so the notice is the one the owner read. Approve is
+    // refused in main's sentence, and the notice is read again: the new lists.
+    await app.evaluate(({ BrowserWindow }) => {
+      const win = BrowserWindow.getAllWindows().find(w => !w.webContents.getURL().includes('tray-panel'))!;
+      const send = win.webContents.send.bind(win.webContents);
+      const g = globalThis as Record<string, unknown>;
+      g.__qaHeldSend = { win, send };
+      win.webContents.send = (channel: string, ...args: unknown[]) => { if (channel !== 'endpoints:changed') send(channel, ...args); };
+    });
+    const changedAgain = await byLead({ 'X-Route': 'amber-pool', 'X-Batch': 'nightly' });
+    const stale = await notice.innerText();
+    await notice.getByRole('button', { name: 'approve the new headers', exact: true }).click();
+    const refusedAgain = row.locator('[data-endpoint-row-error]');
+    await expect(refusedAgain).toContainText('changed since it was shown', { timeout: 15_000 });
+    await expect(notice).toContainText('X-Route: amber-pool', { timeout: 15_000 });
+    await app.evaluate(() => {
+      const held = (globalThis as Record<string, unknown>).__qaHeldSend as { win: { webContents: { send: unknown } }; send: unknown };
+      held.win.webContents.send = held.send;
+    });
+    const changedTwice = { changedAgain, stale, refused: await refusedAgain.innerText(), notice: await notice.innerText(), view: await view() };
+    keep({ changedTwice });
+    await stepShot(page, '3b-changed-since-shown');
+    expect.soft(changedTwice.stale, 'the notice the owner read').toContain('X-Route: green-pool');
+    expect.soft(changedTwice.refused, 'main\'s sentence').toMatch(/^The endpoint "Remote host" changed since it was shown \(Lead, [^)]+\): look at it again before you approve\.$/);
+    expect.soft(changedTwice.notice, 'the new lists').toContain('new        X-Route: amber-pool · X-Batch: nightly');
+    expect.soft(changedTwice.view, 'nothing approved').toMatchObject({ approved: false, approvedExtraHeaders: { 'X-Route': 'blue-pool' } });
+
+    // 4e. Approve what is shown now: approved, and the next request carries it.
     await notice.getByRole('button', { name: 'approve the new headers', exact: true }).click();
     await expect(row).not.toContainText('waiting for your approval', { timeout: 15_000 });
     const approved = await view();
     const sentAfter = await checkedWith('X-Route');
-    keep({ approved, sentAfter });
-    expect.soft(approved, 'approved').toMatchObject({ approved: true, extraHeaders: { 'X-Route': 'green-pool', 'X-Batch': 'nightly' } });
-    expect.soft(sentAfter, 'the next request carries the new ones').toContain('green-pool');
+    keep({ approved, sentAfter, rowAfter: await row.innerText() });
+    expect.soft(approved, 'approved').toMatchObject({ approved: true, extraHeaders: { 'X-Route': 'amber-pool', 'X-Batch': 'nightly' } });
+    expect.soft(sentAfter, 'the next request carries the new ones').toContain('amber-pool');
+    expect.soft(await row.innerText(), 'the refusal is gone once approved').not.toContain('changed since it was shown');
 
     // 5. Lead changes them again; the owner puts back the approved ones.
     const again = await byLead({ 'X-Route': 'red-pool' });
@@ -161,7 +208,7 @@ test('an endpoint\'s extra headers: added by the owner and sent, a credential\'s
     const putBack = await view();
     keep({ again, putBack, putBackRow: await row.innerText() });
     await stepShot(page, '4-put-back');
-    expect.soft(putBack, 'put back').toMatchObject({ approved: true, extraHeaders: { 'X-Route': 'green-pool', 'X-Batch': 'nightly' } });
+    expect.soft(putBack, 'put back').toMatchObject({ approved: true, extraHeaders: { 'X-Route': 'amber-pool', 'X-Batch': 'nightly' } });
 
     // 6.
     keep({ errors });
