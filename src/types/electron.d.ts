@@ -2871,7 +2871,9 @@ export interface ElectronAPI {
   /** Inference endpoints (services/inference-endpoints.ts). The window is the one place an endpoint is approved. */
   endpoints?: {
     list: () => Promise<EndpointView[]>;
-    /** From the window: approved by the act. */
+    /** From the window: a new endpoint, an address or extra headers the owner typed (or the approved ones put back)
+     *  are approved by the act. A save of any other field (traces, the name, the hold) leaves an agent's pending
+     *  change pending: the answer's endpoint keeps `approved: false`. Only `approve` approves it. */
     /** `allowPlainHttp`: the owner allows plain http to a public address (refused without it; private addresses
      *  need none). An agent's change of address takes the endpoint's key away (set it again). */
     /** Traces turned off applies at once: ok, with `unsaved` while it is not written yet. */
@@ -2882,7 +2884,10 @@ export interface ElectronAPI {
      *  Trailer, Upgrade, Expect, Accept-Encoding, X-Session-Id, X-Agent-Id, any `Proxy-` header, and two names equal
      *  but for case. Every agent reads them: say in the window never to put a credential there. */
     save: (e: { id?: string; name: string; baseUrl: string; allowTraces: boolean; holdMaxSeconds?: number; sendSessionHeaders?: boolean; allowPlainHttp?: boolean; extraHeaders?: Record<string, string> }) => Promise<{ ok: true; endpoint: EndpointView; unsaved?: string } | { ok: false; error: string }>;
-    approve: (id: string) => Promise<{ ok: true; endpoint: EndpointView } | { ok: false; error: string }>;
+    /** Approves exactly what the window showed: `seen` is the view's `baseUrl` and `extraHeaders` as displayed in the
+     *  notice. Refused (`ok: false`, `error` a plain sentence) when either is not the endpoint's now (an agent changed
+     *  it again while the notice was open: read `endpoints.list` and show the change), or when `seen` is missing. */
+    approve: (id: string, seen: { baseUrl: string; extraHeaders: Record<string, string> }) => Promise<{ ok: true; endpoint: EndpointView } | { ok: false; error: string }>;
     /** Write-only: no channel returns a key. null clears it. */
     setKey: (id: string, key: string | null) => Promise<{ ok: true } | { ok: false; error: string }>;
     /** Refused while agents run on it (`agents` names them). */

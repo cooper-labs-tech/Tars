@@ -1107,6 +1107,11 @@ the health: the API's `/api/endpoints` and the `endpoint_*` tools of mcp-orchest
 - Extra headers an agent adds or changes wait for the owner's approval the same way (the owner's decision of 26/11):
   they go out with the owner's key, and a header can route or bill the requests at the endpoint. The key stays, since
   the address does not change.
+- Approval stays apart from saving (found in the window's work, 27/11). The owner's save of another field (traces,
+  the name, the hold) leaves an agent's change pending: it never approves what the owner has not looked at. An
+  approval names the address and the extra headers the window showed, and is refused when an agent changed either
+  again since. An address or headers the owner types in the window, or the approved values put back, are the owner's
+  own, approved by that act.
 - A key, the models, the name or the hold ceiling keep the approval.
 - An agent may turn traces off for an endpoint, never on.
 

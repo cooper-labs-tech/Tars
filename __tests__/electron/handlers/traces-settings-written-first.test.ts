@@ -115,7 +115,9 @@ describe('the other trace and endpoint settings of the same handlers (5)', () =>
     failWith = full();
     events = [];
     const before = structuredClone(memory);
-    for (const [channel, args] of [['endpoints:setKey', [id, 'sk-test-not-a-key']], ['endpoints:approve', [id]]] as const) {
+    // An approval names what the window showed (27/11): here, the endpoint as it was saved.
+    const seen = { baseUrl: 'http://127.0.0.1:9/v1', extraHeaders: {} };
+    for (const [channel, args] of [['endpoints:setKey', [id, 'sk-test-not-a-key']], ['endpoints:approve', [id, seen]]] as const) {
       const answer = await call(channel, ...args);
       expect(answer.ok, `${channel}: ${JSON.stringify(answer)}`).toBe(false);
       expect(String(answer.error), channel).toMatch(/ENOSPC/);
