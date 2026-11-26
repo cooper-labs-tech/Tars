@@ -53,6 +53,13 @@ import { cannotSymlink } from '../setup/symlink-privilege';
  *     or saving the same headers again takes an approval away; or the change takes the key away.
  * 20. A probe of an approved endpoint leaves its extra headers out (an endpoint that needs them answers 4xx), or
  *     sends them to an address the owner did not approve.
+ * Added before their code, a finding of the window's work on #599 (27/11): approval stays apart from saving.
+ * 21. The owner's save of another field (traces, the name, the hold) on an endpoint whose address or extra headers an
+ *     agent changed approves that change unseen.
+ * 22. An approval approves something other than what the owner saw: one given with no values, or with values an
+ *     agent changed again since the notice was shown, is taken; or one with the values shown is refused.
+ * 23. The owner's own change of address or extra headers in the window is not its own approval; putting the approved
+ *     values back is refused; or the owner's new address approves headers an agent changed meanwhile.
  */
 
 const NOW = '2026-11-19T12:00:00.000Z';
@@ -66,6 +73,12 @@ function added(settings: AppSettings, actor: EndpointActor, over: Record<string,
   if (!r.ok) throw new Error(r.error);
   return r;
 }
+
+/** What the window shows of an endpoint, which an approval names (seen). */
+const seenOf = (settings: AppSettings, id: string) => {
+  const v = endpointViews(settings, []).find(e => e.id === id)!;
+  return { baseUrl: v.baseUrl, extraHeaders: v.extraHeaders };
+};
 
 describe('saving endpoints', () => {
   it('1: only a plain http(s) base URL is saved', () => {
@@ -84,7 +97,7 @@ describe('saving endpoints', () => {
     expect(byAgent.endpoint).toMatchObject({ approved: false, allowTraces: false, changedBy: { agentId: 'agent-remote' } });
     expect('refused' in endpointTarget(byAgent.settings, byAgent.endpoint.id)).toBe(true);
 
-    const approved = approveEndpoint(byAgent.settings, byAgent.endpoint.id);
+    const approved = approveEndpoint(byAgent.settings, byAgent.endpoint.id, seenOf(byAgent.settings, byAgent.endpoint.id));
     if (!approved.ok) throw new Error(approved.error);
     expect(approved.endpoint).toMatchObject({ approved: true, approvedBaseUrl: 'http://192.168.50.10:9000/v1' });
 
@@ -158,7 +171,7 @@ describe('saving endpoints', () => {
     expect(byAgent.endpoint).toMatchObject({ approved: false, changedBy: { agentId: 'agent-remote' } });
     expect('refused' in endpointTarget(byAgent.settings, r.endpoint.id)).toBe(true);
     expect(endpointViews(byAgent.settings, [])[0].keySet).toBe(true);
-    const approved = approveEndpoint(byAgent.settings, r.endpoint.id);
+    const approved = approveEndpoint(byAgent.settings, r.endpoint.id, seenOf(byAgent.settings, r.endpoint.id));
     if (!approved.ok) throw new Error(approved.error);
     expect(endpointTarget(approved.settings, r.endpoint.id)).toMatchObject({ key: 'k-owner', extraHeaders: { 'X-Route': 'elsewhere' } });
     // The same map again, in another key order or case of nothing: no change, the approval stays.
@@ -190,6 +203,62 @@ describe('saving endpoints', () => {
     expect(sent[0].url).toBe('https://other.example/v1/models');
     expect(sent[0].headers['X-Tenant']).toBeUndefined();
     expect(sent[0].headers.Authorization).toBeUndefined();
+  });
+
+  /** An owner's endpoint, approved, with a key, then an agent's change of its address and of its headers. */
+  function pendingAfterAgent() {
+    const r = added(base(), OWNER, { baseUrl: 'https://h.example/v1', allowTraces: true });
+    const keyed = setEndpointKey(r.settings, r.endpoint.id, 'k-owner');
+    if (!keyed.ok) throw new Error(keyed.error);
+    const moved = saveEndpoint(keyed.settings, { id: r.endpoint.id, baseUrl: 'https://agent.example/v1', extraHeaders: { 'X-Route': 'agent' } }, AGENT, NOW);
+    if (!moved.ok) throw new Error(moved.error);
+    return { id: r.endpoint.id, settings: moved.settings };
+  }
+  it('21: the owner\'s save of traces, the name or the hold leaves an agent\'s change pending', () => {
+    const p = pendingAfterAgent();
+    for (const change of [{ allowTraces: false }, { name: 'Renamed' }, { holdMaxSeconds: 30 }, { allowTraces: true, name: 'Again' }]) {
+      // The window sends the whole form: the address and headers it shows, which are the pending ones.
+      const s = saveEndpoint(p.settings, { id: p.id, ...seenOf(p.settings, p.id), ...change }, OWNER, NOW);
+      if (!s.ok) throw new Error(s.error);
+      expect(s.endpoint, JSON.stringify(change)).toMatchObject({ approved: false, approvedBaseUrl: 'https://h.example/v1', approvedExtraHeaders: {} });
+      expect('refused' in endpointTarget(s.settings, p.id), JSON.stringify(change)).toBe(true);
+    }
+  });
+
+  it('22: an approval approves what the owner saw, and nothing else', () => {
+    const p = pendingAfterAgent();
+    const seen = seenOf(p.settings, p.id);
+    expect(approveEndpoint(p.settings, p.id).ok).toBe(false);
+    // The agent changes the headers again while the notice is open.
+    const again = saveEndpoint(p.settings, { id: p.id, extraHeaders: { 'X-Route': 'agent-2' } }, AGENT, NOW);
+    if (!again.ok) throw new Error(again.error);
+    const stale = approveEndpoint(again.settings, p.id, seen);
+    expect(stale.ok).toBe(false);
+    if (!stale.ok) expect(stale.error).toMatch(/changed/);
+    const movedAgain = saveEndpoint(p.settings, { id: p.id, baseUrl: 'https://agent-2.example/v1' }, AGENT, NOW);
+    if (!movedAgain.ok) throw new Error(movedAgain.error);
+    expect(approveEndpoint(movedAgain.settings, p.id, seen).ok).toBe(false);
+    // What it saw, in another key order: approved, both parts.
+    const ok = approveEndpoint(p.settings, p.id, { baseUrl: seen.baseUrl, extraHeaders: { ...seen.extraHeaders } });
+    if (!ok.ok) throw new Error(ok.error);
+    expect(ok.endpoint).toMatchObject({ approved: true, approvedBaseUrl: 'https://agent.example/v1', approvedExtraHeaders: { 'X-Route': 'agent' } });
+    expect(endpointTarget(ok.settings, p.id)).toMatchObject({ baseUrl: 'https://agent.example/v1', extraHeaders: { 'X-Route': 'agent' } });
+  });
+
+  it('23: the owner\'s own address or headers, and putting the approved values back, are the owner\'s approval', () => {
+    const p = pendingAfterAgent();
+    // Put back: the approved address and headers, typed back in the window.
+    const back = saveEndpoint(p.settings, { id: p.id, baseUrl: 'https://h.example/v1', extraHeaders: {} }, OWNER, NOW);
+    if (!back.ok) throw new Error(back.error);
+    expect(back.endpoint).toMatchObject({ approved: true, baseUrl: 'https://h.example/v1', extraHeaders: {} });
+    // An address of the owner's own, the agent's headers still pending: the address is approved, the endpoint is not.
+    const own = saveEndpoint(p.settings, { id: p.id, baseUrl: 'https://owner.example/v1', extraHeaders: { 'X-Route': 'agent' } }, OWNER, NOW);
+    if (!own.ok) throw new Error(own.error);
+    expect(own.endpoint).toMatchObject({ approved: false, approvedBaseUrl: 'https://owner.example/v1', approvedExtraHeaders: {} });
+    // And headers of the owner's own on top: both are the owner's now.
+    const both = saveEndpoint(own.settings, { id: p.id, extraHeaders: { 'X-Route': 'owner' } }, OWNER, NOW);
+    if (!both.ok) throw new Error(both.error);
+    expect(both.endpoint).toMatchObject({ approved: true, approvedBaseUrl: 'https://owner.example/v1', approvedExtraHeaders: { 'X-Route': 'owner' } });
   });
 
   it('4: the key is never in a view nor in the endpoint record', () => {
@@ -257,7 +326,7 @@ describe('the key goes only where the owner approved (H1, M1)', () => {
     await readModels(rekeyed.settings, r.endpoint.id, b.f, NOW);
     await checkHealth(rekeyed.settings, r.endpoint.id, b.f, NOW);
     expect(b.seen.map(c => c.auth)).toEqual([undefined, undefined]);
-    const approved = approveEndpoint(moved.settings, r.endpoint.id);
+    const approved = approveEndpoint(moved.settings, r.endpoint.id, seenOf(moved.settings, r.endpoint.id));
     if (!approved.ok) throw new Error(approved.error);
     expect(endpointTarget(approved.settings, r.endpoint.id)).toMatchObject({ key: null });
   });

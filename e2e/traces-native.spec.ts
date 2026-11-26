@@ -40,6 +40,9 @@ import { DEV_URL, apiPort } from './ports.mjs';
  *     the credential is refused.
  * 13. A side request goes up marked: Q's harness sends a title call before its task, and the upload to a
  *     back-office stand-in carries `side: true` for it and `side: false` for the rest.
+ * 14. (Found in the window's work on #599, 27/11.) Approval stays apart from saving: once Lead has moved the endpoint
+ *     and changed its extra headers, the owner turning its traces off in the window leaves it unapproved, and Q's next
+ *     model call is refused (403) without reaching the address Lead set.
  * The artefact: values.json, the stand-in's request log (headers included), the trace export, the app's log.
  */
 
@@ -296,7 +299,7 @@ test('an open harness runs on an inference endpoint through Tars, held while the
     expect.soft(moved.error, 'why').toMatch(/approve/);
 
     // 12. Lead's extra header waits for the owner; a credential header is refused.
-    const approvedOther = await api<{ ok: boolean }>('endpoints', 'approve', String(another?.id));
+    const approvedOther = await api<{ ok: boolean }>('endpoints', 'approve', String(another?.id), { baseUrl: another?.baseUrl, extraHeaders: another?.extraHeaders ?? {} });
     const leadHeader = await lead('endpoint_update', { id: String(another?.id), extra_headers: { 'X-Route': 'r9' } });
     const leadCredential = await lead('endpoint_update', { id: String(another?.id), extra_headers: { 'x-api-key': 'k' } });
     const otherAfter = (await api<Array<Record<string, unknown>>>('endpoints', 'list')).find(v => v.id === another?.id);
@@ -322,6 +325,27 @@ test('an open harness runs on an inference endpoint through Tars, held while the
       expect.soft(reachedAttacker.every(r => !r.headers?.authorization && !r.headers?.['x-api-key']), 'a credential reached the unapproved address').toBe(true);
       expect.soft(JSON.stringify(reachedAttacker), 'the key reached the unapproved address').not.toContain(key);
       expect.soft(afterMove, 'the moved endpoint').toMatchObject({ approved: false, keySet: false });
+
+      // 14. Approval stays apart from saving: Lead changes the headers too, over its tools; the owner turns traces off
+      // in the window, the form showing the pending values. The endpoint stays unapproved, and Q's next model call
+      // never reaches the address Lead set.
+      const leadHeaders = await lead('endpoint_update', { id: EP, extra_headers: { 'X-Route': 'agent-set' } });
+      const pending = (await api<Array<Record<string, unknown>>>('endpoints', 'list')).find(v => v.id === EP)!;
+      const flipped = await api<{ ok: boolean; error?: string }>('endpoints', 'save', {
+        id: EP, name: String(pending.name), baseUrl: String(pending.baseUrl), allowTraces: false, holdMaxSeconds: 30, sendSessionHeaders: true, extraHeaders: pending.extraHeaders,
+      });
+      const afterFlip = (await api<Array<Record<string, unknown>>>('endpoints', 'list')).find(v => v.id === EP);
+      const attackerPosts = () => (fs.existsSync(attackerLog) ? fs.readFileSync(attackerLog, 'utf8').trim().split('\n').filter(Boolean).map(l => JSON.parse(l)) : []).filter((r: { method?: string }) => r.method === 'POST').length;
+      const postsBefore = attackerPosts();
+      const callsBeforeFlip = fakeEntries().filter(e => e.model && e.agent === Q).length;
+      await lead('send_message', { id: Q, message: 'Run the probe a last time.' });
+      await lead('wait_for_agent', { id: Q, timeoutSeconds: 90 });
+      const afterFlipCalls = fakeEntries().filter(e => e.model && e.agent === Q).slice(callsBeforeFlip).map(c => c.status);
+      keep({ leadHeaders, flipped, afterFlip, attackerPostsAfterFlip: attackerPosts() - postsBefore, afterFlipCalls });
+      expect.soft(flipped.ok, `the owner's traces toggle: ${flipped.error}`).toBe(true);
+      expect.soft(afterFlip, 'the endpoint after the owner\'s toggle').toMatchObject({ approved: false, allowTraces: false, extraHeaders: { 'X-Route': 'agent-set' } });
+      expect.soft(attackerPosts() - postsBefore, 'model calls that reached the address Lead set').toBe(0);
+      expect.soft(afterFlipCalls, "what Q's harness got").toEqual([403]);
     } finally {
       await attacker.close();
     }
