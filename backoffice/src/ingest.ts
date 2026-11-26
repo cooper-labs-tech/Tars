@@ -150,7 +150,7 @@ const REQUEST_COLS: Col[] = [
   ['params', 'params', 'jsonb'], ['toolsHash', 'tools_hash', 'text'], T('startedAt', 'started_at'), ['ttftMs', 'ttft_ms', 'bigint'],
   ['totalMs', 'total_ms', 'bigint'], ['tokensIn', 'tokens_in', 'bigint'], ['tokensCached', 'tokens_cached', 'bigint'],
   ['tokensOut', 'tokens_out', 'bigint'], ['status', 'status', 'int'], ['error', 'error', 'text'], ['finishReason', 'finish_reason', 'text'],
-  ['streamed', 'streamed', 'bool'], ['reqBytes', 'req_bytes', 'bigint'], ['respBytes', 'resp_bytes', 'bigint'],
+  ['streamed', 'streamed', 'bool'], ['side', 'side', 'bool'], ['reqBytes', 'req_bytes', 'bigint'], ['respBytes', 'resp_bytes', 'bigint'],
 ];
 
 /** One INSERT ... SELECT FROM jsonb_to_recordset ... ON CONFLICT per table: a batch is a few queries, never one per row. */
@@ -167,7 +167,8 @@ const SQL = {
   sessions: upsertSql('sessions', 'sessionId', 'session_id', SESSION_COLS, { cols: ['changed_seq'], vals: [`nextval('change_seq')`] }).replace(
     /DO UPDATE SET /, 'DO UPDATE SET received_at = now(), '),
   turns: upsertSql('turns', 'turnId', 'turn_id', TURN_COLS),
-  requests: upsertSql('requests', 'requestId', 'request_id', REQUEST_COLS),
+  // A request sent again without its side mark keeps the one it had: only true or false replaces it.
+  requests: upsertSql('requests', 'requestId', 'request_id', REQUEST_COLS).replace('side = EXCLUDED.side', 'side = coalesce(EXCLUDED.side, requests.side)'),
 };
 
 /** The last row of each id wins, as it would had the rows come in separate batches. */

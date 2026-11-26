@@ -228,6 +228,7 @@ missing blob, then `PUT` the batch, and send any `missingBlobs` it reports.
 | `error` | string ≤ 2,000 | no | |
 | `finishReason` | string ≤ 40 | no | |
 | `streamed` | bool | no | |
+| `side` | bool | no | `true` for a harness's side request (a title request with no tools, a memory request with another system prompt), `false` for the agent's own loop. Leave it out when the client does not know. A request sent again without it keeps the mark it had |
 | `reqBytes`, `respBytes` | int ≥ 0 | no | |
 | `messages` | array ≤ 10,000 | yes | `{ "position": int, "hash": sha256, "direction": "input" \| "output" }`: what the request sent, in order, then what it produced |
 
@@ -276,6 +277,14 @@ again gets every session that is new or grew since, each once per change, oldest
 `200 {"session": Session, "turns": [Turn], "requests": [Request], "messages": [Message]}`, with
 `requests` ordered by `seq`, and `messages` the metadata of every hash the requests name.
 
+Every request read back, here and in § 6.5, carries `side`, always present:
+
+- `true`: a side request;
+- `false`: the agent's own loop;
+- `null`: the uploading Tars did not say (one before the mark). A reader treats `null` as side,
+  so a side request is never passed off as a main one. The server never turns a missing mark into
+  `false`.
+
 ### 6.3 `GET /v1/read/blobs/{hash}`
 
 - The blob's bytes, `Content-Type: application/octet-stream`, with its SHA-256 in `ETag`.
@@ -320,3 +329,18 @@ The server stores what it is given, so privacy is decided on the client:
 `schema: 1` in a batch is this document. A later version adds a new number. The server accepts
 the numbers it knows and refuses the others with `400 bad_request`. Unknown fields inside a known
 schema are refused (`422 invalid_batch`), so a client mistake is seen at once rather than lost.
+
+**Additive fields stay in v1.** A new optional field, such as a request's `side`, is added to
+schema 1 and to `/v1` without a new number:
+
+- an older client that leaves it out is still accepted, and its rows read back with the field's
+  "unknown" value (`null` for `side`);
+- a reader ignores fields it does not know, and finds every documented field on every read.
+
+A new number is kept for changes that alter or remove what a field means. Because writes refuse
+unknown fields, a client may send a new field only to a server that knows it: update the server
+before the clients.
+
+| Added | Field |
+|---|---|
+| 26/11/2026 | `side` on a request (§ 5, read back in §§ 6.2 and 6.5), migration `002_request_side` |

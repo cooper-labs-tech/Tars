@@ -138,6 +138,7 @@ function request(r: QueryResultRow) {
     toolsHash: r.tools_hash ?? undefined, startedAt: ms(r.started_at), ttftMs: r.ttft_ms ?? undefined, totalMs: r.total_ms ?? undefined,
     tokensIn: r.tokens_in ?? undefined, tokensCached: r.tokens_cached ?? undefined, tokensOut: r.tokens_out ?? undefined,
     status: r.status ?? undefined, error: r.error ?? undefined, finishReason: r.finish_reason ?? undefined, streamed: r.streamed ?? undefined,
+    side: r.side ?? null, // always present: null is "the uploading Tars did not say", which readers treat as side
     reqBytes: r.req_bytes ?? undefined, respBytes: r.resp_bytes ?? undefined,
   };
 }

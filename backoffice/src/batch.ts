@@ -29,7 +29,7 @@ const REQUEST: Shape = {
   surface: r({ t: 'enum', of: ['openai_chat', 'openai_responses', 'anthropic_messages', 'models', 'other'] }),
   modelRequested: str(200), modelServed: str(200), params: { t: 'obj', maxBytes: 16 * 1024 }, toolsHash: hash, startedAt: r(int),
   ttftMs: int, totalMs: int, tokensIn: int, tokensCached: int, tokensOut: int, status: int, error: str(2000), finishReason: str(40),
-  streamed: bool, reqBytes: int, respBytes: int, messages: r({ t: 'msgs' }),
+  streamed: bool, side: bool, reqBytes: int, respBytes: int, messages: r({ t: 'msgs' }),
 };
 const MESSAGE: Shape = {
   hash: r(hash), role: r({ t: 'enum', of: ['system', 'user', 'assistant', 'tool', 'developer'] }), createdAt: r(int), size: r(int),
