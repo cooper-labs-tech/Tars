@@ -22,7 +22,7 @@ CLIs run on your machine and Tars is the room they work in.
 - [Memory](#memory)
 - [Hermes](#hermes)
 - [The surfaces](#the-surfaces)
-- [A preview: projects and chats](#a-preview-projects-and-chats)
+- [Projects and chats](#projects-and-chats)
 - [Where your data lives](#where-your-data-lives)
 - [Development](#development)
 - [Further reading](#further-reading)
@@ -287,6 +287,10 @@ without leaving Tars. Without a gateway the rest of Tars works fine.
 
 ## The surfaces
 
+The sidebar's main menu holds your chats (Chat), Projects, Dashboard, Kanban and
+Schedules, and its Tars, all projects entry opens the Chat below; the others open
+from More, as a card above the page you were on.
+
 | Screen | What it is for |
 |---|---|
 | **Dashboard** | The terminal grid. Every agent, live, grouped by project; each panel shows its session and opens fullscreen in one press. A project with an orchestrator opens with it on two thirds of the board and its team in a column beside it, the keys going to the orchestrator; Equal grid in the header gives the grid back. An asleep agent's panel keeps its last screen, and a key typed there wakes it |
@@ -306,16 +310,11 @@ without leaving Tars. Without a gateway the rest of Tars works fine.
 
 ---
 
-## A preview: projects and chats
+## Projects and chats
 
-Tars 2.0.0 carries a new interface as a preview, off by default: Settings,
-Preferences, **New interface**. Until you turn it on, Tars looks and works
-exactly as before, and turning it off brings that back at once.
-
-![Settings, Preferences: the New interface row, on, in Settings as a card above the app](screenshots/new-interface-settings.png)
-
-A project keeps its team, and you open several chats in it, each its own
-conversation with the project's orchestrator on one topic.
+Since 2.1.0 this is Tars's only interface (it was a preview from 2.0.0 to 2.0.7,
+behind a switch). A project keeps its team, and you open several chats in it,
+each its own conversation with the project's orchestrator on one topic.
 
 ![A chat's page: its orchestrator hands the test to QA and the fix to the Frontend Engineer, reads their answers and runs the tests, your next words wait in the composer, and the list says 2 of 3 chats are working](screenshots/new-interface-chat.png)
 
@@ -334,9 +333,13 @@ conversation with the project's orchestrator on one topic.
   once is working, a send says which, each with its Stop.
 - **A project's page.** Its chats, its team and what each agent is on, its
   terminals and its room.
-- **More.** Agents, Review, Logs, Vault, Extensions, Usage, Brain, Settings and
-  What's New open as cards above the app. Tars, all projects is today's Chat,
-  unchanged.
+- **More.** Agents, Review, Logs, Vault, Extensions, Usage, Resources, Brain,
+  Settings and What's New open as cards above the app. Tars, all projects is the
+  Chat: Hermes and a room per project.
+- **The theme.** Settings, Preferences, Appearance: Dark or Light.
+- **The keys.** Cmd and a digit (Ctrl on Windows): 1 Dashboard, 3 Kanban,
+  4 Schedules and 8 Projects open their page; 2 Agents, 5 Review, 6 Logs,
+  7 Vault, 9 Extensions and 0 Usage open their card.
 
 ![A project's page: its chats by number, its team and what each agent is on, its terminals and its room](screenshots/new-interface-project.png)
 

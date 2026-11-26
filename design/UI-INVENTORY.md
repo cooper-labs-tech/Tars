@@ -30,8 +30,10 @@ composer and the room head, each dark and light, and two notes frames. Hermes is
 Draw anything for the Chat in `chat-redesign-a.pen`.
 
 A fourth document, `design/landing.pen`, holds the site in `landing/`:
-`Landing · desktop` (its `Preview` section shows the new interface as the preview
-of 2.0.0, with a picture of a chat's page that e2e/new-interface-pictures.mjs takes), `Landing · 404`, `Landing · privacy and terms` (the two
+`Landing · desktop` (its `Preview` section shows projects and chats, the preview of 2.0.0
+and the only interface since 2.1.0, with a picture of a chat's page that
+e2e/new-interface-pictures.mjs takes; its screenshot, and the social image's, are to show
+the Dashboard in the new shell, `Landing · notes (2.1.0)`), `Landing · 404`, `Landing · privacy and terms` (the two
 legal pages, drawn once: they share one layout), and `Landing · social image`,
 the picture link previews show. It was forked from `tars-redesign.pen` on 2026-09-23 with
 only the landing kept, and the landing frame left the first two documents in the

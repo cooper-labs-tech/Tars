@@ -559,7 +559,7 @@ The contract: `role` on `agent:create` and `agent:update`, where anything but th
 
 ### Chats: `services/chats.ts`, `handlers/chat-handlers.ts`
 
-A chat is one conversation with a project's orchestrator on one topic (ORCHESTRATOR-PER-CHAT.md v2.2; 2.0.0 builds it in steps). The records and their runners are in. Nothing in the window reads them yet: the chat pages come behind the "new interface" switch.
+A chat is one conversation with a project's orchestrator on one topic (ORCHESTRATOR-PER-CHAT.md v2.2; 2.0.0 builds it in steps). The records and their runners are in, and the window reads them in its chat list and its chat pages, the shell's own since 2.1.0 (a preview behind a switch from 2.0.0 to 2.0.7).
 
 - **The record** (`chats.json`, §7):
   - the project's path as Tars saved it, its orchestrator's;
@@ -649,7 +649,7 @@ A chat is one conversation with a project's orchestrator on one topic (ORCHESTRA
 - **task_status** knows every id Tars gave: waiting (`queued`), taken back (`error`, why), typed straight in (`delivered`, `how: 'typed'`, recorded when the request went in), then the ledger's task.
 - **A stop** keeps the queue, paused (`stopped by <who>`), and its answer says so (`queueKept`; `stop_agent` names the count); `dropQueue: true` drops it instead (`queueDropped`), each sender told it never ran. The kept requests are not ended (`endWorkerRequests`, `keep`).
 - **A restart of Tars** keeps it: the line is written at each change to `~/.tars-private/agent-queues.json` (0600; never in `~/.tars`, which every agent is handed), only the items Tars can hand over again. At launch their requests are not ended (`keptQueueRefs`), each queue comes back paused (`Tars restarted`, or the pause it had), each item waits again as the route that queued it did (`replayQueuedItem`), under the sender line it was queued with, and the project's orchestrator is told, per agent, what waits and how to resume it (agent-watch, `kept`). A file that is not one is said once and restores nothing.
-- `e2e/agent-queue.spec.ts` drives the whole chain in both interfaces, red on main for each case.
+- `e2e/agent-queue.spec.ts` drives the whole chain, red on main for each case.
 ### What guarantees delivery, and what does not
 
 **Guaranteed.**

@@ -393,9 +393,8 @@ Traces are `retain-on-failure`.
 
 ```bash
 npx tsc -p electron/tsconfig.json && (cd mcp-orchestrator && npm run build)
-npm run e2e:matrix                                               # both shells, about 14 minutes each
+npm run e2e:matrix                                               # about 14 minutes
 E2E_MATRIX_ONLY=claude,amp,grok npm run e2e:matrix               # the pairs of these CLIs only
-E2E_MATRIX_SHELL=classic npm run e2e:matrix                      # one shell (classic or new)
 TARS_CLI_MATRIX_LIVE=1 npm run e2e:matrix -- e2e/cli-matrix.live.spec.ts   # the real CLIs, on purpose only
 ```
 
@@ -403,8 +402,8 @@ TARS_CLI_MATRIX_LIVE=1 npm run e2e:matrix -- e2e/cli-matrix.live.spec.ts   # the
 its CLI where Tars depends on it (`e2e/fake-clis.mjs`, `e2e/fake-codex.mjs`). It makes each in turn the orchestrator
 and has it delegate to, message and hear back from every other: 72 ordered pairs, five cells each.
 
-**Its own project, `matrix`, out of the default suite since 19/10.** Its two shells take 27 minutes, which nearly
-doubled `npm run e2e`. The project exists only with `E2E_MATRIX=1`, which `npm run e2e:matrix` sets
+**Its own project, `matrix`, out of the default suite since 19/10.** It took 27 minutes in the two shells Tars had
+until 2.1.0, which nearly doubled `npm run e2e`; since the new interface became the only one it runs in that one. The project exists only with `E2E_MATRIX=1`, which `npm run e2e:matrix` sets
 (`e2e/matrix.mjs`).
 
 **When it runs:**
@@ -428,7 +427,7 @@ doubled `npm run e2e`. The project exists only with `E2E_MATRIX=1`, which `npm r
 fails on a red cell no rule expects, on a rule whose cell turned green, and on a cell red for another reason than its
 rule's. So the PR that fixes a pair removes its rule.
 
-**The artefact:** `values.json` in the run directory holds every cell, its result and what was read, in both shells.
+**The artefact:** `values.json` in the run directory holds every cell, its result and what was read.
 
 ### Coverage guard: `npm run e2e:guard`
 

@@ -1,9 +1,8 @@
 import type { ReactNode } from 'react';
 
 /**
- * The new interface as the preview of 2.0.0: `Landing · desktop`, its Preview
- * section (design/landing.pen). Projects and chats, off until Settings,
- * Preferences, New interface turns it on, as the app has it; between its head
+ * Projects and chats, the preview of 2.0.0 and Tars's only interface since 2.1.0: `Landing · desktop`, its
+ * Preview section (design/landing.pen); between its head
  * and its points, the picture of a chat's page the home page hands it (taken by
  * e2e/new-interface-pictures.mjs). No `@/` import and no package of the
  * landing's own: __tests__/landing/preview.test.tsx renders it with the root's,
@@ -23,19 +22,19 @@ const POINTS = [
     body: 'Its chats, its team and what each agent is on, its terminals and its room, on one page. Agents, Usage, Settings and the other pages open from More, as cards above the app.',
   },
   {
-    title: 'Off until you turn it on',
-    body: 'Settings, Preferences, New interface. Today’s interface stays exactly as it is until then, and comes back the moment you turn it off.',
+    title: 'Every page, a key away',
+    body: 'Cmd and a digit (Ctrl on Windows) opens a page, or its card above the one you are on, as before. Dark or light is in Settings, Preferences, Appearance.',
   },
 ];
 
 export function PreviewSection({ picture }: { picture?: ReactNode }) {
   return (
     <section id="preview" className="max-w-[1040px] mx-auto px-6 py-16 border-b border-line">
-      <p className="font-mono text-xs text-accent mb-3.5">Preview in 2.0.0</p>
+      <p className="font-mono text-xs text-accent mb-3.5">New in 2.1.0</p>
       <h2 className="font-display text-3xl mb-3.5">Projects and chats</h2>
       <p className="text-ink-soft text-[15px] leading-relaxed max-w-[600px] mb-10">
         A project keeps its team, and you open several chats in it, each its own conversation with the
-        project{'’'}s orchestrator on one topic. It comes in 2.0.0 as a preview, off until you turn it on.
+        project{'’'}s orchestrator on one topic. A preview in 2.0.0, it is Tars{'’'}s interface since 2.1.0.
       </p>
       {picture && <div className="mb-10">{picture}</div>}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-x-10 gap-y-9">
