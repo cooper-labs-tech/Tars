@@ -128,6 +128,11 @@ test('codex: another session\'s queued message reaches an orchestrator and not a
       `model = "${MODEL}"`, 'model_provider = "stand-in"', 'check_for_update_on_startup = false', '',
       '[model_providers.stand-in]', 'name = "Stand-in"', `base_url = "http://127.0.0.1:${STUB}/v1"`, 'env_key = "TARS_E2E_OPENAI_KEY"', 'wire_api = "responses"', '',
       ...Object.values(projects).flatMap((p) => [p, fs.realpathSync(p)]).flatMap((p) => [`[projects."${p}"]`, 'trust_level = "trusted"', '']),
+      // The two orchestrator-only servers, as a machine that ran 2.0.4 has them, off: a worker's codex is started with
+      // `-c mcp_servers.<name>.enabled=false` for each (services/mcp-roles.ts), and codex 0.163 refuses to start on
+      // that for a server its config does not have ("invalid transport"), as on a fresh CODEX_HOME. That is not what
+      // this spec is about: reported apart.
+      ...['claude-mgr-telegram', 'dorothy-x'].flatMap((name) => [`[mcp_servers.${name}]`, 'command = "true"', 'enabled = false', '']),
     ].join('\n'));
   });
   const values: Record<string, unknown> = { codex: CODEX, version: execFileSync(CODEX, ['--version']).toString().trim(), nonce, tmpdir: process.env.TMPDIR ?? null };
