@@ -32,7 +32,9 @@ import { DEV_URL, apiPort } from './ports.mjs';
  * 6. (the Audit's M-b on #596, #596 at 7a651ed95, written before the window's part) An editor opened before an
  *    agent moved the address saves over it: the save is taken, or approves the move, or turns traces off, or sends a
  *    request; or main's refusal is not said under the row, or says an ISO time, or the move is not shown waiting.
- * 7. An uncaught error in the page.
+ * 7. (the Audit's L-c on #599, written before the window's part) An endpoint an agent added with extra headers offers
+ *    approve with only their count: approve would approve header values the owner never saw.
+ * 8. An uncaught error in the page.
  * The artefact: values.json (each step's view, the stand-in's requests as seen), step screenshots, the app's log.
  */
 
@@ -242,7 +244,27 @@ test('an endpoint\'s extra headers: added by the owner and sent, a credential\'s
     expect.soft(race.row, 'the move shown, waiting').toMatch(new RegExp(`approved\\s+${String(beforeRace.approvedBaseUrl).replace(/[.*+?^${}()|[\]\\/]/g, '\\$&')}\\s+new\\s+http://127\\.0\\.0\\.1:9/v1`));
     expect.soft(race.sent, 'no request sent').toBe(0);
 
-    // 7.
+    // 7. Lead adds an endpoint with an extra header over the API: its notice lists the header, name and value, before
+    // approve is offered, and approve then approves exactly that.
+    const addedByLead = await fetch(`http://127.0.0.1:${port}/api/endpoints`, {
+      method: 'POST', headers: { 'content-type': 'application/json', authorization: `Bearer ${token}`, 'X-Tars-Caller-Id': LEAD },
+      body: JSON.stringify({ name: 'Shared vLLM', baseUrl: 'http://127.0.0.1:9/v1', extraHeaders: { 'X-Tenant': 'harbor' } }),
+    }).then(async r => ({ status: r.status, body: await r.json() as { endpoint?: { id: string }; needsApproval?: boolean; error?: string } }));
+    const addedRow = page.locator('[data-endpoint="Shared vLLM"]');
+    await expect(addedRow).toContainText('waiting for your approval', { timeout: 15_000 });
+    const addedNotice = addedRow.locator('[data-endpoint-notice]');
+    const listed = { added: addedByLead, notice: await addedNotice.innerText() };
+    keep({ listed });
+    await stepShot(page, '6-added-with-a-header');
+    expect.soft(listed.added, 'Lead\'s endpoint').toMatchObject({ status: 201, body: { needsApproval: true } });
+    expect.soft(listed.notice, 'the header listed before approve').toMatch(/extra headers\s+X-Tenant: harbor/);
+    await addedNotice.getByRole('button', { name: 'approve', exact: true }).click();
+    await expect(addedRow).not.toContainText('waiting for your approval', { timeout: 15_000 });
+    const addedView = ((await page.evaluate(() => ((window as unknown as Api).electronAPI.endpoints.list)())) as View[]).find(v => v.id === addedByLead.body.endpoint?.id);
+    keep({ addedView });
+    expect.soft(addedView, 'approved, its header with it').toMatchObject({ approved: true, approvedExtraHeaders: { 'X-Tenant': 'harbor' } });
+
+    // 8.
     keep({ errors });
     expect(errors).toEqual([]);
   } finally {
