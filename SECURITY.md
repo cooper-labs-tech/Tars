@@ -873,6 +873,19 @@ repository. An agent of the project reads and writes the same folder (it is in
 its `--add-dir`): the folder is shared with every agent of the project, and is
 no boundary between them.
 
+The buttons that show a folder (2.0.7, `shell:reveal` and
+`vault:project-file:show`) show the path in its folder with
+`shell.showItemInFolder` and open nothing. `shell:reveal` takes only a real
+folder, never a file, that is Tars's data folder, `~/.claude`, or a project
+the window lists (added by hand, an agent's folder or worktree, a folder Claude
+Code has worked in) or a folder in one, judged in main as the Code panel's
+search judges its folders (`windowMayReveal`,
+`electron/utils/window-file-access.ts`): the projects' list is in `~/.tars`,
+which every agent can write, and only the projects the path lies in are looked
+at on the disk. A link the window follows, and `app:openExternal`, hand only an
+`https` address to the system's browser (`electron/utils/external-url.ts`); a
+link the page opens in a new window keeps `http` and `https`.
+
 Made on a new install by the first save, the directory came out `0755`, since
 only the migration asked for `0700`. Whichever write makes it now, the
 migration or the first save of the conversation or of the webhook secret, makes

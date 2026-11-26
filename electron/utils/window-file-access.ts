@@ -122,6 +122,37 @@ export function windowMayWrite(target: string, projects: string[]): boolean {
   return !!real && real.toLowerCase().endsWith('.md');
 }
 
+/**
+ * A folder the window may have shown in its folder (shell:reveal, 2.0.7): a real folder, never a file, that is Tars's
+ * data folder, ~/.claude, or a project Tars knows (added by hand, an agent's folder or worktree) or a folder in one.
+ * ~/.tars/projects.json is every agent's to write, so each project is judged as a project is (mayBeProject), none in
+ * the data folder or a credential place, and none that is the home or above it shows anything (landsUnderSafeRoot):
+ * the rule the Code panel's search keeps for its folders.
+ */
+export function windowMayReveal(target: unknown, projects: string[]): boolean {
+  if (typeof target !== 'string' || !target || !path.isAbsolute(target)) return false;
+  const resolved = path.resolve(target);
+  const real = realTarget(resolved);
+  if (!real) return false;
+  try {
+    if (!fs.statSync(real).isDirectory()) return false;
+  } catch {
+    return false;
+  }
+  const own = [DATA_DIR, path.join(home(), '.claude')];
+  if (own.some((f) => samePath(resolved, f) || samePath(real, realTarget(f) ?? f))) return true;
+  if (isWithinDir(real, DATA_DIR) || inCredentialPlace(resolved, real)) return false;
+  return landsUnderSafeRoot(resolved, projectsHolding(resolved, real, projects), inside);
+}
+
+/**
+ * The projects among `projects` that `resolved` (or its real path) lies in, and that the rule allows. Only those are
+ * judged on the disk: a project on a mount gone offline is not looked at to read another (fs-roots-home.test.ts, 7).
+ */
+function projectsHolding(resolved: string, real: string | undefined, projects: string[]): string[] {
+  return projectRoots(projects).filter((p) => (inside(path.resolve(p), resolved) || (!!real && inside(path.resolve(p), real))) && mayBeProject(p));
+}
+
 export function localFileServes(target: string): boolean {
   const resolved = path.resolve(target);
   if (isSecretFile(resolved)) return false;

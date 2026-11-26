@@ -42,6 +42,7 @@ import { marketplaceListing } from '../services/skills-marketplace';
 import { skillsProblem } from '../utils/skill-name';
 import { resolveWorktreePath } from '../utils/worktree-path';
 import { landsUnderSafeRoot } from '../utils/real-target';
+import { mayOpenExternally } from '../utils/external-url';
 import { writeAtomicSync } from '../utils/secret-file';
 import { getProvider, getAllProviders } from '../providers';
 import { planModeRefusal } from '../providers/plan-mode';
@@ -86,7 +87,7 @@ import { probeVersion } from '../core/version-probe';
 import { readCodexModels } from '../providers/codex-cli';
 import { cliKeyStates, withCliKey } from '../services/cli-keys';
 import { keepSecrets, secretStates, setSecret, settingsForWindow, type SecretField } from '../services/settings-secrets';
-import { isSecretFile, mayBeProject, windowMayRead, windowMayWrite } from '../utils/window-file-access';
+import { isSecretFile, mayBeProject, windowMayRead, windowMayReveal, windowMayWrite } from '../utils/window-file-access';
 import { mcpConfigPathFor } from '../services/mcp-roles';
 import { registerFirstRunHandlers } from './first-run-handlers';
 import { setFirstTask, spendFirstTask, withFirstTask } from '../core/first-task';
@@ -2298,7 +2299,9 @@ function registerUpdateHandlers(): void {
 
   ipcMain.handle('app:quitAndInstall', async () => quitAndInstall());
 
+  // The update's download page: an https URL only goes to the system's browser (utils/external-url.ts, 2.0.7).
   ipcMain.handle('app:openExternal', async (_event, url: string) => {
+    if (!mayOpenExternally(url)) return { success: false, error: 'Only an https address is opened in the browser' };
     shell.openExternal(url);
     return { success: true };
   });
@@ -2886,11 +2889,24 @@ function registerShellHandlers(deps: IpcHandlerDependencies): void {
     }
   });
 
+  /**
+   * "Reveal in Finder", "show folder": a folder Tars knows, shown in its folder (2.0.7). Judged here, since the
+   * projects' list is every agent's to write (windowMayReveal), and shown with showItemInFolder, never opened: opening
+   * a path hands it to its default application.
+   */
   ipcMain.handle('shell:reveal', async (_event, { path: target }: { path: string }) => {
-    if (!target || !fs.existsSync(target)) return { success: false, error: 'no such path' };
+    if (typeof target !== 'string' || !target || !fs.existsSync(target)) return { success: false, error: 'no such path' };
+    // The folders the Projects page and Review list: added by hand, the agents', and those Claude Code has worked in
+    // (its history, as fs:list-projects and fs:read-project-files take them), each judged as a project by the rule.
+    const seen = (await projectFolders(path.join(os.homedir(), '.claude', 'projects'))).map((f) => f.projectPath);
+    const known = [...readCustomProjects(), ...[...deps.agents.values()].flatMap((a) => [a.projectPath, a.worktreePath]), ...seen]
+      .filter((p): p is string => typeof p === 'string' && !!p && path.isAbsolute(p));
+    if (!windowMayReveal(target, known)) {
+      return { success: false, error: 'Only a folder Tars knows (a project, an agent\'s folder, its data folder) is shown from here' };
+    }
     const { shell } = await import('electron');
-    const error = await shell.openPath(target);
-    return error ? { success: false, error } : { success: true };
+    shell.showItemInFolder(target);
+    return { success: true };
   });
 
   // Start a new quick terminal PTY

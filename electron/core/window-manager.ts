@@ -4,6 +4,7 @@ import * as fs from 'fs';
 import { getAppBasePath } from '../utils';
 import { MIME_TYPES } from '../constants';
 import { localFileServes } from '../utils/window-file-access';
+import { mayOpenExternally } from '../utils/external-url';
 import { titleBarOptions } from '../platform/desktop-shell';
 import { installEditContextMenu } from './edit-context-menu';
 
@@ -235,7 +236,8 @@ export function hardenWindow(window: BrowserWindow): void {
   window.webContents.on('will-navigate', (event, url) => {
     if (isOurs(url)) return;
     event.preventDefault();
-    void shell.openExternal(url);
+    // To the system's browser, an https link only (utils/external-url.ts, 2.0.7).
+    if (mayOpenExternally(url)) void shell.openExternal(url);
   });
 
   window.webContents.setWindowOpenHandler(({ url }) => {
