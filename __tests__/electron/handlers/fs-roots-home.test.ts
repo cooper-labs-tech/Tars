@@ -231,7 +231,9 @@ describe('fs:read-project-files', () => {
       }
       expect((await readProject(path.join(skills, 'kc'), 'config')).files).toEqual({});
       expect((await readProject(path.join(skills, 'az'), 'msal_token_cache.json')).files).toEqual({});
-      expect(Object.values((await readProject(mine, 'SKILL.md')).files)).toEqual(['the SKILL.md']);
+      // By the path the skills list gives it, as the Brain asks: its real path (getClaudeSkills), which under a temp
+      // folder reached through a link (macOS's /var/folders) is not the home's spelling.
+      expect(Object.values((await readProject(fs.realpathSync(mine), 'SKILL.md')).files)).toEqual(['the SKILL.md']);
       expect(Object.values((await readProject(agentSkill, 'SKILL.md')).files)).toEqual(['the SKILL.md']);
       expect(Object.values((await readProject(plugin, 'README.md')).files)).toEqual(['the README.md']);
     } finally {
