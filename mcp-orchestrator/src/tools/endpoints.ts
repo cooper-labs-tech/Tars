@@ -5,7 +5,7 @@ import { apiRequest } from "../utils/api.js";
 
 type Endpoint = {
   id: string; name: string; baseUrl: string; allowTraces: boolean; keySet: boolean; models: string[];
-  approved: boolean; approvedBaseUrl?: string; holdMaxSeconds: number;
+  approved: boolean; approvedBaseUrl?: string; holdMaxSeconds: number; extraHeaders?: Record<string, string>;
   agents: Array<{ id: string; name: string; projectPath: string; provider: string; model?: string }> | number;
   health?: { ok: boolean; status?: number; latencyMs?: number; at: string; error?: string };
   modelsError?: string;
@@ -21,8 +21,12 @@ function describe(e: Endpoint): string {
     `- ${e.name} [${e.id}] ${e.baseUrl}`,
     `  ${e.approved ? "approved" : `WAITING for the owner's approval in the window${e.approvedBaseUrl ? ` (approved before: ${e.approvedBaseUrl})` : ""}`}; key ${e.keySet ? "set" : "not set"}; traces ${e.allowTraces ? "allowed" : "off"}; held up to ${e.holdMaxSeconds} s while it pauses`,
     `  models: ${e.models.length ? e.models.join(", ") : "none read"}${e.modelsError ? ` (last read failed: ${e.modelsError})` : ""}; health: ${health}; used by: ${users}`,
+    ...(e.extraHeaders && Object.keys(e.extraHeaders).length ? [`  extra headers: ${Object.entries(e.extraHeaders).map(([k, v]) => `${k}: ${v}`).join("; ")}`] : []),
   ].join("\n");
 }
+
+const EXTRA_HEADERS = z.record(z.string(), z.string())
+  .describe("Fixed headers Tars adds to every request it sends to this endpoint, as {\"Name\": \"value\"}, at most 16. Every agent can read them, so never a credential: the key goes through key_file. Tars refuses Authorization, x-api-key, Cookie, Host, the connection's own headers and the session headers. Setting or changing them makes the endpoint wait for the owner's approval. {} removes them.");
 
 /**
  * Inference endpoints (OpenAI-compatible) that agents of every project can run their harness on: list, add, change,
@@ -48,28 +52,30 @@ export function registerEndpointTools(server: McpServer): void {
       schema: {
         name: z.string().min(1).max(60).describe("A name people will recognise."),
         base_url: z.string().describe("http(s), up to the routes, for example https://host.example.com/v1."),
-        hold_max_seconds: z.number().int().min(0).max(3600).optional().describe("How long Tars holds a request while the endpoint answers 503, 429 or 502 before passing the error on (default 120)."),
+        hold_max_seconds: z.number().int().min(0).max(3600).optional().describe("How long Tars holds a request while the endpoint answers 503 or 429 (or 502 to a GET) before passing the error on (default 120)."),
         key_file: KEY_FILE.optional(),
+        extra_headers: EXTRA_HEADERS.optional(),
       },
       failure: "adding the endpoint",
-      async run(args: { name: string; base_url: string; hold_max_seconds?: number; key_file?: string }) {
-        const r = (await apiRequest("/api/endpoints", "POST", { name: args.name, baseUrl: args.base_url, holdMaxSeconds: args.hold_max_seconds, keyFile: args.key_file })) as { endpoint: Endpoint; needsApproval: boolean; keyNotTaken?: string };
+      async run(args: { name: string; base_url: string; hold_max_seconds?: number; key_file?: string; extra_headers?: Record<string, string> }) {
+        const r = (await apiRequest("/api/endpoints", "POST", { name: args.name, baseUrl: args.base_url, holdMaxSeconds: args.hold_max_seconds, keyFile: args.key_file, extraHeaders: args.extra_headers })) as { endpoint: Endpoint; needsApproval: boolean; keyNotTaken?: string };
         return text([describe(r.endpoint), r.needsApproval ? "It waits for the owner's approval in Tars's window." : "", r.keyNotTaken ? `The key was not taken: ${r.keyNotTaken}` : ""].filter(Boolean).join("\n"));
       },
     }),
     tool({
       name: "endpoint_update",
-      description: "Change an endpoint's name, base URL, hold ceiling, or turn its traces off. A new base URL makes it wait for the owner's approval again; the rest keeps the approval. Only the owner turns traces on.",
+      description: "Change an endpoint's name, base URL, hold ceiling or extra headers, or turn its traces off. A new base URL or new extra headers make it wait for the owner's approval again; the rest keeps the approval. Only the owner turns traces on.",
       schema: {
         id: z.string().regex(/^ep-[0-9a-f]{6}$/),
         name: z.string().min(1).max(60).optional(),
         base_url: z.string().optional(),
         hold_max_seconds: z.number().int().min(0).max(3600).optional(),
         traces_off: z.boolean().optional().describe("true to stop allowing traces on this endpoint."),
+        extra_headers: EXTRA_HEADERS.optional(),
       },
       failure: "changing the endpoint",
-      async run(args: { id: string; name?: string; base_url?: string; hold_max_seconds?: number; traces_off?: boolean }) {
-        const r = (await apiRequest(`/api/endpoints/${args.id}`, "POST", { name: args.name, baseUrl: args.base_url, holdMaxSeconds: args.hold_max_seconds, ...(args.traces_off ? { allowTraces: false } : {}) })) as { endpoint: Endpoint; needsApproval: boolean };
+      async run(args: { id: string; name?: string; base_url?: string; hold_max_seconds?: number; traces_off?: boolean; extra_headers?: Record<string, string> }) {
+        const r = (await apiRequest(`/api/endpoints/${args.id}`, "POST", { name: args.name, baseUrl: args.base_url, holdMaxSeconds: args.hold_max_seconds, extraHeaders: args.extra_headers, ...(args.traces_off ? { allowTraces: false } : {}) })) as { endpoint: Endpoint; needsApproval: boolean };
         return text([describe(r.endpoint), r.needsApproval ? "It waits for the owner's approval in Tars's window." : ""].filter(Boolean).join("\n"));
       },
     }),

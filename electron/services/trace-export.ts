@@ -7,6 +7,10 @@ import type { TraceFilter, TraceStore } from './trace-store';
  * copy (`copy: "console"`), unmasked on the user's own machine (`masking_version: "none"`): masking and
  * pseudonyms are the relay's, on the reader's side. A message, a system prompt or a tool set shared by many
  * requests is written once, under its content hash.
+ *
+ * A request's `ttft_ms` is the model's first token: for a stream, the first chunk with text, reasoning or a tool call
+ * (a chunk with only a role, or empty, is not one; null when the stream carried no content); for a response that is
+ * not streamed, the first byte. `side` marks a side request (a title or memory call), which `request_count` leaves out.
  */
 
 export interface SessionDocument {

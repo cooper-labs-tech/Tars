@@ -3,8 +3,8 @@ import { ipcMain, dialog, BrowserWindow } from 'electron';
 import type { AppSettings, TraceSettings } from '../types';
 import { agents } from '../core/agent-manager';
 import {
-  applyEndpointPatch, approveEndpoint, checkHealth, endpointViews, readModels, removeEndpoint, saveEndpoint, setEndpointKey, transportOf,
-  type EndpointView, type ToolCallSupport,
+  applyEndpointPatch, approveEndpoint, checkHealth, endpointViews, readModels, removeEndpoint, sameExtraHeaders, saveEndpoint, setEndpointKey,
+  transportOf, type EndpointView, type ToolCallSupport,
 } from '../services/inference-endpoints';
 import {
   endpointWaits, readerTokenStatus, revokeReaderToken, rotateReaderToken, sweepTraces, traceSettingsOf, traceStore,
@@ -86,18 +86,21 @@ export function registerTracesHandlers(deps: TracesHandlerDeps): void {
       holdMaxSeconds: typeof i.holdMaxSeconds === 'number' ? i.holdMaxSeconds : undefined,
       sendSessionHeaders: typeof i.sendSessionHeaders === 'boolean' ? i.sendSessionHeaders : undefined,
       allowPlainHttp: typeof i.allowPlainHttp === 'boolean' ? i.allowPlainHttp : undefined,
+      // Checked by saveEndpoint (cleanExtraHeaders): anything but a map of header names to values is refused there.
+      extraHeaders: i.extraHeaders,
     }, { window: true });
     if (!r.ok) return r;
     // Traces turned off for an endpoint is a revoke of sharing: it applies first, then is written (holdRevoke), with
     // the rest of the save when that grants nothing (names, the hold, the defaults the save fills in). A save that
-    // also grants (session headers or plain http turned on, or the address moved, which the save approves with the
-    // key) has that part written first.
+    // also grants (session headers or plain http turned on, the address moved, which the save approves with the key,
+    // or extra headers changed, which go out with it) has that part written first.
     const before = (deps.getAppSettings().inferenceEndpoints ?? []).find(e => e.id === r.endpoint.id);
     let held: string | undefined;
     if (before?.allowTraces === true && r.endpoint.allowTraces === false) {
       const grants = (before.sendSessionHeaders !== true && r.endpoint.sendSessionHeaders === true)
         || (before.allowPlainHttp !== true && r.endpoint.allowPlainHttp === true)
-        || before.baseUrl !== r.endpoint.baseUrl;
+        || before.baseUrl !== r.endpoint.baseUrl
+        || !sameExtraHeaders(before.extraHeaders, r.endpoint.extraHeaders);
       if (!grants) {
         held = holdRevoke(r.settings);
       } else {

@@ -1,6 +1,8 @@
 import { test, expect, _electron as electron, type ElectronApplication, type Page } from '@playwright/test';
 import * as fs from 'fs';
+import * as http from 'http';
 import * as path from 'path';
+import * as zlib from 'zlib';
 import { randomBytes } from 'crypto';
 import { execFileSync, spawn, type ChildProcessWithoutNullStreams } from 'child_process';
 import { launchSandboxed, recordValues, removeHome } from './fixture.mjs';
@@ -27,6 +29,17 @@ import { DEV_URL, apiPort } from './ports.mjs';
  * 8. (The Audit's H1 on #596.) Lead moves the endpoint's base URL to an address of its own, then asks for its models
  *    and its health, by its tools and by the window's buttons: that address never receives the key, and the move
  *    took the key away.
+ * Added before their code, the owner's decision of 26/11:
+ * 9. The window gives the endpoint an extra header, which every request reaching the endpoint carries; one naming
+ *    the credential is refused, and nothing changes.
+ * 10. TTFT measures the model: the endpoint opens its stream with an empty chunk, then pauses, then sends its first
+ *     token; the request's ttft is that token's, not the empty chunk's.
+ * 11. A 502 to a POST passes through once: the endpoint answers 502 to Q's next model call, and the harness gets it
+ *     at once, never sent again.
+ * 12. Lead gives another endpoint an extra header through its tools: it waits for the owner's approval; one naming
+ *     the credential is refused.
+ * 13. A side request goes up marked: Q's harness sends a title call before its task, and the upload to a
+ *     back-office stand-in carries `side: true` for it and `side: false` for the rest.
  * The artefact: values.json, the stand-in's request log (headers included), the trace export, the app's log.
  */
 
@@ -51,7 +64,7 @@ test('an open harness runs on an inference endpoint through Tars, held while the
   const fakeLog = path.join(home, 'fake-cli.jsonl');
   const standinLog = test.info().outputPath('endpoint-requests.jsonl');
   const key = `e2e-endpoint-key-${randomBytes(6).toString('hex')}`;
-  const standin = await startStandIn({ key, log: standinLog, failFirst: [503, 429], chunkDelayMs: 300 });
+  const standin = await startStandIn({ key, log: standinLog, failFirst: [503, 429], chunkDelayMs: 300, emptyFirstChunk: true });
 
   const agent = (id: string, name: string, extra: Record<string, unknown>) => ({
     id, name, character: 'robot', status: 'idle', permissionMode: 'bypass', projectPath: project, skills: [],
@@ -138,6 +151,16 @@ test('an open harness runs on an inference endpoint through Tars, held while the
     expect.soft(views.find(v => v.id === EP)?.keySet, 'the key is not set').toBe(true);
     expect.soft(JSON.stringify(views), 'a view holds the key').not.toContain(key);
 
+    // 9. An extra header from the window; a credential header refused.
+    const owned = { id: EP, name: 'Remote host', baseUrl: standin.baseUrl, allowTraces: true, holdMaxSeconds: 30, sendSessionHeaders: true };
+    const withHeader = await api<{ ok: boolean; error?: string }>('endpoints', 'save', { ...owned, extraHeaders: { 'X-Tenant': 'e2e-tenant' } });
+    const credential = await api<{ ok: boolean; error?: string }>('endpoints', 'save', { ...owned, extraHeaders: { Authorization: 'Bearer not-the-key' } });
+    const headerView = (await api<Array<Record<string, unknown>>>('endpoints', 'list')).find(v => v.id === EP);
+    keep({ withHeader, credential, headerView });
+    expect.soft(withHeader.ok, `the extra header: ${withHeader.error}`).toBe(true);
+    expect.soft(credential.ok, 'a credential header').toBe(false);
+    expect.soft(headerView, 'the endpoint after both').toMatchObject({ approved: true, keySet: true, extraHeaders: { 'X-Tenant': 'e2e-tenant' } });
+
     // 2 to 4. Lead's task to Q, through the proxy, held while the endpoint pauses.
     await page.evaluate((id) => ((window as unknown as Api).electronAPI.agent.start as (p: unknown) => Promise<unknown>)({ id, prompt: '' }), Q);
     await expect.poll(async () => fakeEntries().some(e => e.launch && e.agent === Q), { timeout: 30_000 }).toBe(true);
@@ -158,6 +181,7 @@ test('an open harness runs on an inference endpoint through Tars, held while the
     expect.soft(reached.every(r => !JSON.stringify(r.headers).includes('tep_')), "the endpoint saw a terminal's token").toBe(true);
     expect.soft(new Set(reached.map(r => r.headers!['x-agent-id'])), 'X-Agent-Id').toEqual(new Set([Q]));
     expect.soft(reached.every(r => /^tr_/.test(String(r.headers!['x-session-id']))), 'X-Session-Id').toBe(true);
+    expect.soft(reached.map(r => r.headers!['x-tenant']), 'the extra header at the endpoint').toEqual(reached.map(() => 'e2e-tenant'));
     const statuses = (waitsSeen as Array<Array<{ agentId: string; lastStatus?: number }>>).flat().filter(w => w.agentId === Q).map(w => w.lastStatus);
     expect.soft(statuses, 'the window was told of the wait').toEqual(expect.arrayContaining([503, 429]));
     const lastSent = answered.filter(a => a.answered === 200).map(a => Number(a.lastChunkAt));
@@ -183,6 +207,9 @@ test('an open harness runs on an inference endpoint through Tars, held while the
     expect.soft(requests.map(r => r.attempts), 'the attempts of each request').toEqual([3, 1]);
     expect.soft(requests.every(r => /^standin-/.test(String(r.upstreamRequestId))), "the endpoint's request ids").toBe(true);
     expect.soft(Number(requests[0]?.heldMs), 'the time held').toBeGreaterThanOrEqual(1500);
+    // 10. The first token came 300 ms after the empty first chunk: the ttft is the token's.
+    keep({ ttft: requests.map(r => r.ttftMs) });
+    expect.soft(Number(requests[1]?.ttftMs), 'the ttft of a request whose stream opened with an empty chunk').toBeGreaterThanOrEqual(250);
     const messages = await api<{ input: Array<{ role: string; parts: Array<{ kind: string; text?: string }> }>; output: unknown[] }>('traces', 'requestMessages', requests[1]?.requestId);
     expect.soft(JSON.stringify(messages.input), 'the tool result in the trace').toContain(standin.marker);
     const exported = await app.evaluate((_e, { dist }) => {
@@ -205,6 +232,58 @@ test('an open harness runs on an inference endpoint through Tars, held while the
     expect.soft(doc.requests?.map(r => r.upstream_request_id).every(id => /^standin-/.test(id)), 'the join ids in the session document').toBe(true);
     expect.soft(refused.status, 'the shared token on the traces').toBe(401);
 
+    // 11. A 502 to a POST, once.
+    const answeredBefore = standinEntries().filter(e => e.answered !== undefined).length;
+    const callsBefore = fakeEntries().filter(e => e.model && e.agent === Q).length;
+    standin.failNext(502);
+    await lead('send_message', { id: Q, message: 'Run the probe once more.' });
+    const after502 = await lead('wait_for_agent', { id: Q, timeoutSeconds: 90 });
+    const answeredAfter = standinEntries().filter(e => e.answered !== undefined).slice(answeredBefore).map(a => a.answered);
+    const harnessSaw = fakeEntries().filter(e => e.model && e.agent === Q).slice(callsBefore).map(c => c.status);
+    keep({ after502, answeredAfter, harnessSaw });
+    expect.soft(answeredAfter, 'what the endpoint answered to the next call').toEqual([502]);
+    expect.soft(harnessSaw, 'what the harness got').toEqual([502]);
+
+    // 13. A side request goes up marked side: true, to a back-office stand-in that takes installs, blobs and batches.
+    const batches: Array<{ requests?: Array<{ side?: unknown; requestId?: string }> }> = [];
+    const backOffice = http.createServer((req, res) => {
+      const chunks: Buffer[] = [];
+      req.on('data', c => chunks.push(c));
+      req.on('end', () => {
+        const raw = Buffer.concat(chunks);
+        const answer = (status: number, body: unknown) => { res.writeHead(status, { 'Content-Type': 'application/json' }); res.end(JSON.stringify(body)); };
+        const url = req.url ?? '';
+        if (req.method === 'POST' && url === '/v1/installs') { answer(201, { installId: 'inst-1', token: 'tbi_1', limits: {}, retentionDays: 90 }); return; }
+        if (req.method === 'POST' && url === '/v1/blobs/missing') { answer(200, { missing: [] }); return; }
+        if (req.method === 'PUT' && url.startsWith('/v1/batches/')) {
+          const enc = req.headers['content-encoding'];
+          const zstd = (zlib as unknown as { zstdDecompressSync?: (b: Buffer) => Buffer }).zstdDecompressSync;
+          const body = enc === 'zstd' && zstd ? zstd(raw) : enc === 'gzip' ? zlib.gunzipSync(raw) : raw;
+          batches.push(JSON.parse(body.toString()));
+          answer(200, { missingBlobs: [] });
+          return;
+        }
+        answer(404, { error: 'not_found' });
+      });
+    });
+    await new Promise<void>(r => backOffice.listen(0, '127.0.0.1', () => r()));
+    try {
+      await lead('send_message', { id: Q, message: 'Give this a title, then run the probe.' });
+      const titled = await lead('wait_for_agent', { id: Q, timeoutSeconds: 90 });
+      const address = await api<{ ok: boolean; error?: string }>('traces', 'setSettings', { uploadUrl: `http://127.0.0.1:${(backOffice.address() as { port: number }).port}` });
+      await api('traces', 'uploadNotice');
+      const consent = await api<{ ok: boolean; error?: string }>('traces', 'giveUploadConsent');
+      const pass = await app.evaluate((_e, { dist }) => process.mainModule!.require(`${dist}/services/traces-runtime.js`).traceUploader().runOnce(), { dist });
+      const uploaded = batches.flatMap(b => b.requests ?? []);
+      keep({ titled, address, consent, pass, uploadedSide: uploaded.map(q => q.side) });
+      expect.soft(address.ok && consent.ok, `the back-office address and the consent: ${address.error ?? ''} ${consent.error ?? ''}`).toBe(true);
+      expect.soft(uploaded.length, 'requests uploaded').toBeGreaterThan(0);
+      expect.soft(uploaded.every(q => typeof q.side === 'boolean'), 'every uploaded request says side').toBe(true);
+      expect.soft(uploaded.filter(q => q.side === true).length, 'the title call uploaded as a side request').toBe(1);
+    } finally {
+      await new Promise(r => backOffice.close(() => r(undefined)));
+    }
+
     // 7. An endpoint an agent adds waits for the owner.
     const added = await lead('endpoint_add', { name: 'Another host', base_url: 'https://192.0.2.10:9000/v1' });
     const after = await api<Array<Record<string, unknown>>>('endpoints', 'list');
@@ -215,6 +294,18 @@ test('an open harness runs on an inference endpoint through Tars, held while the
     expect.soft(another, 'the added endpoint').toMatchObject({ approved: false, changedBy: { agentId: LEAD } });
     expect.soft(moved.success, 'an agent set on an endpoint not approved').toBe(false);
     expect.soft(moved.error, 'why').toMatch(/approve/);
+
+    // 12. Lead's extra header waits for the owner; a credential header is refused.
+    const approvedOther = await api<{ ok: boolean }>('endpoints', 'approve', String(another?.id));
+    const leadHeader = await lead('endpoint_update', { id: String(another?.id), extra_headers: { 'X-Route': 'r9' } });
+    const leadCredential = await lead('endpoint_update', { id: String(another?.id), extra_headers: { 'x-api-key': 'k' } });
+    const otherAfter = (await api<Array<Record<string, unknown>>>('endpoints', 'list')).find(v => v.id === another?.id);
+    keep({ approvedOther, leadHeader, leadCredential, otherAfter });
+    expect.soft(approvedOther.ok, 'the owner approved the other endpoint').toBe(true);
+    expect.soft(leadHeader.isError, `endpoint_update with a header: ${leadHeader.text}`).toBe(false);
+    expect.soft(leadHeader.text, 'it says it waits').toContain('approval');
+    expect.soft(leadCredential.isError, 'a credential header from Lead').toBe(true);
+    expect.soft(otherAfter, 'the other endpoint').toMatchObject({ approved: false, extraHeaders: { 'X-Route': 'r9' } });
 
     // 8. The key never goes to an address nobody approved.
     const attackerLog = test.info().outputPath('attacker-requests.jsonl');

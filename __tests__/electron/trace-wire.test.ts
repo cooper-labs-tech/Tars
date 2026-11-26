@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import {
-  surfaceOf, parseRequest, parseResponse, opensTurn, instructionText, hashOf, canonicalJson,
+  surfaceOf, parseRequest, parseResponse, opensTurn, instructionText, hashOf, canonicalJson, firstContentEnd,
 } from '../../electron/services/trace-wire';
 
 /**
@@ -27,6 +27,15 @@ import {
  * 12. Two messages equal in content but with keys in another order hash differently, so the history resent on every
  *     request is stored twice.
  * 13. The instruction's text, read for authorship, includes the harness's reminders.
+ * Added before their code, the owner's decision of 26/11 (TTFT measures the model):
+ * 14. Chat completions: a chunk with only a role, an empty content, or only usage is taken for the first token; or a
+ *     first chunk of reasoning (`reasoning_content`, `reasoning`) or of a tool call is not.
+ * 15. Responses: `response.created`, a message item added, or an empty delta is taken for the first token; or the
+ *     first non-empty text, reasoning or tool-call arguments delta, or a function call item added, is not.
+ * 16. Anthropic Messages: `message_start`, a text block started, `ping` or an empty text delta is taken for the first
+ *     token; or a thinking delta, a tool_use block started or an input_json delta is not.
+ * 17. A body that is not streamed, or a stream with no content at all, gives a place for the first token.
+ * 18. The place is not in bytes (a multibyte character before it moves it), or is before the end of its event.
  */
 
 const buf = (v: unknown) => Buffer.from(typeof v === 'string' ? v : JSON.stringify(v));
@@ -184,5 +193,91 @@ describe('turns and authorship', () => {
     const msg = { role: 'user', content: [{ type: 'text', text: '<system-reminder>skills</system-reminder>' }, { type: 'text', text: 'Fix the bug' }] };
     expect(instructionText('openai_chat', [msg])).toBe('Fix the bug');
     expect(instructionText('openai_responses', [{ role: 'user', content: [{ type: 'input_text', text: 'Hello' }] }])).toBe('Hello');
+  });
+});
+
+describe('the first token (TTFT)', () => {
+  const SSE = 'text/event-stream';
+  const blocks = (events: unknown[], named = false) => events.map((e) => {
+    const o = e as { type?: string };
+    return `${named && o.type ? `event: ${o.type}\n` : ''}data: ${JSON.stringify(e)}\n\n`;
+  });
+  /** The byte just past the k-th event, its blank line included. */
+  const endOf = (list: string[], k: number) => Buffer.byteLength(list.slice(0, k).join(''));
+  const at = (surface: Parameters<typeof firstContentEnd>[0], list: string[], tail = '') => firstContentEnd(surface, SSE, buf(list.join('') + tail));
+  const chunk = (delta: unknown, more: object = {}) => ({ choices: [{ index: 0, delta, finish_reason: null }], ...more });
+
+  it('14: chat: past a role-only chunk and an empty content, at the first content', () => {
+    const list = blocks([chunk({ role: 'assistant' }), chunk({ content: '' }), chunk({ content: 'Hi' }), chunk({ content: ' there' })]);
+    expect(at('openai_chat', list, 'data: [DONE]\n\n')).toBe(endOf(list, 3));
+  });
+
+  it('14: chat: a first chunk of reasoning or of a tool call is the first token; usage alone is not', () => {
+    for (const first of [{ role: 'assistant', reasoning_content: 'Thinking' }, { reasoning: 'Thinking' }, { tool_calls: [{ index: 0, id: 'c1', type: 'function', function: { name: 'bash', arguments: '' } }] }]) {
+      const list = blocks([{ choices: [], usage: { prompt_tokens: 1 } }, chunk(first), chunk({ content: 'x' })]);
+      expect(at('openai_chat', list), JSON.stringify(first)).toBe(endOf(list, 2));
+    }
+  });
+
+  it('15: Responses: past created, a message item added and an empty delta, at the first non-empty delta', () => {
+    const list = blocks([
+      { type: 'response.created', response: { status: 'in_progress', output: [] } },
+      { type: 'response.output_item.added', output_index: 0, item: { type: 'message', role: 'assistant', content: [] } },
+      { type: 'response.output_text.delta', output_index: 0, delta: '' },
+      { type: 'response.output_text.delta', output_index: 0, delta: 'Hello' },
+    ], true);
+    expect(at('openai_responses', list)).toBe(endOf(list, 4));
+  });
+
+  it('15: Responses: a reasoning delta, a function call item added, or its arguments delta, is the first token', () => {
+    const created = { type: 'response.created', response: { status: 'in_progress', output: [] } };
+    for (const first of [
+      { type: 'response.reasoning_summary_text.delta', delta: 'Plan' },
+      { type: 'response.reasoning_text.delta', delta: 'Plan' },
+      { type: 'response.output_item.added', output_index: 0, item: { type: 'function_call', name: 'bash', arguments: '' } },
+      { type: 'response.function_call_arguments.delta', delta: '{"cmd"' },
+    ]) {
+      const list = blocks([created, first], true);
+      expect(at('openai_responses', list), first.type).toBe(endOf(list, 2));
+    }
+  });
+
+  it('16: Messages: past message_start, a text block started, a ping and an empty text, at the first text', () => {
+    const list = blocks([
+      { type: 'message_start', message: { usage: { input_tokens: 5 } } },
+      { type: 'content_block_start', index: 0, content_block: { type: 'text', text: '' } },
+      { type: 'ping' },
+      { type: 'content_block_delta', index: 0, delta: { type: 'text_delta', text: '' } },
+      { type: 'content_block_delta', index: 0, delta: { type: 'text_delta', text: 'Hi' } },
+    ], true);
+    expect(at('anthropic_messages', list)).toBe(endOf(list, 5));
+  });
+
+  it('16: Messages: a thinking delta, a tool_use block started or an input_json delta is the first token', () => {
+    const start = { type: 'message_start', message: {} };
+    for (const first of [
+      { type: 'content_block_delta', index: 0, delta: { type: 'thinking_delta', thinking: 'Hmm' } },
+      { type: 'content_block_start', index: 0, content_block: { type: 'tool_use', id: 't1', name: 'bash', input: {} } },
+      { type: 'content_block_delta', index: 0, delta: { type: 'input_json_delta', partial_json: '{"c' } },
+    ]) {
+      const list = blocks([start, first], true);
+      expect(at('anthropic_messages', list), JSON.stringify(first)).toBe(endOf(list, 2));
+    }
+  });
+
+  it('17: no place for a body that is not streamed, or a stream with no content', () => {
+    expect(firstContentEnd('openai_chat', 'application/json', buf({ choices: [{ message: { content: 'Hi' } }] }))).toBeNull();
+    expect(at('openai_chat', blocks([chunk({ role: 'assistant' }), chunk({}, { usage: { prompt_tokens: 1 } })]), 'data: [DONE]\n\n')).toBeNull();
+    expect(at('anthropic_messages', blocks([{ type: 'message_start', message: {} }, { type: 'message_stop' }], true))).toBeNull();
+  });
+
+  it('18: the place is in bytes, past a multibyte character, and at the end of its event', () => {
+    const list = blocks([chunk({ role: 'assistant', content: '' }), chunk({ content: 'été 東京' })]);
+    const end = at('openai_chat', list);
+    expect(end).toBe(endOf(list, 2));
+    expect(end).toBeGreaterThan(list.join('').length);
+    // A stream cut inside the event with content: the event never ended, so there is no place.
+    const cut = list.join('').slice(0, -4);
+    expect(firstContentEnd('openai_chat', SSE, buf(cut))).toBeNull();
   });
 });

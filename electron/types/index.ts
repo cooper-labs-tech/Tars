@@ -1013,12 +1013,19 @@ export interface InferenceEndpoint {
   approved: boolean;
   /** The base URL the owner approved. */
   approvedBaseUrl?: string;
-  /** The agent that last added it or changed its base URL. */
+  /** The agent that last added it or changed its base URL or its extra headers. */
   changedBy?: { agentId: string; agentName?: string; at: string };
-  /** How long the proxy holds a request while the endpoint pauses (503, 429, 502): 0 to 3600 s, 120 by default. */
+  /** How long the proxy holds a request while the endpoint pauses (503 and 429; 502 for a GET): 0 to 3600 s, 120 by default. */
   holdMaxSeconds: number;
   /** Add X-Session-Id and X-Agent-Id to every request (off by default: they name the agent and its session). */
   sendSessionHeaders?: boolean;
+  /**
+   * Fixed headers added to every request the proxy sends to it, at most 16 (inference-endpoints.ts cleanExtraHeaders).
+   * Not a secret: agents read them, so never a credential. An agent's change waits for the owner's approval.
+   */
+  extraHeaders?: Record<string, string>;
+  /** The extra headers the owner approved, as the base URL is (approvedBaseUrl). */
+  approvedExtraHeaders?: Record<string, string>;
   /** The owner allowed plain http to this public address (window only); private addresses need no allowance. */
   allowPlainHttp?: boolean;
   health?: { ok: boolean; status?: number; latencyMs?: number; at: string; error?: string };

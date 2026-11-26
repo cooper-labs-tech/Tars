@@ -2875,7 +2875,13 @@ export interface ElectronAPI {
     /** `allowPlainHttp`: the owner allows plain http to a public address (refused without it; private addresses
      *  need none). An agent's change of address takes the endpoint's key away (set it again). */
     /** Traces turned off applies at once: ok, with `unsaved` while it is not written yet. */
-    save: (e: { id?: string; name: string; baseUrl: string; allowTraces: boolean; holdMaxSeconds?: number; sendSessionHeaders?: boolean; allowPlainHttp?: boolean }) => Promise<{ ok: true; endpoint: EndpointView; unsaved?: string } | { ok: false; error: string }>;
+    /** `extraHeaders`: fixed headers sent with every request to the endpoint, replacing the whole map ({} clears it;
+     *  left out, they stay). At most 16; a name is a header token of 64 characters at most, a value 1 to 1024
+     *  printable characters on one line. Refused, with the reason in `error`: Authorization, x-api-key, Cookie,
+     *  Set-Cookie, Host, Content-Length, Content-Type, Content-Encoding, Transfer-Encoding, Connection, Keep-Alive, TE,
+     *  Trailer, Upgrade, Expect, Accept-Encoding, X-Session-Id, X-Agent-Id, any `Proxy-` header, and two names equal
+     *  but for case. Every agent reads them: say in the window never to put a credential there. */
+    save: (e: { id?: string; name: string; baseUrl: string; allowTraces: boolean; holdMaxSeconds?: number; sendSessionHeaders?: boolean; allowPlainHttp?: boolean; extraHeaders?: Record<string, string> }) => Promise<{ ok: true; endpoint: EndpointView; unsaved?: string } | { ok: false; error: string }>;
     approve: (id: string) => Promise<{ ok: true; endpoint: EndpointView } | { ok: false; error: string }>;
     /** Write-only: no channel returns a key. null clears it. */
     setKey: (id: string, key: string | null) => Promise<{ ok: true } | { ok: false; error: string }>;
@@ -2972,14 +2978,18 @@ export interface EndpointView {
   modelsError?: string;
   /** Who runs on it. */
   agents: Array<{ id: string; name: string; projectPath: string; provider: string; model?: string }>;
-  /** false: an agent added it or changed its base URL; the window shows Approve. */
+  /** false: an agent added it or changed its base URL or its extra headers; the window shows Approve. */
   approved: boolean;
   /** Differs from baseUrl while a change waits for approval: show both. */
   approvedBaseUrl?: string;
   /** The change notice: which agent, when. */
   changedBy?: { agentId: string; agentName?: string; at: string };
-  /** How long a request is held while the endpoint pauses (503, 429, 502): 0 to 3600, default 120. */
+  /** How long a request is held while the endpoint pauses (503 and 429; a 502 to a GET): 0 to 3600, default 120. */
   holdMaxSeconds: number;
+  /** Fixed headers sent with every request to it ({} for none). Not secret: agents read them. */
+  extraHeaders: Record<string, string>;
+  /** The extra headers the owner approved: differs from extraHeaders while an agent's change waits; show both. */
+  approvedExtraHeaders?: Record<string, string>;
   /** Adds X-Session-Id and X-Agent-Id to every request: off by default (they name the agent and its session). */
   sendSessionHeaders: boolean;
   /** The traffic is plain http, not encrypted at the HTTP level: show it. */
@@ -3171,6 +3181,8 @@ export interface TraceRequestView {
   /** A side call (a title, a memory summary): no turn of its own. */
   side: boolean;
   startedAt: number;
+  /** The model's first token: for a stream, the first chunk with text, reasoning or a tool call (a chunk with only a
+   *  role, or empty, is not one; none when the stream carried no content); not streamed, the first byte. */
   ttftMs?: number;
   totalMs?: number;
   status: number;

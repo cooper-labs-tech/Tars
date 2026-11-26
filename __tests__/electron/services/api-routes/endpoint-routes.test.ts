@@ -11,6 +11,9 @@ import type { AddressInfo } from 'node:net';
  *    (a project taken out of traces, the upload address cleared) is undone.
  * 2. A route saves nothing of the probe (its models, its health).
  * 3. A probe of an address the endpoint has left since lands on the new address (the re-audit's I1).
+ * Added before its code, the owner's decision of 26/11 (extra headers per endpoint):
+ * 4. An agent's extra headers, through POST /api/endpoints or /api/endpoints/:id, are dropped; or they apply without
+ *    the owner's approval; or a refused one (a credential header) is saved rather than answered 400.
  */
 
 vi.mock('electron', () => ({
@@ -107,4 +110,31 @@ describe('the probe routes write what they own, onto the settings as they are wh
       expect(e.health).toBeUndefined();
     });
   }
+});
+
+describe('an agent\'s extra headers', () => {
+  async function post(pathname: string, body: Record<string, unknown>, params: Record<string, string> = {}) {
+    const app = makeRouteApp();
+    const ctx = { getAppSettings: () => settings } as unknown as RouteContext;
+    registerEndpointRoutes(app, ctx);
+    const route = app.routes.find(r => r.method === 'POST' && (r.pattern instanceof RegExp ? r.pattern.test(pathname) : r.pattern === pathname))!;
+    const sent = vi.fn();
+    const req = { method: 'POST', pathname, url: new URL(`http://localhost${pathname}`), body, raw: {} as never, res: {} as never, params, callerAgentId: 'agent-1' } as RouteRequest;
+    await route.handler(req, sent, ctx);
+    return sent.mock.calls[0] as [Record<string, unknown>, number | undefined];
+  }
+
+  it('4: are saved, wait for the owner\'s approval, and a credential header is refused', async () => {
+    const [changed] = await post('/api/endpoints/ep-0a0b0c', { extraHeaders: { 'X-Route': 'r2' } }, { id: 'ep-0a0b0c' });
+    expect(changed).toMatchObject({ needsApproval: true });
+    expect(settings.inferenceEndpoints![0]).toMatchObject({ extraHeaders: { 'X-Route': 'r2' }, approved: false });
+    const [added, status] = await post('/api/endpoints', { name: 'Other', baseUrl: 'https://other.example.com/v1', extraHeaders: { 'X-Tenant': 'blue' } });
+    expect(status).toBe(201);
+    expect(added).toMatchObject({ needsApproval: true, endpoint: { extraHeaders: { 'X-Tenant': 'blue' } } });
+    const before = JSON.stringify(settings);
+    const [refused, code] = await post('/api/endpoints/ep-0a0b0c', { extraHeaders: { Authorization: 'Bearer x' } }, { id: 'ep-0a0b0c' });
+    expect(code).toBe(400);
+    expect(String(refused.error)).toMatch(/Authorization/i);
+    expect(JSON.stringify(settings)).toBe(before);
+  });
 });

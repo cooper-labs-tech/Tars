@@ -35,6 +35,13 @@ import type { WireRecord } from '../../electron/services/trace-store';
  * 19. Retry-After as an HTTP date, or absent, gives no sensible wait; a huge one is not capped.
  * 20. (The Audit's L4 on #596.) A POST the endpoint may already have taken (the connection reset after it was sent)
  *     is sent again, and a generation runs and is billed twice; a GET is not retried after a reset.
+ * Added before their code, the owner's decision of 26/11:
+ * 21. A 502 to a POST is held and sent again: a 502 can come once the request reached the engine and timed out
+ *     there, so the generation runs twice. A 502 to a GET is not retried; 503 and 429 are no longer held for a POST.
+ * 22. The endpoint's extra headers do not reach it, or a harness's header of the same name wins over the endpoint's
+ *     value; an extra header naming the credential, a hop-by-hop header or a session header replaces Tars's own.
+ * 23. A stream's first chunk holding only a role, or nothing, is taken as the model's first token: the record says
+ *     no time for the first chunk with content, reasoning or a tool call.
  */
 
 type Upstream = { server: http.Server; base: string; seen: Array<{ method?: string; url?: string; headers: http.IncomingHttpHeaders; body: Buffer }>; handler: (req: http.IncomingMessage, res: http.ServerResponse, body: Buffer, n: number) => void };
@@ -312,6 +319,68 @@ describe('the endpoint proxy', () => {
     expect(get.status).toBe(502);
     expect(up.seen.filter(s => s.method === 'GET').length).toBeGreaterThan(1);
     expect(sleeps.length).toBeGreaterThan(0);
+  });
+
+  it('21: a 502 to a POST passes through once; to a GET it is held and tried again (503 and 429 stay held: 14)', async () => {
+    let n502 = 0;
+    up.handler = (req, res) => {
+      if (req.method === 'POST') {
+        n502++;
+        res.writeHead(502, { 'Content-Type': 'application/json', 'Retry-After': '1' });
+        res.end('{"error":{"type":"engine_unreachable"}}');
+        return;
+      }
+      if (up.seen.filter(s => s.method === 'GET').length === 1) { res.writeHead(502, { 'Retry-After': '1' }); res.end('{}'); return; }
+      res.writeHead(200, { 'Content-Type': 'application/json' }); res.end('{"data":[]}');
+    };
+    let t = 0;
+    await startProxy({ targetOf: () => ({ baseUrl: up.base, key: KEY, holdMaxSeconds: 5 }), now: () => t, sleep: async (ms) => { sleeps.push(ms); t += ms; } });
+    const post = await call('/v1/chat/completions', { body: '{"model":"m"}' });
+    expect(post.status).toBe(502);
+    expect(post.text).toBe('{"error":{"type":"engine_unreachable"}}');
+    expect(n502).toBe(1);
+    expect(sleeps).toEqual([]);
+    const get = await call('/v1/models', { method: 'GET' });
+    expect(get.status).toBe(200);
+    expect(up.seen.filter(s => s.method === 'GET')).toHaveLength(2);
+    expect(sleeps).toEqual([1000]);
+  });
+
+  it('22: the endpoint\'s extra headers go with every request, over a harness\'s own, and never replace Tars\'s', async () => {
+    await startProxy({
+      targetOf: () => ({
+        baseUrl: up.base, key: KEY, holdMaxSeconds: 600, sendSessionHeaders: true,
+        extraHeaders: { 'X-Tenant': 'team-blue', 'x-route': 'r1', Authorization: 'Bearer stolen', 'X-Session-Id': 'forged', Connection: 'close', Host: 'other.example.com' },
+      }),
+    });
+    await call('/v1/chat/completions', { body: '{}', headers: { 'X-Tenant': 'from-harness' } });
+    await call('/v1/models', { method: 'GET' });
+    for (const s of up.seen) {
+      expect(s.headers['x-tenant']).toBe('team-blue');
+      expect(s.headers['x-route']).toBe('r1');
+      expect(s.headers.authorization).toBe(`Bearer ${KEY}`);
+      expect(s.headers['x-session-id']).toBe(SESSION.traceId);
+      expect(s.headers.host).toMatch(/^127\.0\.0\.1:/);
+    }
+  });
+
+  it('23: the record says when the first chunk with content came, past a role-only first chunk', async () => {
+    up.handler = (_q, res) => {
+      res.writeHead(200, { 'Content-Type': 'text/event-stream' });
+      res.write('data: {"choices":[{"index":0,"delta":{"role":"assistant","content":""}}]}\n\n');
+      setTimeout(() => {
+        res.write('data: {"choices":[{"index":0,"delta":{"content":"Hello"}}]}\n\n');
+        res.end('data: [DONE]\n\n');
+      }, 120);
+    };
+    await startProxy();
+    const r = await call('/v1/chat/completions', { body: '{"model":"m","stream":true}' });
+    expect(r.status).toBe(200);
+    await settle();
+    const rec = records[0] as WireRecord & { firstContentAt?: number };
+    expect(rec.firstByteAt).toBeDefined();
+    expect(rec.firstContentAt).toBeDefined();
+    expect(rec.firstContentAt! - rec.firstByteAt!).toBeGreaterThanOrEqual(100);
   });
 
   it('19: the wait read from Retry-After, an HTTP date, or nothing, capped at 60 s', () => {
