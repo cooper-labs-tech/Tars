@@ -196,8 +196,9 @@ describe('a chat, followed', () => {
     write(S('a'), userLine('hello'));
     const chat = chatOf();
     noteChatSnapshot(chat.id, await readChatItems(chat, { runner: runnerOf(), homeDir: home }));
-    const f = follow({ chats: [chat] });
+    // Appended before the follower starts, as in 9: its first tick starts with it, and a tick joins the one in flight.
     append(S('a'), userLine('with no setting'));
+    const f = follow({ chats: [chat] });
     await f.tick();
     f.stop();
     expect(itemsSent()).toEqual(['with no setting']);
