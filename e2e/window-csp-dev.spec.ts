@@ -77,3 +77,59 @@ test('next dev\'s pages get the development policy: scripts as next dev needs th
     await removeHome(home);
   }
 });
+
+/**
+ * A vault note's local picture is read from this Tars's own API port (electronAPI.apiPort), never 31415 (QA's
+ * finding on #651 at f5462e8dd: MarkdownRenderer and DocumentViewer wrote 31415 in, so under img-src every Tars on
+ * another port, the sandbox's, every E2E's, the packed spec's, had its note pictures refused).
+ * A sandbox on a port of its own, a 1x1 picture in ~/.tars/vault/attachments (the one folder /api/local-file
+ * serves), a note naming it, opened in the Vault page: the picture loads (naturalWidth > 0) from this port, and the
+ * policy refuses nothing. Red on f5462e8dd: the picture was asked of 31415 and refused by img-src.
+ */
+test('a vault note\'s local picture is read from this Tars\'s own API port, never 31415', async () => {
+  test.setTimeout(180_000);
+  const home = fs.mkdtempSync(path.join(os.tmpdir(), 'dorothy-e2e-csp-picture-'));
+  const attachments = path.join(home, '.tars', 'vault', 'attachments');
+  fs.mkdirSync(attachments, { recursive: true });
+  const picture = path.join(fs.realpathSync(attachments), 'pixel.png');
+  fs.writeFileSync(picture, Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==', 'base64'));
+  const port = apiPort(31954);
+  const app = await launchSandboxed(electron, home, {
+    env: { NODE_ENV: 'development', DOROTHY_DEV_URL: DEV_URL, DOROTHY_API_PORT: port, DOROTHY_E2E: '1' },
+  });
+  try {
+    const page = await app.firstWindow();
+    await page.addInitScript(() => {
+      const seen: Violation[] = [];
+      Object.defineProperty(window, '__cspViolations', { value: seen });
+      document.addEventListener('securitypolicyviolation', (event) => {
+        seen.push({ directive: event.effectiveDirective, blocked: event.blockedURI });
+      });
+    });
+    await page.goto(`${DEV_URL}/vault`, { waitUntil: 'domcontentloaded' });
+    await splashGone(page);
+    type VaultApi = { electronAPI: { apiPort: number | null; vault: { createDocument(p: { title: string; content: string; author: string }): Promise<{ success: boolean }> } } };
+    const created = await page.evaluate((src) => (window as unknown as VaultApi).electronAPI.vault.createDocument({ title: 'A note with a picture', content: `![a pixel](${src})`, author: 'e2e' }), picture);
+    const windowPort = await page.evaluate(() => (window as unknown as VaultApi).electronAPI.apiPort);
+    await page.goto(`${DEV_URL}/vault`, { waitUntil: 'domcontentloaded' });
+    await splashGone(page);
+    await page.getByRole('button').filter({ hasText: 'A note with a picture' }).first().click();
+    const img = page.locator('img[alt="a pixel"]').first();
+    await expect(img).toBeAttached({ timeout: 15_000 });
+    const loaded = await expect.poll(() => img.evaluate((el) => (el as HTMLImageElement).complete && (el as HTMLImageElement).naturalWidth), { timeout: 10_000 })
+      .toBeGreaterThan(0).then(() => true, () => false);
+    const shown = await img.evaluate((el) => ({ src: (el as HTMLImageElement).src, naturalWidth: (el as HTMLImageElement).naturalWidth }));
+    const reported = await page.evaluate(() => (window as unknown as { __cspViolations: Violation[] }).__cspViolations.slice());
+    await page.screenshot({ path: test.info().outputPath('vault-picture.png') });
+    recordValues({ created, port, windowPort, loaded, shown, reported });
+
+    expect.soft(created.success, 'the note made').toBe(true);
+    expect.soft(windowPort, 'the window is told its own API port').toBe(Number(port));
+    expect.soft(shown.src, 'the picture asked of this Tars\'s own port').toContain(`http://127.0.0.1:${port}/api/local-file?path=`);
+    expect.soft(shown.naturalWidth, 'the picture loads').toBeGreaterThan(0);
+    expect.soft(reported, 'the policy refuses nothing').toEqual([]);
+  } finally {
+    await app.close().catch(() => undefined);
+    await removeHome(home);
+  }
+});
