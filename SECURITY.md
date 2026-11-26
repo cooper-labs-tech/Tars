@@ -1111,7 +1111,9 @@ the health: the API's `/api/endpoints` and the `endpoint_*` tools of mcp-orchest
   the name, the hold) leaves an agent's change pending: it never approves what the owner has not looked at. An
   approval names the address and the extra headers the window showed, and is refused when an agent changed either
   again since. An address or headers the owner types in the window, or the approved values put back, are the owner's
-  own, approved by that act.
+  own, approved by that act. "Typed" is measured against what the form showed when it opened (`shown`), never
+  against the record: a save from a form an agent changed the endpoint under is refused, nothing written (the Audit's
+  M-b), so an earlier value of the agent's sent back by a stale form is never taken for the owner's.
 - A key, the models, the name or the hold ceiling keep the approval.
 - An agent may turn traces off for an endpoint, never on.
 

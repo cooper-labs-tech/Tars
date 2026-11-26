@@ -88,6 +88,9 @@ export function registerTracesHandlers(deps: TracesHandlerDeps): void {
       allowPlainHttp: typeof i.allowPlainHttp === 'boolean' ? i.allowPlainHttp : undefined,
       // Checked by saveEndpoint (cleanExtraHeaders): anything but a map of header names to values is refused there.
       extraHeaders: i.extraHeaders,
+      // What the form showed when it opened: a save of an endpoint that exists is refused without it, or when an
+      // agent changed the endpoint since (saveEndpoint), before anything is written, the grant-first path included.
+      shown: i.shown && typeof i.shown === 'object' ? i.shown as { baseUrl?: unknown; extraHeaders?: unknown } : undefined,
     }, { window: true });
     if (!r.ok) return r;
     // Traces turned off for an endpoint is a revoke of sharing: it applies first, then is written (holdRevoke), with
