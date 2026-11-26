@@ -26,6 +26,9 @@ import * as path from 'node:path';
  *    was the Settings row #547 removes), writes it back.
  * R10 (the Audit's L3 on #545) a later launch removes a token the first could not read (its file did not parse then):
  *    `telegramBotRetired.hadToken` stays false, and the window never says to revoke it; or `at` moves.
+ * R12 (2.1.0, the new interface the only one, the owner's decision of 26/11) a save writes back `newInterface`, the
+ *    preview's switch nothing reads any more, true or false, from a file that held it or a window that still sends
+ *    it; or the settings beside it (chatsReadEachOther) go with it.
  */
 
 vi.mock('electron', () => ({
@@ -143,6 +146,13 @@ describe('a token found by a later launch (the Audit\'s L3 on #545)', () => {
 describe('a dead setting a save still carries (the orchestrator\'s addition to #545)', () => {
   it('R11: defaultProvider is dropped, the rest kept', () => {
     expect(retired.withoutRetiredSettings({ theme: 'dark', defaultProvider: 'codex', telegramEnabled: true })).toEqual({ theme: 'dark' });
+  });
+
+  it('R12: newInterface is dropped, true or false, and the settings beside it kept', () => {
+    for (const newInterface of [true, false]) {
+      expect(retired.withoutRetiredSettings({ theme: 'dark', newInterface, chatsReadEachOther: true }), String(newInterface))
+        .toEqual({ theme: 'dark', chatsReadEachOther: true });
+    }
   });
 });
 
