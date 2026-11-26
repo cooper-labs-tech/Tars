@@ -11,6 +11,9 @@
 // 6. A schema other than 1 is accepted.
 // 7. More rows than the per-batch limits are accepted.
 // 8. A valid batch is refused, or its optional fields are dropped.
+// 9. A request's `side` mark (the owner's decision of 26/11) is refused when it is a boolean, or
+//    taken when it is anything else ("yes", 1, "true"), or required, which would refuse every
+//    upload from a Tars before the mark.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { validateBatch } from '../../src/batch.ts';
@@ -80,4 +83,14 @@ test('8. a valid batch passes whole, optional fields kept, absent arrays empty',
   const empty = validateBatch({ schema: 1 });
   assert.ok(!('errors' in empty));
   assert.deepEqual([empty.sessions, empty.turns, empty.requests, empty.messages], [[], [], [], []]);
+});
+
+test('9. side: a boolean or nothing', () => {
+  for (const side of [true, false]) {
+    const r = validateBatch({ ...ok, requests: [{ ...request, side }] });
+    assert.ok(!('errors' in r), `side ${side}: ${JSON.stringify(r)}`);
+    assert.equal(r.requests[0]!.side, side);
+  }
+  assert.ok(!('errors' in validateBatch(ok)), 'a request without side, from a Tars before the mark, is taken');
+  for (const side of ['yes', 'true', 1, 0, {}]) assert.ok(errs({ ...ok, requests: [{ ...request, side }] }).length, String(side));
 });

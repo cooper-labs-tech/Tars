@@ -3,6 +3,18 @@
 //
 // Run: npm run test:e2e   (PG_BIN=<folder of initdb> when initdb is not found by itself)
 // Artefact: .runs/<time>/ holds asserted.json (every value checked), server.log and reproduce.txt.
+//
+// A request's side mark (the owner's decision of 26/11): the ways it can fail, written before the code.
+// S1. A request sent with `side` is refused as an unknown field, so a Tars that marks its side
+//     requests cannot upload at all.
+// S2. `side: true` or `false` is not stored, or not returned by a read route that returns requests
+//     (the session detail, the join by upstream request id).
+// S3. A request sent without `side` (a Tars before the mark) reads back as `false`. A side request
+//     would then pass as a main one, unseen. It must read back as `null`: unknown, which readers
+//     treat as side (fail closed).
+// S4. `side` is left out of a read instead of `null`, so a reader cannot tell unknown from a
+//     server before the field.
+// S5. A request sent again without `side` erases the mark it had.
 import { describe, it, before, after } from 'node:test';
 import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
@@ -68,7 +80,7 @@ const turn = { turnId: 'turn-1', sessionId: 'sess-1', index: 0, startedAt: T0, e
 const requests = [
   { requestId: 'req-1', sessionId: 'sess-1', turnId: 'turn-1', seq: 0, upstreamRequestId: 'up-111', surface: 'openai_chat', modelRequested: 'open-model-a',
     modelServed: 'open-model-a', params: { temperature: 0.2 }, toolsHash, startedAt: T0, ttftMs: 200, totalMs: 1500, tokensIn: 120, tokensCached: 0,
-    tokensOut: 20, status: 200, finishReason: 'tool_calls', streamed: true, reqBytes: 900, respBytes: 300,
+    tokensOut: 20, status: 200, finishReason: 'tool_calls', streamed: true, side: false, reqBytes: 900, respBytes: 300,
     messages: [{ position: 0, hash: h.system, direction: 'input' }, { position: 1, hash: h.user, direction: 'input' }, { position: 2, hash: h.call, direction: 'output' }] },
   { requestId: 'req-2', sessionId: 'sess-1', turnId: 'turn-1', seq: 1, upstreamRequestId: 'up-222', surface: 'openai_chat', startedAt: T0 + 2400,
     totalMs: 1600, tokensIn: 180, tokensCached: 100, tokensOut: 20, status: 200, finishReason: 'stop', streamed: true,
@@ -281,6 +293,21 @@ describe('trace back-office, end to end', () => {
     assert.equal(d.json.messages.length, 5);
     const j = await call('GET', '/v1/read/requests?upstreamRequestId=up-222', { token: reader.token });
     assert.deepEqual(note('read.join', j.json.requests.map((r: any) => [r.install, r.sessionId, r.turnId, r.requestId])), [[installA.id, 'sess-1', 'turn-1', 'req-2']]);
+    // S2, S3, S4: req-1 was sent with side: false, req-2 without it.
+    assert.deepEqual(note('side.asSent', d.json.requests.map((r: any) => [r.requestId, 'side' in r, r.side])), [['req-1', true, false], ['req-2', true, null]]);
+    assert.deepEqual(j.json.requests.map((r: any) => ['side' in r, r.side]), [[true, null]]);
+    // S1, S2: a side request (a title request with no tools) is taken and read back as one.
+    const title = { requestId: 'req-t', sessionId: 'sess-1', turnId: 'turn-1', seq: 2, upstreamRequestId: 'up-333', surface: 'openai_chat', startedAt: T0 + 4100,
+      side: true, messages: [{ position: 0, hash: h.user, direction: 'input' }] };
+    const marked = await call('PUT', '/v1/batches/batch-side', { token: installA.token, body: { schema: 1, requests: [title, { ...requests[1], side: true }] } });
+    assert.equal(marked.status, 200, String(marked.buf));
+    // S5: req-2 sent again without the mark keeps it.
+    const resent = await call('PUT', '/v1/batches/batch-side-2', { token: installA.token, body: { schema: 1, requests: [requests[1]] } });
+    assert.equal(resent.status, 200, String(resent.buf));
+    const d2 = await call('GET', `/v1/read/sessions/${installA.id}/sess-1`, { token: reader.token });
+    assert.deepEqual(note('side.afterMarks', d2.json.requests.map((r: any) => [r.requestId, r.side])), [['req-1', false], ['req-2', true], ['req-t', true]]);
+    const jt = await call('GET', '/v1/read/requests?upstreamRequestId=up-333', { token: reader.token });
+    assert.deepEqual(jt.json.requests.map((r: any) => [r.requestId, r.side]), [['req-t', true]]);
     const blob = await call('GET', `/v1/read/blobs/${h.answer}`, { token: reader.token });
     assert.equal(blob.status, 200);
     assert.ok(blob.buf.equals(msgs.answer), 'the blob comes back byte for byte');
@@ -344,7 +371,7 @@ describe('trace back-office, end to end', () => {
     const blobsBefore = filesUnder(blobDir).length;
     const d = await call('DELETE', '/v1/installs/me', { token: installA.token });
     assert.equal(d.status, 200);
-    assert.deepEqual(note('delete.counts', [d.json.deleted.sessions, d.json.deleted.turns, d.json.deleted.requests, d.json.deleted.blobs]), [1, 1, 2, 6]);
+    assert.deepEqual(note('delete.counts', [d.json.deleted.sessions, d.json.deleted.turns, d.json.deleted.requests, d.json.deleted.blobs]), [1, 1, 3, 6]);
     assert.match(d.json.receipt, /^del_/);
     assert.equal((await call('GET', '/v1/installs/me', { token: installA.token })).status, 401);
     // A's own blobs are gone from disk; the user message B also sent is still there.
