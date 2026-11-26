@@ -83,6 +83,12 @@ import { hasPosixModes } from '../setup/platform-limits';
  * deletion, or of a project or agent opted out), nothing was ever sent again:
  * 37. 5001 sessions recorded before the deletion's moment and 1 after: one pass does not send that 1.
  * 38. 5001 sessions of a project not opted in and 1 of one that is: the same.
+ * Added before its code, the owner's decision of 26/11:
+ * 39. A side request (a title or a memory call) goes up like a main one: the request carries no `side`, the export's
+ *     own mark, so the back-office counts it as a step of the turn.
+ * 40. A back-office older than the `side` field refuses the batch (422 invalid_batch, it refuses unknown fields), and
+ *     the uploader sends it again without the mark, or with a side request marked false; or it marks the session
+ *     sent; or it never sends it once the back-office knows the field. The order is the back-office first (SPECS).
  */
 
 type Seen = { method: string; url: string; headers: http.IncomingHttpHeaders; body: Buffer };
@@ -97,6 +103,8 @@ class FakeBackOffice {
   sessions = new Map<string, Record<string, unknown>>();
   rows: Array<Record<string, unknown>> = [];
   failNext: Array<{ status: number; retryAfter?: string; code?: string }> = [];
+  /** Request fields this back-office does not know: a batch carrying one is refused, 422 invalid_batch (API.md § 8). */
+  unknownRequestFields: string[] = [];
   down = false;
   async start() {
     this.server = http.createServer((req, res) => {
@@ -147,6 +155,7 @@ class FakeBackOffice {
       const digest = createHash('sha256').update(body).digest('hex');
       if (this.batches.has(id)) { this.send(res, this.batches.get(id) === digest ? 200 : 409, this.batches.get(id) === digest ? { replayed: true, missingBlobs: [] } : { error: 'batch_conflict' }); return; }
       const batch = JSON.parse(body.toString());
+      if ((batch.requests ?? []).some((q: object) => Object.keys(q).some(k => this.unknownRequestFields.includes(k)))) { this.send(res, 422, { error: 'invalid_batch' }); return; }
       this.batches.set(id, digest);
       for (const s of batch.sessions ?? []) this.sessions.set(s.sessionId, s);
       this.rows.push(batch);
@@ -255,7 +264,7 @@ describe('the trace uploader', () => {
     expect(Object.keys(session).sort()).toEqual(expect.arrayContaining(['sessionId', 'harness', 'model', 'startedAt', 'finalStatus', 'turnCount', 'requestCount', 'tokensIn', 'tokensCached', 'tokensOut']));
     const allowed = { session: ['sessionId', 'agentId', 'agentName', 'projectKey', 'harness', 'harnessVersion', 'nativeSessionId', 'endpointKey', 'endpointName', 'model', 'startedAt', 'endedAt', 'finalStatus', 'turnCount', 'requestCount', 'tokensIn', 'tokensCached', 'tokensOut', 'mixed', 'unknownTurns', 'outcome'],
       turn: ['turnId', 'sessionId', 'index', 'startedAt', 'endedAt', 'gapBeforeMs', 'requestCount', 'toolCallCount', 'toolErrorCount', 'toolMs', 'modelMs', 'tokensIn', 'tokensCached', 'tokensOut', 'finalStatus', 'finalFinishReason', 'author', 'authorDetail'],
-      request: ['requestId', 'sessionId', 'turnId', 'seq', 'upstreamRequestId', 'surface', 'modelRequested', 'modelServed', 'params', 'toolsHash', 'startedAt', 'ttftMs', 'totalMs', 'tokensIn', 'tokensCached', 'tokensOut', 'status', 'error', 'finishReason', 'streamed', 'reqBytes', 'respBytes', 'messages'],
+      request: ['requestId', 'sessionId', 'turnId', 'seq', 'side', 'upstreamRequestId', 'surface', 'modelRequested', 'modelServed', 'params', 'toolsHash', 'startedAt', 'ttftMs', 'totalMs', 'tokensIn', 'tokensCached', 'tokensOut', 'status', 'error', 'finishReason', 'streamed', 'reqBytes', 'respBytes', 'messages'],
       message: ['hash', 'role', 'createdAt', 'size', 'toolCallCount', 'hasThinking'] };
     const batch = bo.rows[0] as { schema: number; sessions: object[]; turns: object[]; requests: Array<{ messages: Array<{ hash: string }>; toolsHash?: string; upstreamRequestId?: string }>; messages: Array<{ hash: string; role: string }> };
     expect(batch.schema).toBe(1);
@@ -761,5 +770,44 @@ describe('forgetting the progress after a DELETE that went through, on a full di
     } finally {
       vi.restoreAllMocks();
     }
+  });
+
+  it('39: a side request goes up marked side: true, and a main one side: false', async () => {
+    seed('t1', 'list the files');
+    // A title call: no tools and its own system prompt, which the store reads as a side request.
+    const req = Buffer.from(JSON.stringify({ model: 'open-coder-1', messages: [{ role: 'system', content: 'Title generator' }, { role: 'user', content: 'list the files' }] }));
+    const resp = Buffer.from(JSON.stringify({ choices: [{ message: { role: 'assistant', content: 'Listing files' }, finish_reason: 'stop' }] }));
+    store.ingest({ traceId: 't1', agentId: 'agent-1', surface: 'openai_chat', startedAt: 1200, endedAt: 1250, status: 200, contentType: 'application/json', requestBody: req, responseBody: resp, attempts: 1, heldMs: 0 });
+    expect((await uploader().runOnce()).sent).toBe(1);
+    const requests = bo.rows.flatMap(b => (b as { requests?: Array<{ side?: unknown }> }).requests ?? []);
+    expect(requests.map(r => r.side).sort()).toEqual([false, true]);
+  });
+
+  it('40: a back-office that does not know side refuses the batch: nothing is sent without the mark, and it goes once it knows', async () => {
+    seed('t1', 'list the files');
+    const req = Buffer.from(JSON.stringify({ model: 'open-coder-1', messages: [{ role: 'system', content: 'Title generator' }, { role: 'user', content: 'list the files' }] }));
+    const resp = Buffer.from(JSON.stringify({ choices: [{ message: { role: 'assistant', content: 'Listing files' }, finish_reason: 'stop' }] }));
+    store.ingest({ traceId: 't1', agentId: 'agent-1', surface: 'openai_chat', startedAt: 1200, endedAt: 1250, status: 200, contentType: 'application/json', requestBody: req, responseBody: resp, attempts: 1, heldMs: 0 });
+    bo.unknownRequestFields = ['side'];
+    const u = uploader();
+    expect(await u.runOnce()).toMatchObject({ sent: 0, failed: 1 });
+    expect(bo.rows).toHaveLength(0);
+    expect(u.state().lastError).toMatch(/422/);
+    expect(u.state().pendingSessions).toBe(1);
+    // Every batch it tried carries the mark, the side request's true.
+    const decode = (s: Seen) => {
+      const enc = s.headers['content-encoding'];
+      return JSON.parse((enc === 'zstd' ? (zlib as unknown as { zstdDecompressSync: (b: Buffer) => Buffer }).zstdDecompressSync(s.body) : enc === 'gzip' ? zlib.gunzipSync(s.body) : s.body).toString());
+    };
+    const tried = bo.seen.filter(s => s.method === 'PUT' && s.url.startsWith('/v1/batches/')).flatMap(s => decode(s).requests as Array<{ side?: unknown }>);
+    expect(tried.length).toBeGreaterThan(0);
+    expect(tried.every(q => typeof q.side === 'boolean')).toBe(true);
+    expect(tried.filter(q => q.side === true).length).toBeGreaterThan(0);
+    // The back-office updated: the next try sends the session, marks and all.
+    bo.unknownRequestFields = [];
+    clock += 60 * 60_000;
+    expect(await u.runOnce()).toMatchObject({ sent: 1, failed: 0 });
+    const sent = bo.rows.flatMap(b => (b as { requests?: Array<{ side?: unknown }> }).requests ?? []);
+    expect(sent.map(r => r.side).sort()).toEqual([false, true]);
   });
 });

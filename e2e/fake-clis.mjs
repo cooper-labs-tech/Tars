@@ -491,6 +491,13 @@ export async function run() {
     const key = process.env.OPENAI_API_KEY ?? '';
     const tools = [{ type: 'function', function: { name: 'run_shell_command', description: 'Run a shell command', parameters: { type: 'object', properties: { command: { type: 'string' } }, required: ['command'] } } }];
     const messages = [{ role: 'system', content: 'You are a stand-in coding agent.' }, { role: 'user', content: text }];
+    // A task that asks for a title gets a side request first, as opencode's title call is (no tools, a system prompt of
+    // its own, not streamed): what a trace marks `side`.
+    if (/\btitle\b/i.test(text)) {
+      const res = await fetch(`${base}/chat/completions`, { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${key}` }, body: JSON.stringify({ model: process.env.OPENAI_MODEL, messages: [{ role: 'system', content: 'Generate a short title for the conversation.' }, { role: 'user', content: text }], stream: false }) });
+      await res.text();
+      log({ model: true, side: true, status: res.status, keyHead: key.slice(0, 4), keyLength: key.length });
+    }
     for (let step = 0; step < 4; step++) {
       const sentAt = Date.now();
       const res = await fetch(`${base}/chat/completions`, { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${key}` }, body: JSON.stringify({ model: process.env.OPENAI_MODEL, messages, tools, stream: true, stream_options: { include_usage: true } }) });

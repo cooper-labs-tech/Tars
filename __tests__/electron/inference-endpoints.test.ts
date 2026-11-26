@@ -42,6 +42,17 @@ import { cannotSymlink } from '../setup/symlink-privilege';
  * 15. (L2, the orchestrator's rule.) Plain http to a public address is taken; or refused on loopback, a private range
  *     (RFC 1918, 100.64.0.0/10, fc00::/7) or IPv6 link-local; or an agent, rather than the owner in the window, allows
  *     plain http to a public address.
+ * Added before their code, the owner's decision of 26/11 (extra headers per endpoint, a general option):
+ * 17. An extra header that names the credential (Authorization, x-api-key, Cookie), the hop (Host, Content-Length,
+ *     Transfer-Encoding, Connection, Accept-Encoding, a hop-by-hop or proxy header), a session header Tars sets
+ *     (X-Session-Id, X-Agent-Id), a name that is not a header token, a name or value holding CR or LF, more than 16
+ *     headers, a value over 1024 bytes, or two names equal but for case, is saved.
+ * 18. The owner's extra headers are not in the proxy's target or the view, or saving them takes the approval away;
+ *     an empty map does not clear them.
+ * 19. An agent adds or changes extra headers and they go out with the owner's key before the owner approved them;
+ *     or saving the same headers again takes an approval away; or the change takes the key away.
+ * 20. A probe of an approved endpoint leaves its extra headers out (an endpoint that needs them answers 4xx), or
+ *     sends them to an address the owner did not approve.
  */
 
 const NOW = '2026-11-19T12:00:00.000Z';
@@ -102,6 +113,83 @@ describe('saving endpoints', () => {
     if (!withHeaders.ok) throw new Error(withHeaders.error);
     expect(endpointTarget(withHeaders.settings, r.endpoint.id)).toMatchObject({ sendSessionHeaders: true });
     expect(endpointViews(withHeaders.settings, [])[0]).toMatchObject({ sendSessionHeaders: true, holdMaxSeconds: 120 });
+  });
+
+  it('17: an extra header that is the credential, the hop, a session header or malformed is refused, and nothing saved', () => {
+    const r = added(base(), OWNER);
+    const refused: Array<Record<string, unknown>> = [
+      ...['Authorization', 'x-api-key', 'Cookie', 'Host', 'Content-Length', 'Transfer-Encoding', 'Connection', 'Accept-Encoding',
+        'X-Session-Id', 'x-agent-id', 'Keep-Alive', 'TE', 'Trailer', 'Upgrade', 'Proxy-Authorization', 'Proxy-Connection'].map(n => ({ [n]: 'v' })),
+      { 'X Bad': 'v' }, { 'X-Bad:': 'v' }, { '': 'v' }, { 'X-Ok': 'line1\r\nX-Injected: 1' }, { 'X-Ok': 'a\nb' }, { 'X-Ok\r\n': 'v' },
+      { 'X-Ok': 42 }, { 'X-Ok': 'x'.repeat(1025) }, { 'X-Dup': 'a', 'x-dup': 'b' },
+      Object.fromEntries(Array.from({ length: 17 }, (_, i) => [`X-H${i}`, 'v'])),
+    ];
+    for (const extraHeaders of refused) {
+      const s = saveEndpoint(r.settings, { id: r.endpoint.id, extraHeaders } as Parameters<typeof saveEndpoint>[1], OWNER, NOW);
+      expect(s.ok, JSON.stringify(extraHeaders).slice(0, 80)).toBe(false);
+    }
+    for (const extraHeaders of [['X-A', 'v'], 'X-A: v', null]) {
+      expect(saveEndpoint(r.settings, { id: r.endpoint.id, extraHeaders } as unknown as Parameters<typeof saveEndpoint>[1], OWNER, NOW).ok, String(extraHeaders)).toBe(false);
+    }
+  });
+
+  it('18: the owner\'s extra headers keep the approval, reach the target and the view, and an empty map clears them', () => {
+    const r = added(base(), OWNER);
+    const s = saveEndpoint(r.settings, { id: r.endpoint.id, extraHeaders: { 'X-Tenant': 'team-blue', 'X-Route': 'r1' } }, OWNER, NOW);
+    if (!s.ok) throw new Error(s.error);
+    expect(s.endpoint.approved).toBe(true);
+    expect(endpointTarget(s.settings, r.endpoint.id)).toMatchObject({ extraHeaders: { 'X-Tenant': 'team-blue', 'X-Route': 'r1' } });
+    expect(endpointViews(s.settings, [])[0].extraHeaders).toEqual({ 'X-Tenant': 'team-blue', 'X-Route': 'r1' });
+    const kept = saveEndpoint(s.settings, { id: r.endpoint.id, name: 'Renamed' }, OWNER, NOW);
+    if (!kept.ok) throw new Error(kept.error);
+    expect(endpointViews(kept.settings, [])[0].extraHeaders).toEqual({ 'X-Tenant': 'team-blue', 'X-Route': 'r1' });
+    const cleared = saveEndpoint(kept.settings, { id: r.endpoint.id, extraHeaders: {} }, OWNER, NOW);
+    if (!cleared.ok) throw new Error(cleared.error);
+    expect(endpointViews(cleared.settings, [])[0].extraHeaders).toEqual({});
+    expect((endpointTarget(cleared.settings, r.endpoint.id) as { extraHeaders?: object }).extraHeaders ?? {}).toEqual({});
+  });
+
+  it('19: an agent\'s extra headers wait for the owner, keep the key, and the same headers again keep the approval', () => {
+    const r = added(base(), OWNER);
+    const keyed = setEndpointKey(r.settings, r.endpoint.id, 'k-owner');
+    if (!keyed.ok) throw new Error(keyed.error);
+    const byAgent = saveEndpoint(keyed.settings, { id: r.endpoint.id, extraHeaders: { 'X-Route': 'elsewhere' } }, AGENT, NOW);
+    if (!byAgent.ok) throw new Error(byAgent.error);
+    expect(byAgent.endpoint).toMatchObject({ approved: false, changedBy: { agentId: 'agent-remote' } });
+    expect('refused' in endpointTarget(byAgent.settings, r.endpoint.id)).toBe(true);
+    expect(endpointViews(byAgent.settings, [])[0].keySet).toBe(true);
+    const approved = approveEndpoint(byAgent.settings, r.endpoint.id);
+    if (!approved.ok) throw new Error(approved.error);
+    expect(endpointTarget(approved.settings, r.endpoint.id)).toMatchObject({ key: 'k-owner', extraHeaders: { 'X-Route': 'elsewhere' } });
+    // The same map again, in another key order or case of nothing: no change, the approval stays.
+    const again = saveEndpoint(approved.settings, { id: r.endpoint.id, extraHeaders: { 'X-Route': 'elsewhere' }, holdMaxSeconds: 60 }, AGENT, NOW);
+    if (!again.ok) throw new Error(again.error);
+    expect(again.endpoint.approved).toBe(true);
+    // A refused header is refused for an agent too.
+    expect(saveEndpoint(approved.settings, { id: r.endpoint.id, extraHeaders: { Authorization: 'Bearer x' } }, AGENT, NOW).ok).toBe(false);
+  });
+
+  it('20: a probe of the approved address sends the extra headers with the key; of an address an agent moved to, neither', async () => {
+    const r = added(base(), OWNER, { baseUrl: 'https://h.example/v1' });
+    const s = saveEndpoint(r.settings, { id: r.endpoint.id, extraHeaders: { 'X-Tenant': 'team-blue' } }, OWNER, NOW);
+    if (!s.ok) throw new Error(s.error);
+    const keyed = setEndpointKey(s.settings, r.endpoint.id, 'k-owner');
+    if (!keyed.ok) throw new Error(keyed.error);
+    const sent: Array<{ url: string; headers: Record<string, string> }> = [];
+    const fetchImpl = (async (url: string, init: { headers?: Record<string, string> }) => {
+      sent.push({ url, headers: init.headers ?? {} });
+      return new Response(JSON.stringify({ data: [{ id: 'm' }] }), { status: 200 });
+    }) as unknown as typeof fetch;
+    await readModels(keyed.settings, r.endpoint.id, fetchImpl, NOW);
+    await checkHealth(keyed.settings, r.endpoint.id, fetchImpl, NOW);
+    expect(sent.map(x => x.headers['X-Tenant'])).toEqual(['team-blue', 'team-blue']);
+    const moved = saveEndpoint(keyed.settings, { id: r.endpoint.id, baseUrl: 'https://other.example/v1' }, AGENT, NOW);
+    if (!moved.ok) throw new Error(moved.error);
+    sent.length = 0;
+    await readModels(moved.settings, r.endpoint.id, fetchImpl, NOW);
+    expect(sent[0].url).toBe('https://other.example/v1/models');
+    expect(sent[0].headers['X-Tenant']).toBeUndefined();
+    expect(sent[0].headers.Authorization).toBeUndefined();
   });
 
   it('4: the key is never in a view nor in the endpoint record', () => {

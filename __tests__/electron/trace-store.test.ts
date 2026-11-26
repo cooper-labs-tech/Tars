@@ -28,6 +28,9 @@ import { TraceStore, type WireRecord, type TraceMeta } from '../../electron/serv
  * 12. A message read back is not the message that was stored (compression round trip).
  * 13. Past the cap, the store keeps writing bodies; or it stops recording the requests' metadata too.
  * 14. A request whose bodies cannot be parsed throws out of ingest (the proxy must never fail on the recorder).
+ * Added before their code, the owner's decision of 26/11 (TTFT measures the model):
+ * 17. A streamed request's ttft is its first byte, though the proxy said when the first chunk with content came; or
+ *     a stream that never carried content gets a ttft; or one not streamed loses the time to its first byte.
  */
 
 let dir: string;
@@ -260,5 +263,19 @@ describe('the trace store', () => {
     store.openTrace(meta('t1'));
     expect(() => store.ingest(rec('t1', Buffer.from('not json'), Buffer.from('{oops'), clock))).not.toThrow();
     expect(store.session('t1')!.session.requestCount).toBe(1);
+  });
+
+  it('17: a stream\'s ttft is its first chunk with content; one with none has none; one not streamed keeps its first byte', () => {
+    store.openTrace(meta('t1'));
+    const streamed = (messages: unknown[]) => Buffer.from(JSON.stringify({ model: 'open-coder-1', stream: true, messages: [SYSTEM, ...messages], tools: TOOLS }));
+    const sse = (deltas: unknown[]) => Buffer.from(deltas.map(d => `data: ${JSON.stringify({ choices: [{ index: 0, delta: d }] })}\n\n`).join('') + 'data: [DONE]\n\n');
+    const t0 = clock;
+    store.ingest(rec('t1', streamed([user('hello')]), sse([{ role: 'assistant' }, { content: 'Hi' }]), t0, 900,
+      { contentType: 'text/event-stream', firstByteAt: t0 + 20, firstContentAt: t0 + 650 } as Partial<WireRecord>));
+    store.ingest(rec('t1', streamed([user('hello'), { role: 'assistant', content: 'Hi' }, user('again')]), sse([{ role: 'assistant' }]), t0 + 2000, 300,
+      { contentType: 'text/event-stream', firstByteAt: t0 + 2015 }));
+    store.ingest(rec('t1', chatReq([user('once more')]), chatResp({ role: 'assistant', content: 'ok' }, 'stop'), t0 + 4000, 200, { firstByteAt: t0 + 4180 }));
+    const ttft = store.session('t1')!.turns.flatMap(t => t.requests).map(r => r.ttftMs);
+    expect(ttft).toEqual([650, undefined, 180]);
   });
 });

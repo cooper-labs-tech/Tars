@@ -116,7 +116,7 @@ function sse(res, data, event) {
 
 const pause = (ms) => new Promise((r) => setTimeout(r, ms));
 
-async function answerChat(body, res, marker, chunkDelayMs = 0) {
+async function answerChat(body, res, marker, chunkDelayMs = 0, emptyFirstChunk = false) {
   const d = decide(body, chatToolResult(body.messages), marker);
   const id = `chatcmpl-${randomBytes(6).toString('hex')}`;
   const finish = d.call ? 'tool_calls' : 'stop';
@@ -130,10 +130,15 @@ async function answerChat(body, res, marker, chunkDelayMs = 0) {
   }
   res.writeHead(200, { 'Content-Type': 'text/event-stream', 'Cache-Control': 'no-cache', 'X-Request-Id': `standin-${id}` });
   const base = { id, object: 'chat.completion.chunk', created: Math.floor(Date.now() / 1000), model: MODEL_ID };
+  // As many engines open a stream: a chunk with the role and no content, before the model's first token.
+  if (emptyFirstChunk) {
+    sse(res, { ...base, choices: [{ index: 0, delta: { role: 'assistant', content: '' }, finish_reason: null }] });
+    if (chunkDelayMs) await pause(chunkDelayMs);
+  }
   sse(res, { ...base, choices: [{ index: 0, delta: { role: 'assistant', reasoning_content: 'Thinking about the probe.' }, finish_reason: null }] });
   // A model takes its time between tokens: with a delay, a relay that buffers shows (the first chunk would reach the
   // client only once the last is sent).
-  if (chunkDelayMs) await pause(chunkDelayMs);
+  if (chunkDelayMs && !emptyFirstChunk) await pause(chunkDelayMs);
   if (d.call) {
     sse(res, { ...base, choices: [{ index: 0, delta: { tool_calls: [{ index: 0, id: d.call.id, type: 'function', function: { name: d.call.name, arguments: '' } }] }, finish_reason: null }] });
     const half = Math.floor(d.call.arguments.length / 2);
@@ -178,9 +183,11 @@ function answerResponses(body, res, marker) {
  * Starts the stand-in. `key` set: any other Bearer gets a 401. `failFirst`: the statuses the first model calls get
  * (503 endpoint_busy, 429 rate_limited, 502), each with `Retry-After: 1`, before any is served, as a remote host
  * outside its window or at its cap answers. `chunkDelayMs`: the pause between a stream's first and next chunks.
- * Resolves with its base URL and a close().
+ * `emptyFirstChunk`: a chat stream opens with a chunk holding the role and an empty content, then that pause, then
+ * the model's first token. Resolves with its base URL, a close(), and failNext(...statuses), which makes the next
+ * model calls fail as failFirst does.
  */
-export function startStandIn({ port = 0, key = '', log = '', failFirst = [], chunkDelayMs = 0 } = {}) {
+export function startStandIn({ port = 0, key = '', log = '', failFirst = [], chunkDelayMs = 0, emptyFirstChunk = false } = {}) {
   const marker = `TARS-PROBE-${randomBytes(4).toString('hex')}`;
   const failing = [...failFirst];
   const note = (entry) => { if (log) fs.appendFileSync(log, `${JSON.stringify({ at: Date.now(), ...entry })}\n`); };
@@ -208,7 +215,7 @@ export function startStandIn({ port = 0, key = '', log = '', failFirst = [], chu
         res.end(JSON.stringify({ error: { type, message: `stand-in ${type}` } }));
         note({ answered: status });
       } else if (req.method === 'POST' && url === '/v1/chat/completions') {
-        const done = await answerChat(asObj(body), res, marker, chunkDelayMs);
+        const done = await answerChat(asObj(body), res, marker, chunkDelayMs, emptyFirstChunk);
         note({ answered: 200, ...(done ?? {}) });
       } else if (req.method === 'POST' && url === '/v1/responses') {
         answerResponses(asObj(body), res, marker);
@@ -221,7 +228,11 @@ export function startStandIn({ port = 0, key = '', log = '', failFirst = [], chu
   return new Promise((resolve) => {
     server.listen(port, '127.0.0.1', () => {
       const { port: bound } = server.address();
-      resolve({ baseUrl: `http://127.0.0.1:${bound}/v1`, port: bound, marker, close: () => new Promise((r) => server.close(() => r())) });
+      resolve({
+        baseUrl: `http://127.0.0.1:${bound}/v1`, port: bound, marker,
+        failNext: (...statuses) => { failing.push(...statuses); },
+        close: () => new Promise((r) => server.close(() => r())),
+      });
     });
   });
 }
