@@ -162,9 +162,11 @@ function fromAnotherCli(agent: AgentStatus, req: RouteRequest): boolean | Promis
   const postedBy = typeof header === 'string' ? header : undefined;
   const terminal = agent.ptyId ? ptyProcesses.get(agent.ptyId) : undefined;
   const execLaunch = terminalIsTheCli(terminal) === true;
-  const atOnce = ownCliAtOnce(terminal?.pid, postedBy, process.platform, execLaunch);
+  // A CLI on a remote host has a pid of the host's, never this terminal's: its token is the proof (remote-agents.ts).
+  const terminalPid = agent.remote ? undefined : terminal?.pid;
+  const atOnce = ownCliAtOnce(terminalPid, postedBy, process.platform, execLaunch);
   // Answered at once when it can be: a route then goes on in the same tick, as it always did.
-  return atOnce === undefined ? isTerminalsOwnCli(terminal?.pid, postedBy, { execLaunch }).then((own) => !own) : !atOnce;
+  return atOnce === undefined ? isTerminalsOwnCli(terminalPid, postedBy, { execLaunch }).then((own) => !own) : !atOnce;
 }
 
 /**
@@ -372,7 +374,9 @@ export function registerHooksRoutes(app: RouteApp, ctx: RouteContext): void {
       // inside it (a `claude -p` from its Bash tool) inherits the agent's id,
       // token and hooks, and took the agent's session (core/terminal-cli.ts).
       const terminal = agent.ptyId ? ptyProcesses.get(agent.ptyId) : undefined;
-      const terminalPid = terminal?.pid;
+      // A CLI on a remote host (2.0.7, services/remote-agents.ts) runs under a pid of the host's, which no process of
+      // this computer has: its token is the proof, as for any post. A run nested in it there is not told apart.
+      const terminalPid = agent.remote ? undefined : terminal?.pid;
       const execLaunch = terminalIsTheCli(terminal) === true;
       const refuse = () => {
         console.log(`[hooks] Refused session ${session_id} for ${agent.id}: its CLI (pid ${String(cli_pid)}) is not its terminal's (pid ${terminalPid})`);

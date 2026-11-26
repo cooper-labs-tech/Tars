@@ -4,6 +4,7 @@ import { ptyProcesses, fieldInUse, onFieldChange, type FieldInUse } from './pty-
 import { cliRunningIn } from './agent-pty';
 import { killPty } from './pty-kill';
 import { launchAgent, CLI_BOOT_MS, dialogOpen, noteCliLaunched, cliLaunchedAt } from './agent-launch';
+import { endRemoteSession } from '../services/remote-agents';
 import { agentStatusEmitter } from '../services/agent-events';
 import { holdsFor } from '../services/agent-watch';
 import { pendingBackgroundWork } from '../services/agent-truth';
@@ -408,6 +409,9 @@ async function restartNow(agent: AgentStatus, cause: 'settings' | 'asked'): Prom
     agent.currentSessionId = undefined;
     agent.ptyId = undefined;
     agent.ptyCwd = undefined;
+    // On a remote host its CLI outlives the ssh just ended, in tmux: its session there ends too, then the launch starts
+    // it again there (the Audit's L1 on #600; launchAgent hands such an agent to spawnAgentSession).
+    if (agent.remote) await endRemoteSession(agent);
 
     const result = await launchAgent(agent.id, '', { resumeSessionId: conversation });
     if (!result.success) throw new Error(result.error);

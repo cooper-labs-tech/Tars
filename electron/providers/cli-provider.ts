@@ -54,6 +54,12 @@ export interface InteractiveCommandParams {
   forkSession?: boolean;
   /** The settings the command is built with: read from disk when absent (codex's key, services/cli-keys.ts). */
   appSettings?: AppSettings;
+  /**
+   * The CLI runs on one of the owner's remote hosts (2.0.7, services/remote-agents.ts): no path of this computer in
+   * its command, its hooks and Tars's MCP servers from the files Tars put there. Claude Code only: the launch refuses
+   * a remote agent of any other provider.
+   */
+  remote?: boolean;
 }
 
 /**

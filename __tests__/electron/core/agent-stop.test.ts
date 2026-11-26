@@ -32,6 +32,10 @@ import * as fs from 'node:fs';
  *    new terminal with the same birth tag, and the same stop then ends it.
  * 11. (the Audit's L2) What the stop ended and kept outside the terminal is
  *    only logged: not on the record, not in what whoever asked is told.
+ * 12. (the Audit's L4 on #600) An agent on a remote host whose host the stop's
+ *    ssh cannot reach: its CLI goes on there in tmux while the agent reads
+ *    stopped, and nothing says so. The record's kept list, which the stopper
+ *    is told, must name the session left on the host and why, in ssh's words.
  *
  * Each "terminal" here is a real process group where node-pty's shell would
  * be: a bash leader that relays SIGHUP to its job, a job that ignores SIGHUP
@@ -237,6 +241,27 @@ describe('stopping an agent', () => {
     expect(agent.stopProcesses?.ended[0]).toMatch(new RegExp(`^pid ${server}: .* stop-11$`));
     expect(agent.stopProcesses?.kept).toEqual([]);
     expect(save).toHaveBeenCalledTimes(2);
+  });
+
+  it('12. an agent on a host the stop cannot reach: its session left there is on the record, with ssh\'s words', async () => {
+    const os = await import('node:os');
+    const path = await import('node:path');
+    const { remoteHosts } = await import('../../../electron/services/remote-hosts');
+    remoteHosts().set({ id: 'build-1', name: 'Build host', sshTarget: 'buildbox', workRoot: '/home/agent/work' });
+    const bin = fs.mkdtempSync(path.join(os.tmpdir(), 'ssh-stand-in-'));
+    fs.writeFileSync(path.join(bin, 'ssh'), "#!/bin/sh\necho 'ssh: connect to host buildbox port 22: Connection refused' >&2\nexit 255\n", { mode: 0o755 });
+    const pathBefore = process.env.PATH;
+    process.env.PATH = `${bin}:${pathBefore}`;
+    try {
+      const agent = { ...runningAgent(), remote: { hostId: 'build-1', folder: '/home/agent/work/p' } } as AgentStatus;
+      await stopAgent(agent, { by: 'you' }, { save: vi.fn(), announce: vi.fn() });
+      expect(agent.status).toBe('stopped');
+      expect(agent.stopProcesses?.kept).toEqual([expect.stringMatching(/its CLI's session on Build host .*Connection refused/)]);
+    } finally {
+      process.env.PATH = pathBefore;
+      remoteHosts().remove('build-1');
+      fs.rmSync(bin, { recursive: true, force: true });
+    }
   });
 
   it('7. stops an agent that has no terminal, only a delegated run', async () => {

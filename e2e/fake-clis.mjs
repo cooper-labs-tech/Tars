@@ -173,7 +173,7 @@ export async function run() {
   if (['auth', 'login', 'logout', 'update', 'hooks', 'config', 'models', 'doctor', 'upgrade'].includes(argv[0])) { log({ command: argv[0], argv }); out('ok\n'); process.exit(0); }
 
   // ---- The session's command line, read as each CLI reads it.
-  const opts = { prompt: null, oneShot: false, mcpConfigs: [], settingsFile: null, bypass: false, resume: null, model: null };
+  const opts = { prompt: null, oneShot: false, mcpConfigs: [], settingsFile: null, settingsFlags: [], bypass: false, resume: null, model: null };
   const value = (i) => argv[i + 1];
   if (kind === 'claude') {
     const dd = argv.indexOf('--');
@@ -182,6 +182,7 @@ export async function run() {
     for (let i = 0; i < before.length; i++) {
       const a = before[i];
       if (a === '--mcp-config') { opts.mcpConfigs.push(value(i)); i++; }
+      else if (a === '--settings') { opts.settingsFlags.push(value(i)); i++; }
       else if (a === '--dangerously-skip-permissions') opts.bypass = true;
       else if (a === '--permission-mode') { opts.bypass = value(i) === 'bypassPermissions'; i++; }
       else if (a === '--resume' || a === '-r') { opts.resume = value(i); i++; }
@@ -256,7 +257,17 @@ export async function run() {
   }
 
   // ---- Its settings: hooks, MCP servers.
-  const settings = kind === 'claude' ? (readJson(path.join(claudeDir, 'settings.json')) ?? {})
+  // claude: `--settings <file or JSON>` read over the user's settings, the hooks of each source run (Claude Code's
+  // settings precedence, documented; how Tars hands an agent on a remote host its hooks, services/remote-agents.ts).
+  const withFlagSettings = (base) => {
+    const merged = { ...base, hooks: { ...(base.hooks ?? {}) } };
+    for (const s of opts.settingsFlags) {
+      const parsed = s && s.trim().startsWith('{') ? (() => { try { return JSON.parse(s); } catch { return undefined; } })() : readJson(s);
+      for (const [event, entries] of Object.entries(parsed?.hooks ?? {})) merged.hooks[event] = [...(merged.hooks[event] ?? []), ...entries];
+    }
+    return merged;
+  };
+  const settings = kind === 'claude' ? withFlagSettings(readJson(path.join(claudeDir, 'settings.json')) ?? {})
     : kind === 'gemini' ? (readJson(files.gemini) ?? {})
       : kind === 'qwen-code' ? { ...(readJson(files.qwen) ?? {}), ...(readJson(process.env.QWEN_CODE_SYSTEM_SETTINGS_PATH ?? '') ?? {}) }
         : {};
@@ -410,12 +421,15 @@ export async function run() {
         : { sessionId: sid, cwd, timestamp: at, uuid: crypto.randomUUID(), type: 'assistant', model: opts.model || 'deepseek-v4-flash', message: { role: 'model', parts: [{ text }] }, usageMetadata: { promptTokenCount: 1200, candidatesTokenCount: 80, totalTokenCount: 1280 } }) + '\n');
     }
   };
+  // Claude Code hands its hooks CLAUDE_PID, its own pid (core/terminal-cli.ts). Off unless FAKE_CLAUDE_PID=1: the
+  // specs that run this stand-in on this computer were written without it.
+  const hookEnv = kind === 'claude' && process.env.FAKE_CLAUDE_PID === '1' ? { ...process.env, CLAUDE_PID: String(process.pid) } : process.env;
   const hook = (event, payload = {}) => {
     if (!hookEvents.includes(event)) return;
     for (const entry of settings.hooks?.[event] ?? []) {
       for (const h of entry.hooks ?? []) {
         if (h.type && h.type !== 'command') continue;
-        const r = spawnSync('/bin/sh', ['-c', h.command], { input: JSON.stringify({ session_id: sid, transcript_path: transcript, cwd, hook_event_name: event, timestamp: new Date().toISOString(), ...payload }), env: process.env, timeout: (h.timeout ?? 20) * 1000, encoding: 'utf8' });
+        const r = spawnSync('/bin/sh', ['-c', h.command], { input: JSON.stringify({ session_id: sid, transcript_path: transcript, cwd, hook_event_name: event, timestamp: new Date().toISOString(), ...payload }), env: hookEnv, timeout: (h.timeout ?? 20) * 1000, encoding: 'utf8' });
         log({ hook: event, exit: r.status });
       }
     }

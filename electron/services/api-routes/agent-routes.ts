@@ -20,7 +20,7 @@ import { clearStop, noteRestartAfterStop, stopAgent, stopReasonOf } from '../../
 import { diskRefusal, freeSpace } from '../../core/disk-space';
 import { noteWaker, wakeFromSleep } from '../../core/agent-asleep';
 import type { AgentWakeVia } from '../../types';
-import { sessionStarted, SENDER_WAIT_MS, launchBegins, launchAbandoned, dialogShown, takeSlot } from '../../core/agent-launch';
+import { sessionStarted, SENDER_WAIT_MS, launchBegins, launchAbandoned, dialogShown, takeSlot, registerRemoteStarter } from '../../core/agent-launch';
 import { getAllProviders, getProvider, isValidProvider } from '../../providers';
 import { planModeRefusal } from '../../providers/plan-mode';
 // An agent may name any CLI, since an agent in bypass can run any binary itself (SECURITY.md): what is
@@ -67,6 +67,9 @@ import { cliAtWork, updateAgent, type AgentUpdate } from '../../core/agent-updat
 import { assignRole, hasOrchestratorPowers, requestedRole } from '../../core/agent-role';
 import { callerId as resolveCallerId, callerProject } from './utils';
 import { mcpConfigPathFor } from '../mcp-roles';
+import { remoteLaunchFor } from '../remote-agents';
+import { remoteHosts } from '../remote-hosts';
+import { tunnelListenerPort } from '../api-tunnel';
 import { envelopeValue } from '../../utils/envelope-value';
 import { replyTargetOf } from '../../core/reply-target';
 import { oneTaskQueue, neverStarted, workerOrderRefusal, workerStopRefusal, isReportTo, noteFrom, behindText, unknownTaskText, terminalTurnOf, holdsMessages, type Busy, type QueuedTask } from '../../core/one-task';
@@ -242,6 +245,26 @@ async function spawnAgentSessionInSlot(
   // the name) or a chat's runner (core/agent-role.ts).
   const isSuperAgentApi = hasOrchestratorPowers(agent);
 
+  // A worker placed on one of the owner's remote hosts (2.0.7, services/remote-agents.ts): its CLI runs there, over
+  // ssh, and what cannot run there is said before anything is ended.
+  const remoteAsk = remoteLaunchFor(agent, { providerId: cliProvider.id, leads: isSuperAgentApi });
+  if (remoteAsk && !remoteAsk.ok) {
+    sendJson({ error: remoteAsk.error, code: remoteAsk.code }, remoteAsk.status);
+    return false;
+  }
+  const remote = remoteAsk?.launch;
+  if (remote) {
+    // The tunnel reaches the API's second listener, which takes only a remote agent's token (services/api-tunnel.ts).
+    try {
+      remote.apiPort = await tunnelListenerPort(remote.host.id);
+    } catch (err) {
+      sendJson({ error: `${agent.name || agent.id} runs on a remote host, and the listener its tunnel reaches could not open: ${err instanceof Error ? err.message : String(err)}`, code: 'remote_tunnel' }, 503);
+      return false;
+    }
+  }
+  // The host's claude, found on its own PATH: the binary of this computer means nothing there.
+  const launchBinary = remote ? 'claude' : binaryPath;
+
   // Provider env vars: CLAUDE_* tracking vars + ANTHROPIC_BASE_URL /
   // ANTHROPIC_API_KEY for alt providers (OpenRouter, DeepSeek, Moonshot...).
   const providerEnvVars = cliProvider.getPtyEnvVars(agent.id, agent.projectPath, agent.skills || [], appSettings, { model: opts.model ?? agent.model, effort: agent.effort });
@@ -284,9 +307,11 @@ async function spawnAgentSessionInSlot(
   const identityHeader =
     `[Tars: you are agent "${agent.name || agent.id}" (id ${agent.id}), ` +
     `${agent.kind === 'chat' ? 'orchestrator' : agent.role || 'worker'} of project ${agent.projectPath}` +
-    (agent.worktreePath
-      ? `, working in worktree ${agent.worktreePath}${agent.branchName ? ` (branch ${agent.branchName})` : ''}: stay inside this directory`
-      : '') +
+    (remote
+      ? `, running on the remote host ${remote.host.name}, in ${remote.folder}: stay inside this directory`
+      : agent.worktreePath
+        ? `, working in worktree ${agent.worktreePath}${agent.branchName ? ` (branch ${agent.branchName})` : ''}: stay inside this directory`
+        : '') +
     `. Work autonomously without asking for confirmation and end with a clear report of your results` +
     (isSuperAgentApi ? '' : ': an orchestrator reads your final message') +
     `.` + (chatIdentityOf(agent) ? ` ${chatIdentityOf(agent)}` : '') + `]`;
@@ -358,7 +383,7 @@ async function spawnAgentSessionInSlot(
       agentId: agent.id,
       resumeSessionId,
       forkSession,
-      binaryPath,
+      binaryPath: launchBinary,
       prompt: taskPrompt,
       model: resolvedModel && resolvedModel !== 'default' ? resolvedModel : undefined,
       permissionMode: effectiveMode,
@@ -375,7 +400,9 @@ async function spawnAgentSessionInSlot(
       // BUG 5: an orchestrator cannot edit files directly.
       orchestratorMode: isSuperAgentApi,
       verbose: appSettings.verboseModeEnabled,
-      chrome: appSettings.chromeEnabled,
+      // The owner's Chrome is on this computer, never on a host.
+      chrome: appSettings.chromeEnabled && !remote,
+      remote: !!remote,
     });
   } catch (err) {
     sendJson({ error: err instanceof Error ? err.message : 'Invalid agent configuration' }, 400);
@@ -384,7 +411,7 @@ async function spawnAgentSessionInSlot(
 
   // Print mode: inject -p right after the binary token.
   if (usePrintMode) {
-    const binToken = `'${binaryPath.replace(/'/g, "'\\''")}'`;
+    const binToken = `'${launchBinary.replace(/'/g, "'\\''")}'`;
     if (cliCommand.startsWith(binToken)) {
       cliCommand = `${binToken} -p${cliCommand.slice(binToken.length)}`;
     }
@@ -479,6 +506,7 @@ async function spawnAgentSessionInSlot(
       rows: 40,
       cwd: rawWorkingDir,
       env: start.env,
+      ...(remote ? { remote: { launch: { ...remote, mcpConfigPath }, cliCommand } } : {}),
     });
   } catch (err) {
     launchAbandoned(agent.id, launch);
@@ -1849,6 +1877,8 @@ const MODEL_NAME = /^[a-zA-Z0-9._:\/\[\]-]+$/;
 /** What update_agent changes, as POST /api/agents/:id/update takes it. */
 const UPDATE_FIELDS = [
   'name', 'character', 'provider', 'model', 'localModel', 'effort', 'permissionMode', 'cliPath', 'skills', 'secondaryProjectPath',
+  // 2.0.7: a remote host of the owner's and a folder on it, or null (core/remote-launch.ts; checked in core/agent-update.ts).
+  'remote',
 ] as const;
 const CHARACTERS: readonly AgentCharacter[] = ['robot', 'ninja', 'wizard', 'astronaut', 'knight', 'pirate', 'alien', 'viking'];
 const EFFORTS: readonly AgentEffort[] = ['low', 'medium', 'high', 'xhigh', 'max'];
@@ -1917,8 +1947,9 @@ function updateFrom(body: unknown, agent: AgentStatus, ctx: RouteContext): { upd
   }
   if (!UPDATE_FIELDS.some(field => asked[field] !== undefined)) return { status: 400, error: `Nothing to change: name a setting. ${takes}` };
 
-  const { name, character, provider, model, localModel, effort, permissionMode, cliPath, skills, secondaryProjectPath } = asked;
+  const { name, character, provider, model, localModel, effort, permissionMode, cliPath, skills, secondaryProjectPath, remote } = asked;
   const update: Omit<AgentUpdate, 'id'> = {};
+  if (remote !== undefined) update.remote = remote as AgentUpdate['remote'];
   if (name !== undefined) {
     if (typeof name !== 'string' || !name.trim()) return { status: 400, error: 'An agent\'s name is a string with at least one character in it.' };
     // As POST /api/agents refuses it (the Audit's gate of #351).
@@ -2029,6 +2060,13 @@ function whenItApplies(
     };
   };
   if (how.newCli) return nextStart(`Its next start runs ${cli.displayName}${agent.cliPath ? ` (${agent.cliPath})` : ''}`);
+  // A new place (2.0.7, services/remote-agents.ts): refused while a CLI runs, so it is read at the next start, there.
+  if (how.changed.includes('remote')) {
+    const host = agent.remote ? remoteHosts().get(agent.remote.hostId) : undefined;
+    return nextStart(agent.remote
+      ? `Its next start runs on the remote host ${host?.name ?? agent.remote.hostId}, in ${agent.remote.folder}`
+      : 'Its next start runs on this computer');
+  }
   if (how.changedAtLaunch.length === 0) {
     // Its name and skills are given to a session when it starts (the identity Tars types, CLAUDE_SKILLS), and are
     // no launch setting: nothing restarts for them, and the session up keeps the old ones (the Audit's L2 on #480).
@@ -2103,6 +2141,20 @@ function answersFor(agent: AgentStatus, req: RouteRequest):
 
 export function registerAgentRoutes(app_: RouteApp, ctx: RouteContext): void {
   replayContext = ctx;
+  // An agent placed on a remote host starts through spawnAgentSession, whoever starts it: a restart, the window's start,
+  // any launchAgent (core/agent-launch.ts, the Audit's L1 on #600).
+  registerRemoteStarter(async (agentId, prompt, options) => {
+    const agent = agents.get(agentId);
+    if (!agent) return { success: false, error: 'Agent not found' };
+    let refused: string | undefined;
+    const started = await spawnAgentSession(agent, prompt, {
+      ...(options?.model ? { model: options.model } : {}),
+      ...(options?.sender ? { sender: options.sender } : {}),
+    }, ctx, (data, status) => {
+      if ((status ?? 200) >= 400) refused = (data as { error?: string } | undefined)?.error ?? `refused (${status})`;
+    });
+    return started ? { success: true } : { success: false, error: refused ?? 'the launch on its host did not start' };
+  });
   // GET /api/agents/:id/wait: long-poll until agent status changes
   app_.get(/^\/api\/agents\/([^/]+)\/wait$/, (req, sendJson) => {
     const agent = visibleAgent(req);
@@ -2571,10 +2623,18 @@ export function registerAgentRoutes(app_: RouteApp, ctx: RouteContext): void {
       const newBinary = getProvider(result.agent.provider).binaryName !== binaryBefore;
       if (newBinary) newConversationOnNextStart(agent.id);
       const { lastCleanOutput, ...updated } = projectAgent(result.agent);
+      const applies = whenItApplies(result.agent, { cliWasUp, newCli, newBinary, changed: result.changed, changedAtLaunch: result.changedAtLaunch, restart: result.restart });
+      // A move away from a host ended the agent's session there first (the Audit's M1 on #600), or says it could not.
+      const former = result.formerPlace;
+      const leftThere = former && !former.ended
+        ? ` It could not end its session on ${former.host}: ${former.why}. End it there with ~/.tars-remote/bin/tars-remote stop ${agent.id}.`
+        : '';
       sendJson({
         agent: { ...updated, ...(readsAnswersOf(result.agent, req, result.agent.requestedBy?.agentId) && lastCleanOutput !== undefined ? { lastCleanOutput } : {}) },
         changed: result.changed,
-        ...whenItApplies(result.agent, { cliWasUp, newCli, newBinary, changed: result.changed, changedAtLaunch: result.changedAtLaunch, restart: result.restart }),
+        ...applies,
+        text: `${applies.text}${leftThere}`,
+        ...(former ? { formerPlace: former } : {}),
       });
     });
   });

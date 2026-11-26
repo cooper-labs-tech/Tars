@@ -61,6 +61,23 @@ export function registerAgentLauncher(fn: AgentLauncher): void {
 }
 
 /**
+ * How an agent placed on a remote host starts (2.0.7, services/remote-agents.ts): spawnAgentSession, which the API's
+ * routes own and register here, since a launch there is never typed into a shell of this computer. The window's
+ * launcher hands such an agent to it, so a restart, the window's start and every launchAgent reach the host (the
+ * Audit's L1 on #600).
+ */
+let remoteStarter: AgentLauncher | null = null;
+
+export function registerRemoteStarter(fn: AgentLauncher): void {
+  remoteStarter = fn;
+}
+
+export function startRemoteAgent(agentId: string, prompt: string, options?: AgentLaunchOptions): Promise<AgentLaunchResult> {
+  if (!remoteStarter) return Promise.resolve({ success: false, error: 'The local API is not started: an agent on a remote host starts through it.' });
+  return remoteStarter(agentId, prompt, options);
+}
+
+/**
  * Whether a chat's runner may start now: a slot within the RAM's limit, taken
  * (services/chat-runners.ts sets it), or why not. Every start of a runner goes
  * through it, whoever starts it: a send in its chat, a wake by news, a

@@ -14,6 +14,10 @@
  *   has one ahead, otherwise five hours;
  * - a pinned agent moved: the pin wins, even at the limit (its account is
  *   still blocked for the others);
+ * - (the Audit's L1 on #600) an agent on a remote host moved, or its limit
+ *   taken for one of these accounts': its CLI runs on that host's own
+ *   sign-in, and the restart a move asks for ended its session there for
+ *   nothing;
  * - an agent moved when no other account has room, or moved to an account
  *   over its threshold, or to one signed out;
  * - every account at its limit and nothing planned while another comes back
@@ -222,6 +226,17 @@ describe.skipIf(claudeAccountsNotPorted())('an agent cut by its limit', () => {
     const a = agent({ claudeAccountPin: 'default' });
     expect(onUsageLimit(a, SESSION_LIMIT)).toBe(false);
     expect(blockedUntil().default).toBeDefined();
+    vi.advanceTimersByTime(RESTART_AFTER_MS * 4);
+    expect(h.restarts).toEqual([]);
+  });
+
+  it('does nothing for an agent on a remote host, whose CLI runs on the host\'s own sign-in: no block, no move, no restart', () => {
+    const a = agent({ remote: { hostId: 'build-1', folder: '/home/agent/work/p' } });
+    expect(onUsageLimit(a, SESSION_LIMIT)).toBe(false);
+    expect(blockedUntil()).toEqual({});
+    expect(pendingMove(a.id)).toBeUndefined();
+    counter('default', 99);
+    expect(onTurnEnded(agent({ status: 'idle', remote: { hostId: 'build-1', folder: '/home/agent/work/p' } }))).toBe(false);
     vi.advanceTimersByTime(RESTART_AFTER_MS * 4);
     expect(h.restarts).toEqual([]);
   });

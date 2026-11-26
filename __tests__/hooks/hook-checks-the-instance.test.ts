@@ -38,6 +38,12 @@ import { shHooksNotShipped } from '../setup/platform-limits';
  *    token, and the post was refused: a Stop lost, the agent left running.
  *    The check waits 5 s, longer than any post: held up to that, Tars still
  *    gets its token, where a post without the check would have given up.
+ * 8. (#600, the Audit's gate) A CLI on a remote host reaches Tars through its
+ *    tunnel's own listener, which answers nothing without an agent's token,
+ *    /api/health included: its hooks would never get their token out, and
+ *    every status of the agent would freeze. Told so by Tars's wrapper there
+ *    (TARS_API_TUNNEL=1), they send it without the check: that port is
+ *    sshd's for as long as the token lives. Without it, unchanged.
  *
  * The real hook scripts and their helper, with only the port pointed at a
  * server here that plays Tars, or plays the squatter.
@@ -49,7 +55,7 @@ const home = path.join(tmp, 'home');
 const INSTANCE = crypto.randomBytes(16).toString('hex');
 const TOKEN = 'token-of-a1s-terminal';
 
-type Mode = 'tars' | 'squatter' | 'replay' | 'silent' | 'held';
+type Mode = 'tars' | 'squatter' | 'replay' | 'silent' | 'held' | 'tunnel';
 /** How long a held Tars takes to answer the check. */
 let heldMs = 0;
 let mode: Mode = 'tars';
@@ -67,6 +73,12 @@ beforeAll(async () => {
     received.push({ path: url.pathname, authorization: req.headers.authorization, url: req.url ?? '' });
     req.resume();
     req.on('end', () => {
+      // The tunnel's listener: nothing without an agent's token, /api/health included.
+      if (mode === 'tunnel' && req.headers.authorization !== `Bearer ${TOKEN}`) {
+        res.writeHead(401, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ error: 'Unauthorized' }));
+        return;
+      }
       if (url.pathname === '/api/health') {
         const challenge = url.searchParams.get('challenge') ?? '';
         if (mode === 'silent') return; // never answers
@@ -184,4 +196,22 @@ describe.skipIf(shHooksNotShipped())('a hook, before it sends its token', () => 
 
     for (const r of received) expect(r.url, r.path).not.toContain(INSTANCE);
   }, 30_000);
+
+  it("8. on a remote host, told by Tars's wrapper, sends it through the tunnel's listener without the check; never without being told", async () => {
+    mode = 'tunnel';
+    await runHook({ ...env, TARS_API_TUNNEL: '1' });
+    const posts = received.filter(r => r.path.startsWith('/api/hooks/'));
+    expect(posts.length).toBeGreaterThan(0);
+    for (const post of posts) expect(post.authorization).toBe(`Bearer ${TOKEN}`);
+    expect(received.some(r => r.path === '/api/health'), 'it asked a port that answers nothing without a token').toBe(false);
+
+    received.length = 0;
+    await runHook(env);
+    expect(withToken()).toEqual([]);
+    for (const value of ['0', 'yes', '']) {
+      received.length = 0;
+      await runHook({ ...env, TARS_API_TUNNEL: value });
+      expect(withToken(), JSON.stringify(value)).toEqual([]);
+    }
+  }, 60_000);
 });

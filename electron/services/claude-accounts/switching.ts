@@ -93,7 +93,9 @@ function whereFrom(agent: AgentStatus): string {
 }
 
 function moving(settings: ClaudeAccountsSettings, agent: AgentStatus): boolean {
-  return settings.enabled && isClaudeSubscription(agent);
+  // An agent on a remote host runs on that host's own sign-in, never one of these accounts (the Audit's L1 on #600):
+  // its limit blocks none of them, and a move's restart would only end its session there.
+  return settings.enabled && isClaudeSubscription(agent) && !agent.remote;
 }
 
 /**
