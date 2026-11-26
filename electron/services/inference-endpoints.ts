@@ -5,6 +5,7 @@ import { DATA_DIR } from '../constants';
 import { isValidOpenAIBaseUrl } from '../providers/cli-provider';
 import type { AgentStatus, AppSettings, InferenceEndpoint } from '../types';
 import { isRefusedExtraHeader, type ProxyTarget } from './endpoint-proxy';
+import { twoZones } from '../utils/two-zones';
 
 /**
  * Inference endpoints (native traces): OpenAI-compatible endpoints an open harness runs
@@ -155,7 +156,11 @@ export function cleanBaseUrl(raw: unknown): string | null {
 /** Adds an endpoint, or changes one (`id`), as the owner or an agent may. */
 export function saveEndpoint(
   settings: AppSettings,
-  input: { id?: string; name?: string; baseUrl?: string; allowTraces?: boolean; holdMaxSeconds?: number; sendSessionHeaders?: boolean; allowPlainHttp?: boolean; extraHeaders?: unknown },
+  input: {
+    id?: string; name?: string; baseUrl?: string; allowTraces?: boolean; holdMaxSeconds?: number; sendSessionHeaders?: boolean; allowPlainHttp?: boolean; extraHeaders?: unknown;
+    /** The window's save of an endpoint that exists: the address and extra headers its form showed when opened. */
+    shown?: { baseUrl?: unknown; extraHeaders?: unknown };
+  },
   actor: EndpointActor,
   now: string = new Date().toISOString(),
 ): Result {
@@ -163,6 +168,13 @@ export function saveEndpoint(
   const current = input.id !== undefined ? list.find(e => e.id === input.id) : undefined;
   if (input.id !== undefined && !current) return { ok: false, error: 'There is no such endpoint.' };
   const owner = fromWindow(actor);
+  // The owner's save of an endpoint that exists names what its form showed (the Audit's M-b at c31811361): what the
+  // owner "typed" is what differs from that, so a form opened before an agent's latest change could otherwise send
+  // the agent's earlier values back as the owner's own, and approve them. Refused unless it is the endpoint now.
+  if (owner && current) {
+    const stale = shownDiffers(current, input.shown);
+    if (stale) return { ok: false, error: stale };
+  }
 
   const name = input.name !== undefined ? String(input.name).trim().slice(0, MAX_NAME) : current?.name;
   if (!name) return { ok: false, error: 'An endpoint has a name.' };
@@ -235,6 +247,25 @@ function newId(list: InferenceEndpoint[]): string {
   return id;
 }
 
+/**
+ * Why what the window showed of an endpoint (its address and extra headers) is not the endpoint now, or null when it
+ * is: an agent changed it while the form or the notice was open, and the owner must see that change first.
+ */
+function shownDiffers(current: InferenceEndpoint, shown: { baseUrl?: unknown; extraHeaders?: unknown } | undefined, act: 'save' | 'approve' = 'save'): string | null {
+  const headers = shown?.extraHeaders;
+  if (!shown || typeof shown.baseUrl !== 'string' || !headers || typeof headers !== 'object' || Array.isArray(headers)) {
+    return act === 'approve'
+      ? 'An approval names the address and the extra headers it approves, as the window showed them.'
+      : 'A save names the address and the extra headers the form showed, so a change made meanwhile is not taken for yours.';
+  }
+  if (shown.baseUrl === current.baseUrl && sameExtraHeaders(headers as Record<string, string>, current.extraHeaders)) return null;
+  // The time as the notices say it, UTC then the machine's own with its offset (utils/two-zones.ts): the window shows
+  // these words as they come.
+  const at = current.changedBy ? Date.parse(current.changedBy.at) : NaN;
+  const by = current.changedBy ? ` (${current.changedBy.agentName ?? current.changedBy.agentId}${Number.isNaN(at) ? '' : `, ${twoZones(at)}`})` : '';
+  return `The endpoint "${current.name}" changed since it was shown${by}: look at it again before you ${act}.`;
+}
+
 /** The extra headers the owner approved; for an endpoint approved before they were recorded, its own. */
 function approvedHeadersOf(e: InferenceEndpoint): Record<string, string> {
   return e.approvedExtraHeaders ?? (e.approved ? e.extraHeaders ?? {} : {});
@@ -249,14 +280,9 @@ export function approveEndpoint(settings: AppSettings, id: string, seen?: { base
   const list = endpointsOf(settings);
   const current = list.find(e => e.id === id);
   if (!current) return { ok: false, error: 'There is no such endpoint.' };
-  const shownHeaders = seen?.extraHeaders;
-  if (!seen || typeof seen.baseUrl !== 'string' || !shownHeaders || typeof shownHeaders !== 'object' || Array.isArray(shownHeaders)) {
-    return { ok: false, error: 'An approval names the address and the extra headers it approves, as the window showed them.' };
-  }
-  if (seen.baseUrl !== current.baseUrl || !sameExtraHeaders(shownHeaders as Record<string, string>, current.extraHeaders)) {
-    const by = current.changedBy ? ` (${current.changedBy.agentName ?? current.changedBy.agentId}, ${current.changedBy.at})` : '';
-    return { ok: false, error: `The endpoint "${current.name}" changed since it was shown${by}: look at it again before you approve.` };
-  }
+  if (!seen) return { ok: false, error: 'An approval names the address and the extra headers it approves, as the window showed them.' };
+  const stale = shownDiffers(current, seen, 'approve');
+  if (stale) return { ok: false, error: stale };
   const next: InferenceEndpoint = { ...current, approved: true, approvedBaseUrl: current.baseUrl, approvedExtraHeaders: current.extraHeaders ?? {} };
   return { ok: true, settings: { ...settings, inferenceEndpoints: list.map(e => (e.id === id ? next : e)) }, endpoint: next };
 }

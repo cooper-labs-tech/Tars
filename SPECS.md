@@ -252,7 +252,8 @@ re-pointed base URL from an agent, or extra headers an agent adds or changes, wa
 window: a header goes out with the owner's key, and may route or bill the requests at the endpoint. Approval stays
 apart from saving: the owner's save of another field (traces, the name, the hold) leaves such a change pending, and
 only the window's approval approves it, for the address and headers it showed (refused if an agent changed them again
-meanwhile). An address or headers the owner types, or the approved values put back, are the owner's own. Keys come
+meanwhile). An address or headers the owner types, or the approved values put back, are the owner's own; a save
+names what its form showed, and is refused when an agent changed the endpoint since. Keys come
 from the window, or from an agent's drop file (`~/.tars/endpoint-keys/<name>.key`). SECURITY.md § 9.
 
 **Traces.** A session is traced only when all of these hold (`trace-gate.ts`):

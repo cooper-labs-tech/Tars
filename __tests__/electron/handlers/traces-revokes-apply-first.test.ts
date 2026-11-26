@@ -45,6 +45,9 @@ import { assertThrowaway } from '../../setup/throwaway-dirs';
  *      from its words: the upload state has no field that says it (`unsavedKind`), so a consent missing for another
  *      reason, beside an unrelated owed write, is shown as held back by a revoke. One case per kind, and none once
  *      the write holds.
+ * V15. (The Audit's M-b at c31811361, a stale form, on the path that writes a grant first.) An agent moves the
+ *      endpoint to Y, the owner's form opens on Y, the agent moves it to X, and the owner's save turns traces off and
+ *      session headers on, sending Y back: Y is approved and written, and the proxy sends there.
  */
 
 assertThrowaway({ DATA_DIR, PRIVATE_DIR });
@@ -148,7 +151,7 @@ describe('a revoke of sharing on settings that cannot be written applies at once
     record('s-endpoint');
     expect(pending()).toBe(1);
     failWith = full();
-    const answer = call('endpoints:save', { id: EP, allowTraces: false });
+    const answer = call('endpoints:save', { id: EP, allowTraces: false, shown: { baseUrl: BASE, extraHeaders: {} } });
     expect(pending()).toBe(0);
     expect(answer).toMatchObject({ ok: true });
   });
@@ -229,7 +232,7 @@ describe('a revoke of sharing on settings that cannot be written applies at once
 
   it('V12. an address moved with traces turned off, on settings that cannot be written: the move is not applied, and the answer says so', () => {
     failWith = full();
-    const answer = call('endpoints:save', { id: EP, baseUrl: 'http://127.0.0.1:10/v1', allowTraces: false }) as { ok: boolean };
+    const answer = call('endpoints:save', { id: EP, baseUrl: 'http://127.0.0.1:10/v1', allowTraces: false, shown: { baseUrl: BASE, extraHeaders: {} } }) as { ok: boolean };
     const ep = (memory.inferenceEndpoints ?? []).find(e => e.id === EP);
     expect(ep?.allowTraces).toBe(false);
     expect(ep?.baseUrl).toBe(BASE);
@@ -242,6 +245,23 @@ describe('a revoke of sharing on settings that cannot be written applies at once
     expect(answer.unsaved).toMatch(/once more as it quits/);
     expect(answer.unsaved).toMatch(/the next start takes your consent as withdrawn/);
     expect(runtime.uploadPersistence().unsaved).toBe(answer.unsaved);
+  });
+
+  it('V15. a form that shows an address an agent changed since is refused on the path that writes a grant first: nothing is written', async () => {
+    const ie = await import('../../../electron/services/inference-endpoints');
+    const agentActor = { agentId: AGENT, agentName: 'R' };
+    const step = (r: ReturnType<typeof ie.saveEndpoint>) => { if (!r.ok) throw new Error(r.error); memory = r.settings; disk = structuredClone(memory); };
+    const Y = 'http://127.0.0.1:11/v1';
+    step(ie.saveEndpoint(memory, { id: EP, baseUrl: Y }, agentActor));
+    const shown = { baseUrl: Y, extraHeaders: {} };
+    step(ie.saveEndpoint(memory, { id: EP, baseUrl: 'http://127.0.0.1:12/v1' }, agentActor));
+    const before = structuredClone(memory);
+    const answer = call('endpoints:save', { id: EP, baseUrl: Y, allowTraces: false, sendSessionHeaders: true, shown }) as { ok: boolean; error?: string };
+    expect(answer.ok).toBe(false);
+    expect(String(answer.error)).toMatch(/changed since it was shown/);
+    expect(memory).toEqual(before);
+    expect(disk).toEqual(before);
+    expect('refused' in ie.endpointTarget(memory, EP)).toBe(true);
   });
 
   describe('V14. the upload state says which note `unsaved` carries', () => {
