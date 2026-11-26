@@ -24,8 +24,9 @@ import * as crypto from 'crypto';
  * - style-src 'unsafe-inline': the exported pages carry style attributes (React's), xterm and the tray panel
  *   add style elements at run time, and none of those can be hashed. A style runs no script.
  * - img-src data: the stylesheet's own SVG icons; blob: a picture attached in the Chat, previewed before it is
- *   sent; http://127.0.0.1:<port>: the vault's pictures and attachments, served by the local API's
- *   /api/local-file.
+ *   sent; http://127.0.0.1:<port>/api/local-file: the vault's pictures and attachments, which the window
+ *   asks as /api/local-file?path=…. The route, not the API's origin: a source's path is matched exactly and
+ *   the query is not part of the match, so no other route of the API loads as a picture.
  * - connect-src https://raw.githubusercontent.com: the plugin marketplace's lists (src/lib/plugins-database.ts).
  *   'self' is the page's own route data, which client navigation reads.
  * - manifest-src 'self': the pages link /manifest.json.
@@ -82,7 +83,7 @@ function devSocket(origin: string): string | null {
 export function windowCsp({ apiPort, scriptHashes = [], devOrigin }: WindowCspOptions): string {
   const dev = devOrigin !== undefined;
   const socket = dev ? devSocket(devOrigin) : null;
-  const api = isPort(apiPort) ? [`http://127.0.0.1:${apiPort}`] : [];
+  const api = isPort(apiPort) ? [`http://127.0.0.1:${apiPort}/api/local-file`] : [];
   const hashes = scriptHashes.filter((hash) => /^'sha256-[A-Za-z0-9+/]+={0,2}'$/.test(hash));
   const directives: Array<[string, string[]]> = [
     ['default-src', ["'none'"]],
