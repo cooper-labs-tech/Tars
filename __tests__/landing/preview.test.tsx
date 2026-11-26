@@ -3,26 +3,37 @@ import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { PreviewSection } from '../../landing/src/components/PreviewSection';
+import { CHANGELOG } from '../../src/data/changelog';
 import { DEFAULT_APP_SETTINGS, SECTIONS } from '../../src/components/Settings/constants';
 
 /**
- * The landing's section on the preview of 2.0.0 (landing/src/components/
+ * The landing's section on projects and chats (landing/src/components/
  * PreviewSection.tsx), as `Landing · desktop` draws it in design/landing.pen,
- * its Preview section: projects and chats, off until Settings turns it on.
+ * its Preview section: the preview of 2.0.0, Tars's only interface since 2.1.0.
  * Written before the code, as the ways it can fail:
  * 1. a word of the frame's section is dropped, changed or moved on its way to
  *    the page;
- * 2. it says the new interface is on, or not that it is off until turned on,
- *    while the app's default is off (src/components/Settings/constants.ts);
- * 3. it names a switch the app does not have, or puts it somewhere else: the
- *    row's label in GeneralSection.tsx, in the section Settings lists as
- *    Preferences;
  * 4. the home page does not show it, shows it twice, or elsewhere than
  *    between What it does and How it works, where the frame has it.
  *
+ * 2 and 3 said, until 2.1.0, that the section must call the new interface
+ * off until turned on, and name the switch as the app had it. With the switch
+ * gone (the owner's decision of 26/11), QA rewrote them as the Frontend
+ * proposed, after the landing's own change (92e3baebe), their bite shown on
+ * mutants:
+ * 2. the app still has a newInterface setting, or the section still says it
+ *    is off until turned on or names the New interface switch; or its eyebrow
+ *    does not name the version that shipped it, 2.1.0, a version of the
+ *    changelog;
+ * 3. it puts the theme somewhere the app does not: the Appearance row of
+ *    GeneralSection.tsx, Dark and Light, in the section Settings lists as
+ *    Preferences; or it promises a digit for every page while NewShell's
+ *    SHORTCUTS do not hold all ten, 0 to 9.
+ *
  * Added after the code, for a mutant of its bench that survived (A2):
  * 5. the row is renamed while its switch keeps the name, and the landing
- *    names a row Settings no longer shows (case 3 reads both).
+ *    names a row Settings no longer shows (case 3 read both until 2.1.0; it
+ *    reads the Appearance row's label and its control's since).
  *
  * Added with the pictures of 2.0.0, before them:
  * 6. the frame's picture is not on the page, or another one is: the image its
@@ -80,26 +91,34 @@ describe('the landing\'s preview of 2.0.0', () => {
     expect(shown).toBe(words.join(' ').replace(/\s+/g, ' ').trim());
   });
 
-  it('says it is off until turned on, as the app\'s default is (2)', () => {
-    expect(DEFAULT_APP_SETTINGS.newInterface).toBe(false);
-    expect(shown).toContain('off until you turn it on');
-    expect(shown).not.toMatch(/\bon by default\b/i);
+  it('says it is the interface since 2.1.0, with no switch left to turn it on (2)', () => {
+    expect('newInterface' in DEFAULT_APP_SETTINGS, 'no newInterface setting').toBe(false);
+    expect(shown).not.toContain('off until you turn it on');
+    expect(shown).not.toContain('New interface');
+    // The eyebrow, the section's first words: the version that shipped it, one the changelog has.
+    const eyebrow = /^New in (\d+\.\d+\.\d+) /.exec(shown)?.[1];
+    expect(eyebrow).toBe('2.1.0');
+    expect(CHANGELOG.map(r => r.version)).toContain(eyebrow);
   });
 
-  it('names the switch the app has, where the app has it (3)', () => {
+  it('puts the theme where the app has it, and promises a digit only for the pages that have one (3)', () => {
     const general = read('src/components/Settings/GeneralSection.tsx');
-    const at = general.indexOf('newInterface: ');
-    // The row that sets it: the name it shows, and its switch's.
-    const row = general.slice(general.lastIndexOf('<SettingsRow', at), at);
-    const labels = [...row.matchAll(/label="([^"]+)"/g)].map(m => m[1]);
-    expect(labels.length).toBeGreaterThan(1);
-    expect(new Set(labels).size, 'the row and its switch say the same').toBe(1);
-    const label = labels[0];
-    expect(label).toBe('New interface');
+    const at = general.indexOf('label="Appearance"');
+    expect(at, 'GeneralSection has an Appearance row').toBeGreaterThan(-1);
+    // The row and its control: the name it shows, the control's, and its two choices.
+    const row = general.slice(general.lastIndexOf('<SettingsRow', at), general.indexOf('<SettingsRow', at));
+    expect([...row.matchAll(/(?:label|ariaLabel)="([^"]+)"/g)].map(m => m[1])).toEqual(['Appearance', 'Appearance']);
+    expect([...row.matchAll(/\{ value: '(\w+)', label: '(\w+)' \}/g)].map(m => [m[1], m[2]])).toEqual([['dark', 'Dark'], ['light', 'Light']]);
     // The page GeneralSection draws, as Settings lists it: Preferences, under General.
     const page = SECTIONS.find(s => s.id === 'general')?.label;
     expect(page).toBe('Preferences');
-    expect(shown).toContain(`Settings, ${page}, ${label}.`);
+    expect(shown).toContain(`Settings, ${page}, Appearance.`);
+    // A digit for every page: NewShell's SHORTCUTS hold all ten.
+    const shell = read('src/components/NewShell/NewShell.tsx');
+    const from = shell.indexOf('const SHORTCUTS');
+    const table = shell.slice(from, shell.indexOf('\n};', from));
+    expect([...table.matchAll(/^ {2}'(\d)': \{/gm)].map(m => m[1]).sort()).toEqual(['0', '1', '2', '3', '4', '5', '6', '7', '8', '9']);
+    expect(shown).toContain('Cmd and a digit (Ctrl on Windows) opens a page');
   });
 
   it('shows the picture its frame names, from the app, between its head and its points (6)', () => {
