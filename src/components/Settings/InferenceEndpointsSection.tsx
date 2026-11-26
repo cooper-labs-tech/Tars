@@ -160,7 +160,9 @@ export const InferenceEndpointsSection = () => {
   const putBack = async (e: EndpointView) => {
     if (!api) return;
     const baseUrl = e.approvedBaseUrl ?? e.baseUrl;
-    const headersWait = e.approvedExtraHeaders !== undefined && !sameHeaders(e.approvedExtraHeaders, e.extraHeaders);
+    // Headers never recorded as approved are none approved (the Audit's L-c on #599), as main's approvedHeadersOf
+    // reads them for an endpoint that waits.
+    const headersWait = !sameHeaders(e.approvedExtraHeaders ?? {}, e.extraHeaders);
     let r: Awaited<ReturnType<typeof api.save>>;
     try {
       r = await api.save({
@@ -211,7 +213,10 @@ export const InferenceEndpointsSection = () => {
         const own = waits.filter(w => w.endpointId === e.id);
         const health = own.length > 0 ? { word: waitWord(own), tone: 'waiting' as StatusTone } : healthOf(e.health, checking[e.id]);
         const baseUrlWaits = !e.approved && !!e.approvedBaseUrl && e.approvedBaseUrl !== e.baseUrl;
-        const headersWait = !e.approved && e.approvedExtraHeaders !== undefined && !sameHeaders(e.approvedExtraHeaders, e.extraHeaders);
+        // An endpoint an agent added has no approved address yet: its own notice shows all of it, headers included.
+        // Otherwise headers never recorded as approved are none approved (the Audit's L-c on #599), so a change waits.
+        const added = !e.approved && !e.approvedBaseUrl;
+        const headersWait = !e.approved && !added && !sameHeaders(e.approvedExtraHeaders ?? {}, e.extraHeaders);
         const state = !e.approved
           ? { word: baseUrlWaits ? 'new base URL waiting for your approval' : headersWait ? 'new extra headers waiting for your approval' : 'waiting for your approval', tone: 'waiting' as StatusTone }
           : health;
@@ -272,6 +277,10 @@ export const InferenceEndpointsSection = () => {
                 <Button size="sm" className="font-mono lowercase" onClick={() => askRemove(e)}>remove</Button>
               </>}>
                 <p>{`${e.changedBy?.agentName ?? 'An agent'} added it${e.changedBy ? ` at ${clockOf(e.changedBy.at)}` : ''}. No agent can use it until you approve it here: agents cannot approve an endpoint.`}</p>
+                {/* Approve approves its headers too: each with its value, before approve is offered (the Audit's L-c). */}
+                <p className="font-mono text-[11px] text-text-secondary whitespace-pre-wrap">
+                  {Object.keys(e.extraHeaders ?? {}).length > 0 ? `extra headers   ${headersLineOf(e.extraHeaders)}` : 'no extra headers'}
+                </p>
               </Notice>
             )}
 
