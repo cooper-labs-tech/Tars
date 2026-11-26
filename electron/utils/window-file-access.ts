@@ -5,7 +5,7 @@ import { DATA_DIR, PRIVATE_DIR, VAULT_DIR } from '../constants';
 import { isUnder, samePath } from '../platform/path-compare';
 import { coversHome } from './home-root';
 import { isHardLinkInto, isWithinDir } from './path-identity';
-import { inCredentialPlace, inCredentialPlaceByName, landsUnderSafeRoot, realTarget } from './real-target';
+import { inCredentialPlace, inPlaceTaken, landsUnderSafeRoot, realTarget, takePlaces, type PlacesTaken } from './real-target';
 
 /**
  * What the window may read, write, and have local-file:// serve (the Audit's
@@ -84,8 +84,7 @@ const CLI_FOLDERS = ['.claude', '.codex', '.gemini', '.grok'];
  * The name of the home's folder `p` is in or is, under the home as spelled or where it really lies: none for the home
  * itself or a path outside it. Outside is `..` and what is under it, never a folder whose name starts with two dots.
  */
-function homeFolderNames(p: string): string[] {
-  const homes = [home(), realTarget(home())].filter((h): h is string => !!h);
+function homeFolderNames(p: string, homes: string[] = [home(), realTarget(home())].filter((h): h is string => !!h)): string[] {
   return homes.flatMap((h) => {
     const rel = path.relative(h, p);
     if (!rel || rel === '..' || rel.startsWith('..' + path.sep) || path.isAbsolute(rel)) return [];
@@ -94,8 +93,8 @@ function homeFolderNames(p: string): string[] {
 }
 
 /** `p` is in a folder of the home whose name starts with a dot, other than the four CLI folders, or is one. */
-function inOtherDotFolderOfHome(p: string): boolean {
-  return homeFolderNames(p).some((first) => first.startsWith('.') && !CLI_FOLDERS.includes(first.toLowerCase()));
+function inOtherDotFolderOfHome(p: string, homes?: string[]): boolean {
+  return homeFolderNames(p, homes).some((first) => first.startsWith('.') && !CLI_FOLDERS.includes(first.toLowerCase()));
 }
 
 /**
@@ -113,27 +112,30 @@ export function projectRefusal(p: unknown): string | undefined {
 }
 
 /**
- * projectRefusal for fs:list-projects, which runs on the main thread for every project at each listing: the project is
- * followed asynchronously, and the places are then told by their names, the project's real path against the places'
- * own (inCredentialPlaceByName). A place reached under another name may go untold here; each use still judges the
- * project with projectRefusal, by identity too.
+ * projectRefusal for the callers that run on the main thread for many projects (fs:list-projects at each listing,
+ * Review's scan and search): the project, the home and the places are followed asynchronously, then compared by
+ * their paths (takePlaces, inPlaceTaken), each place where it really lies included. `taken`: the places taken once for
+ * a whole listing.
  */
-export async function projectRefusalAsync(p: string): Promise<string | undefined> {
+export async function projectRefusalAsync(p: string, taken?: PlacesTaken): Promise<string | undefined> {
   const resolved = path.resolve(p);
+  const places = taken ?? await takePlaces();
   // A folder gone from the disk is judged by the folder it would be in, as realTarget judges it: Review says it is gone.
   const real = projectRoots([resolved]).length === 0 ? undefined : await fs.promises.realpath(resolved)
     .catch((err: NodeJS.ErrnoException) => (err.code === 'ENOENT' ? realTarget(resolved) : undefined));
-  return refusalOf(resolved, () => real, inCredentialPlaceByName);
+  return refusalOf(resolved, () => real, (spelled, r) => inPlaceTaken(spelled, r, places), places.homes);
 }
 
-function refusalOf(resolved: string, realOf: () => string | undefined, credential: (spelled: string, real: string) => boolean): string | undefined {
+export { takePlaces };
+
+function refusalOf(resolved: string, realOf: () => string | undefined, credential: (spelled: string, real: string) => boolean, homes?: string[]): string | undefined {
   if (projectRoots([resolved]).length === 0) return "Tars's own folders cannot be a project.";
   const real = realOf();
   if (!real) return 'This folder cannot be followed to where it really lies.';
   if (credential(resolved, real)) {
     return 'A folder of credentials, or an application folder of the home (~/Library, AppData), cannot be a project.';
   }
-  if (inOtherDotFolderOfHome(resolved) || inOtherDotFolderOfHome(real)) {
+  if (inOtherDotFolderOfHome(resolved, homes) || inOtherDotFolderOfHome(real, homes)) {
     return 'A folder of the home whose name starts with a dot cannot be a project, but for ~/.claude, ~/.codex, ~/.gemini and ~/.grok.';
   }
   return undefined;

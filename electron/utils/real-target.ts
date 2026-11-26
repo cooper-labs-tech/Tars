@@ -137,9 +137,18 @@ function userDocuments(home: string): string[] {
 }
 
 const underPlace = (p: string, place: string) => p === place || p.startsWith(place + path.sep) || isWithinDir(p, place);
+const byName = (p: string, folder: string) => samePath(p, folder) || isUnder(p, folder);
 
-/** `p` is in `place`, and not in one of the user's documents folders inside it. */
-const inBlocked = (p: string, place: string, docs: string[]) => underPlace(p, place) && !docs.some(d => underPlace(p, d));
+/**
+ * The documents folders by name only, under the home as spelled and where it really lies. Never by identity: a
+ * documents folder that is another name for a refused one exempts nothing (the Audit's M3 on #648).
+ */
+function documentsByName(home: string): string[] {
+  return [...new Set([home, realPath(home) ?? home])].flatMap(userDocuments);
+}
+
+/** `p` is in `place` (by identity too), and not in one of the user's documents folders inside it (by name). */
+const inBlocked = (p: string, place: string, docs: string[]) => underPlace(p, place) && !docs.some(d => byName(p, d));
 
 /**
  * Whether `target` is in a folder of credentials (~/.ssh, ~/.gnupg, ~/.aws,
@@ -154,23 +163,32 @@ const inBlocked = (p: string, place: string, docs: string[]) => underPlace(p, pl
 export function inCredentialPlace(target: string, real: string | null, deps: { home?: string } = {}): boolean {
   const home = deps.home ?? os.homedir();
   const own = new Set(['.claude', DATA_DIR_NAME, PRIVATE_DIR_NAME].map(name => path.join(home, name)));
-  const docs = userDocuments(home);
+  const docs = documentsByName(home);
   return blockedPlaces(home).filter(place => !own.has(place)).some(place => [target, real].some(p => !!p && inBlocked(p, place, docs)));
 }
 
+/** The places inCredentialPlace judges, taken without blocking: what inPlaceTaken compares a path with. */
+export interface PlacesTaken { homes: string[]; places: string[]; docs: string[] }
+
 /**
- * inCredentialPlace told by names only, for a caller that followed `real` itself without blocking (fs:list-projects):
- * each place as spelled under the home and under the home's real path, compared as the system compares paths. It looks
- * at no disk but the home's, so a place reached under another name goes untold; the uses judge by identity too.
+ * The credential places for a caller that must not block the main thread (fs:list-projects, Review's scan and search),
+ * taken once per listing: the home and each place followed asynchronously, each place compared under the home as
+ * spelled, under its real path, and where the place itself really lies, so a place that is another name for a folder
+ * elsewhere covers that folder, as inCredentialPlace's identity does; the documents folders by name only.
  */
-export function inCredentialPlaceByName(target: string, real: string, deps: { home?: string } = {}): boolean {
+export async function takePlaces(deps: { home?: string } = {}): Promise<PlacesTaken> {
   const home = deps.home ?? os.homedir();
-  const homes = [...new Set([home, realPath(home) ?? home])];
+  const homes = [...new Set([home, await fs.promises.realpath(home).catch(() => home)])];
   const own = new Set(['.claude', DATA_DIR_NAME, PRIVATE_DIR_NAME]);
-  const places = homes.flatMap(h => blockedPlaces(h).filter(place => !own.has(path.basename(place))));
-  const docs = homes.flatMap(h => userDocuments(h));
-  const under = (p: string, place: string) => samePath(p, place) || isUnder(p, place);
-  return places.some(place => [target, real].some(p => under(p, place) && !docs.some(d => under(p, d))));
+  const mine = (h: string) => blockedPlaces(h).filter(place => !own.has(path.basename(place)));
+  const reals = await Promise.all(mine(home).map(place => fs.promises.realpath(place).catch(() => undefined)));
+  const places = [...new Set([...homes.flatMap(mine), ...reals.filter((r): r is string => !!r)])];
+  return { homes, places, docs: homes.flatMap(userDocuments) };
+}
+
+/** inCredentialPlace against places taken by takePlaces: no disk is looked at. */
+export function inPlaceTaken(target: string, real: string, taken: PlacesTaken): boolean {
+  return taken.places.some(place => [target, real].some(p => byName(p, place) && !taken.docs.some(d => byName(p, d))));
 }
 
 const MARKDOWN = /\.(md|markdown|mdx)$/i;
@@ -195,7 +213,7 @@ export function linkedFileAllowed(realFile: string, deps: { home?: string } = {}
   } catch {
     return false;
   }
-  const docs = userDocuments(home);
+  const docs = documentsByName(home);
   return !blockedPlaces(home).some(place => inBlocked(realFile, place, docs));
 }
 

@@ -86,7 +86,7 @@ import { probeVersion } from '../core/version-probe';
 import { readCodexModels } from '../providers/codex-cli';
 import { cliKeyStates, withCliKey } from '../services/cli-keys';
 import { keepSecrets, secretStates, setSecret, settingsForWindow, type SecretField } from '../services/settings-secrets';
-import { isSecretFile, projectRefusal, projectRefusalAsync, projectRootsFor, windowMayRead, windowMayReadUnder, windowMaySearch, windowMayWrite } from '../utils/window-file-access';
+import { isSecretFile, projectRefusal, projectRefusalAsync, projectRootsFor, takePlaces, windowMayRead, windowMayReadUnder, windowMaySearch, windowMayWrite } from '../utils/window-file-access';
 import { rememberPicked } from '../utils/picked-files';
 import { mcpConfigPathFor } from '../services/mcp-roles';
 import { registerFirstRunHandlers } from './first-run-handlers';
@@ -2315,6 +2315,8 @@ function registerFileSystemHandlers(deps: IpcHandlerDependencies): void {
       const claudeDir = path.join(os.homedir(), '.claude', 'projects');
       const projects: Array<{ id: string; path: string; name: string; custom?: boolean; refused?: string }> = [];
       const seen = new Set<string>();
+      // The home and the credential places, followed once for the whole listing.
+      const places = await takePlaces();
 
       const push = async (p: string, id: string, custom = false) => {
         if (!p || p === '/' || p === os.homedir()) return;
@@ -2322,7 +2324,7 @@ function registerFileSystemHandlers(deps: IpcHandlerDependencies): void {
         seen.add(p);
         if (!await fs.promises.access(p).then(() => true, () => false)) return;
         // One the project rule now refuses stays listed, with why: the window reads nothing of it (2.0.7).
-        const refused = await projectRefusalAsync(p);
+        const refused = await projectRefusalAsync(p, places);
         projects.push({ id, path: p, name: path.basename(p), ...(custom ? { custom: true } : {}), ...(refused ? { refused } : {}) });
       };
 
