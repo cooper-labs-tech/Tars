@@ -158,14 +158,15 @@ guard.throwawayHome = fs.mkdtempSync(path.join(os.tmpdir(), 'tars-vitest-home-')
 // (C:\Users\<you>\AppData\Local\Temp), so without it every mkdtemp of the
 // suite read as a write into the real home (the first Windows run, 01/10:
 // about 300 of 340 failing files). Elsewhere it is outside the home anyway.
-// On Windows, the run's folder, which holds the file's own (tmpdir-isolation.ts
-// hands it over): a write past the file's folder is for the run's guard to
-// report (tmpdir-run.ts), as on macOS and Linux, and this guard refused it
-// first there, as a write into the real home (tmpdir-isolation.test.ts, 7).
-// macOS and Linux keep the file's own folder, as before.
-const runTmpdir = onWindows
-  ? (globalThis as typeof globalThis & { [key: symbol]: string | undefined })[Symbol.for('tars.test.runTmpdir')] ?? os.tmpdir()
-  : os.tmpdir();
+// The run's folder, which holds the file's own (tmpdir-isolation.ts hands it
+// over): a write past the file's folder is for the run's guard to report
+// (tmpdir-run.ts), and this guard refused it first, as a write into the real
+// home (tmpdir-isolation.test.ts, 7), wherever the temporary folder lies inside
+// the account's home: on Windows, and in a terminal Tars runs, whose TMPDIR is
+// ~/.tars/tmp/<agent>/t on every system (measured on 2026-11-26: 4 files of
+// main's suite failed there). Where it lies outside every protected home, as
+// macOS's and Linux's own, letting it through changes nothing.
+const runTmpdir = (globalThis as typeof globalThis & { [key: symbol]: string | undefined })[Symbol.for('tars.test.runTmpdir')] ?? os.tmpdir();
 guard.allowedRoots = [canonical(process.cwd()), canonical(guard.throwawayHome), canonical(runTmpdir)];
 // HOME, and on Windows the variables that name the profile (test-home.ts's
 // list). USERPROFILE everywhere, as the suite has always moved it.

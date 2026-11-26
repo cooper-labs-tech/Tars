@@ -46,9 +46,12 @@ const INHERITED = [
 
 describe.skipIf(process.platform === 'win32')('the PATH an E2E sandbox hands the app', () => {
   it('1. keeps no folder of the account\'s home, and every other folder it inherited', () => {
-    const entries = sandboxPath(sandbox(), INHERITED, accountHome).split(path.delimiter);
+    const box = sandbox();
+    const entries = sandboxPath(box, INHERITED, accountHome).split(path.delimiter);
 
-    expect(entries.filter(entry => under(entry, accountHome))).toEqual([]);
+    // The sandbox's own folder is no inherited one: it lies in the temporary folder, which a terminal Tars runs
+    // keeps inside the account's home (~/.tars/tmp/<agent>/t).
+    expect(entries.filter(entry => under(entry, accountHome) && !under(entry, box))).toEqual([]);
     expect(entries).toEqual(expect.arrayContaining(['/usr/local/bin', '/usr/bin', '/bin', '/usr/sbin', '/sbin', '/opt/homebrew/bin']));
   });
 

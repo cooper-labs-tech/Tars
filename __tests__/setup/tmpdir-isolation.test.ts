@@ -61,6 +61,14 @@ import { processesUnder } from './leftover-processes';
  * 12. The run fails without saying which processes: id, state, command line.
  * 13. A run whose processes all ended fails all the same (6 and 7 above run
  *     with the guard, and pass or fail on their folders alone).
+ *
+ * Written on 2026-11-26, before the fix, after main's suite failed 4 files in
+ * a terminal Tars runs, whose TMPDIR is ~/.tars/tmp/<agent>/t, inside the
+ * account's home (QA and the agents run the suite there):
+ * 14. With the temporary folder inside a protected home, the home guard
+ *     (home-isolation.ts) refuses what is written past a file's folder before
+ *     the run's guard can report it: the run's guard no longer bites there,
+ *     and 7 fails.
  */
 
 const FILE_PREFIX = 'tars-vitest-file-';
@@ -81,17 +89,21 @@ const VITEST = path.join(path.dirname(createRequire(import.meta.url).resolve('vi
  * variables (CLAUDECODE), and colours its output on CI: these tests passed
  * under an agent and failed on CI, 2026-10-05.
  */
-function runFixtures(args: string[]): { status: number | null; output: string; left: string[]; tmp: string } {
+function runFixtures(args: string[], homeAround = false): { status: number | null; output: string; left: string[]; tmp: string } {
   const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'child-run-'));
+  // homeAround: the child's HOME is `tmp` and its temporary folder lies inside it, as a terminal Tars runs has
+  // ~/.tars/tmp/<agent>/t inside the account's home (14).
+  const childTmp = homeAround ? path.join(tmp, '.tars', 'tmp', 'agent', 't') : tmp;
+  fs.mkdirSync(childTmp, { recursive: true });
   // The child is a run of its own, not a worker of this one.
   const env = Object.fromEntries(Object.entries(process.env).filter(([name]) => !name.startsWith('VITEST')));
   const child = spawnSync(process.execPath, [VITEST, 'run', '--config', `${FIXTURES}/vitest.config.mts`, '--reporter=default', ...args], {
     cwd: process.cwd(),
-    env: { ...env, TMPDIR: tmp, TMP: tmp, TEMP: tmp },
+    env: { ...env, TMPDIR: childTmp, TMP: childTmp, TEMP: childTmp, ...(homeAround ? { HOME: tmp, USERPROFILE: tmp } : {}) },
     encoding: 'utf8',
     timeout: 60_000,
   });
-  return { status: child.status, output: stripVTControlCharacters(`${child.stdout}${child.stderr}`), left: fs.readdirSync(tmp), tmp };
+  return { status: child.status, output: stripVTControlCharacters(`${child.stdout}${child.stderr}`), left: fs.readdirSync(childTmp), tmp };
 }
 
 describe('the temporary folder of a test file', () => {
@@ -140,6 +152,15 @@ describe('the guard at the end of a run', () => {
 
   it('7. fails the run on a file\'s folder whose hooks ran and outlived them, and on what was written past every file\'s folder', () => {
     const run = runFixtures(['outlived']);
+    expect(run.output).toMatch(/Test Files {2}1 passed \(1\)/);
+    expect(run.status).toBe(1);
+    expect(run.output).toMatch(/The run left 2 entries in its temporary folder \(.*tars-vitest-file-outlived.*\)/);
+    expect(run.output).toMatch(/The run left 2 entries in its temporary folder \(.*written-past.*\)/);
+    expect(run.left).toEqual([]);
+  }, 90_000);
+
+  it('14. still fails it there with the temporary folder inside the home, as in a terminal Tars runs', () => {
+    const run = runFixtures(['outlived'], true);
     expect(run.output).toMatch(/Test Files {2}1 passed \(1\)/);
     expect(run.status).toBe(1);
     expect(run.output).toMatch(/The run left 2 entries in its temporary folder \(.*tars-vitest-file-outlived.*\)/);

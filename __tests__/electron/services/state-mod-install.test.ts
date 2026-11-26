@@ -160,7 +160,10 @@ describe('the mod Tars hands to claude', () => {
     const dir = stateModDir();
     expect(dir).toBe(path.join(userData, 'mods', 'tars-state'));
     expect(dir.startsWith(path.join(process.cwd(), 'mods'))).toBe(false);
-    expect(dir.includes(`${path.sep}.tars${path.sep}`)).toBe(false);
+    // Not in the folder Tars hands its agents, this suite's own ~/.tars: by place, not by the words of its path,
+    // since a terminal Tars runs keeps the temporary folder, and so this userData, in ~/.tars/tmp/<agent>/t.
+    const handed = path.join(os.homedir(), '.tars');
+    expect(dir === handed || dir.startsWith(handed + path.sep)).toBe(false);
     expect(writable(path.join(dir, 'hooks', 'register.ts'))).toBe(false);
     expect(fs.existsSync(path.join(dir, 'hooks', 'register.ts'))).toBe(true);
   });
