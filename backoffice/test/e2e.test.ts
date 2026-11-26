@@ -15,6 +15,12 @@
 // S4. `side` is left out of a read instead of `null`, so a reader cannot tell unknown from a
 //     server before the field.
 // S5. A request sent again without `side` erases the mark it had.
+//
+// Migration 002 over a database that already holds requests (QA, written before the step): the
+// suite's own migrations above run on an empty database, where neither of these can show.
+// M1. Its up gives the requests from before it a mark: `false` would pass a side request off as a
+//     main one. They must read back `null`, every other value as it was.
+// M2. Its down loses a request, or a value of one, along with the marks it is meant to drop.
 import { describe, it, before, after } from 'node:test';
 import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
@@ -313,6 +319,47 @@ describe('trace back-office, end to end', () => {
     assert.ok(blob.buf.equals(msgs.answer), 'the blob comes back byte for byte');
     const res = await fetch(`${srv.base}/v1/read/blobs/${h.result}`, { headers: { authorization: `Bearer ${reader.token}`, 'accept-encoding': 'zstd' } });
     assert.equal(note('read.blob.zstd', res.headers.get('content-encoding')), 'zstd');
+  });
+
+  it('migrates a database that holds requests: down keeps every row but the marks, up reads them back unknown', async () => {
+    // M1, M2. The server stopped, as an operator migrates; what it logged so far is kept for the artefact.
+    const earlier = srv.log.slice();
+    await srv.stop();
+    const client = new pg.Client({ host: db.env.PGHOST, port: Number(db.env.PGPORT), user: db.env.PGUSER, database: db.env.PGDATABASE });
+    await client.connect();
+    try {
+      // Every table's rows, compared without `side`: a count and a digest per table.
+      const rows = async () => {
+        const tables = (await client.query("SELECT tablename FROM pg_tables WHERE schemaname = 'public' AND tablename <> 'schema_migrations' ORDER BY 1")).rows.map((r) => r.tablename as string);
+        const out: Record<string, string> = {};
+        for (const t of tables) {
+          const r = (await client.query(`SELECT count(*)::int AS n, md5(coalesce(string_agg(x, '|' ORDER BY x), '')) AS d FROM (SELECT (to_jsonb(t) - 'side')::text AS x FROM "${t}" t) s`)).rows[0];
+          out[t] = `${r.n}:${r.d}`;
+        }
+        return out;
+      };
+      const marks = async () => (await client.query('SELECT request_id, side FROM requests ORDER BY request_id')).rows.map((r) => [r.request_id, r.side]);
+      const before = note('migrate.withData.before', await rows());
+      assert.deepEqual(note('migrate.withData.marksBefore', await marks()), [['req-1', false], ['req-2', true], ['req-t', true]]);
+      note('migrate.withData.down', runCli(['migrate', 'down'], env).trim());
+      assert.deepEqual(note('migrate.withData.afterDown', await rows()), before, 'the down kept every request and value but the marks');
+      note('migrate.withData.up', runCli(['migrate', 'up'], env).trim());
+      assert.deepEqual(await rows(), before, 'the up kept every request and value');
+      assert.deepEqual(note('migrate.withData.marksAfterUp', await marks()), [['req-1', null], ['req-2', null], ['req-t', null]]);
+    } finally {
+      // Up again and serving whatever this step found, so a failure here is this step's alone.
+      runCli(['migrate', 'up'], env);
+      await client.end();
+      srv = await startServer(env);
+      srv.log.unshift(...earlier, '--- restarted after the migration step ---\n');
+    }
+    const d = await call('GET', `/v1/read/sessions/${installA.id}/sess-1`, { token: reader.token });
+    assert.deepEqual(note('migrate.withData.read', d.json.requests.map((r: any) => [r.requestId, 'side' in r, r.side])), [['req-1', true, null], ['req-2', true, null], ['req-t', true, null]]);
+    // An older Tars sends req-2 again, without the mark: still unknown.
+    const older = await call('PUT', '/v1/batches/batch-older', { token: installA.token, body: { schema: 1, requests: [requests[1]] } });
+    assert.equal(older.status, 200, String(older.buf));
+    const d2 = await call('GET', `/v1/read/sessions/${installA.id}/sess-1`, { token: reader.token });
+    assert.deepEqual(d2.json.requests.map((r: any) => [r.requestId, r.side]), [['req-1', null], ['req-2', null], ['req-t', null]]);
   });
 
   it('holds each install to its quota and its rate', async () => {
