@@ -113,7 +113,7 @@ test('another session\'s message reaches an orchestrator and is refused by a wor
   const stub = spawn(process.execPath, [path.join(WT, 'e2e', 'live', 'fake-messages-api.mjs')], {
     env: { PATH: process.env.PATH, FAKE_PORT: String(STUB), FAKE_LOG }, stdio: 'ignore',
   });
-  type Req = { full?: string; last?: string; side?: boolean; tools?: string[] };
+  type Req = { full?: string; last?: string; side?: boolean; tools?: string[]; deferred?: string[] };
   const requests = () => (fs.existsSync(FAKE_LOG) ? fs.readFileSync(FAKE_LOG, 'utf8').trim().split('\n').filter(Boolean).map((l) => JSON.parse(l) as Req) : []);
   const carrying = (word: string) => requests().filter((r) => !r.side && (r.full ?? '').includes(word));
   const values: Record<string, unknown> = { claude: CLAUDE, nonce, platform: process.platform, tmpdir: process.env.TMPDIR ?? null };
@@ -193,11 +193,17 @@ test('another session\'s message reaches an orchestrator and is refused by a wor
       expect((values.screens as { worker: { dialog: boolean } }).worker.dialog, 'the worker shows a dialog about the post').toBe(false);
       expect(JSON.stringify((values.screens as { worker: { text: string[] } }).worker.text)).not.toContain(TO_WORKER);
 
-      // 3. The tools each model is offered: a turn typed into each.
-      expect(await tyPe('worker', `LINES 1 wtools${nonce}`)).not.toBeNull();
-      await expect.poll(() => carrying(`wtools${nonce}`).length, { timeout: 90_000 }).toBeGreaterThan(0);
-      const workerTools = carrying(`wtools${nonce}`)[0].tools ?? [];
-      const leadTools = carrying(TO_LEAD)[0].tools ?? [];
+      // 3. The tools each model is offered, or listed to load with ToolSearch (SendMessage is one of those on 2.1.332,
+      // and a turn a peer's post started carries no such list): a turn typed into each.
+      const toolsOf = (r: Req) => [...(r.tools ?? []), ...(r.deferred ?? [])];
+      const typedTurn = async (id: string, tag: string) => {
+        await expect.poll(async () => (await agentOf(id)).status, { timeout: 60_000 }).toMatch(/^(idle|waiting|completed)$/);
+        expect(await tyPe(id, `LINES 1 ${tag}`)).not.toBeNull();
+        await expect.poll(() => carrying(tag).length, { timeout: 90_000, message: `${id}'s typed turn reached the model` }).toBeGreaterThan(0);
+        return toolsOf(carrying(tag)[0]);
+      };
+      const workerTools = await typedTurn('worker', `wtools${nonce}`);
+      const leadTools = await typedTurn('lead', `ltools${nonce}`);
       values.tools = { worker: workerTools, lead: leadTools };
       recordValues(values);
       expect(workerTools.length, 'the stand-in logged no tool').toBeGreaterThan(0);
