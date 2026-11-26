@@ -167,6 +167,12 @@ export const GUIDE_TOPICS: readonly GuideTopic[] = [
 export const TOOL_TOPIC: Readonly<Record<string, string>> = {
   // mcp-orchestrator
   disk_scan: 'limits',
+  endpoint_list: 'delegation',
+  endpoint_add: 'delegation',
+  endpoint_update: 'delegation',
+  endpoint_set_key: 'delegation',
+  endpoint_refresh_models: 'delegation',
+  endpoint_check: 'delegation',
   whoami: 'limits',
   list_agents: 'delegation',
   get_agent: 'delegation',

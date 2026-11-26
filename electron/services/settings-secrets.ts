@@ -30,6 +30,7 @@ export const SECRET_FIELDS = [
   'openRouterApiKey', 'deepSeekApiKey', 'mimoApiKey', 'moonshotApiKey', 'qwenApiKey', 'zhipuApiKey',
   'minimaxApiKey', 'nvidiaApiKey', 'nousPortalApiKey', 'veniceApiKey', 'ollamaCloudApiKey', 'customOpenAIApiKey',
   'hermesGatewayToken', 'memoryGbrainAuthToken', 'memoryHonchoApiKey',
+  'endpointKeys',
 ] as const satisfies readonly (keyof AppSettings)[];
 
 export type SecretField = typeof SECRET_FIELDS[number];
@@ -51,7 +52,7 @@ const MOVED_FIELDS: readonly string[] = [...SECRET_FIELDS, ...LEGACY_SECRET_FIEL
  * mask: the CLIs' keys go through cliKeys:set instead. The Sentry token keeps
  * its own private file (sentry-token.ts) and is one of them.
  */
-export const WINDOW_SET_FIELDS = [...SECRET_FIELDS.filter((f) => f !== 'cliApiKeys' && f !== 'ampApiKey'), 'sentryAuthToken'] as const;
+export const WINDOW_SET_FIELDS = [...SECRET_FIELDS.filter((f) => f !== 'cliApiKeys' && f !== 'ampApiKey' && f !== 'endpointKeys'), 'sentryAuthToken'] as const;
 type WindowField = typeof WINDOW_SET_FIELDS[number];
 
 /** A field the move takes out of app-settings.json: a secret, or a legacy one. */
@@ -182,12 +183,61 @@ export function setSecret(current: AppSettings, field: string, value: string | n
  * then the rest to app-settings.json, so that a stop between the two leaves
  * every key where the next load finds it. A private file that cannot be read
  * is set aside in the private folder rather than written over: the app loaded
- * without its keys, and a save would otherwise lose them for good.
+ * without its keys, and a save would otherwise lose them for good. A save that
+ * throws changed nothing: when app-settings.json cannot be written, the private
+ * file is put back as it was, or removed if there was none (the Audit's I-3 on
+ * #596). A failure of that too leaves the new keys: it is said in the log, and
+ * the error is marked so the window is told so (keysKeptAfter).
  */
 export function saveSettingsSplit(settings: AppSettings): void {
-  if (readSecretsFile() === null) setAside(SECRETS_FILE);
-  writeSecrets(secretsOf(settings as unknown as Record<string, unknown>));
-  writeSecretFileSync(APP_SETTINGS_FILE, JSON.stringify(withoutSecrets(settings), null, 2));
+  const held = readSecretsFile();
+  if (held === null) setAside(SECRETS_FILE);
+  let before: string | null;
+  try {
+    before = fs.readFileSync(SECRETS_FILE, 'utf-8');
+  } catch {
+    before = null;
+  }
+  const next = secretsOf(settings as unknown as Record<string, unknown>);
+  writeSecrets(next);
+  try {
+    writeSecretFileSync(APP_SETTINGS_FILE, JSON.stringify(withoutSecrets(settings), null, 2));
+  } catch (err) {
+    // A save that set no key (a withdrawal's write, a consent, an endpoint saved without its key) wrote back what the
+    // file held: there is nothing to put back, and nothing to say about the keys (the Audit's I-1 at ae56b8d6e).
+    if (JSON.stringify(next) === JSON.stringify(held ?? {})) throw err;
+    try {
+      if (before === null) fs.rmSync(SECRETS_FILE, { force: true });
+      else writeSecretFileSync(SECRETS_FILE, before);
+    } catch (undo) {
+      console.error(`[secrets] app-settings.json was not written, and ${path.basename(SECRETS_FILE)} could not be put back as it was: ${describeSecretFileError(undo)}`);
+      // The keys that stayed, for the window's words and for the settings in memory (withKeptKeys).
+      if (err && typeof err === 'object') (err as { keptKeys?: Secrets }).keptKeys = next;
+    }
+    throw err;
+  }
+}
+
+/** The keys a save that threw left in the private file (its put-back failed too), or null. */
+function keptKeysOf(err: unknown): Secrets | null {
+  const kept = err && typeof err === 'object' ? (err as { keptKeys?: unknown }).keptKeys : undefined;
+  return kept && typeof kept === 'object' ? kept as Secrets : null;
+}
+
+/** Whether a save that threw left a key it set in the private file. */
+export function keysKeptAfter(err: unknown): boolean {
+  return keptKeysOf(err) !== null;
+}
+
+/**
+ * The settings in memory after a save that threw, as the disk holds them: their own, with the keys that save left
+ * in the private file, or null when it left none. Kept otherwise, the next save that holds would write the old keys
+ * back over the kept one, and the key the window was told loads at the next start would not (the Audit's I-2a at
+ * ae56b8d6e). Only the keys: the rest of that save was not written.
+ */
+export function withKeptKeys(settings: AppSettings, err: unknown): AppSettings | null {
+  const kept = keptKeysOf(err);
+  return kept ? { ...withoutSecrets(settings), ...kept } as AppSettings : null;
 }
 
 function setAside(file: string): void {

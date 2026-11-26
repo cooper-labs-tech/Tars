@@ -56,6 +56,11 @@ export interface RouteRequest {
   hermes?: boolean;
   /** The Hermes gateway whose secret opened this call (services/hermes-gateways.ts), when `hermes`. */
   hermesGateway?: string;
+  /**
+   * True when the caller presents the external trace reader's token (services/traces-runtime.ts), on a
+   * `/api/traces/` path, the only one where the server takes it. Never set from a header.
+   */
+  traceReader?: boolean;
 }
 
 export type SendJson = (data: unknown, status?: number) => void;

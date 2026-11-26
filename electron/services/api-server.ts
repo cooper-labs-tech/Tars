@@ -1,3 +1,4 @@
+import { isReaderToken } from './traces-runtime';
 import { noteApiPhase } from '../core/api-listening';
 import * as http from 'http';
 import * as path from 'path';
@@ -158,7 +159,9 @@ export type CallerResolution =
     /** The Hermes gateway whose secret this is (services/hermes-gateways.ts). */
     hermesGateway?: string;
     /** The token is the agent's terminal's, as it is now: not a delegated run's. */
-    terminal?: boolean }
+    terminal?: boolean;
+    /** The external trace reader's token, on its own routes (services/traces-runtime.ts). */
+    traceReader?: boolean }
   | { ok: false; status: number; error: string };
 
 /**
@@ -214,6 +217,15 @@ export function resolveCaller(
   if (gatewayOfPath(pathname) !== undefined) {
     const hermesGateway = gatewayOfSecret(presented);
     if (hermesGateway) return { ok: true, hermes: true, hermesGateway };
+  }
+
+  // The traces' read routes open to the external trace reader's token and to nothing else: not an agent's token
+  // (one agent would read another's sessions), not the shared token, not a gateway's secret. Off these routes the
+  // reader's token is nothing, and gets the 401 below.
+  if (pathname === '/api/traces' || pathname.startsWith('/api/traces/')) {
+    return isReaderToken(presented)
+      ? { ok: true, traceReader: true }
+      : { ok: false, status: 401, error: 'Unauthorized' };
   }
 
   const agentId = presented ? agentForToken(presented) : undefined;
@@ -460,6 +472,7 @@ export function startApiServer(
           internal: caller.ok ? caller.internal === true : false,
           hermes: caller.ok ? caller.hermes === true : false,
           hermesGateway: caller.ok ? caller.hermesGateway : undefined,
+          traceReader: caller.ok ? caller.traceReader === true : false,
         };
         await inApiCall({ tool, fromMcp, agentId: callerAgent }, () => route.handler(routeReq, sendJson, ctx));
         return;

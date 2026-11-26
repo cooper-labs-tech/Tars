@@ -1,4 +1,6 @@
-import { describe, it, expect, beforeEach } from 'vitest';
+// First: the home's guard, before anything loads electron/constants (throwaway-home.ts).
+import '../../setup/throwaway-home';
+import { describe, it, expect, beforeEach, vi } from 'vitest';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 
@@ -48,6 +50,18 @@ import * as path from 'node:path';
  *      held is lost (the Audit's mutant S1).
  * P13. (The Audit's probe PB, its mutant S2) A save over a private file that
  *      cannot be read writes over it, instead of setting it aside.
+ * Added before its code after the Audit's re-read of #596 at a3c07fbfa (its I-3, 24/11):
+ * P14. A save that writes the private file and then cannot write app-settings.json
+ *      throws, and the window is told "nothing was changed", while the private
+ *      file holds the new keys: an endpoint key loads at the next start. A save
+ *      that throws must leave the private file as it was, or gone if there was none.
+ * P15. (The Audit's I-2 at 965cfced0.) Putting the private file back fails too
+ *      (the volume filled between the two writes): the window is still told
+ *      "nothing was changed", while the new key stays and loads at the next
+ *      start. Its words must say the keys were kept.
+ * P16. (The Audit's I-1 at ae56b8d6e.) A save that changes no key (a withdrawal's
+ *      write, a consent, an endpoint saved without its key), whose put-back
+ *      fails: it is still said that the keys were kept, though none was set.
  * (The Telegram bot's token, its switch and its authorized chats, which these
  * cases used as samples, went with Tars's own Telegram bot in 2.0.5: Discord's
  * token and Slack's switch stand in for them.)
@@ -58,6 +72,26 @@ import {
   SECRETS_FILE, readSecrets, settingsForWindow, setSecret, SECRET_MASK,
 } from '../../../electron/services/settings-secrets';
 import { DATA_DIR, PRIVATE_DIR, APP_SETTINGS_FILE } from '../../../electron/constants';
+import { settingsNotWritten } from '../../../electron/services/traces-runtime';
+import { assertThrowaway } from '../../setup/throwaway-dirs';
+
+// Every test below starts by removing both folders whole: only in a throwaway home.
+assertThrowaway({ DATA_DIR, PRIVATE_DIR });
+
+// P15: the put-back of the private file, its second write in one save, can be made to land on a full volume.
+const putBack = vi.hoisted(() => ({ fail: false, writes: 0 }));
+vi.mock('../../../electron/utils/secret-file', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('../../../electron/utils/secret-file')>();
+  return {
+    ...actual,
+    writeSecretFileSync: (file: string, contents: string) => {
+      if (putBack.fail && file.endsWith('settings-secrets.json') && ++putBack.writes === 2) {
+        throw Object.assign(new Error('no space left on device'), { code: 'ENOSPC' });
+      }
+      return actual.writeSecretFileSync(file, contents);
+    },
+  };
+});
 import type { AppSettings } from '../../../electron/types';
 
 const KEYS = { deepSeekApiKey: 'ds-secret-111', discordBotToken: '123:dc-secret-222', memoryHonchoApiKey: 'honcho-333', xApiSecret: 'x-444' };
@@ -231,5 +265,72 @@ describe('after the Audit\'s gate of 06a46bcb', () => {
     const aside = fs.readdirSync(PRIVATE_DIR).filter(n => n.startsWith('settings-secrets.json.unreadable-'));
     expect(aside.length).toBe(1);
     expect(fs.readFileSync(path.join(PRIVATE_DIR, aside[0]), 'utf8')).toBe('{ broken');
+  });
+
+  it('P14. a save that cannot write app-settings.json after the private file leaves the private file as it was', () => {
+    saveSettingsSplit({ ...KEYS, slackEnabled: true } as unknown as AppSettings);
+    const held = fs.readFileSync(SECRETS_FILE, 'utf8');
+    // A folder where app-settings.json goes: no rename lands on it, on any system.
+    fs.rmSync(APP_SETTINGS_FILE);
+    fs.mkdirSync(APP_SETTINGS_FILE);
+    try {
+      expect(() => saveSettingsSplit({ ...KEYS, deepSeekApiKey: 'ds-new-999' } as unknown as AppSettings)).toThrow();
+      expect(fs.readFileSync(SECRETS_FILE, 'utf8')).toBe(held);
+      // With no private file before it, none after.
+      fs.rmSync(SECRETS_FILE);
+      expect(() => saveSettingsSplit({ deepSeekApiKey: 'ds-new-999' } as unknown as AppSettings)).toThrow();
+      expect(fs.existsSync(SECRETS_FILE)).toBe(false);
+    } finally {
+      fs.rmSync(APP_SETTINGS_FILE, { recursive: true, force: true });
+    }
+  });
+
+  it('P15. a save whose put-back fails too is answered with words that say the keys were kept', () => {
+    saveSettingsSplit({ ...KEYS, slackEnabled: true } as unknown as AppSettings);
+    fs.rmSync(APP_SETTINGS_FILE);
+    fs.mkdirSync(APP_SETTINGS_FILE);
+    // The second write of the private file in this save, the put-back, lands on a full volume.
+    putBack.fail = true;
+    putBack.writes = 0;
+    const log = vi.spyOn(console, 'error').mockImplementation(() => {});
+    let thrown: unknown;
+    try {
+      saveSettingsSplit({ ...KEYS, deepSeekApiKey: 'ds-new-999' } as unknown as AppSettings);
+    } catch (err) {
+      thrown = err;
+    } finally {
+      putBack.fail = false;
+      log.mockRestore();
+      fs.rmSync(APP_SETTINGS_FILE, { recursive: true, force: true });
+    }
+    expect(thrown, 'the save throws').toBeDefined();
+    // The put-back did fail: the new key is in the private file.
+    expect(fs.readFileSync(SECRETS_FILE, 'utf8')).toContain('ds-new-999');
+    const words = settingsNotWritten(thrown);
+    expect(words).not.toMatch(/nothing was changed/);
+    expect(words).toMatch(/kept/);
+  });
+
+  it('P16. a save that changes no key, whose put-back would fail, is answered "nothing was changed"', () => {
+    saveSettingsSplit({ ...KEYS, slackEnabled: true } as unknown as AppSettings);
+    const held = fs.readFileSync(SECRETS_FILE, 'utf8');
+    fs.rmSync(APP_SETTINGS_FILE);
+    fs.mkdirSync(APP_SETTINGS_FILE);
+    putBack.fail = true;
+    putBack.writes = 0;
+    const log = vi.spyOn(console, 'error').mockImplementation(() => {});
+    let thrown: unknown;
+    try {
+      saveSettingsSplit({ ...KEYS, slackEnabled: false } as unknown as AppSettings);
+    } catch (err) {
+      thrown = err;
+    } finally {
+      putBack.fail = false;
+      log.mockRestore();
+      fs.rmSync(APP_SETTINGS_FILE, { recursive: true, force: true });
+    }
+    expect(thrown, 'the save throws').toBeDefined();
+    expect(fs.readFileSync(SECRETS_FILE, 'utf8')).toBe(held);
+    expect(settingsNotWritten(thrown)).toMatch(/nothing was changed/);
   });
 });

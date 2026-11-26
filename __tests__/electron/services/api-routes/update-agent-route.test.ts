@@ -38,6 +38,10 @@ import { EventEmitter } from 'events';
  *     executable file, a skill name, an empty name or one with ", task t-",
  *     plan on a provider without plan mode, a key provider without its key.
  * 12. A value of the wrong type reaches the record (skills as a string).
+ * 12d. An inference endpoint (native traces) is refused over the API, or taken unchecked: one that does not exist,
+ *     waits for the owner's approval, runs another harness than the agent's, or does not list the model; traces
+ *     that is not a boolean. A valid choice is not written, or is checked against the settings on disk rather than
+ *     those the app holds.
  * 12b. A folder handed besides the project (secondaryProjectPath) that is
  *     ~/.tars-private, inside it, or holds it (the home folder, the root) is
  *     taken, by update_agent or by create_agent: the agent would be handed
@@ -383,6 +387,43 @@ describe('what may change', () => {
       expect(status, JSON.stringify(body)).toBe(400);
       expect(recordOf('w2')).toEqual(before);
     }
+  });
+});
+
+describe('an inference endpoint over the API (native traces)', () => {
+  const EP = { id: 'ep-0a0b0c', name: 'Remote host', baseUrl: 'http://192.0.2.10:9000/v1', allowTraces: true, models: ['open-coder-1'], approved: true, approvedBaseUrl: 'http://192.0.2.10:9000/v1', holdMaxSeconds: 120 };
+
+  it('12d. refuses an endpoint that does not fit, or traces that is not a boolean, and writes nothing', async () => {
+    settings.inferenceEndpoints = [EP, { ...EP, id: 'ep-0d0e0f', approved: false }];
+    agents.set('q', agent({ id: 'q', name: 'Q', role: 'worker', provider: 'qwen-code', model: 'open-coder-1' }));
+    const refused: Array<[Record<string, unknown>, RegExp]> = [
+      [{ endpointId: 'ep-ffffff' }, /no such endpoint/i],
+      [{ endpointId: 'ep-0d0e0f' }, /approve/],
+      [{ endpointId: EP.id, model: 'other-model' }, /does not list/],
+      [{ endpointId: 'not-an-id' }, /endpoint/i],
+      [{ traces: 'yes' }, /traces/],
+    ];
+    for (const [body, why] of refused) {
+      const before = recordOf('q');
+      const { answer, status } = await update('q', body);
+      expect(status, JSON.stringify(body)).toBe(400);
+      expect(String(answer.error), JSON.stringify(body)).toMatch(why);
+      expect(recordOf('q'), JSON.stringify(body)).toEqual(before);
+    }
+    const { answer, status } = await update('w2', { endpointId: EP.id, model: 'open-coder-1' });
+    expect(status).toBe(400);
+    expect(String(answer.error)).toMatch(/codex, pi, qwen-code or opencode/);
+  });
+
+  it('12d. takes a valid endpoint and traces, checked against the settings the app holds', async () => {
+    settings.inferenceEndpoints = [EP];
+    agents.set('q', agent({ id: 'q', name: 'Q', role: 'worker', provider: 'qwen-code', model: 'open-coder-1' }));
+    const { status, answer } = await update('q', { endpointId: EP.id, traces: true });
+    expect(status, JSON.stringify(answer)).toBe(200);
+    expect(agents.get('q')).toMatchObject({ endpointId: EP.id, traces: true });
+    const off = await update('q', { endpointId: null });
+    expect(off.status).toBe(200);
+    expect(agents.get('q')!.endpointId).toBeUndefined();
   });
 });
 

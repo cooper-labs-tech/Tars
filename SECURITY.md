@@ -1040,3 +1040,205 @@ says around them, in a message of its own, is the owner's; anything the owner
 typed by hand into a terminal, or said in Slack or Discord. The mark says
 "these are words the owner sent Tars, at that time, for that project or chat,
 as that kind of word", and no more.
+
+## 9. Inference endpoints and traces
+
+Written with the code (19/11/2026). An agent running codex, pi, qwen-code or opencode can run on an
+OpenAI-compatible inference endpoint the user adds in Settings, a remote inference host. Its sessions can be kept as
+traces, opt-in, for an external trace reader. This adds one outbound flow, two credentials and one store.
+
+**The outbound flow.** Every model call such an agent makes goes to the endpoint, with the agent's whole context:
+- its system prompt;
+- the files it read;
+- every tool result.
+
+The harness never talks to the endpoint directly. It talks to Tars's endpoint proxy on loopback
+(`services/endpoint-proxy.ts`, `API_PORT + 2`), which sends the request to the endpoint's approved base URL and to no
+other address.
+
+**The endpoint's key** is in the settings' secrets (`endpointKeys`, `~/.tars-private/settings-secrets.json`).
+- The proxy reads it per request and puts it on the outbound call, in the header form the harness used (a Bearer, or
+  `x-api-key`).
+- It is never in an agent's environment, a command line, a CLI's config file, a log, a trace, or anything the window
+  is sent (the window gets `keySet`).
+- Pi's `models.json` gets one provider of Tars's whose `apiKey` is the name of a variable (`$TARS_ENDPOINT_TOKEN`),
+  not a key.
+
+**The terminal's token** (`tep_` and 48 hex characters) is what the harness presents to the proxy.
+- It is minted with the agent's terminal (`core/agent-pty.ts`), in memory only, and dies with that terminal.
+- It sits in the variables the harness reads it from: `TARS_ENDPOINT_TOKEN`, and `OPENAI_API_KEY` for qwen-code.
+- Like the agent's API token (§ 3), it is not secret from the other agents of the same user. Another agent that read
+  it could make model calls on that endpoint, recorded under that agent's session, but it would never learn the key.
+
+**The key goes only to the approved address** (the Audit's H1 on #596).
+- The proxy, and the models and health probes too, send the key only to `approvedBaseUrl`, and only while the
+  endpoint is approved at that address. An endpoint whose address an agent changed is probed at the new address with
+  no key.
+- No fetch follows a redirect, the uploader's included (its install token does not hop either): a redirect answer
+  is an error, never a hop for a credential.
+- A probe that was in flight while the endpoint's address changed is dropped: its models or health describe the old
+  address.
+- An agent changing an endpoint's address also takes its key away. The key was given for the old address, and the
+  owner approving the new one must not hand it over unawares: it is set again, from the window or a drop file. The
+  owner's own change of address keeps it, since that act is the approval.
+- A probe writes back only what it owns (models, health), onto the settings as they are when it ends, so a change
+  made meanwhile (a project's trace opt-out) is never undone (the Audit's M1).
+
+**Plain http** (L2). https is required for a public address.
+- Plain http is taken for loopback, private ranges (RFC 1918, 100.64.0.0/10 where encrypted overlays such as
+  WireGuard live, fc00::/7) and IPv6 link-local, and the window says the traffic is not encrypted at the HTTP level.
+- Anything else on http needs the owner's "allow plain http" for that endpoint, given in the window only.
+- The back-office address follows the same rule.
+- A host name counts as public: no name is resolved to decide.
+- The cloud metadata range, 169.254/16, is refused whatever the scheme.
+
+**A request is sent twice only when it cannot have run** (L4). A connection refused or unreachable is held and tried
+again. A reset after the request was written is tried again for a GET only: a POST may already be generating, and
+sending it again would run and bill it twice.
+
+**The approval guard.** Any agent may list the endpoints, add one, change one, rotate a key, read the models and check
+the health: the API's `/api/endpoints` and the `endpoint_*` tools of mcp-orchestrator. That is the owner's decision of
+19/11, so agents can tune other projects' agents.
+- An endpoint an agent adds, or whose base URL an agent changes, is unusable until the owner approves it once in the
+  window. The proxy answers `403 endpoint_not_approved`, and an agent cannot be set on it.
+  - The reason: it is where an agent's whole context would go, and an injected agent could otherwise point any agent
+    at its own server in two calls.
+  - No API route approves: `endpoints:approve` is the window's alone.
+- Extra headers an agent adds or changes wait for the owner's approval the same way (the owner's decision of 26/11):
+  they go out with the owner's key, and a header can route or bill the requests at the endpoint. The key stays, since
+  the address does not change.
+- Approval stays apart from saving (found in the window's work, 27/11). The owner's save of another field (traces,
+  the name, the hold) leaves an agent's change pending: it never approves what the owner has not looked at. An
+  approval names the address and the extra headers the window showed, and is refused when an agent changed either
+  again since. An address or headers the owner types in the window, or the approved values put back, are the owner's
+  own, approved by that act. "Typed" is measured against what the form showed when it opened (`shown`), never
+  against the record: a save from a form an agent changed the endpoint under is refused, nothing written (the Audit's
+  M-b), so an earlier value of the agent's sent back by a stale form is never taken for the owner's.
+- A key, the models, the name or the hold ceiling keep the approval.
+- An agent may turn traces off for an endpoint, never on.
+
+**The key drop folder.** An agent hands a key to Tars through a file, never through a prompt or a tool argument.
+- It writes the key, one line, into `~/.tars/endpoint-keys/<name>.key`, and names the file in `endpoint_set_key`.
+- The name must be `[A-Za-z0-9._-]{1,64}.key`, with no separator.
+- The folder must be a plain folder, not a link (lstat).
+- The file is opened with `O_NOFOLLOW` and checked by fstat against its lstat: a plain file with one link, 8 KiB at
+  most, one printable line.
+- Then Tars takes the key into the private folder and deletes the file, only once the settings that hold the key
+  are written, and only that very file (the same inode). A save that fails leaves the drop file exactly as it was,
+  and the agent is answered the reason, which never holds the key: the drop file is how the owner hands Tars a
+  production key, and until this a failed save lost it.
+- A file that fails a check is left as it is, and only its name is reported.
+- Tars reads a key from no other path, so no argument can make it read `~/.tars-private`, `~/.ssh` or anything else
+  and send it out as a Bearer.
+- The macOS keychain is not read either: the key path is the same on every system.
+
+**The trace reader's token**, `~/.tars-private/traces-reader-token` (0600), opens `GET /api/traces/*` and nothing
+else.
+- `resolveCaller` reads it only on those paths, as it reads a Hermes gateway's secret only on its webhook.
+- No other credential opens those paths: not an agent's token (one agent would read every other's sessions), not the
+  shared token, not a gateway's secret.
+- It is rotated or revoked in the window, and shown once when made. A revoke applies first: the token is refused in
+  memory at once, then its file is unlinked, or else emptied, which reads as no token at the next start, and the
+  window is answered ok only once one of the two holds. A rotation drops the old token the same way before it writes
+  the new one, so a write that fails (a full disk) leaves no token, never the old one.
+- Emptying or changing the back-office address takes the upload consent back first, in memory and off the disk, then
+  writes the rest: on settings that cannot be written, sharing has still stopped, and the window is told so.
+- The other revokes of sharing made in the window apply first too: a project opted out, a pair removed, closed
+  models left out, an endpoint's traces turned off, an endpoint removed. Each holds in memory at once, then is
+  written, and is tried again every minute and once more as Tars quits (not on a crash, a forced kill or a power
+  loss), until it holds, the window told. What is sent follows the trace gate as it is at sending, so each also holds
+  back what was recorded before it. While such a write does not hold, the consent's file is dropped (unlinked or
+  emptied, which needs no free space): nothing is shared meanwhile, and a start before the write holds reads no
+  consent and takes it for a deletion, which fails closed. The
+  file is put back once the settings hold. When the file can be neither removed nor emptied, a restart before the
+  write holds shares again what the revoke stopped, and the window is told so. The grants opposite to these are
+  written first, and so is an endpoint's address moved in the same save. An agent's own change through the local API
+  (its endpoint's traces off, its address moved) is written first as well, and refused with the reason when the write
+  fails: applied first, it could drop the owner's consent.
+- The API listens on loopback. Offering the routes to a host on a tailnet is not built; it is the owner's call. It
+  would take a second listener bound to the tailnet address alone, serving these routes and nothing else, behind a
+  switch that is off by default. A port forward would carry every route of the API, leaving the token as the only
+  guard.
+
+**The stored traces**, `~/.tars/traces/traces.db` (0600, in a 0700 folder).
+- They hold sessions in full: prompts, files read, tool results.
+- `~/.tars` is in every agent's `--add-dir`, so any agent can read every traced session, as it can already read every
+  transcript under `~/.claude` and `~/.codex`.
+- Nothing is masked on this machine. Masking secrets and pseudonymising is the reader's job, on its side.
+- The endpoint's key never enters a trace: the proxy records the request body, never its headers.
+- What is kept is bounded: off by default for every project and every agent, a size cap and a retention set in
+  Settings, and a delete in the back-office.
+
+**Who is traced** (`services/trace-gate.ts`). A session is traced only when all of these hold:
+- an approved endpoint that allows traces;
+- the project's switch and the agent's both on;
+- the harness and model pair on the owner's list, which ships empty;
+- with the default on, the model is not a closed one (Claude, GPT, o-series, Gemini).
+
+The owner can turn that default off in Settings. The window warns that the providers' terms may forbid training on
+their outputs.
+
+**Session headers.** `X-Session-Id` and `X-Agent-Id` name the agent and its session to the endpoint. The proxy adds
+them only for an endpoint whose "send session headers" option is on, which is off by default.
+
+**Extra headers.** An endpoint may carry up to 16 fixed headers, sent with every request to it and with its probes,
+to the approved address only. They are not a secret: they are kept in `app-settings.json` with the endpoint, and every
+agent reads them, so a credential never goes there (the key has its own path, above). None may name the credential
+(Authorization, x-api-key, Cookie), the connection's own headers or the body's framing, or the session headers, and a
+name or value holding CR or LF is refused; the proxy skips a refused name again when it sends.
+
+**The upload** (`services/trace-upload.ts`). Opted-in sessions go to the back-office address the user sets, empty by
+default. Nothing goes before the user has read, in the window, what leaves the machine, with one session shown as it
+would be sent.
+- Every string is scrubbed first (`services/trace-scrub.ts`, whose header says what it catches and what it cannot).
+- Projects and endpoints go as HMAC keys of a secret that never leaves the install, never their paths or addresses.
+- Neither the agent's name nor the endpoint's goes: both are free labels that may name a person or a host (L1).
+- A turn's author goes by kind (user, orchestrator, agent), never a name.
+- The install's token and that secret are in `~/.tars-private/traces-install.json` (0600).
+- Only sessions whose project and agent are opted in at the moment of sending go.
+- One action in the window asks the back-office to delete everything the install sent, then forgets the install and
+  takes the consent back. Without that, the next pass would register again and send everything back, undoing the
+  deletion. Sharing starts again only when the user consents again.
+- The deletion withdraws the consent first, so sending stops at once. A DELETE that fails or never goes leaves sharing
+  off and the deletion shown as owed, until it is done.
+- A deletion is the user's word: sharing again sends only the sessions started after it, and the consent says so.
+  Its moment is never earlier than the newest session it covers, so a clock moved backward lets none through.
+- An owed deletion holds only while its install is still here: with the install file lost, it is cleared. The user
+  can also give up a deletion an old back-office never confirmed. Tars stops asking it, and what was recorded before
+  the deletion is still never sent.
+- A pass under way is stopped and waited for before the deletion, and every pass reads the consent again before
+  each session and before any registration, so nothing it sends lands after a deletion or a withdrawn consent.
+- When the back-office no longer knows the install (a 401: the user's deletion, or its operator's), Tars never
+  registers again on its own. Uploads stop, the local traces stay, the consent is withdrawn, and the window says so.
+  Registering again is the user's own act.
+- A consent stands only while its own file, `~/.tars-private/traces-upload-consent` (0600, no agent is handed it),
+  holds the very time the settings say. Giving it writes that file, then the settings; either failing answers the
+  window with the reason, and nothing is given. A withdrawal holds in memory at once, then unlinks that file, or else
+  empties it, then writes the settings. Measured on macOS 26 (APFS): a full volume refuses a write, a rename and a
+  truncate but takes an unlink, and a folder that may not be written refuses an unlink but takes a truncate. A start
+  whose settings still say consent with no such file, a partial one or another time has none (it fails closed).
+  That start also takes it for a deletion it could not write down, since a deletion's moment and its owed DELETE
+  live in the settings alone: the moment becomes the latest of the one kept, the start and the newest session, and
+  the DELETE is owed again while the install file is there. So a deletion on settings that cannot be written, then a
+  quit, still never lets what was recorded before it go, unless its consent's file could be neither unlinked nor
+  emptied as well. That is the one case that brings the consent back at the next start: the file can be neither
+  unlinked nor emptied (a volume remounted read-only, an immutable file, a full volume with a folder that may not be
+  written) and no write of the settings holds before Tars quits. The old consent then stands, the deletion's moment
+  is lost with the settings that held it, and what was recorded before the deletion may go. The log says so, and the
+  window meanwhile. The deletion's moment and its owed mark are written with the withdrawal, in one write, so no stop
+  between two writes leaves the consent standing with a deletion owed, or neither. The install file goes the same way, unlinked or else emptied, so a 401, a deletion that went
+  through or a deletion given up never throws on a folder that refuses the unlink, and a 401 withdraws the consent
+  before it touches the file.
+  Settings that could not be written after a withdrawal or a deletion are tried again every minute, the window told
+  (`unsaved`), and nothing uploads meanwhile. Until this, both were held in memory and saved by a write that swallowed
+  its error: a consent given on a full disk was answered as given, and a withdrawal came back at the next start.
+- The scrubbing applies to what is uploaded only: the endpoint the agent talked to, and the local store, saw the
+  session as it was.
+
+Measured by:
+- `__tests__/electron/endpoint-proxy.test.ts` (the token swap, both ids, no buffering, the holds);
+- `inference-endpoints.test.ts` (the approval guard, the drop file);
+- `services/trace-reader-token.test.ts` (the door);
+- `trace-gate.test.ts`;
+- `trace-scrub.test.ts` and `trace-upload.test.ts` (the upload, against a stand-in back-office);
+- `e2e/traces-native.spec.ts` (the whole chain against a stand-in endpoint on loopback).

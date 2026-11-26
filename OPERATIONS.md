@@ -1242,6 +1242,85 @@ stat -f '%Sp %N' ~/.tars-private/api-token      # expect -rw-------
 
 ---
 
+## Inference endpoints and traces
+
+What it is: SPECS.md § 2, "Inference endpoints and native traces". What it guards: SECURITY.md § 9.
+
+**Ports and files.**
+
+| What | Where |
+|---|---|
+| The endpoint proxy | `http://127.0.0.1:<API_PORT + 2>/v1` (31417), loopback only |
+| Endpoints | `inferenceEndpoints` in `~/.tars/app-settings.json` |
+| Their keys | `endpointKeys` in `~/.tars-private/settings-secrets.json` |
+| The key drop folder | `~/.tars/endpoint-keys/` (0700) |
+| The traces | `~/.tars/traces/traces.db` (SQLite, WAL) |
+| The reader token | `~/.tars-private/traces-reader-token` (0600) |
+
+**Add an endpoint.**
+1. In Settings: a name, a base URL up to the routes (`https://host.example.com/v1`) and the key, then Refresh models.
+2. Then, in an agent's panel: codex, pi, qwen-code or opencode, the endpoint and one of its models.
+
+The agent's next terminal runs on it. A change of endpoint, model or traces ends the current terminal, so that the new
+one carries the new session.
+
+**From an agent.** `endpoint_list`, `endpoint_add`, `endpoint_update`, `endpoint_set_key`, `endpoint_refresh_models`,
+`endpoint_check`.
+- A key goes through the drop folder: write it, one line, into `~/.tars/endpoint-keys/<name>.key`, then call
+  `endpoint_set_key` with `key_file: "<name>.key"`. The file is deleted once the key is taken.
+- An endpoint an agent adds, re-points or gives new extra headers shows Approve in Settings: nothing reaches it before
+  the owner approves. Saving the endpoint's other fields does not approve it; Approve does, for what the notice shows.
+
+**When the endpoint pauses.** The proxy holds a request on 503, 429 or a refused connection, and a GET on a 502 too
+(a 502 to a POST passes at once: it may have run on the engine), as `Retry-After` says (60 s at most per wait), up to the endpoint's hold ceiling (120 s by default, 0 to 3600). The agent shows
+"waiting on <endpoint>". Past the ceiling, the last error reaches the harness as it came. For hours-long gaps, stop
+the agents rather than raising the ceiling.
+
+**Traces.**
+- Off by default. Turn a project on in the back-office, then an agent in its panel. Both are needed.
+- Only for a pair on the list in Settings. The list ships empty; add pairs, or import a JSON file of
+  `{ harness, models }`.
+- Closed models (Claude, GPT, o-series, Gemini) are left out by default. The switch is in Settings, with the warning
+  about their terms.
+- Session headers (`X-Session-Id`, `X-Agent-Id`) are an endpoint's option, off by default.
+- The cap and the retention are swept every hour and after any write that crosses the cap: the oldest ended sessions
+  go first, and open sessions are never deleted by retention. Past the cap with only open sessions left, request
+  metadata is still written and bodies are not (`bodiesDropped`).
+- Export: the back-office writes JSONL in the reader's trace format tables (`traces`, `turns`, `requests`,
+  `request_messages`, `messages`), each message once.
+
+**Upload to a back-office.**
+- Set its address in the back-office page (any server that speaks the trace back-office's HTTP API v1), and read the
+  notice of what leaves the machine, with a preview.
+- Opted-in sessions then go every 5 minutes, and 30 s after a change: scrubbed, keyed, resumable.
+- The install is in `~/.tars-private/traces-install.json`.
+- "Delete everything sent" calls the back-office's `DELETE /v1/installs/me`, then forgets the install.
+
+**The external reader.** Rotate its token in the back-office (shown once), then read on loopback:
+
+```bash
+curl -s -H "Authorization: Bearer $(cat ~/.tars-private/traces-reader-token)" \
+  "http://127.0.0.1:31415/api/traces/sessions?limit=50&project=/path/to/project-a"   # then &cursor=<nextCursor>
+curl -s -H "Authorization: Bearer $(cat ~/.tars-private/traces-reader-token)" \
+  http://127.0.0.1:31415/api/traces/sessions/<traceId>
+```
+
+- `/api/traces/sessions` returns the sessions new or grown since the cursor, in the order they changed. Its filters
+  are `project`, `harness`, `model`, `endpoint`, `agent`, `from` and `to` (ms).
+- A session's document has its trace, turns, requests (with `upstream_request_id`, the endpoint's `X-Request-Id`),
+  request_messages and messages.
+- No other credential opens these routes.
+
+**Measure a harness again** after an update, against a stand-in endpoint on loopback:
+
+```bash
+node e2e/stand-in-openai-endpoint.mjs --port 0 --key dummy --log /tmp/standin.jsonl
+```
+
+Then run the harness one-shot at the printed URL, as its adapter in `services/endpoint-harness.ts` configures it.
+Record the version measured in `HARNESS_SUPPORT` (`handlers/traces-handlers.ts`). A harness that fails its tool call
+there is marked `failed`, and agents are not set on it.
+
 ## The heavy-run slot
 
 One queue for the whole machine (2.0.5, `electron/services/heavy-slot.ts`): the test suites, builds, Docker and

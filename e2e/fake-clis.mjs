@@ -461,7 +461,8 @@ export async function run() {
       return;
     }
     const directive = /\b(DELEGATE|SEND|ECHO|APPROVE) (\S+)(?: (.+))?$/ms.exec(text);
-    if (!directive) answer = 'ok';
+    if (kind === 'qwen-code' && process.env.OPENAI_BASE_URL) answer = await modelTurn(text);
+    else if (!directive) answer = 'ok';
     else if (directive[1] === 'ECHO') answer = `echo ${directive[2]}`;
     else if (directive[1] === 'APPROVE') answer = (opts.bypass || await ask(directive[2])) ? `ran echo ${directive[2]}` : `did not run echo ${directive[2]}`;
     else if (directive[1] === 'SEND') {
@@ -477,6 +478,69 @@ export async function run() {
     if (kind === 'gemini') hook('AfterAgent', { prompt: text, prompt_response: answer, stop_hook_active: false });
     else hook('Stop', { stop_hook_active: false, last_assistant_message: answer, permission_mode: permissionMode });
     if (kind !== 'claude') hook('Notification', { notification_type: 'idle_prompt', message: 'waiting for your input' });
+  }
+
+  // On an inference endpoint (Tars's endpoint proxy, OPENAI_BASE_URL and OPENAI_API_KEY in its environment, as
+  // Qwen Code 0.25.2 reads them with --auth-type openai, measured 19/11): a turn is a model's, through chat
+  // completions, streamed, with a shell tool. The command asked for is run as its words say (an `echo` prints its
+  // argument), on every system alike, and its output is sent back as the tool's result. Logged: each request's
+  // status, the time its first chunk came and the time it ended, and what the key looked like (its first four
+  // characters), never the key.
+  async function modelTurn(text) {
+    const base = process.env.OPENAI_BASE_URL.replace(/\/+$/, '');
+    const key = process.env.OPENAI_API_KEY ?? '';
+    const tools = [{ type: 'function', function: { name: 'run_shell_command', description: 'Run a shell command', parameters: { type: 'object', properties: { command: { type: 'string' } }, required: ['command'] } } }];
+    const messages = [{ role: 'system', content: 'You are a stand-in coding agent.' }, { role: 'user', content: text }];
+    // A task that asks for a title gets a side request first, as opencode's title call is (no tools, a system prompt of
+    // its own, not streamed): what a trace marks `side`.
+    if (/\btitle\b/i.test(text)) {
+      const res = await fetch(`${base}/chat/completions`, { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${key}` }, body: JSON.stringify({ model: process.env.OPENAI_MODEL, messages: [{ role: 'system', content: 'Generate a short title for the conversation.' }, { role: 'user', content: text }], stream: false }) });
+      await res.text();
+      log({ model: true, side: true, status: res.status, keyHead: key.slice(0, 4), keyLength: key.length });
+    }
+    for (let step = 0; step < 4; step++) {
+      const sentAt = Date.now();
+      const res = await fetch(`${base}/chat/completions`, { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${key}` }, body: JSON.stringify({ model: process.env.OPENAI_MODEL, messages, tools, stream: true, stream_options: { include_usage: true } }) });
+      let firstChunkAt;
+      let raw = '';
+      const reader = res.body.getReader();
+      for (;;) {
+        const { value, done } = await reader.read();
+        if (done) break;
+        if (firstChunkAt === undefined) firstChunkAt = Date.now();
+        raw += Buffer.from(value).toString('utf8');
+      }
+      log({ model: true, status: res.status, sentAt, firstChunkAt, endAt: Date.now(), keyHead: key.slice(0, 4), keyLength: key.length, model_: process.env.OPENAI_MODEL });
+      if (!res.ok) return `the endpoint answered ${res.status}`;
+      let content = '';
+      const calls = new Map();
+      for (const block of raw.split('\n\n')) {
+        const data = block.split('\n').filter((l) => l.startsWith('data:')).map((l) => l.slice(5).trim()).join('');
+        if (!data || data === '[DONE]') continue;
+        let chunk;
+        try { chunk = JSON.parse(data); } catch { continue; }
+        for (const c of chunk.choices ?? []) {
+          content += c.delta?.content ?? '';
+          for (const tc of c.delta?.tool_calls ?? []) {
+            const call = calls.get(tc.index) ?? { id: '', name: '', arguments: '' };
+            if (tc.id) call.id = tc.id;
+            if (tc.function?.name) call.name += tc.function.name;
+            call.arguments += tc.function?.arguments ?? '';
+            calls.set(tc.index, call);
+          }
+        }
+      }
+      if (!calls.size) return content || 'no answer';
+      const list = [...calls.values()];
+      messages.push({ role: 'assistant', content: null, tool_calls: list.map((c) => ({ id: c.id, type: 'function', function: { name: c.name, arguments: c.arguments } })) });
+      for (const c of list) {
+        let command = '';
+        try { command = JSON.parse(c.arguments).command ?? ''; } catch { /* nothing */ }
+        const echoed = /^echo (.+)$/.exec(String(command).trim());
+        messages.push({ role: 'tool', tool_call_id: c.id, content: echoed ? `${echoed[1]}\n` : `ran ${command}` });
+      }
+    }
+    return 'too many steps';
   }
 
   hook('SessionStart', { source: opts.resume ? 'resume' : 'startup', model: opts.model, permission_mode: permissionMode });

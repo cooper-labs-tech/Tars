@@ -693,6 +693,10 @@ export interface AgentStatus {
   obsidianVaultPaths?: string[]; // Obsidian vault paths to mount via --add-dir (read-only)
   createdAt?: string;         // ISO timestamp when the agent was created
   cliPath?: string;              // Custom CLI binary path override
+  /** The inference endpoint its harness (codex, pi, qwen-code, opencode) runs on, with `model` one of its models. */
+  endpointId?: string;
+  /** Its own trace switch, off by default: a session is traced only with its project's on too. */
+  traces?: boolean;
 }
 
 export interface AgentTemplate {
@@ -1583,6 +1587,12 @@ export interface ElectronAPI {
       role?: 'orchestrator' | 'worker';
       /** @deprecated Send `role`. Read only when `role` is absent. */
       orchestratorMode?: boolean;
+      model?: string;
+      /** The inference endpoint its harness runs on, with `model` one of its models. Refused (thrown) when the
+       *  endpoint is not approved, the provider is not one of the four, or the model is not listed. */
+      endpointId?: string;
+      /** Its own trace switch, off by default. */
+      traces?: boolean;
     }) => Promise<AgentStatus & { ptyId: string }>;
     update: (params: {
       id: string;
@@ -1605,6 +1615,11 @@ export interface ElectronAPI {
       /** @deprecated Send `role`. Read only when `role` is absent. */
       orchestratorMode?: boolean;
       cliPath?: string | null;
+      /** The inference endpoint its harness runs on, or null for none: validated with the provider and model. A
+       *  change of endpoint, model or traces on an endpoint ends the agent's terminal (a new one carries the new
+       *  session). */
+      endpointId?: string | null;
+      traces?: boolean;
     }) => Promise<{ success: boolean; error?: string; agent?: AgentStatus }>;
     /** `{ success: false, cliRunning: true }` when a CLI still runs in the agent's terminal: nothing was typed. */
     /** `code: 'no_terminal'` when the machine had no terminal left: `error` says how many of how many and what frees one, and the agent reads 'error' with it (asleep, it stays asleep with it). */
@@ -2853,8 +2868,371 @@ export interface ElectronAPI {
     last: () => Promise<ErrorReportsLast | null>;
   };
 
+  /** Inference endpoints (services/inference-endpoints.ts). The window is the one place an endpoint is approved. */
+  endpoints?: {
+    list: () => Promise<EndpointView[]>;
+    /** From the window: a new endpoint, an address or extra headers the owner typed (or the approved ones put back)
+     *  are approved by the act. A save of any other field (traces, the name, the hold) leaves an agent's pending
+     *  change pending: the answer's endpoint keeps `approved: false`. Only `approve` approves it.
+     *  `shown` (required when `id` names an endpoint that exists; left out for a new one): the view's `baseUrl` and
+     *  `extraHeaders` as the form displayed them when it opened. "Typed" means what differs from `shown`. Refused,
+     *  nothing written, when `shown` is missing ("A save names the address and the extra headers the form showed, so a
+     *  change made meanwhile is not taken for yours.") or when it is not the endpoint now ('The endpoint "<name>"
+     *  changed since it was shown (<agent>, <time>): look at it again before you save.'): re-read `endpoints.list`.
+     *  <time> is said as every notice says it: "21:00 UTC (01:00 +04)", or "21:00 UTC" on a machine on UTC. */
+    /** `allowPlainHttp`: the owner allows plain http to a public address (refused without it; private addresses
+     *  need none). An agent's change of address takes the endpoint's key away (set it again). */
+    /** Traces turned off applies at once: ok, with `unsaved` while it is not written yet. */
+    /** `extraHeaders`: fixed headers sent with every request to the endpoint, replacing the whole map ({} clears it;
+     *  left out, they stay). At most 16; a name is a header token of 64 characters at most, a value 1 to 1024
+     *  printable characters on one line. Refused, with the reason in `error`: Authorization, x-api-key, Cookie,
+     *  Set-Cookie, Host, Content-Length, Content-Type, Content-Encoding, Transfer-Encoding, Connection, Keep-Alive, TE,
+     *  Trailer, Upgrade, Expect, Accept-Encoding, X-Session-Id, X-Agent-Id, any `Proxy-` header, and two names equal
+     *  but for case. Every agent reads them: say in the window never to put a credential there. */
+    save: (e: { id?: string; name: string; baseUrl: string; allowTraces: boolean; holdMaxSeconds?: number; sendSessionHeaders?: boolean; allowPlainHttp?: boolean; extraHeaders?: Record<string, string>; shown?: { baseUrl: string; extraHeaders: Record<string, string> } }) => Promise<{ ok: true; endpoint: EndpointView; unsaved?: string } | { ok: false; error: string }>;
+    /** Approves exactly what the window showed: `seen` is the view's `baseUrl` and `extraHeaders` as displayed in the
+     *  notice. Refused (`ok: false`, `error` a plain sentence) when either is not the endpoint's now (an agent changed
+     *  it again while the notice was open: read `endpoints.list` and show the change), or when `seen` is missing. The
+     *  sentence: 'The endpoint "<name>" changed since it was shown (<agent>, <time>): look at it again before you
+     *  approve.', the time as `save`'s says it. */
+    approve: (id: string, seen: { baseUrl: string; extraHeaders: Record<string, string> }) => Promise<{ ok: true; endpoint: EndpointView } | { ok: false; error: string }>;
+    /** Write-only: no channel returns a key. null clears it. */
+    setKey: (id: string, key: string | null) => Promise<{ ok: true } | { ok: false; error: string }>;
+    /** Refused while agents run on it (`agents` names them). */
+    /** Applies at once: ok, with `unsaved` while it is not written yet. */
+    remove: (id: string) => Promise<{ ok: true; unsaved?: string } | { ok: false; error: string; agents?: string[] }>;
+    refreshModels: (id: string) => Promise<{ ok: true; models: string[] } | { ok: false; error: string }>;
+    /** A /v1/models probe: status, latency, time. */
+    check: (id: string) => Promise<EndpointHealth>;
+    harnesses: () => Promise<HarnessSupport[]>;
+    waits: () => Promise<EndpointWait[]>;
+    /** An endpoint added, changed, approved or removed; `by` when an agent did it, `needsApproval` when it now waits. */
+    onChanged: (cb: (e: { id: string; by?: { agentId: string; agentName?: string }; needsApproval: boolean }) => void) => () => void;
+    /** The requests held while their endpoint pauses, every time that changes. */
+    onWaiting: (cb: (waits: EndpointWait[]) => void) => () => void;
+  };
+
+  /** Native traces (services/trace-store.ts), the back-office page. */
+  traces?: {
+    settings: () => Promise<TraceSettingsView>;
+    /** `uploadUrl`: the back-office address any user may point at their own server, '' for none. A new address
+     *  clears the consent: the notice is shown again. */
+    /** A change that takes away from sharing (projects opted out, closed models left out) applies at once: ok, with
+     *  `unsaved` while it is not written yet (Tars tries again every minute, and shares nothing meanwhile; when the
+     *  consent's file can be neither removed nor emptied, the words say a restart would share again instead). */
+    setSettings: (s: { projects?: string[]; capBytes?: number; retentionDays?: number; excludeClosedModels?: boolean; uploadUrl?: string; uploadAllowPlainHttp?: boolean }) => Promise<{ ok: true; settings: TraceSettingsView; unsaved?: string } | { ok: false; error: string }>;
+    /** The harness and model pairs that may be traced (empty as Tars ships), and the closed-model default with the
+     *  warning to show beside its switch. */
+    pairs: () => Promise<TracePairsView>;
+    addPair: (pair: TracePair) => Promise<({ ok: true } & TracePairsView) | { ok: false; error: string }>;
+    /** Applies at once: ok, with `unsaved` while it is not written yet. */
+    removePair: (pair: { harness: string; models: string }) => Promise<({ ok: true; unsaved?: string } & TracePairsView) | { ok: false; error: string }>;
+    /** Adds the pairs of a JSON file the owner picks (an array of { harness, models, note? }); `added` new ones. */
+    importPairs: () => Promise<({ ok: true; added: number } & TracePairsView) | { ok: false; error: string; cancelled?: true }>;
+    /** What leaves the machine on upload, what stays, and what the scrubbing catches and cannot: the first-time notice. */
+    uploadNotice: () => Promise<UploadNotice>;
+    /** One session as it would be uploaded: scrubbed, with what was masked by kind. */
+    /** One session exactly as it would be uploaded: the batches (id and body) and the blobs (hash and content) the
+     *  upload sends, built by the same function, with what was masked, by kind. */
+    preview: (traceId: string) => Promise<{ document: { batches: Array<{ batchId: string; body: unknown }>; blobs: Record<string, unknown> }; counts: Record<string, number>; scrubVersion: string } | null>;
+    /** The user has read the notice: uploads may start (refused while no address is set, or a deletion is owed). */
+    giveUploadConsent: () => Promise<{ ok: true; at: string } | { ok: false; error: string }>;
+    /** The uploader's state. */
+    uploadState: () => Promise<UploadState>;
+    /** Asks the back-office to delete everything this install sent, then forgets the install and what was sent. */
+    deleteEverywhere: () => Promise<{ ok: true; deleted?: number } | { ok: false; error: string }>;
+    /** Gives up a deletion the old back-office never confirmed (gone, or not answering). Say plainly what it means:
+     *  "what you shared there may still be there; Tars stops trying to delete it, and still never sends what was
+     *  recorded before the deletion". Sharing may then start again, to this or another back-office. Refused, with a
+     *  reason, when no deletion is waiting for confirmation. */
+    abandonDeletion: () => Promise<{ ok: true; state: UploadState } | { ok: false; error: string }>;
+    /** The window has shown UploadState.deletionCleared: it stops being reported. */
+    ackDeletionCleared: () => Promise<{ ok: true }>;
+    /** Whether "Record traces" is offered for this harness, model and endpoint, and why not (the rule stays in main).
+     *  `offered` counts the agent's own switch as on; `projectOptedIn` says the project's apart, and `reason` says it
+     *  when it is the one missing. */
+    offer: (q: { provider: string; model?: string; endpointId?: string; projectPath?: string }) => Promise<{ offered: boolean; code: TraceOfferCode; reason: string; projectOptedIn: boolean }>;
+    stats: () => Promise<TraceStats>;
+    list: (f: TraceFilter) => Promise<TraceList>;
+    session: (traceId: string) => Promise<{ session: TraceSessionSummary; outcome?: TraceOutcome; turns: TraceTurnView[] } | null>;
+    requestMessages: (requestId: string) => Promise<{ system?: unknown; tools?: unknown[]; input: TraceMessageView[]; output: TraceMessageView[] } | null>;
+    /** A save dialog in main; JSONL in the reader's trace format tables. */
+    exportTo: (f: TraceFilter) => Promise<{ ok: true; path: string; sessions: number } | { ok: false; error: string; cancelled?: true }>;
+    remove: (sel: { traceIds: string[] } | { filter: TraceFilter }) => Promise<{ deleted: number; bytesFreed: number }>;
+    readerToken: () => Promise<{ exists: boolean; createdAt?: string; lastUsedAt?: string; route: string; listen: 'loopback' }>;
+    /** A new reader token, shown once; the old one opens nothing from now on. ok:false with the reason when it could
+     *  not be saved: the old one then opens nothing either, and there is no token; or when the old one's file stays,
+     *  which would open again after a restart. */
+    rotateReaderToken: () => Promise<{ token: string } | { ok: false; error: string }>;
+    /** ok once the token opens nothing and its file says no token; else the reason (it still opens nothing until
+     *  Tars quits). */
+    revokeReaderToken: () => Promise<{ ok: true } | { ok: false; error: string }>;
+    /** Throttled to once a second. */
+    onChanged: (cb: () => void) => () => void;
+  };
+
   // Platform info
   platform: string;
+}
+
+export type HarnessId = 'codex' | 'pi' | 'qwen-code' | 'opencode';
+
+export interface EndpointHealth { ok: boolean; status?: number; latencyMs?: number; at: string; error?: string }
+
+export interface EndpointView {
+  id: string;
+  name: string;
+  baseUrl: string;
+  allowTraces: boolean;
+  /** Never the key. */
+  keySet: boolean;
+  models: string[];
+  modelsReadAt?: string;
+  modelsError?: string;
+  /** Who runs on it. */
+  agents: Array<{ id: string; name: string; projectPath: string; provider: string; model?: string }>;
+  /** false: an agent added it or changed its base URL or its extra headers; the window shows Approve. */
+  approved: boolean;
+  /** Differs from baseUrl while a change waits for approval: show both. */
+  approvedBaseUrl?: string;
+  /** The change notice: which agent, when. */
+  changedBy?: { agentId: string; agentName?: string; at: string };
+  /** How long a request is held while the endpoint pauses (503 and 429; a 502 to a GET): 0 to 3600, default 120. */
+  holdMaxSeconds: number;
+  /** Fixed headers sent with every request to it ({} for none). Not secret: agents read them. */
+  extraHeaders: Record<string, string>;
+  /** The extra headers the owner approved: differs from extraHeaders while an agent's change waits; show both. */
+  approvedExtraHeaders?: Record<string, string>;
+  /** Adds X-Session-Id and X-Agent-Id to every request: off by default (they name the agent and its session). */
+  sendSessionHeaders: boolean;
+  /** The traffic is plain http, not encrypted at the HTTP level: show it. */
+  plainHttp: boolean;
+  /** The owner allowed plain http to this public address. */
+  allowPlainHttp: boolean;
+  health?: EndpointHealth;
+}
+
+export interface HarnessSupport {
+  harness: HarnessId;
+  toolCalls: 'works' | 'failed' | 'unmeasured';
+  api: 'chat' | 'responses';
+  /** The version measured against a stand-in endpoint. */
+  measuredOn: string;
+  note?: string;
+}
+
+/** An agent's request held by the proxy while its endpoint pauses. */
+export interface EndpointWait {
+  agentId: string;
+  endpointId: string;
+  since: number;
+  attempts: number;
+  lastStatus?: number;
+  lastError?: string;
+  nextTryAt: number;
+  giveUpAt: number;
+}
+
+/** Why "Record traces" is or is not offered: stable codes the window words itself. `no-endpoint`: the agent runs on
+ *  its CLI's own account. `agent-off` never comes from offer (it counts the agent's switch as on). */
+export type TraceOfferCode = 'traced' | 'no-endpoint' | 'endpoint-not-approved' | 'endpoint-disallows' | 'project-off' | 'agent-off' | 'closed-model' | 'not-on-list';
+
+export interface TracePair { harness: string; models: string; note?: string }
+export interface TracePairsView { pairs: TracePair[]; excludeClosedModels: boolean; closedModelsWarning: string }
+export interface TraceSettingsView {
+  projects: string[];
+  capBytes: number;
+  retentionDays: number;
+  pairs: TracePair[];
+  /** On by default: Claude, GPT, o-series and Gemini models are left out. */
+  excludeClosedModels: boolean;
+  /** The back-office address, '' for none (no upload). */
+  uploadUrl: string;
+  /** When the user read the upload notice for this address. */
+  uploadConsentAt?: string;
+  /** The owner allowed plain http to a public back-office address. */
+  uploadAllowPlainHttp?: boolean;
+  /** The last deletion of what was shared (ms): only later sessions are sent again. */
+  uploadDeletedAt?: number;
+  /** A deletion not confirmed yet: consent is refused until it is. */
+  uploadDeletionOwed?: boolean;
+  /** Whose the latest deletion is: 'you', the user's "delete everything"; 'start', a start that found a withdrawal
+   *  Tars could not write down and took it for a deletion. */
+  uploadDeletionBy?: 'you' | 'start';
+}
+
+export interface UploadNotice {
+  /** After a deletion: only sessions started after this moment are sent; say it with the consent. */
+  onlyAfter?: string;
+  leaves: string[];
+  stays: string[];
+  scrubbing: { version: string; catches: string[]; cannot: string[] };
+}
+
+export interface UploadState {
+  /** An address is set. */
+  configured: boolean;
+  consentAt?: string;
+  /** The install is registered with the back-office (its token is in the private folder). */
+  registered: boolean;
+  /** The sessions an upload pass would send now: a change not sent, the trace gate as it is now (project and agent
+   *  opted in, the endpoint there and allowing traces, the pair on the list, closed models left out when that is on),
+   *  started after the latest deletion's moment. Still counted while the consent, the address or an owed deletion
+   *  stops every session. */
+  pendingSessions: number;
+  /** The sessions sent and still on the back-office: those started after the latest deletion's moment. */
+  sentSessions: number;
+  lastUploadAt?: number;
+  lastError?: string;
+  /** Waiting before the next try (offline, the server busy or full). */
+  nextTryAt?: number;
+  /** The settings could not be written after a change that already holds in memory (a withdrawn consent, a
+   *  deletion's bookkeeping, a revoke of sharing): the reason, with "Tars tries again every minute". Uploads stay off
+   *  meanwhile, unless the words say a restart would share again. Say it as a warning until it goes. */
+  unsaved?: string;
+  /** Which note `unsaved` carries, set with it and gone with it; key on this, never on the words:
+   *  - 'consent-held': a revoke not yet saved holds the consent back, and nothing is shared meanwhile;
+   *  - 'revoke-comes-back': a revoke or withdrawal not yet saved whose consent file stays, so a restart would share
+   *    again what it stopped;
+   *  - 'owed': any other write owed (a withdrawal whose file went, a deletion's bookkeeping). */
+  unsavedKind?: 'consent-held' | 'revoke-comes-back' | 'owed';
+  /** Say each plainly, not as an error:
+   *  - 'registration_closed': "this back-office does not take new installs" (looked at again in 6 hours);
+   *  - 'install_blocked': "this back-office blocked this install" (looked at again in 6 hours);
+   *  - 'forgotten': "this back-office no longer knows this Tars" (the user's deletion, or its operator's). Uploads
+   *    stop, the local traces stay, and the consent is withdrawn: sharing again is the user's own act (the upload
+   *    notice, then giveUploadConsent), which registers a new install. */
+  notice?: 'registration_closed' | 'install_blocked' | 'forgotten';
+  /** A deletion that waited for confirmation was cleared because this install's record is gone: say it ("sharing may
+   *  start again; what was recorded before the deletion is still never sent") until traces.ackDeletionCleared(). */
+  deletionCleared: boolean;
+  /** A deletion asked for and not confirmed by the back-office: sharing stays off; offer "delete again". */
+  deletionOwed: boolean;
+  /** Whose the latest deletion is, while there is one: 'you' or 'start' (TraceSettings.uploadDeletionBy). */
+  deletionBy?: 'you' | 'start';
+}
+
+export interface TraceStats {
+  bytes: number;
+  capBytes: number;
+  retentionDays: number;
+  sessions: number;
+  requests: number;
+  oldest?: number;
+  /** Past the cap with only open sessions: metadata kept, bodies dropped. */
+  bodiesDropped: boolean;
+  byProject: Array<{ projectPath: string; sessions: number; bytes: number }>;
+}
+
+export interface TraceFilter {
+  /** One session exactly (an export of a single session). */
+  traceId?: string;
+  project?: string;
+  agentId?: string;
+  harness?: string;
+  model?: string;
+  endpointId?: string;
+  /** ms UTC, on the start. */
+  from?: number;
+  to?: number;
+  cursor?: string;
+  /** 1 to 200, 50 by default; newest first. */
+  limit?: number;
+}
+
+export interface TraceTotals { count: number; bytes: number; tokensIn: number; tokensCached: number; tokensOut: number }
+
+export interface TraceList {
+  sessions: TraceSessionSummary[];
+  nextCursor?: string;
+  /** For the whole filter, not the page. */
+  totals: TraceTotals;
+  byProject: Array<TraceTotals & { projectPath: string }>;
+}
+
+export interface TraceSessionSummary {
+  traceId: string;
+  projectPath: string;
+  agentId: string;
+  agentName?: string;
+  harness: string;
+  harnessVersion?: string;
+  endpointId: string;
+  endpointName?: string;
+  model: string;
+  startedAt: number;
+  endedAt?: number;
+  finalStatus: 'done' | 'failed' | 'abandoned' | 'open';
+  turnCount: number;
+  requestCount: number;
+  tokensIn: number;
+  tokensCached: number;
+  tokensOut: number;
+  bytes: number;
+  /** A closed model's words entered the session. */
+  mixed: boolean;
+  /** Turns whose author Tars could not attribute. */
+  unknownTurns: number;
+}
+
+/** What Tars knows of how a session ended: what is not known is absent. */
+export interface TraceOutcome {
+  task?: { id: string; status: string; from?: string; endedAt?: number };
+  branch?: string;
+  head?: string;
+  tests?: { command?: string; passed?: number; failed?: number; at?: number };
+  gates?: Array<{ kind: string; verdict: string; at?: number }>;
+  heldRequests?: number;
+  requestErrors?: number;
+}
+
+export interface TraceRequestView {
+  requestId: string;
+  upstreamRequestId?: string;
+  seq: number;
+  surface: string;
+  /** A side call (a title, a memory summary): no turn of its own. */
+  side: boolean;
+  startedAt: number;
+  /** The model's first token: for a stream, the first chunk with text, reasoning or a tool call (a chunk with only a
+   *  role, or empty, is not one; none when the stream carried no content); not streamed, the first byte. */
+  ttftMs?: number;
+  totalMs?: number;
+  status: number;
+  finishReason?: string;
+  error?: string;
+  tokensIn?: number;
+  tokensCached?: number;
+  tokensOut?: number;
+  reqBytes: number;
+  respBytes: number;
+  newMessages: number;
+  attempts: number;
+  heldMs: number;
+  bodiesDropped: boolean;
+}
+
+export interface TraceTurnView {
+  turnId: string;
+  index: number;
+  startedAt: number;
+  endedAt?: number;
+  gapBeforeMs?: number;
+  /** user | orchestrator | agent | chat | relay | tars | unknown */
+  author: string;
+  authorDetail?: string;
+  finalStatus?: string;
+  toolCalls: number;
+  toolErrors: number;
+  modelMs: number;
+  toolMs: number;
+  requests: TraceRequestView[];
+}
+
+export interface TraceMessageView {
+  hash: string;
+  role: string;
+  parts: Array<{ kind: 'text' | 'thinking' | 'tool_call' | 'tool_result' | 'image'; text?: string; toolName?: string; toolCallId?: string; isError?: boolean; size: number }>;
 }
 
 declare global {
