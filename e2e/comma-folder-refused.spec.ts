@@ -57,6 +57,15 @@ import { writeFakeClis } from './fake-clis.mjs';
  * 8. ~/.tars-private is refused for the running claude agent, its reason naming it, and nothing is typed for it.
  * Red on e4d550b48: main typed nothing, its answer said nothing of when, and it took ~/.tars-private. Red on
  * f68f7901c: main typed `/add-dir <folder>` into claude and answered `now`, and answered `next-start` for grok.
+ * And grok holding the folder 7 gave it (QA, on the Audit's M1 and M2 at 20c062cd3: a grok agent with a secondary
+ * folder starts, and saves an edit):
+ * 9. stopped and started again, it starts, and its kept output says, naming the folder, that Tars does not hand grok it;
+ * 10. the window's rename of it is saved, its folder kept.
+ * Shown on a mutant (QA's hold636g): 9 red with grok's launch notice left out (grok-provider.ts).
+ *
+ * Each fill of the custom path field in the first test is checked: the field holds the path and its Add is enabled,
+ * else the path is filled again. The agent's terminal takes the focus a moment after its window opens, about 350 ms
+ * under load (the Audit's reading of a red run of step 0, where Add stayed disabled after the fill).
  */
 
 type Api = { electronAPI: { agent: {
@@ -114,7 +123,13 @@ test('a gemini agent is refused a secondary folder whose name holds a comma, wit
     await page.locator('[data-agent-card="gem"]').click({ position: { x: 24, y: 14 } });
     await page.getByRole('radiogroup', { name: 'Agent rail' }).getByRole('radio', { name: /Memory/ }).click();
     const field = page.getByPlaceholder('/path/to/project...');
-    await field.fill(comma);
+    // Filled until the field holds the path and its Add is enabled: the terminal may take the focus meanwhile.
+    const fillField = (value: string) => expect(async () => {
+      await field.fill(value);
+      await expect(field).toHaveValue(value, { timeout: 1_000 });
+      await expect(field.locator('xpath=..').getByRole('button', { name: 'Add', exact: true })).toBeEnabled({ timeout: 1_000 });
+    }).toPass({ timeout: 15_000 });
+    await fillField(comma);
     await field.locator('xpath=..').getByRole('button', { name: 'Add', exact: true }).click();
     const line = page.locator('[data-secondary-project-error]');
     await expect.soft(line, 'the refusal under the field').toBeVisible({ timeout: 10_000 });
@@ -137,7 +152,7 @@ test('a gemini agent is refused a secondary folder whose name holds a comma, wit
 
     // 0b. Editing the path clears the line.
     const add = () => field.locator('xpath=..').getByRole('button', { name: 'Add', exact: true }).click();
-    await field.fill(plain);
+    await fillField(plain);
     const errorAfterEdit = await line.count();
     // 0c. The plain folder, added there: taken, nothing typed by the window, and when it applies said under the field.
     const typedBefore = (await windowInputs()).length;
@@ -148,7 +163,7 @@ test('a gemini agent is refused a secondary folder whose name holds a comma, wit
     await page.screenshot({ path: test.info().outputPath('next-start-on-screen.png') });
     const windowTyped = (await windowInputs()).slice(typedBefore);
     // 0d. Refused again, then the dialog on another agent: the line goes.
-    await field.fill(comma);
+    await fillField(comma);
     await add();
     await expect.soft(line, 'refused again').toBeVisible({ timeout: 10_000 });
     await page.getByRole('button', { name: 'close', exact: true }).first().click();
@@ -160,7 +175,7 @@ test('a gemini agent is refused a secondary folder whose name holds a comma, wit
     await page.locator('[data-agent-card="grk"]').click({ position: { x: 24, y: 14 } });
     await page.getByRole('radiogroup', { name: 'Agent rail' }).getByRole('radio', { name: /Memory/ }).click();
     const grokTypedBefore = (await windowInputs()).length;
-    await field.fill(plain);
+    await fillField(plain);
     await add();
     await expect.soft(note, 'what becomes of the folder on grok').toBeVisible({ timeout: 10_000 });
     const grokNote = (await note.textContent({ timeout: 1_000 }).catch(() => null)) ?? null;
@@ -215,13 +230,15 @@ test('a gemini agent is refused a secondary folder whose name holds a comma, wit
 
 type LiveApi = { electronAPI: { agent: {
   start(p: { id: string; prompt: string }): Promise<unknown>;
+  stop(id: string): Promise<{ success: boolean }>;
+  update(p: Record<string, unknown>): Promise<{ success: boolean; error?: string }>;
   setSecondaryProject(p: { id: string; secondaryProjectPath: string | null }): Promise<{ success: boolean; error?: string; appliesAt?: string }>;
-  get(id: string): Promise<{ cliRunning?: boolean; currentSessionId?: string; status?: string; secondaryProjectPath?: string } | null>;
+  get(id: string): Promise<{ cliRunning?: boolean; currentSessionId?: string; status?: string; secondaryProjectPath?: string; name?: string } | null>;
 } } };
 type Rec = { agent?: string; kind?: string; launch?: unknown; typed?: string };
 
 test("a folder set while the agent's CLI runs is typed into no CLI, and the answer says when it reaches it", async () => {
-  test.setTimeout(150_000);
+  test.setTimeout(270_000);
   const home = fs.mkdtempSync(path.join(os.tmpdir(), 'dorothy-e2e-live-folder-'));
   const project = path.join(home, 'projects', 'demo');
   const dir = path.join(home, '.tars');
@@ -288,6 +305,35 @@ test("a folder set while the agent's CLI runs is typed into no CLI, and the answ
     expect.soft(privateAnswer.error ?? '').toMatch(/tars-private/);
     expect.soft(privateTyped, 'nothing typed for ~/.tars-private').toEqual([]);
     expect.soft(claudeAfter?.secondaryProjectPath).toBe(shared);
+
+    // 9. grok, holding the folder 7 gave it, stopped and started again: it starts, and its output names the folder
+    //    Tars does not hand it.
+    const grokLaunches = () => recs('live-grok').filter((r) => r.launch).length;
+    const launchesBefore = grokLaunches();
+    await page.evaluate((i) => (window as unknown as LiveApi).electronAPI.agent.stop(i), 'live-grok');
+    await expect.poll(async () => !!(await get('live-grok'))?.cliRunning, { timeout: 30_000, message: "grok's CLI stopped" }).toBe(false);
+    await page.evaluate((i) => (window as unknown as LiveApi).electronAPI.agent.start({ id: i, prompt: '' }), 'live-grok');
+    await expect.poll(grokLaunches, { timeout: 60_000, message: 'grok launched again' }).toBeGreaterThan(launchesBefore);
+    // The notice is a [Tars] line in the agent's kept output (core/agent-notices.ts), read from main as
+    // chat-runners.spec.ts reads a refused session's: agent:get answers a running CLI's screen instead.
+    const dist = path.resolve('electron', 'dist');
+    const grokOutput = () => app.evaluate((_e, { dist, id }) => {
+      const agent = process.mainModule!.require(`${dist}/core/agent-manager.js`).agents.get(id);
+      return ((agent?.output ?? []) as string[]).join('');
+    }, { dist, id: 'live-grok' });
+    await expect.poll(grokOutput, { timeout: 15_000, message: "grok's launch notice in its kept output" }).toMatch(/does not hand grok its secondary folder/);
+    const grokSaid = await grokOutput();
+    // 10. The window's rename of that grok agent, as its edit sends it: saved, its folder kept.
+    const grokRenamed = await page.evaluate(({ i, f }) => (window as unknown as LiveApi).electronAPI.agent.update({ id: i, ...f }), {
+      i: 'live-grok',
+      f: { projectPath: project, skills: [], permissionMode: 'bypass', character: 'robot', model: null, savedPrompt: null, role: 'worker', cliPath: fakes.grok, name: 'Grok Renamed', provider: 'grok' },
+    });
+    const grokAfter = await get('live-grok');
+    keep({ grokRelaunched: grokLaunches() - launchesBefore, grokNoticeNamesFolder: grokSaid.includes(shared), grokRenamed, grokAfter: { name: grokAfter?.name, folder: grokAfter?.secondaryProjectPath ?? null } });
+    expect.soft(grokSaid, "grok's notice names its folder").toContain(shared);
+    expect.soft(grokRenamed.success, JSON.stringify(grokRenamed)).toBe(true);
+    expect.soft(grokAfter?.name).toBe('Grok Renamed');
+    expect.soft(grokAfter?.secondaryProjectPath).toBe(shared);
   } finally {
     await app.close();
     await removeHome(home);
