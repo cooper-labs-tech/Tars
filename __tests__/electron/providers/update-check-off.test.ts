@@ -107,18 +107,19 @@ afterEach(() => {
 describe('codex', () => {
   const provider = new CodexProvider();
   const check = ['-c', 'check_for_update_on_startup=false'];
-  const hasCheckOff = (argv: string[]) => argv.some((w, i) => w === check[0] && argv[i + 1] === check[1]);
+  /** How many times the line passes the switch: once, never twice (#625 adds the same switch on the 2.0.7 train). */
+  const checksOff = (argv: string[]) => argv.filter((w, i) => w === check[0] && argv[i + 1] === check[1]).length;
 
-  it('1: every interactive line switches its update check off: a start, a resume, a fork, with a model', () => {
+  it('1: every interactive line switches its update check off, once: a start, a resume, a fork, with a model', () => {
     for (const extra of [{}, { model: 'gpt-6-luna', effort: 'low' }, { resumeSessionId: '019a0000-0000-7000-8000-000000000001' }, { resumeSessionId: '019a0000-0000-7000-8000-000000000001', forkSession: true }]) {
-      expect(hasCheckOff(words(provider.buildInteractiveCommand({ binaryPath: codexBin, prompt: PROMPT, ...extra }))), JSON.stringify(extra)).toBe(true);
+      expect(checksOff(words(provider.buildInteractiveCommand({ binaryPath: codexBin, prompt: PROMPT, ...extra }))), JSON.stringify(extra)).toBe(1);
     }
   });
 
   it('1, 7: on Windows too, where the line starts with the binary', () => {
     const argv = asPlatform('win32', () => words(provider.buildInteractiveCommand({ binaryPath: codexBin, prompt: PROMPT })));
     expect(argv[0]).toBe(codexBin);
-    expect(hasCheckOff(argv)).toBe(true);
+    expect(checksOff(argv)).toBe(1);
   });
 });
 
