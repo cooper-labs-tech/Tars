@@ -21,6 +21,15 @@ const { tmpDir } = vi.hoisted(() => ({
   tmpDir: process.getBuiltinModule('node:path').join(process.getBuiltinModule('node:os').tmpdir(), `tars-resume-flags-${process.pid}-${Date.now()}`),
 }));
 
+// Hermes builds its line only for an agent on an inference endpoint (providers/hermes-provider.ts): one, for it
+// alone. Every other provider reads no endpoint here, as before.
+vi.mock('../../../electron/services/traces-runtime', async (importOriginal) => ({
+  ...(await importOriginal<object>()),
+  endpointLaunchForAgent: (agentId: string | undefined, harness: string) => (harness === 'hermes' && agentId
+    ? { args: [], env: {}, tokenVars: [], profile: { baseUrl: 'http://127.0.0.1:31417/v1', model: 'open-coder-1' } }
+    : null),
+}));
+
 vi.mock('os', async (importOriginal) => {
   const mod = await importOriginal<typeof import('os')>();
   return { ...mod, homedir: () => tmpDir };
@@ -31,7 +40,7 @@ const SESSION = '4ab31f00-ce51-4676-ab80-4023cf6e3f4e';
 async function commandFor(providerId: string, resume: { resumeSessionId?: string; forkSession?: boolean }): Promise<string> {
   const { getProvider } = await import('../../../electron/providers');
   return getProvider(providerId as never).buildInteractiveCommand({
-    binaryPath: '/usr/local/bin/cli', prompt: '', model: 'some-model', ...resume,
+    agentId: 'agent-1', binaryPath: '/usr/local/bin/cli', prompt: '', model: 'some-model', ...resume,
   });
 }
 

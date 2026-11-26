@@ -46,6 +46,15 @@ import { execFileSync } from 'node:child_process';
 let root: string;
 let home: string;
 
+// Hermes builds its line only for an agent on an inference endpoint (providers/hermes-provider.ts): one, for it
+// alone. Every other provider reads no endpoint here, as before.
+vi.mock('../../../electron/services/traces-runtime', async (importOriginal) => ({
+  ...(await importOriginal<object>()),
+  endpointLaunchForAgent: (agentId: string | undefined, harness: string) => (harness === 'hermes' && agentId
+    ? { args: [], env: {}, tokenVars: [], profile: { baseUrl: 'http://127.0.0.1:31417/v1', model: 'open-coder-1' } }
+    : null),
+}));
+
 vi.mock('os', async (importOriginal) => {
   const mod = await importOriginal<typeof import('os')>();
   return { ...mod, homedir: () => home, default: { ...mod, homedir: () => home } };
@@ -109,6 +118,8 @@ async function providersUnder(homeDir: string): Promise<Providers> {
 
 /** Everything under the home an interactive command can name, created so the existsSync checks pass. */
 function interactiveParams(homeDir: string) {
+  // The agent, for the CLIs that start in a home of their own per agent (Hermes).
+  const agentId = 'agent-1';
   const secondaryProjectPath = path.join(homeDir, 'second project');
   const vault = path.join(homeDir, "JeanBrasse's vault");
   const mcpConfigPath = path.join(homeDir, 'mcp.json');
@@ -117,6 +128,7 @@ function interactiveParams(homeDir: string) {
   fs.writeFileSync(mcpConfigPath, '{}');
   fs.writeFileSync(systemPromptFile, 'be brief');
   return {
+    agentId,
     binaryPath: 'tars_argv',
     prompt: "Rebase onto main; don't stop at the first failure",
     model: 'some-model',

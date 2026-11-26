@@ -144,7 +144,7 @@ Next.js 16.4 App Router, static-exported (`ELECTRON_BUILD=1 next build` with `sr
 
 `safeEffort()` is exported from the same module and validates reasoning effort against `{low, medium, high, xhigh, max}` before it lands unquoted in a shell string. The value arrives over IPC, so it is validated at the point of use, not trusted from the caller. `effortFlag()` turns it into ` --effort <level>` for the fourteen providers on the claude binary, medium included: without the flag Claude Code starts at the effort it last saved for that model from any terminal (`/effort` writes `modelSettings.<model>.effortLevel` into `~/.claude/settings.json`), not at medium. An agent with no effort gets no flag, which is the one case that means the CLI's own.
 
-### The registry (21 providers)
+### The registry (22 providers)
 
 | id | Display name | Binary | Config dir | Reaches the model via |
 |---|---|---|---|---|
@@ -156,6 +156,7 @@ Next.js 16.4 App Router, static-exported (`ELECTRON_BUILD=1 next build` with `sr
 | `pi` | Pi Terminal | `pi` | `~/.pi` | native |
 | `amp` | Amp | `amp` | `~/.config/amp` | native |
 | `qwen-code` | Qwen Code | `qwen` | `~/.qwen` | native, on the models of the user's own `~/.qwen/settings.json` (2.0.4, below) |
+| `hermes` | Hermes Agent | `hermes` | `~/.tars/hermes` (a profile per agent) | an inference endpoint only, through Tars's proxy (below) |
 | `openrouter` | OpenRouter | `claude` | `~/.claude` | `https://openrouter.ai/api` |
 | `deepseek` | DeepSeek | `claude` | `~/.claude` | `https://api.deepseek.com/anthropic`, else OpenRouter |
 | `moonshot` | MoonshotAI (Kimi) | `claude` | `~/.claude` | `https://api.moonshot.ai/anthropic`, else OpenRouter |
