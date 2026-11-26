@@ -1074,7 +1074,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
   endpoints: {
     list: () => ipcRenderer.invoke('endpoints:list'),
     save: (e: { id?: string; name: string; baseUrl: string; allowTraces: boolean; holdMaxSeconds?: number; sendSessionHeaders?: boolean; allowPlainHttp?: boolean; extraHeaders?: Record<string, string> }) => ipcRenderer.invoke('endpoints:save', e),
-    approve: (id: string) => ipcRenderer.invoke('endpoints:approve', id),
+    approve: (id: string, seen: { baseUrl: string; extraHeaders: Record<string, string> }) => ipcRenderer.invoke('endpoints:approve', id, seen),
     setKey: (id: string, key: string | null) => ipcRenderer.invoke('endpoints:setKey', id, key),
     remove: (id: string) => ipcRenderer.invoke('endpoints:remove', id),
     refreshModels: (id: string) => ipcRenderer.invoke('endpoints:refreshModels', id),

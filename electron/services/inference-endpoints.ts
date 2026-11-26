@@ -13,7 +13,9 @@ import { isRefusedExtraHeader, type ProxyTarget } from './endpoint-proxy';
  * - **Where things are kept.** The records are in `app-settings.json` (`inferenceEndpoints`), with no secret. Each
  *   key is in the settings' secrets (`endpointKeys`, ~/.tars-private/settings-secrets.json), read by the proxy per
  *   request and never handed to an agent, a CLI or the window, which only learns `keySet`.
- * - **Who changes what.** The owner, in the window, adds and changes anything, and approves by that act. Any agent,
+ * - **Who changes what.** The owner, in the window, adds and changes anything; an address or extra headers the
+ *   owner types there are approved by that act, while a save of another field leaves an agent's change pending
+ *   until the owner approves exactly what the window showed (approveEndpoint). Any agent,
  *   through the API or its MCP tools, may list them, add one, change one and rotate a key (the owner's word of 19/11:
  *   the agents of one project tune another project's).
  * - **The approval guard** (the orchestrator's decision, 19/11). An endpoint an agent adds, or whose base URL an
@@ -200,9 +202,16 @@ export function saveEndpoint(
     allowPlainHttp, extraHeaders,
   } as InferenceEndpoint;
   if (owner) {
-    next.approved = true;
-    next.approvedBaseUrl = baseUrl;
-    next.approvedExtraHeaders = extraHeaders;
+    // Approval stays apart from saving (found in the window's work on #599, 27/11). What the owner typed in the
+    // window (a new address, new extra headers, or the approved values put back) is the owner's own, so approved by
+    // that act. What an agent changed and the owner's form only sends back as it showed it stays pending: a save of
+    // another field (traces, the name, the hold) never approves it. Only approveEndpoint does, for what was shown.
+    const approvedHeaders = current ? approvedHeadersOf(current) : extraHeaders;
+    const addressOk = !current || movedTo || current.approvedBaseUrl === baseUrl;
+    const headersOk = !current || headersChanged || sameExtraHeaders(approvedHeaders, extraHeaders);
+    next.approvedBaseUrl = addressOk ? baseUrl : current!.approvedBaseUrl;
+    next.approvedExtraHeaders = headersOk ? extraHeaders : approvedHeaders;
+    next.approved = addressOk && headersOk;
   } else if (movedTo || headersChanged) {
     // An address or extra headers an agent set wait for the owner (the approval guard, above).
     next.approved = false;
@@ -226,11 +235,28 @@ function newId(list: InferenceEndpoint[]): string {
   return id;
 }
 
-/** The owner's approval, from the window only: the base URL in the record now is the one approved. */
-export function approveEndpoint(settings: AppSettings, id: string): Result {
+/** The extra headers the owner approved; for an endpoint approved before they were recorded, its own. */
+function approvedHeadersOf(e: InferenceEndpoint): Record<string, string> {
+  return e.approvedExtraHeaders ?? (e.approved ? e.extraHeaders ?? {} : {});
+}
+
+/**
+ * The owner's approval, from the window only, of exactly what the window showed (`seen`: the address and the extra
+ * headers). Refused when they are not the endpoint's now: an agent changed it again while the notice was open, and
+ * the owner must see that change before approving it.
+ */
+export function approveEndpoint(settings: AppSettings, id: string, seen?: { baseUrl?: unknown; extraHeaders?: unknown }): Result {
   const list = endpointsOf(settings);
   const current = list.find(e => e.id === id);
   if (!current) return { ok: false, error: 'There is no such endpoint.' };
+  const shownHeaders = seen?.extraHeaders;
+  if (!seen || typeof seen.baseUrl !== 'string' || !shownHeaders || typeof shownHeaders !== 'object' || Array.isArray(shownHeaders)) {
+    return { ok: false, error: 'An approval names the address and the extra headers it approves, as the window showed them.' };
+  }
+  if (seen.baseUrl !== current.baseUrl || !sameExtraHeaders(shownHeaders as Record<string, string>, current.extraHeaders)) {
+    const by = current.changedBy ? ` (${current.changedBy.agentName ?? current.changedBy.agentId}, ${current.changedBy.at})` : '';
+    return { ok: false, error: `The endpoint "${current.name}" changed since it was shown${by}: look at it again before you approve.` };
+  }
   const next: InferenceEndpoint = { ...current, approved: true, approvedBaseUrl: current.baseUrl, approvedExtraHeaders: current.extraHeaders ?? {} };
   return { ok: true, settings: { ...settings, inferenceEndpoints: list.map(e => (e.id === id ? next : e)) }, endpoint: next };
 }

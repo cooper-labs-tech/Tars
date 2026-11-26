@@ -1268,7 +1268,8 @@ one carries the new session.
 `endpoint_check`.
 - A key goes through the drop folder: write it, one line, into `~/.tars/endpoint-keys/<name>.key`, then call
   `endpoint_set_key` with `key_file: "<name>.key"`. The file is deleted once the key is taken.
-- An endpoint an agent adds, or re-points, shows Approve in Settings: nothing reaches it before the owner approves.
+- An endpoint an agent adds, re-points or gives new extra headers shows Approve in Settings: nothing reaches it before
+  the owner approves. Saving the endpoint's other fields does not approve it; Approve does, for what the notice shows.
 
 **When the endpoint pauses.** The proxy holds a request on 503, 429 or a refused connection, and a GET on a 502 too
 (a 502 to a POST passes at once: it may have run on the engine), as `Retry-After` says (60 s at most per wait), up to the endpoint's hold ceiling (120 s by default, 0 to 3600). The agent shows

@@ -113,12 +113,14 @@ export function registerTracesHandlers(deps: TracesHandlerDeps): void {
       const unsaved = apply(r.settings);
       if (unsaved) return { ok: false, error: unsaved };
     }
-    tell('endpoints:changed', { id: r.endpoint.id, needsApproval: false });
+    // An agent's change the save left pending still needs the owner's approval.
+    tell('endpoints:changed', { id: r.endpoint.id, needsApproval: !r.endpoint.approved });
     return { ok: true, endpoint: view(r.endpoint.id), ...(held ? { unsaved: held } : {}) };
   });
 
-  ipcMain.handle('endpoints:approve', (_e, id: unknown) => {
-    const r = approveEndpoint(deps.getAppSettings(), String(id));
+  ipcMain.handle('endpoints:approve', (_e, id: unknown, seen: unknown) => {
+    // What the window showed: approved only if it is still what the endpoint holds (approveEndpoint).
+    const r = approveEndpoint(deps.getAppSettings(), String(id), seen && typeof seen === 'object' ? seen as { baseUrl?: unknown; extraHeaders?: unknown } : undefined);
     if (!r.ok) return r;
     const unsaved = apply(r.settings);
     if (unsaved) return { ok: false, error: unsaved };

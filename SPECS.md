@@ -249,8 +249,11 @@ answers, under the harnesses' own request timeouts), and the window shows the wa
 
 **Endpoints and approval.** The user adds endpoints in Settings, and agents add them through `endpoint_*`. A new or
 re-pointed base URL from an agent, or extra headers an agent adds or changes, wait for the owner's approval in the
-window: a header goes out with the owner's key, and may route or bill the requests at the endpoint. Keys come from the
-window, or from an agent's drop file (`~/.tars/endpoint-keys/<name>.key`). SECURITY.md § 9.
+window: a header goes out with the owner's key, and may route or bill the requests at the endpoint. Approval stays
+apart from saving: the owner's save of another field (traces, the name, the hold) leaves such a change pending, and
+only the window's approval approves it, for the address and headers it showed (refused if an agent changed them again
+meanwhile). An address or headers the owner types, or the approved values put back, are the owner's own. Keys come
+from the window, or from an agent's drop file (`~/.tars/endpoint-keys/<name>.key`). SECURITY.md § 9.
 
 **Traces.** A session is traced only when all of these hold (`trace-gate.ts`):
 - the project's switch and the agent's are both on (both off by default);
