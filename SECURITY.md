@@ -1088,7 +1088,11 @@ holds, and records a line only when both agree:
   moment its owner types an answer to a dialog Tars does not see, then forge
   the UserPromptSubmit: that is the agent writing the CLI's own file format into
   the file the CLI is writing, and Tars does not defend against it (§1: an agent
-  runs as the owner's account). Keys typed into a
+  runs as the owner's account). Nor does Tars recognise every dialog: its
+  screen check knows claude's by their "Esc to cancel" footer and codex's by
+  their titles, so the owner's answer to any other dialog shown while the CLI
+  is at rest, confirmed by a forged UserPromptSubmit within 60 seconds, is
+  recorded as the owner's words (the QA's gate of #594). Keys typed into a
   dialog Tars sees never reach the key model at all. And a line waits 60
   seconds at most: the hook comes some 40 ms after an Enter at rest. What an
   agent can still do is confirm, within that minute, a line its owner typed at
