@@ -47,7 +47,7 @@ test.beforeAll(async () => {
   seedSandbox(home);
   app = await launchSandboxed(electron, home, {
     executablePath: path.join(APP!, 'Contents', 'MacOS', info.CFBundleExecutable),
-    env: { DOROTHY_API_PORT: apiPort(31386), DOROTHY_E2E: '1' },
+    env: { DOROTHY_API_PORT: apiPort(31371), DOROTHY_E2E: '1' },
   });
   page = await app.firstWindow();
   // In every document before its first script, as Playwright adds an init script: outside the page's policy.
