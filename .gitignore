@@ -79,3 +79,7 @@ design/exports/
 __pycache__/
 # What `claude plugin validate` writes beside a mod it checks
 mods/*/tsconfig.json
+
+# trace back-office
+/backoffice/node_modules
+/backoffice/.runs
