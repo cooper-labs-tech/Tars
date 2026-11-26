@@ -110,6 +110,19 @@ function isE2E(): boolean {
   return process.env.DOROTHY_E2E === '1';
 }
 
+/**
+ * What main hands every window that loads the bridge, in its process's arguments: the port this Tars's local
+ * API listens on (API_PORT, DOROTHY_API_PORT's override included), and nothing else, never a token. The preload
+ * reads it once and gives it to the page as `electronAPI.apiPort`, synchronously, so a vault note's local
+ * picture is built on this Tars's own API while it renders. Arguments, not IPC: the preload is sandboxed and
+ * cannot import this module, and Electron documents additionalArguments for exactly this.
+ */
+export const API_PORT_SWITCH = '--tars-api-port=';
+
+export function windowArguments(): string[] {
+  return [`${API_PORT_SWITCH}${API_PORT}`];
+}
+
 export function createWindow() {
   const e2e = isE2E();
 
@@ -133,6 +146,7 @@ export function createWindow() {
       preload: path.join(__dirname, '..', 'preload.js'),
       contextIsolation: true,
       nodeIntegration: false,
+      additionalArguments: windowArguments(),
       // No renderer of ours ever needs to reach out on its own.
       webviewTag: false,
       // An unfocused window is throttled by default, which for a test run

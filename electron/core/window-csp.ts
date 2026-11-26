@@ -30,7 +30,8 @@ import * as crypto from 'crypto';
  *   part of the match, so no other route of the API loads as a picture. A redirect drops the path check, as
  *   the CSP specification has it, and /api/local-file never redirects. An encoded path (/api/local-fil%65)
  *   matches the source, which is compared decoded, but the API compares the raw path: such a request is not
- *   the exempt route, and without a token it is refused.
+ *   the exempt route, and without a token it is refused. <port> is this Tars's own API_PORT, which the window
+ *   also knows (electronAPI.apiPort, handed by main in its arguments), so it asks its own API, never 31415.
  * - connect-src https://raw.githubusercontent.com: the plugin marketplace's lists (src/lib/plugins-database.ts).
  *   'self' is the page's own route data, which client navigation reads.
  * - manifest-src 'self': the pages link /manifest.json.

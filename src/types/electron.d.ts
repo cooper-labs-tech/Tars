@@ -3006,6 +3006,13 @@ export interface ElectronAPI {
 
   // Platform info
   platform: string;
+
+  /**
+   * The port this Tars's local API listens on, as main hands it to the window (DOROTHY_API_PORT's override
+   * included), or null in a window main did not open. A vault note's local picture is
+   * `http://127.0.0.1:${apiPort}/api/local-file?path=…`: the window's policy allows that route on this port alone.
+   */
+  apiPort: number | null;
 }
 
 declare global {

@@ -33,6 +33,19 @@ contextBridge.exposeInMainWorld('__SENTRY_IPC__', {
   },
 });
 
+/**
+ * The port this Tars's local API listens on, as main hands it to the window (core/window-manager.ts,
+ * windowArguments: `--tars-api-port=<port>`), read here because a sandboxed preload cannot import it. A whole
+ * number from 1 to 65535 or nothing: a window main did not open gets null, never a default port.
+ */
+function apiPortFromArguments(argv: readonly string[]): number | null {
+  const handed = argv.find((argument) => argument.startsWith('--tars-api-port='));
+  const digits = handed?.slice('--tars-api-port='.length) ?? '';
+  if (!/^[1-9][0-9]{0,4}$/.test(digits)) return null;
+  const port = Number(digits);
+  return port <= 65535 ? port : null;
+}
+
 // Expose protected APIs to renderer
 contextBridge.exposeInMainWorld('electronAPI', {
   // PTY terminal management
@@ -1096,4 +1109,8 @@ contextBridge.exposeInMainWorld('electronAPI', {
 
   // Platform info
   platform: process.platform,
+
+  // The port this Tars's local API listens on (null if main did not hand one): a vault note's local picture is
+  // http://127.0.0.1:<apiPort>/api/local-file?path=…, the one API route the window's policy allows as a picture.
+  apiPort: apiPortFromArguments(process.argv),
 });
