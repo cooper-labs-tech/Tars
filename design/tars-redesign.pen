@@ -841483,7 +841483,7 @@
               "fill": "$text-secondary",
               "textGrowth": "fixed-width",
               "width": 946,
-              "content": "The window’s project rule refuses a hidden folder of the home (but ~/.claude, ~/.codex, ~/.gemini and ~/.grok), and ~/Library or AppData (but iCloud Drive and the cloud drives). A project Tars already held under one stays listed, with main’s reason word for word, in the error ink of the window’s notes; its files are not read. Adding one is refused where the add was made, with the same reason; New agent lists it, not to be chosen.",
+              "content": "The window’s project rule refuses a hidden folder of the home (but ~/.claude, ~/.codex, ~/.gemini and ~/.grok), and ~/Library or AppData (but iCloud Drive and the cloud drives). A project Tars already held under one stays listed, with main’s reason word for word, in the error ink of the window’s notes; its files are not read. Adding one is refused where the add was made, with the same reason; New agent lists it, not to be chosen. Review lists it with the reason and scans nothing in it; a repository in it, or a file named like a credential, says main’s sentence in place of the diff or the patch.",
               "lineHeight": 1.4,
               "fontFamily": "$font-ui",
               "fontSize": 12.5,
@@ -842103,6 +842103,307 @@
               ]
             }
           ]
+        },
+        {
+          "type": "frame",
+          "id": "coCYP",
+          "name": "states review",
+          "width": "fill_container",
+          "gap": 24,
+          "children": [
+            {
+              "type": "frame",
+              "id": "qNQiA",
+              "name": "state REVIEW, ITS PROJECTS: A PROJECT THE RULE REFUSES, MAIN’S REASON, NOTHING SCANNED IN IT",
+              "width": 392,
+              "layout": "vertical",
+              "gap": 8,
+              "children": [
+                {
+                  "type": "text",
+                  "id": "xm4Bm",
+                  "name": "caption",
+                  "fill": "$text-secondary",
+                  "textGrowth": "fixed-width",
+                  "width": 392,
+                  "content": "REVIEW, ITS PROJECTS: A PROJECT THE RULE REFUSES, MAIN’S REASON, NOTHING SCANNED IN IT",
+                  "lineHeight": 1.2,
+                  "fontFamily": "$font-ui",
+                  "fontSize": 10,
+                  "fontWeight": "normal",
+                  "letterSpacing": 0.8
+                },
+                {
+                  "type": "frame",
+                  "id": "tlWg5",
+                  "name": "review panel",
+                  "width": "fill_container",
+                  "fill": "$surface",
+                  "stroke": "$border",
+                  "strokeWidth": 1,
+                  "layout": "vertical",
+                  "gap": 8,
+                  "padding": 12,
+                  "children": [
+                    {
+                      "type": "text",
+                      "id": "xT4tf",
+                      "fill": "$text-muted",
+                      "content": "MINE",
+                      "lineHeight": 1.4,
+                      "fontFamily": "$font-mono",
+                      "fontSize": 10,
+                      "fontWeight": "normal",
+                      "letterSpacing": 0.8
+                    },
+                    {
+                      "type": "frame",
+                      "id": "F31f81",
+                      "name": "error",
+                      "gap": 6,
+                      "children": [
+                        {
+                          "type": "frame",
+                          "id": "GXUeA",
+                          "name": "sq",
+                          "padding": [
+                            5,
+                            0,
+                            0,
+                            0
+                          ],
+                          "children": [
+                            {
+                              "type": "rectangle",
+                              "id": "BYdFX",
+                              "name": "d",
+                              "fill": "$status-error",
+                              "width": 6,
+                              "height": 6
+                            }
+                          ]
+                        },
+                        {
+                          "type": "text",
+                          "id": "ZW0Wl",
+                          "name": "refused",
+                          "fill": "$status-error",
+                          "textGrowth": "fixed-width",
+                          "width": 340,
+                          "content": "A folder of the home whose name starts with a dot cannot be a project, but for ~/.claude, ~/.codex, ~/.gemini and ~/.grok.",
+                          "lineHeight": 1.45,
+                          "fontFamily": "$font-ui",
+                          "fontSize": 11.5,
+                          "fontWeight": "normal"
+                        }
+                      ]
+                    },
+                    {
+                      "type": "text",
+                      "id": "d2vcT",
+                      "fill": "$text-muted",
+                      "content": "DEMO",
+                      "lineHeight": 1.4,
+                      "fontFamily": "$font-mono",
+                      "fontSize": 10,
+                      "fontWeight": "normal",
+                      "letterSpacing": 0.8
+                    },
+                    {
+                      "type": "text",
+                      "id": "J8gVgK",
+                      "fill": "$text-primary",
+                      "content": "main · 2 changed",
+                      "lineHeight": 1.4,
+                      "fontFamily": "$font-mono",
+                      "fontSize": 11,
+                      "fontWeight": "normal"
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "type": "frame",
+              "id": "R9VEoJ",
+              "name": "state REVIEW, A REPOSITORY: MAIN’S REASON IN THE CHANGED FILES’ PLACE",
+              "width": 392,
+              "layout": "vertical",
+              "gap": 8,
+              "children": [
+                {
+                  "type": "text",
+                  "id": "njmqD",
+                  "name": "caption",
+                  "fill": "$text-secondary",
+                  "textGrowth": "fixed-width",
+                  "width": 392,
+                  "content": "REVIEW, A REPOSITORY: MAIN’S REASON IN THE CHANGED FILES’ PLACE",
+                  "lineHeight": 1.2,
+                  "fontFamily": "$font-ui",
+                  "fontSize": 10,
+                  "fontWeight": "normal",
+                  "letterSpacing": 0.8
+                },
+                {
+                  "type": "frame",
+                  "id": "gEVBm",
+                  "name": "review panel",
+                  "width": "fill_container",
+                  "fill": "$surface",
+                  "stroke": "$border",
+                  "strokeWidth": 1,
+                  "layout": "vertical",
+                  "gap": 8,
+                  "padding": 12,
+                  "children": [
+                    {
+                      "type": "text",
+                      "id": "oYcAB",
+                      "fill": "$text-primary",
+                      "content": "mine / .",
+                      "lineHeight": 1.4,
+                      "fontFamily": "$font-mono",
+                      "fontSize": 12,
+                      "fontWeight": "normal"
+                    },
+                    {
+                      "type": "frame",
+                      "id": "Mp8Dt",
+                      "name": "error",
+                      "gap": 6,
+                      "children": [
+                        {
+                          "type": "frame",
+                          "id": "ELHED",
+                          "name": "sq",
+                          "padding": [
+                            5,
+                            0,
+                            0,
+                            0
+                          ],
+                          "children": [
+                            {
+                              "type": "rectangle",
+                              "id": "tURwp",
+                              "name": "d",
+                              "fill": "$status-error",
+                              "width": 6,
+                              "height": 6
+                            }
+                          ]
+                        },
+                        {
+                          "type": "text",
+                          "id": "RMwRZ",
+                          "name": "refused",
+                          "fill": "$status-error",
+                          "textGrowth": "fixed-width",
+                          "width": 340,
+                          "content": "A folder of the home whose name starts with a dot cannot be a project, but for ~/.claude, ~/.codex, ~/.gemini and ~/.grok.",
+                          "lineHeight": 1.45,
+                          "fontFamily": "$font-ui",
+                          "fontSize": 11.5,
+                          "fontWeight": "normal"
+                        }
+                      ]
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "type": "frame",
+              "id": "nustS",
+              "name": "state REVIEW, A FILE NAMED LIKE A CREDENTIAL: MAIN’S SENTENCE IN THE PATCH’S PLACE",
+              "width": 392,
+              "layout": "vertical",
+              "gap": 8,
+              "children": [
+                {
+                  "type": "text",
+                  "id": "QGiOC",
+                  "name": "caption",
+                  "fill": "$text-secondary",
+                  "textGrowth": "fixed-width",
+                  "width": 392,
+                  "content": "REVIEW, A FILE NAMED LIKE A CREDENTIAL: MAIN’S SENTENCE IN THE PATCH’S PLACE",
+                  "lineHeight": 1.2,
+                  "fontFamily": "$font-ui",
+                  "fontSize": 10,
+                  "fontWeight": "normal",
+                  "letterSpacing": 0.8
+                },
+                {
+                  "type": "frame",
+                  "id": "Bz579",
+                  "name": "review panel",
+                  "width": "fill_container",
+                  "fill": "$surface",
+                  "stroke": "$border",
+                  "strokeWidth": 1,
+                  "layout": "vertical",
+                  "gap": 8,
+                  "padding": 12,
+                  "children": [
+                    {
+                      "type": "text",
+                      "id": "TaXoa",
+                      "fill": "$text-primary",
+                      "content": ".env",
+                      "lineHeight": 1.4,
+                      "fontFamily": "$font-mono",
+                      "fontSize": 12,
+                      "fontWeight": "normal"
+                    },
+                    {
+                      "type": "frame",
+                      "id": "v9CoHz",
+                      "name": "error",
+                      "gap": 6,
+                      "children": [
+                        {
+                          "type": "frame",
+                          "id": "xQzzI",
+                          "name": "sq",
+                          "padding": [
+                            5,
+                            0,
+                            0,
+                            0
+                          ],
+                          "children": [
+                            {
+                              "type": "rectangle",
+                              "id": "EAhCi",
+                              "name": "d",
+                              "fill": "$status-error",
+                              "width": 6,
+                              "height": 6
+                            }
+                          ]
+                        },
+                        {
+                          "type": "text",
+                          "id": "sp3jR",
+                          "name": "refused",
+                          "fill": "$status-error",
+                          "textGrowth": "fixed-width",
+                          "width": 340,
+                          "content": "This file is not shown: it is named like a credential, or lies in a folder of credentials.",
+                          "lineHeight": 1.45,
+                          "fontFamily": "$font-ui",
+                          "fontSize": 11.5,
+                          "fontWeight": "normal"
+                        }
+                      ]
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
         }
       ]
     },
@@ -842152,7 +842453,7 @@
               "fill": "$text-secondary",
               "textGrowth": "fixed-width",
               "width": 946,
-              "content": "The window’s project rule refuses a hidden folder of the home (but ~/.claude, ~/.codex, ~/.gemini and ~/.grok), and ~/Library or AppData (but iCloud Drive and the cloud drives). A project Tars already held under one stays listed, with main’s reason word for word, in the error ink of the window’s notes; its files are not read. Adding one is refused where the add was made, with the same reason; New agent lists it, not to be chosen.",
+              "content": "The window’s project rule refuses a hidden folder of the home (but ~/.claude, ~/.codex, ~/.gemini and ~/.grok), and ~/Library or AppData (but iCloud Drive and the cloud drives). A project Tars already held under one stays listed, with main’s reason word for word, in the error ink of the window’s notes; its files are not read. Adding one is refused where the add was made, with the same reason; New agent lists it, not to be chosen. Review lists it with the reason and scans nothing in it; a repository in it, or a file named like a credential, says main’s sentence in place of the diff or the patch.",
               "lineHeight": 1.4,
               "fontFamily": "$font-ui",
               "fontSize": 12.5,
@@ -842764,6 +843065,307 @@
                               "fontWeight": "normal"
                             }
                           ]
+                        }
+                      ]
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "type": "frame",
+          "id": "qrsIp",
+          "name": "states review",
+          "width": "fill_container",
+          "gap": 24,
+          "children": [
+            {
+              "type": "frame",
+              "id": "CR2wg",
+              "name": "state REVIEW, ITS PROJECTS: A PROJECT THE RULE REFUSES, MAIN’S REASON, NOTHING SCANNED IN IT",
+              "width": 392,
+              "layout": "vertical",
+              "gap": 8,
+              "children": [
+                {
+                  "type": "text",
+                  "id": "x8iIIH",
+                  "name": "caption",
+                  "fill": "$text-secondary",
+                  "textGrowth": "fixed-width",
+                  "width": 392,
+                  "content": "REVIEW, ITS PROJECTS: A PROJECT THE RULE REFUSES, MAIN’S REASON, NOTHING SCANNED IN IT",
+                  "lineHeight": 1.2,
+                  "fontFamily": "$font-ui",
+                  "fontSize": 10,
+                  "fontWeight": "normal",
+                  "letterSpacing": 0.8
+                },
+                {
+                  "type": "frame",
+                  "id": "VG7Ad",
+                  "name": "review panel",
+                  "width": "fill_container",
+                  "fill": "$surface",
+                  "stroke": "$border",
+                  "strokeWidth": 1,
+                  "layout": "vertical",
+                  "gap": 8,
+                  "padding": 12,
+                  "children": [
+                    {
+                      "type": "text",
+                      "id": "UwwvH",
+                      "fill": "$text-muted",
+                      "content": "MINE",
+                      "lineHeight": 1.4,
+                      "fontFamily": "$font-mono",
+                      "fontSize": 10,
+                      "fontWeight": "normal",
+                      "letterSpacing": 0.8
+                    },
+                    {
+                      "type": "frame",
+                      "id": "BEZzj",
+                      "name": "error",
+                      "gap": 6,
+                      "children": [
+                        {
+                          "type": "frame",
+                          "id": "cl4Ph",
+                          "name": "sq",
+                          "padding": [
+                            5,
+                            0,
+                            0,
+                            0
+                          ],
+                          "children": [
+                            {
+                              "type": "rectangle",
+                              "id": "MnbSn",
+                              "name": "d",
+                              "fill": "$status-error",
+                              "width": 6,
+                              "height": 6
+                            }
+                          ]
+                        },
+                        {
+                          "type": "text",
+                          "id": "nsQY8",
+                          "name": "refused",
+                          "fill": "$status-error",
+                          "textGrowth": "fixed-width",
+                          "width": 340,
+                          "content": "A folder of the home whose name starts with a dot cannot be a project, but for ~/.claude, ~/.codex, ~/.gemini and ~/.grok.",
+                          "lineHeight": 1.45,
+                          "fontFamily": "$font-ui",
+                          "fontSize": 11.5,
+                          "fontWeight": "normal"
+                        }
+                      ]
+                    },
+                    {
+                      "type": "text",
+                      "id": "CPihf",
+                      "fill": "$text-muted",
+                      "content": "DEMO",
+                      "lineHeight": 1.4,
+                      "fontFamily": "$font-mono",
+                      "fontSize": 10,
+                      "fontWeight": "normal",
+                      "letterSpacing": 0.8
+                    },
+                    {
+                      "type": "text",
+                      "id": "ClfgZ",
+                      "fill": "$text-primary",
+                      "content": "main · 2 changed",
+                      "lineHeight": 1.4,
+                      "fontFamily": "$font-mono",
+                      "fontSize": 11,
+                      "fontWeight": "normal"
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "type": "frame",
+              "id": "G60Uir",
+              "name": "state REVIEW, A REPOSITORY: MAIN’S REASON IN THE CHANGED FILES’ PLACE",
+              "width": 392,
+              "layout": "vertical",
+              "gap": 8,
+              "children": [
+                {
+                  "type": "text",
+                  "id": "CAKHU",
+                  "name": "caption",
+                  "fill": "$text-secondary",
+                  "textGrowth": "fixed-width",
+                  "width": 392,
+                  "content": "REVIEW, A REPOSITORY: MAIN’S REASON IN THE CHANGED FILES’ PLACE",
+                  "lineHeight": 1.2,
+                  "fontFamily": "$font-ui",
+                  "fontSize": 10,
+                  "fontWeight": "normal",
+                  "letterSpacing": 0.8
+                },
+                {
+                  "type": "frame",
+                  "id": "snHRZ",
+                  "name": "review panel",
+                  "width": "fill_container",
+                  "fill": "$surface",
+                  "stroke": "$border",
+                  "strokeWidth": 1,
+                  "layout": "vertical",
+                  "gap": 8,
+                  "padding": 12,
+                  "children": [
+                    {
+                      "type": "text",
+                      "id": "OlTuK",
+                      "fill": "$text-primary",
+                      "content": "mine / .",
+                      "lineHeight": 1.4,
+                      "fontFamily": "$font-mono",
+                      "fontSize": 12,
+                      "fontWeight": "normal"
+                    },
+                    {
+                      "type": "frame",
+                      "id": "sQ3NR",
+                      "name": "error",
+                      "gap": 6,
+                      "children": [
+                        {
+                          "type": "frame",
+                          "id": "i3R0I",
+                          "name": "sq",
+                          "padding": [
+                            5,
+                            0,
+                            0,
+                            0
+                          ],
+                          "children": [
+                            {
+                              "type": "rectangle",
+                              "id": "p5lMB",
+                              "name": "d",
+                              "fill": "$status-error",
+                              "width": 6,
+                              "height": 6
+                            }
+                          ]
+                        },
+                        {
+                          "type": "text",
+                          "id": "M53CMj",
+                          "name": "refused",
+                          "fill": "$status-error",
+                          "textGrowth": "fixed-width",
+                          "width": 340,
+                          "content": "A folder of the home whose name starts with a dot cannot be a project, but for ~/.claude, ~/.codex, ~/.gemini and ~/.grok.",
+                          "lineHeight": 1.45,
+                          "fontFamily": "$font-ui",
+                          "fontSize": 11.5,
+                          "fontWeight": "normal"
+                        }
+                      ]
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "type": "frame",
+              "id": "q5C4eW",
+              "name": "state REVIEW, A FILE NAMED LIKE A CREDENTIAL: MAIN’S SENTENCE IN THE PATCH’S PLACE",
+              "width": 392,
+              "layout": "vertical",
+              "gap": 8,
+              "children": [
+                {
+                  "type": "text",
+                  "id": "Kce6j",
+                  "name": "caption",
+                  "fill": "$text-secondary",
+                  "textGrowth": "fixed-width",
+                  "width": 392,
+                  "content": "REVIEW, A FILE NAMED LIKE A CREDENTIAL: MAIN’S SENTENCE IN THE PATCH’S PLACE",
+                  "lineHeight": 1.2,
+                  "fontFamily": "$font-ui",
+                  "fontSize": 10,
+                  "fontWeight": "normal",
+                  "letterSpacing": 0.8
+                },
+                {
+                  "type": "frame",
+                  "id": "ZPguQ",
+                  "name": "review panel",
+                  "width": "fill_container",
+                  "fill": "$surface",
+                  "stroke": "$border",
+                  "strokeWidth": 1,
+                  "layout": "vertical",
+                  "gap": 8,
+                  "padding": 12,
+                  "children": [
+                    {
+                      "type": "text",
+                      "id": "SJV38",
+                      "fill": "$text-primary",
+                      "content": ".env",
+                      "lineHeight": 1.4,
+                      "fontFamily": "$font-mono",
+                      "fontSize": 12,
+                      "fontWeight": "normal"
+                    },
+                    {
+                      "type": "frame",
+                      "id": "GXWff",
+                      "name": "error",
+                      "gap": 6,
+                      "children": [
+                        {
+                          "type": "frame",
+                          "id": "RaYgb",
+                          "name": "sq",
+                          "padding": [
+                            5,
+                            0,
+                            0,
+                            0
+                          ],
+                          "children": [
+                            {
+                              "type": "rectangle",
+                              "id": "o8pi3",
+                              "name": "d",
+                              "fill": "$status-error",
+                              "width": 6,
+                              "height": 6
+                            }
+                          ]
+                        },
+                        {
+                          "type": "text",
+                          "id": "k1d31j",
+                          "name": "refused",
+                          "fill": "$status-error",
+                          "textGrowth": "fixed-width",
+                          "width": 340,
+                          "content": "This file is not shown: it is named like a credential, or lies in a folder of credentials.",
+                          "lineHeight": 1.45,
+                          "fontFamily": "$font-ui",
+                          "fontSize": 11.5,
+                          "fontWeight": "normal"
                         }
                       ]
                     }
