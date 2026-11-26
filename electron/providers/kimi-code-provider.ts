@@ -43,6 +43,15 @@ export function kimiSessionOfCommand(command: string): string | undefined {
   return /--session\s+['"]?(session_[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})['"]?(?=\s|$)/.exec(command)?.[1];
 }
 
+/**
+ * kimi's own update off (27/11): by default it installs a newer version of itself (`upgrade.autoInstall`, read in
+ * 2.8.1's published code), from a terminal Tars started, into the user's own install. KIMI_CODE_NO_AUTO_UPDATE=1 turns
+ * it off. In the terminal's environment, and on macOS and Linux on the line before the binary too: the terminal's
+ * login shell runs rc files after that environment, and nothing after the line. On Windows the line's first word is
+ * the binary (platform/launch.ts) and nothing is sourced.
+ */
+const NO_AUTO_UPDATE = { KIMI_CODE_NO_AUTO_UPDATE: '1' } as const;
+
 /** A model alias of the user's config (`-m`), letters, digits and `. _ : / -` only: it reaches a command line. */
 const SAFE_MODEL = /^[A-Za-z0-9._:/-]{1,200}$/;
 
@@ -64,7 +73,9 @@ export class KimiCodeProvider implements CLIProvider {
   }
 
   buildInteractiveCommand(params: InteractiveCommandParams): string {
-    let command = shellQuote(params.binaryPath);
+    // Its own update off (NO_AUTO_UPDATE), on the line where a shell runs it.
+    let command = process.platform === 'win32' ? '' : `env KIMI_CODE_NO_AUTO_UPDATE=${NO_AUTO_UPDATE.KIMI_CODE_NO_AUTO_UPDATE} `;
+    command += shellQuote(params.binaryPath);
     // Never --plan: kimi's runs commands after dialogs nobody answers (measured). Refused, with the reason create and
     // update give (plan-mode.ts planModeRefusal, not imported here: it reads the registry, which loads this file).
     if (params.permissionMode === 'plan') throw new Error(`${this.displayName} has no plan mode here: plan would run as manual. Ask for normal, auto or bypass.`);
@@ -150,6 +161,8 @@ export class KimiCodeProvider implements CLIProvider {
       CLAUDE_PROVIDER: this.id,
       // The folder trusted for this process, nothing written (measured on 2.6.3).
       KIMI_CODE_TRUST_WORKSPACE: '1',
+      // Its own update off (NO_AUTO_UPDATE).
+      ...NO_AUTO_UPDATE,
       // On an inference endpoint, its model from the launch (services/endpoint-harness.ts); the proxy token's
       // variable is filled at the spawn (core/agent-pty.ts), never here.
       ...(endpointLaunchForAgent(agentId, 'kimi-code')?.env ?? {}),
