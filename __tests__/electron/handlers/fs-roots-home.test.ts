@@ -46,6 +46,8 @@ import { createRequire, syncBuiltinESMExports } from 'node:module';
  * 10. fs:list-projects follows a listed project synchronously on the main
  *    thread (a realpath, a stat), so a slow share freezes the window at each
  *    listing; it may follow it only asynchronously.
+ *    Extended after the Audit's Info on #648 (2026-11-26): nor the home
+ *    itself, which a home on a share pays at each project.
  */
 
 vi.mock('node-pty', () => ({ spawn: vi.fn() }));
@@ -302,14 +304,15 @@ describe('a project root the target is not under', () => {
     return touched;
   }
 
-  it('10. fs:list-projects follows a listed project only asynchronously', async () => {
+  it('10. fs:list-projects follows a listed project, and the home, only asynchronously', async () => {
     customProjects([project]);
     const real = createRequire(import.meta.url)('node:fs') as typeof fs & Record<string, unknown>;
+    const homes = [home, fs.realpathSync(home)];
     const names = ['statSync', 'lstatSync', 'existsSync', 'accessSync', 'readdirSync'] as const;
     const saved = { ...Object.fromEntries(names.map(n => [n, real[n]])), realpathSync: real.realpathSync };
     const touched: string[] = [];
     const record = (name: string, fn: (...a: unknown[]) => unknown) => (...args: unknown[]) => {
-      if (String(args[0]).startsWith(project)) touched.push(`${name} ${String(args[0])}`);
+      if (String(args[0]).startsWith(project) || homes.includes(path.resolve(String(args[0])))) touched.push(`${name} ${String(args[0])}`);
       return fn(...args);
     };
     for (const n of names) (real as Record<string, unknown>)[n] = record(n, saved[n] as (...a: unknown[]) => unknown);

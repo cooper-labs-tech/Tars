@@ -4,7 +4,7 @@ import * as path from 'path';
 import { DATA_DIR } from '../constants';
 import { agents } from '../core/agent-manager';
 import { broadcastToAllWindows } from '../utils/broadcast';
-import { projectRefusal, projectRefusalAsync } from '../utils/window-file-access';
+import { projectRefusal, projectRefusalAsync, takePlaces } from '../utils/window-file-access';
 import {
   scanProject, repositoryState, searchRepositories, mayReview,
   type ProjectScan, type RepositoryState,
@@ -139,9 +139,10 @@ export function registerReviewHandlers(): void {
     const send = (event: Record<string, unknown>) => broadcastToAllWindows('review:search:event', { searchId, ...event });
     void (async () => {
       const entries: Array<{ project: string; repos: RepositoryState[] }> = [];
+      const places = await takePlaces();
       for (const project of knownProjects()) {
         if (controller.signal.aborted) break;
-        if (await projectRefusalAsync(project)) continue;
+        if (await projectRefusalAsync(project, places)) continue;
         const k = kept.get(project) ?? await scanAndRead(project, `${searchId}-scan`, controller.signal);
         entries.push({ project, repos: [...k.states.values()] });
       }
