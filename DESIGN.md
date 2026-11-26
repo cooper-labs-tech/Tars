@@ -278,7 +278,7 @@ The scale, in px: **9, 9.5, 10, 10.5, 11, 11.5, 12, 12.5, 13, 14, 15, 16, 18,
 |---|---|---|
 | 36 | display | Splash wordmark |
 | 24 | display | Page title (`PageHeader`) |
-| 20 | display | Sidebar wordmark (16 in the mobile top bar) |
+| 20 | display | Sidebar wordmark |
 | 14 | ui | Body default (`body { font-size: 14px; line-height: 1.5 }`), standard `ui/Button` |
 | 13 | term-mono | Terminal (`xterm` `fontSize: 13`, JetBrains Mono) |
 | 12.5 | ui | Page subtitle |
@@ -305,22 +305,41 @@ exceptions in the tree. Don't add a third.
 
 ## Layout & Spacing
 
-The shell is identical on all sixty-odd frames.
+The shell is NewShell, the only one since 2.1.0 (JeanBrasse, 26/11), and it is
+identical on every page: `Shell · Dashboard`, `Shell · Kanban`, `Shell · Schedules`,
+`Shell · Projects` and the `Shell · chats` frames draw it around the main column,
+`Shell · <page> card` around a page of More. The classic shell (a 216 sidebar listing
+every page) is gone; its frames wait in the retired area of `tars-redesign.pen`.
 
-- **Sidebar: 240px** (72 collapsed). `surface` fill, `border` on its right edge.
-  Brand at the top (10px square + wordmark), the nav in the middle, then a
-  What's new row and a connection line (a green dot and the word `Connected`,
-  no port and no mono) and below those the Settings link and the Light/Dark
-  toggle, which are what actually sit at the very bottom.
-- **Header.** A 24px serif title, a 12.5px subtitle in `text-secondary` saying
-  what the screen is for, and the page's actions right-aligned on the same block.
-  `ui/PageHeader` carries only its own `pb-3.5`; the 22px top gutter is the page
-  container's job, and 22 + title + 2 + subtitle + 14 is where the 84 comes from.
-  It is written and mounted nowhere (no page imports it) so no 84px header
-  ships today and every screen still rolls its own heading.
-- **Content: padding 24 on all four sides** at desktop, 16 below `lg`
-  (`p-4 lg:p-6 pb-6` on the main element). So the left edge of content is
-  x=264 with the sidebar open: 240 + 24.
+- **Sidebar: 240px, fixed, no collapse** (`NewShell/NewSidebar.tsx`). `surface`
+  fill, `border` on its right edge. From the top: the brand row, 54 tall, `18`
+  from the edge (13px square + 20px serif wordmark), which is also a window drag
+  region; the main menu, `8` in, rows 32 tall: Chat and Projects, a divider, then
+  Dashboard, Kanban and Schedules, the current row a box (`accent-dim` fill,
+  `accent` border); New chat, a standard button the sidebar's width; the fixed
+  entry Tars, all projects; the chat list, which takes the height left and
+  scrolls in it; the update row while there is one to install; More, 32 tall
+  over a `border` rule, its menu opening above it; the connection line (a 6px
+  square and the word `Connected`), `18` in and `14` from the bottom.
+- **The drag strip**: 28 tall across the sidebar's width (`window-drag`, the macOS
+  traffic lights' column). On Windows, `WindowsCaption` adds its band up to the
+  native buttons (32 tall, `Shell · Windows caption`) and makes the page header a
+  drag region, its controls excepted.
+- **Header.** `ui/PageHeader`: a 24px serif title, a 12.5px subtitle in
+  `text-secondary` saying what the screen is for, and the page's actions
+  right-aligned on the same block, ending `pb-3.5` (14). The 22px top gutter is
+  the main column's, and 22 + title + 2 + subtitle + 14 is where the 84 comes from.
+- **Main column: margin-left 240, padding 22 top, 26 on the sides, 22 at the
+  bottom** (`ml-[240px] px-[26px] pt-[22px] pb-[22px]`, `NewShell.tsx`). So the
+  left edge of content is x=266: 240 + 26. The window's minimum width is 1200,
+  so the column is never under 960 and there is no mobile layout.
+- **A page of More is a card** above the app (`NewShell/PageCard.tsx`): over the
+  `scrim`, `min(1080, viewport - 64)` wide and `viewport - 128` tall, `surface`
+  fill, `border-accent` edge. Its head, padded `22` on the left and `14` on the
+  right, top and bottom, carries the page's icon, its name in 22px serif, `esc`
+  and a 26px close square; its body scrolls, padded `18` on top, `26` on the
+  sides, `22` at the bottom, and its page drops the title the head repeats
+  (`ui/CardTitle`), keeping its subtitle and actions.
 - **Status bar** at the foot of the terminal grid, not the content column
   (`TerminalsView/components/StatusBar.tsx`): the agent count and the per-state
   counts (running, waiting, idle, error) on the left, the total output-line
@@ -328,8 +347,8 @@ The shell is identical on all sixty-odd frames.
 
 The spacing step is **8**: the terminal grid's gap is 8, and card grids and
 section stacks are multiples of it. Inside a component the steps are 2, 4, 6, 8,
-10, 12, 14, 16, 20, 24. The shell's 24 gutter is on the step; the sidebar's own
-`px-6` / `px-5` (24 / 20) are the only shell values worth looking up.
+10, 12, 14, 16, 20, 24. The shell's 26 gutter and 22 top are off the step on
+purpose: they are what the header's 84 is built from, the same on every page.
 
 Control heights are **26 (small)** and **32 (standard)**. There is no third
 height. A padding-driven height drifts with its content (an icon makes a button
@@ -414,9 +433,10 @@ agent count, a custom tab its own preset, and a project's board with its
 orchestrator and another agent opens in the orchestrator layout, its header's
 `Orchestrator | Equal grid` switch the app's `ui/SegmentedControl`
 (`Dashboard · orchestrator layout`). And there is no
-`Dark Light System` picker anywhere: the sidebar has a single Light/Dark toggle
-button and `Settings/TerminalSection.tsx` offers two cards for the *terminal*
-theme, dark and light. Where state is shown, it is the box. There is no
+`Dark Light System` picker anywhere: Settings, Preferences opens on Appearance,
+a `Dark | Light` segmented control for the window (`Shell · Settings card ·
+Preferences, appearance`), and `Settings/TerminalSection.tsx` offers two cards for
+the *terminal* theme, dark and light. Where state is shown, it is the box. There is no
 underline and no bar.
 
 ### Sortable table headers
