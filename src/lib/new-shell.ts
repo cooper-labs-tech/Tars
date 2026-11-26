@@ -1,6 +1,5 @@
 /**
- * The new shell (plan 2.0.0), shown while Settings, Preferences, "New
- * interface" is on. Frames: `Shell · chats · empty`, `· project page`,
+ * The shell (plan 2.0.0), the only one since 2.1.0. Frames: `Shell · chats · empty`, `· project page`,
  * `· More open`, `· Settings card` (tars-redesign.pen) and `Chat · chats ·
  * Tars, all projects` (chat-redesign-a.pen).
  */

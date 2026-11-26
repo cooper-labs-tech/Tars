@@ -36,7 +36,7 @@ function useIsWindowsShell() {
 /**
  * The Windows caption band: the drag strip up to the native buttons, the drag
  * rules for the page header, and the buttons' colours, which follow the theme.
- * Renders nothing on macOS and Linux, whose strip ClientLayout draws.
+ * Renders nothing on macOS and Linux, whose strip NewShell draws.
  */
 export function WindowsCaption() {
   const isWindows = useIsWindowsShell();

@@ -1,32 +1,15 @@
 'use client';
 
 import { useStore } from '@/store';
-import { Brand, BrandMark } from '@/components/Brand';
-import Sidebar from './Sidebar';
+import { BrandMark } from '@/components/Brand';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Menu, X, AlertCircle } from 'lucide-react';
+import { AlertCircle } from 'lucide-react';
 import { useEffect, useState, useCallback, useRef } from 'react';
 import { usePathname } from 'next/navigation';
 import NewShell from '@/components/NewShell/NewShell';
-import { DataFolderNotice } from '@/components/DataFolderNotice';
-import { useNewInterface } from '@/hooks/useNewInterface';
 import { Splash } from '@/components/Splash';
 import { Button, BrandSpinner } from '@/components/ui';
-import { WindowsCaption } from '@/components/WindowsCaption';
 import { followErrorReportsSetting } from '@/lib/error-reports';
-
-function useIsMobile() {
-  const [isMobile, setIsMobile] = useState(false);
-
-  useEffect(() => {
-    const checkMobile = () => setIsMobile(window.innerWidth < 1024);
-    checkMobile();
-    window.addEventListener('resize', checkMobile);
-    return () => window.removeEventListener('resize', checkMobile);
-  }, []);
-
-  return isMobile;
-}
 
 /** Strip HTML tags and collapse whitespace so release notes render as plain text. */
 function stripHtml(html: string): string {
@@ -82,13 +65,11 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
 
 function ClientLayoutInner({ children }: { children: React.ReactNode }) {
   const {
-    mobileMenuOpen, setMobileMenuOpen, darkMode, setDarkMode, setVaultUnreadCount,
+    darkMode, setDarkMode, setVaultUnreadCount,
     updateBannerDismissed: updateDismissed,
     setUpdateBannerDismissed: setUpdateDismissed,
     setPendingUpdateVersion,
   } = useStore();
-  const isMobile = useIsMobile();
-  const newInterface = useNewInterface();
 
   // The splash belongs to the first paint, so it renders on both sides of
   // hydration. It used to be gated on a sessionStorage flag read inside this
@@ -238,78 +219,12 @@ function ClientLayoutInner({ children }: { children: React.ReactNode }) {
     return unsub;
   }, [setVaultUnreadCount]);
 
-  // Close mobile menu on resize to desktop
-  useEffect(() => {
-    if (!isMobile && mobileMenuOpen) {
-      setMobileMenuOpen(false);
-    }
-  }, [isMobile, mobileMenuOpen, setMobileMenuOpen]);
-
-  // One flat width. The collapsed state is gone. Must stay in step with
-  // `sidebarWidth` in Sidebar.tsx and with `--sidebar-w` in globals.css.
-  const mainMarginLeft = isMobile ? 0 : 216;
-
   return (
     <div className="app-shell min-h-screen bg-bg-primary relative">
       {showSplash && <Splash onDone={dismissSplash} />}
-      {/* Settings, Preferences, "New interface": the new shell, a preview
-          (plan 2.0.0). Off, the shell below draws exactly as before. */}
-      {newInterface ? (
-        <NewShell>{children}</NewShell>
-      ) : (
-        <>
-        {/* Window drag strip, sidebar-wide only (desktop). Full width it sat on
-            z-[60] across every page header and swallowed the clicks on the
-            actions that live there; the traffic lights only need this column. */}
-        <div className="window-drag hidden lg:block fixed top-0 left-0 h-7 z-[60]" style={{ width: 'var(--sidebar-w)' }} />
-        <WindowsCaption />
-
-        {/* Mobile Header */}
-        <div className="lg:hidden fixed top-0 left-0 right-0 h-14 bg-bg-secondary border-b border-border-primary z-40 flex items-center px-4">
-          <button
-            onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
-            className="p-2 -ml-2 text-text-secondary hover:text-text-primary transition-colors"
-            aria-label="Toggle menu"
-          >
-            {mobileMenuOpen ? <X className="w-6 h-6" /> : <Menu className="w-6 h-6" />}
-          </button>
-          <div className="ml-2">
-            <Brand markClassName="w-2 h-2" wordmarkClassName="font-serif text-base text-foreground" />
-          </div>
-        </div>
-
-        {/* Mobile Overlay */}
-        <AnimatePresence>
-          {mobileMenuOpen && (
-            <motion.div
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-              transition={{ duration: 0.2 }}
-              className="lg:hidden fixed inset-0 bg-scrim z-40"
-              onClick={() => setMobileMenuOpen(false)}
-            />
-          )}
-        </AnimatePresence>
-
-        {/* Sidebar - Desktop: always visible, Mobile: drawer */}
-        <Sidebar isMobile={isMobile} />
-
-        {/* Main Content. 26px side gutters, 22px at the bottom, no top padding:
-            the 22px header gutter is the page's own job via <PageHeader>, so no
-            page may re-add `pt-4 lg:pt-6` here. */}
-        <motion.main
-          initial={false}
-          animate={{ marginLeft: mainMarginLeft }}
-          transition={{ duration: 0.2, ease: 'easeInOut' }}
-          className="min-h-screen p-4 pt-16 lg:px-[26px] lg:pb-[22px] lg:pt-[22px]"
-        >
-          {/* Across the top of the column, above the page's own 22px header gutter. */}
-          <DataFolderNotice className="-mx-4 -mt-4 mb-4 lg:-mx-[26px] lg:-mt-[22px] lg:mb-[22px]" />
-          {children}
-        </motion.main>
-        </>
-      )}
+      {/* The shell, the only one since 2.1.0 (JeanBrasse, 26/11): the frames `Shell · <page>` and
+          `Shell · <page> card`. The classic shell went with its switch. */}
+      <NewShell>{children}</NewShell>
 
       {/* Update Available Dialog */}
       <AnimatePresence>

@@ -299,9 +299,7 @@ Body copy runs `letter-spacing: 0.01em` and `font-feature-settings: "ss01","ss02
 `td`, `th`, `code` and `pre` get `font-variant-numeric: tabular-nums`, so a
 column of costs or token counts never jitters as it updates.
 
-Two `text-[8px]` survivors, in `src/components/Sidebar.tsx` and
-`src/app/usage/page.tsx`, are below the scale's floor and are the only
-exceptions in the tree. Don't add a third.
+No `text-[8px]` is left in the tree: it is below the scale's floor. Don't add one.
 
 ## Layout & Spacing
 
@@ -553,10 +551,10 @@ progress.
   nav and menu rows, or `surface` + `border` for tabs and segmented cells. The
   label of an active nav item should stay `text-primary`: measured off the frames,
   the active and inactive rows differ only by fill and by `text-primary` vs
-  `text-secondary`. `Sidebar.tsx` does neither: nav rows, What's New and Settings
-  all render active as `bg-primary/20 text-primary`, a 20% accent fill under an
-  orange label, which in light also fails contrast. `Dropdown` is the one that
-  reads right, at `bg-primary/10` with `bg-primary/5` on hover. Orange rules and
+  `text-secondary`. `NewShell/NewSidebar.tsx` reads right: its current row is an
+  `accent-dim` box with an accent edge, under a `text-primary` label, and
+  `Dropdown` marks its row at `bg-primary/10` with `bg-primary/5` on hover. Never
+  an orange label on an accent fill: in light it fails contrast. Orange rules and
   orange labels are AI design slop.
 - **Don't use `>_` as a mark.** The mark is an orange **square**. Loaders and the
   app icon are a 4×4 grid of them that fills. `src/components/Brand.tsx` is the
@@ -606,11 +604,11 @@ progress.
 
 [lucide](https://lucide.dev) (`lucide-react`), at 12px (`w-3 h-3`) in dense
 controls and 16px (`w-4 h-4`) at standard size: 204 and 267 occurrences, the two
-that carry the app. A third size leaked in and stayed: 20px (`w-5 h-5`, 75
-occurrences) is every sidebar nav icon and the agent-card status glyphs. Default
+that carry the app. The sidebar's rows take 14px (`w-3.5 h-3.5`); a third size
+leaked in and stayed, 20px (`w-5 h-5`), the agent-card status glyphs. Default
 stroke, coloured with `text-secondary` or `text-muted` and lifting to
 `text-primary` on hover. Used in the frames: `chevron-down` (dropdowns), `check`
-(selected row), `menu` / `x` (mobile sidebar), `download` / `external-link` /
+(selected row), `x` (a card's close), `download` / `external-link` /
 `rotate-cw` (updater), `loader-2`, which is meant to be updater-only, the app's
 own waiting state being the square pulse, but is imported by 49 files today,
 including `AgentList/AgentCard.tsx`, where it is the running-agent spinner.
