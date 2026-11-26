@@ -2878,7 +2878,8 @@ export interface ElectronAPI {
      *  `extraHeaders` as the form displayed them when it opened. "Typed" means what differs from `shown`. Refused,
      *  nothing written, when `shown` is missing ("A save names the address and the extra headers the form showed, so a
      *  change made meanwhile is not taken for yours.") or when it is not the endpoint now ('The endpoint "<name>"
-     *  changed since it was shown (<agent>, <at>): look at it again before you save.'): re-read `endpoints.list`. */
+     *  changed since it was shown (<agent>, <time>): look at it again before you save.'): re-read `endpoints.list`.
+     *  <time> is said as every notice says it: "21:00 UTC (01:00 +04)", or "21:00 UTC" on a machine on UTC. */
     /** `allowPlainHttp`: the owner allows plain http to a public address (refused without it; private addresses
      *  need none). An agent's change of address takes the endpoint's key away (set it again). */
     /** Traces turned off applies at once: ok, with `unsaved` while it is not written yet. */
@@ -2891,7 +2892,9 @@ export interface ElectronAPI {
     save: (e: { id?: string; name: string; baseUrl: string; allowTraces: boolean; holdMaxSeconds?: number; sendSessionHeaders?: boolean; allowPlainHttp?: boolean; extraHeaders?: Record<string, string>; shown?: { baseUrl: string; extraHeaders: Record<string, string> } }) => Promise<{ ok: true; endpoint: EndpointView; unsaved?: string } | { ok: false; error: string }>;
     /** Approves exactly what the window showed: `seen` is the view's `baseUrl` and `extraHeaders` as displayed in the
      *  notice. Refused (`ok: false`, `error` a plain sentence) when either is not the endpoint's now (an agent changed
-     *  it again while the notice was open: read `endpoints.list` and show the change), or when `seen` is missing. */
+     *  it again while the notice was open: read `endpoints.list` and show the change), or when `seen` is missing. The
+     *  sentence: 'The endpoint "<name>" changed since it was shown (<agent>, <time>): look at it again before you
+     *  approve.', the time as `save`'s says it. */
     approve: (id: string, seen: { baseUrl: string; extraHeaders: Record<string, string> }) => Promise<{ ok: true; endpoint: EndpointView } | { ok: false; error: string }>;
     /** Write-only: no channel returns a key. null clears it. */
     setKey: (id: string, key: string | null) => Promise<{ ok: true } | { ok: false; error: string }>;

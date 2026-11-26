@@ -5,6 +5,7 @@ import { DATA_DIR } from '../constants';
 import { isValidOpenAIBaseUrl } from '../providers/cli-provider';
 import type { AgentStatus, AppSettings, InferenceEndpoint } from '../types';
 import { isRefusedExtraHeader, type ProxyTarget } from './endpoint-proxy';
+import { twoZones } from '../utils/two-zones';
 
 /**
  * Inference endpoints (native traces): OpenAI-compatible endpoints an open harness runs
@@ -258,7 +259,10 @@ function shownDiffers(current: InferenceEndpoint, shown: { baseUrl?: unknown; ex
       : 'A save names the address and the extra headers the form showed, so a change made meanwhile is not taken for yours.';
   }
   if (shown.baseUrl === current.baseUrl && sameExtraHeaders(headers as Record<string, string>, current.extraHeaders)) return null;
-  const by = current.changedBy ? ` (${current.changedBy.agentName ?? current.changedBy.agentId}, ${current.changedBy.at})` : '';
+  // The time as the notices say it, UTC then the machine's own with its offset (utils/two-zones.ts): the window shows
+  // these words as they come.
+  const at = current.changedBy ? Date.parse(current.changedBy.at) : NaN;
+  const by = current.changedBy ? ` (${current.changedBy.agentName ?? current.changedBy.agentId}${Number.isNaN(at) ? '' : `, ${twoZones(at)}`})` : '';
   return `The endpoint "${current.name}" changed since it was shown${by}: look at it again before you ${act}.`;
 }
 
