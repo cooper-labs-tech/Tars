@@ -9,7 +9,7 @@ import { updateSharedJsonSync } from '../utils/shared-file';
 import { addMcpServerToJson, removeMcpServerFromJson } from '../utils/mcp-json';
 import { mcpNodeCommand, isTransientAppPath } from '../utils/mcp-node';
 import { writeAtomicSync } from '../utils/secret-file';
-import { bundledMcpServers, retireTelegramMcp } from './hermes-relay-switch';
+import { bundledMcpServers, retireOldMcpServers } from './hermes-relay-switch';
 import { API_PORT, DATA_DIR } from '../constants';
 import { TARS_MCP_ENV } from './mcp-orchestrator-env';
 import { dropSharedMcpEntries, ensureSharedMcp, SHARED_MCP_SERVERS, writeClaudeCopy, writeSharedMcpEntries } from './mcp-shared';
@@ -35,7 +35,7 @@ export function getMcpOrchestratorPath(): string {
 
 /**
  * Where a 2.0.4 ran the bundled MCP telegram server from: what a registration
- * of it names, for its removal (hermes-relay-switch.ts retireTelegramMcp). Tars
+ * of it names, for its removal (hermes-relay-switch.ts retireOldMcpServers). Tars
  * no longer ships it (2.0.5).
  * Always uses the packaged app path - MCP servers are bundled in extraResources
  */
@@ -215,7 +215,7 @@ export async function setupMcpOrchestrator(appSettings?: AppSettings): Promise<v
         }
       }
     }
-    await retireTelegramMcp(providers);
+    await retireOldMcpServers(providers);
 
     const moved = providers.map(p => p.id).filter(id => !failed.has(id));
     const unchanged = recorded.command === nodeCommand

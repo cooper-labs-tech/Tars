@@ -2,6 +2,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 import type { HookPost } from './codex-sessions';
 import { reportOf } from './terminal-answer';
+import { restRead, turnRead } from './cli-rest';
 
 export type { HookPost };
 
@@ -224,6 +225,8 @@ export class PiSessionWatch {
         }
         f.turnOpen = true;
         f.said = [];
+        // Tars's own reading of a turn's start: no rest (cli-rest.ts).
+        turnRead(agentId);
         await this.post(agentId, f, { status: 'running', event: 'UserPromptSubmit', current_task: event.text });
       } else if (f.turnOpen) {
         if (event.text) (f.said ??= []).push(event.text);
@@ -232,6 +235,8 @@ export class PiSessionWatch {
         } else if (event.stop === 'stop' || event.stop === 'length') {
           f.pendingError = undefined;
           f.turnOpen = false;
+          // Tars's own reading of the turn's end, which a line the owner types needs (owner-typed.ts): never a hook's.
+          restRead(agentId, f.sessionId);
           const answer = reportOf(f.said ?? []) ?? (event.text || null);
           f.said = [];
           if (answer) await this.postTo(agentId, f, '/api/hooks/output', { hook: 'Stop', output: answer });
@@ -240,6 +245,7 @@ export class PiSessionWatch {
         } else if (event.stop === 'aborted') {
           f.pendingError = undefined;
           f.turnOpen = false;
+          restRead(agentId, f.sessionId);
           // No answer: said interrupted first, then the rest pi is at.
           this.deps.interrupted?.(agentId, f.sessionId);
           await this.postTo(agentId, f, '/api/hooks/status', { hook: 'Stop', status: 'idle' });

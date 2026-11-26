@@ -60,11 +60,12 @@ describe('the relay turned on', () => {
   it('2. takes mcp-telegram out of every CLI, and leaves Tars\'s other servers', async () => {
     const gemini = await geminiWithTelegram();
 
-    await sw.retireTelegramMcp([gemini]);
+    await sw.retireOldMcpServers([gemini]);
 
     const servers = JSON.parse(fs.readFileSync(geminiSettings(), 'utf-8')).mcpServers;
     expect(Object.keys(servers)).toEqual(['claude-mgr-orchestrator']);
-  });
+    // The first test imports the providers and mcp-orchestrator cold: past 5 s on a loaded machine (load 170, 19/11).
+  }, 30_000);
 
   it('3. the start does not register mcp-telegram again', () => {
     expect(sw.bundledMcpServers()).not.toContain('claude-mgr-telegram');
@@ -78,7 +79,7 @@ describe('the relay off (2.0.5: no bot)', () => {
     expect(sw.bundledMcpServers()).not.toContain('claude-mgr-telegram');
     expect(sw.bundledMcpServers()).toContain('claude-mgr-orchestrator');
     const gemini = await geminiWithTelegram();
-    await sw.retireTelegramMcp([gemini]);
+    await sw.retireOldMcpServers([gemini]);
     expect(Object.keys(JSON.parse(fs.readFileSync(geminiSettings(), 'utf-8')).mcpServers)).toEqual(['claude-mgr-orchestrator']);
   });
 });
@@ -102,11 +103,11 @@ describe('another install\'s mcp-telegram (the Audit\'s L1 and L2 on #545)', () 
       'C:\\Users\\someone\\AppData\\Local\\Programs\\Tars\\resources\\mcp-telegram\\dist\\bundle.js',
     ]) {
       const gemini = await withGeminiServer('/opt/tars-mcp-node', [bundle]);
-      await sw.retireTelegramMcp([gemini]);
+      await sw.retireOldMcpServers([gemini]);
       expect(servers(), bundle).toEqual(['claude-mgr-orchestrator']);
     }
     const gemini = await withGeminiServer('node', ['/Users/someone/my-telegram/server.js']);
-    await sw.retireTelegramMcp([gemini]);
+    await sw.retireOldMcpServers([gemini]);
     expect(servers()).toEqual(['claude-mgr-telegram', 'claude-mgr-orchestrator']);
   });
 

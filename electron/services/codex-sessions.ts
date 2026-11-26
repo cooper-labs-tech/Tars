@@ -2,6 +2,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 import { codexHome, codexRolloutOf } from '../providers/codex-cli';
 import { reportOf } from './terminal-answer';
+import { restRead, turnRead } from './cli-rest';
 
 /**
  * Codex's turns, read from its own session log and told to Tars the way Claude Code's hooks tell it (2.0.4).
@@ -440,6 +441,8 @@ export class CodexSessionWatch {
           await this.post(b, '/api/hooks/status', { status: 'running', source: 'startup' });
         }
       } else if (event.kind === 'turn_started') {
+        // Tars's own reading of a turn's start: no rest (cli-rest.ts).
+        turnRead(b.agentId);
         b.turnOpen = true;
         b.startPosted = false;
         b.said = [];
@@ -453,6 +456,8 @@ export class CodexSessionWatch {
       } else if (event.kind === 'turn_complete') {
         if (!b.startPosted) await this.post(b, '/api/hooks/status', { status: 'running', event: 'UserPromptSubmit' });
         b.turnOpen = false;
+        // Tars's own reading of the turn's end, which a line the owner types needs (owner-typed.ts): never a hook's.
+        restRead(b.agentId, b.sessionId);
         b.startPosted = false;
         b.asking = false;
         if (event.error) {
@@ -466,6 +471,7 @@ export class CodexSessionWatch {
         }
       } else if (event.kind === 'turn_aborted' && b.turnOpen) {
         b.turnOpen = false;
+        restRead(b.agentId, b.sessionId);
         b.startPosted = false;
         b.asking = false;
         // No answer, and no task_complete will come: said interrupted first, then the rest codex is at.

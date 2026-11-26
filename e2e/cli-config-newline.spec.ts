@@ -28,12 +28,14 @@ import { DEV_URL, apiPort } from './ports.mjs';
  * The artefact: values.json (the file before and after each step), a screenshot, the app's trace with E2E_TRACE=on.
  */
 
+// The user's server: not dorothy-world, which since 2.0.7 Tars takes out of every CLI at its start when it runs
+// Dorothy's world bundle (retireOldMcpServers, #594). The shape is the same: a table with no blank line after it.
 const BEFORE = [
   'model = "gpt-5.3-codex"',
   '',
-  '[mcp_servers.dorothy-world]',
+  '[mcp_servers.atlas]',
   'command = "node"',
-  'args = ["/Users/someone/mcp-world/dist/bundle.js"]',
+  'args = ["/Users/someone/atlas/dist/bundle.js"]',
   '[mcp_servers.docs]',
   'command = "node"',
   'args = ["/Users/someone/docs/dist/bundle.js"]',
@@ -79,7 +81,7 @@ for (const newInterface of [false, true]) {
       keep({ deleted, afterDelete, afterDeleteParse: parses(afterDelete) });
       expect(parses(afterDelete), 'config.toml does not parse after the delete').toBeUndefined();
       const parsed = parseToml(afterDelete) as { mcp_servers?: Record<string, { args?: string[] }>; tui?: unknown };
-      expect.soft(parsed.mcp_servers?.['dorothy-world']?.args).toEqual(['/Users/someone/mcp-world/dist/bundle.js']);
+      expect.soft(parsed.mcp_servers?.atlas?.args).toEqual(['/Users/someone/atlas/dist/bundle.js']);
       expect.soft(parsed.mcp_servers?.docs).toBeUndefined();
       expect.soft(parsed.tui).toEqual({ notice: true });
       expect.soft(afterDelete.endsWith('\n')).toBe(true);

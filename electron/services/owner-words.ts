@@ -18,8 +18,44 @@ import { twoZones } from '../utils/two-zones';
 export const OWNER_WORDS_TTL_MS = 24 * 3_600_000;
 /** The most words held; the oldest go first. */
 export const OWNER_WORDS_MAX = 200;
+/**
+ * How long a line typed into an orchestrator's terminal waits for its CLI to say it took it as a prompt (2.0.7): the
+ * hook comes some 40 ms after an Enter at rest (input-draft.ts), and only a line typed at rest waits (typedAtRest).
+ * It was 10 minutes, all the time a forged hook needed (the Audit's L1 on #594).
+ */
+export const OWNER_TYPED_PENDING_MS = 60_000;
 
-export type OwnerWordsVia = 'window' | 'Telegram';
+/**
+ * Whether a line the owner just submitted into that agent's terminal may wait for its confirmation (the Audit's L1 on
+ * #594): only with the CLI at rest at its prompt (idle, completed, failed, or waiting at its idle prompt), never in a
+ * turn (the line is queued, or answers what the turn shows), with a dialog or a question open, or a permission
+ * question held by Tars. The hook that confirms it carries the agent's own token: a prompt-injected agent could
+ * otherwise confirm a "yes" its owner typed to a dialog Tars did not see.
+ */
+export function typedAtRest(
+  agent: { status?: string; waitingReason?: string; permissionAsk?: unknown; currentSessionId?: string },
+  dialogShown: boolean,
+  /**
+   * The agent's rest as Tars itself read it (restFromReadings), in its current session. The status alone is what
+   * the agent posts, and it can post "idle" mid-turn (the Audit's re-read at f211ff380); so can its Stop, with its own
+   * token (the re-read at 82f13ebd2): neither is a reading of Tars's.
+   */
+  rest: { session: string } | undefined,
+): boolean {
+  if (dialogShown || agent.permissionAsk) return false;
+  if (!rest || !agent.currentSessionId || rest.session !== agent.currentSessionId) return false;
+  if (agent.status === 'waiting') return agent.waitingReason === 'idle';
+  return agent.status === 'idle' || agent.status === 'completed' || agent.status === 'error';
+}
+/** The most lines that wait, per agent; the oldest go first. */
+export const OWNER_TYPED_PENDING_MAX = 20;
+/**
+ * The shortest prompt that may stand for a longer typed line: the hooks carry the first 200 characters (the state
+ * mod) or 200 bytes (the shell hook), never fewer than this many bytes once the cut character is dropped.
+ */
+const HOOK_CUT_MIN_BYTES = 150;
+
+export type OwnerWordsVia = 'window' | 'terminal' | 'Telegram';
 
 export interface OwnerWords {
   id: string;
@@ -75,24 +111,84 @@ function mayHold(party: OwnerWordsParty, words: OwnerWords): boolean {
   return !!words.chatId && party.chatId === words.chatId;
 }
 
+/**
+ * An agent's rest from what Tars reads itself, never from what the agent posts (the Audit's re-read of #594 at
+ * 82f13ebd2): for the claude binary, its transcript's tail in the current session with no turn on record (Claude Code's
+ * turn_duration, or the interrupt marker, after the last prompt) and nothing queued (status-truth.ts turnRecordOf);
+ * for codex and pi, the turn's end their watcher read in the current session's log (cli-rest.ts); for every other CLI
+ * (Qwen Code, whose transcript writes no turn end, gemini, opencode, amp, grok), none. No reading is no rest.
+ */
+export function restFromReadings(r: {
+  cli: 'transcript' | 'session-log' | 'none';
+  session?: string;
+  record?: { inTurn: boolean; queued?: boolean };
+  logRestSession?: string;
+}): { session: string } | undefined {
+  if (!r.session) return undefined;
+  if (r.cli === 'transcript') return r.record && !r.record.inTurn && !r.record.queued ? { session: r.session } : undefined;
+  if (r.cli === 'session-log') return r.logRestSession === r.session ? { session: r.session } : undefined;
+  return undefined;
+}
+
+/** A typed line or a prompt, as compared: CR line breaks as LF, the spaces at its ends and a character the hook cut dropped. */
+function typedForm(text: string): string {
+  return text.replace(/\r\n?/g, '\n').replace(/\uFFFD+$/, '').trim();
+}
+
+/** Where a typed line belongs: the agent's project, and its chat for a chat's runner. */
+export interface TypedScope { projectPath: string; chatId?: string }
+
 export function createOwnerWords(deps: { now?: () => number } = {}) {
   const now = deps.now ?? Date.now;
   const held: Array<OwnerWords & { relayedTo: Map<string, { by: { id: string; name?: string }; at: number }> }> = [];
+  /** Lines typed into an orchestrator's terminal, by agent, waiting for its CLI to take them as a prompt. */
+  const typedLines = new Map<string, Array<{ text: string; scope: TypedScope; at: number }>>();
+
   const copy = (w: OwnerWords): OwnerWords => ({
     id: w.id, text: w.text, at: w.at, via: w.via, projectPath: w.projectPath,
     ...(w.chatId ? { chatId: w.chatId } : {}), ...(w.about ? { about: w.about } : {}),
     ...(w.question ? { question: { ...w.question } } : {}),
   });
   const refused = (status: number, code: string, error: string): RelayRefusal => ({ status, code, error });
+  const record = (input: Omit<OwnerWords, 'id' | 'at'>): OwnerWords => {
+    const words = { ...input, id: `ow-${randomBytes(6).toString('hex')}`, at: now(), relayedTo: new Map() };
+    held.push(words);
+    if (held.length > OWNER_WORDS_MAX) held.splice(0, held.length - OWNER_WORDS_MAX);
+    return copy(words);
+  };
 
   return {
-    /** Records words the owner sent, as Tars received them. */
-    record(input: Omit<OwnerWords, 'id' | 'at'>): OwnerWords {
-      const words = { ...input, id: `ow-${randomBytes(6).toString('hex')}`, at: now(), relayedTo: new Map() };
-      held.push(words);
-      if (held.length > OWNER_WORDS_MAX) held.splice(0, held.length - OWNER_WORDS_MAX);
-      return copy(words);
+    /**
+     * A line the owner typed by hand into that agent's terminal (core/input-draft.ts typedLines): held, not recorded,
+     * until its CLI says it took it as a prompt (confirmTyped). The caller has checked the agent is an orchestrator.
+     */
+    typed(agentId: string, text: string, scope: TypedScope): void {
+      const line = typedForm(text);
+      if (!line) return;
+      const fresh = (typedLines.get(agentId) ?? []).filter((p) => now() - p.at <= OWNER_TYPED_PENDING_MS);
+      fresh.push({ text: line, scope: { ...scope }, at: now() });
+      typedLines.set(agentId, fresh.slice(-OWNER_TYPED_PENDING_MAX));
     },
+    /**
+     * That agent's CLI took a prompt (its UserPromptSubmit): the oldest line waiting that is this prompt, or whose start
+     * it is when the hook cut it, is recorded, from the keys, whole, and no longer waits. Nothing waiting, nothing
+     * recorded: a hook confirms a line, it never supplies one.
+     */
+    confirmTyped(agentId: string, prompt: string | undefined): OwnerWords | undefined {
+      const waiting = (typedLines.get(agentId) ?? []).filter((p) => now() - p.at <= OWNER_TYPED_PENDING_MS);
+      const said = typedForm(prompt ?? '');
+      const at = !said ? -1 : waiting.findIndex((p) => p.text === said
+        || (Buffer.byteLength(said, 'utf8') >= HOOK_CUT_MIN_BYTES && p.text.startsWith(said)));
+      if (at < 0) {
+        if (waiting.length) typedLines.set(agentId, waiting); else typedLines.delete(agentId);
+        return undefined;
+      }
+      const [line] = waiting.splice(at, 1);
+      if (waiting.length) typedLines.set(agentId, waiting); else typedLines.delete(agentId);
+      return record({ text: line.text, via: 'terminal', projectPath: line.scope.projectPath, ...(line.scope.chatId ? { chatId: line.scope.chatId } : {}) });
+    },
+    /** Records words the owner sent, as Tars received them. */
+    record,
     /** The words `party` could have received, newest first, as copies. */
     listFor(party: OwnerWordsParty): OwnerWords[] {
       return held.filter((w) => mayHold(party, w)).reverse().map(copy);

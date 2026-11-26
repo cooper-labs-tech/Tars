@@ -396,6 +396,12 @@ export interface TaskLedger {
    */
   terminalEnded(taskId: string, end: { result?: string; stopReason: string }): void;
   /**
+   * Any ended terminal task's answer, read at its end (task-answers.ts, 2.0.7): a turn the owner typed, a message, a
+   * queued message, a delegation's alike. Kept once: never over an answer already kept, never for a task still
+   * running, an ACP run, or one the ledger does not hold.
+   */
+  keepAnswer(taskId: string, result: string): void;
+  /**
    * A delegated task is about to be typed into an agent at rest (2.0.4): the
    * task still open there is one its background work keeps open, and it ends
    * now, so that the delegation's turn opens a task of its own (the Audit's H1
@@ -451,6 +457,11 @@ export function createTaskLedger(opts: {
    * answers from the fleet (task-watch.ts).
    */
   leads?: (receiverId: string, senderId: string) => boolean;
+  /**
+   * Told each terminal task as it ends at a rest, a stop or before the next delegation (2.0.7), for its answer to be
+   * read (task-watch.ts): never an ACP run, never a task a quit cut, found open at the start.
+   */
+  onEnded?: (task: TaskRecord) => void;
 }): TaskLedger {
   const { file, textFile } = opts;
   const resultFile = opts.resultFile;
@@ -641,6 +652,16 @@ export function createTaskLedger(opts: {
   };
   /** The delegated tasks still open: each ends at its turn's rest (delegatedTask). */
   const delegated = new Set<string>();
+  /** Its end told, never thrown: a reader that fails must not keep the ledger from recording the next turn. */
+  const told = (id: string): void => {
+    const task = byId.get(id);
+    if (!task || !opts.onEnded) return;
+    try {
+      opts.onEnded({ ...task, sessionIds: [...task.sessionIds] });
+    } catch (err) {
+      console.warn('[task-ledger] the end of a task was not told:', (err as Error).message);
+    }
+  };
 
   return {
     handedOff(agentId, handOff) {
@@ -718,6 +739,7 @@ export function createTaskLedger(opts: {
       delegated.delete(task.id);
       open.delete(agent.id);
       write({ t: 'end', id: task.id, at: now(), outcome });
+      told(task.id);
     },
 
     acpRun(run) {
@@ -804,6 +826,7 @@ export function createTaskLedger(opts: {
       open.delete(agentId);
       delegated.delete(task.id);
       write({ t: 'end', id: task.id, at: now(), outcome: 'completed' });
+      told(task.id);
       return task.id;
     },
 
@@ -822,10 +845,21 @@ export function createTaskLedger(opts: {
       if (!task || task.source === 'acp' || task.endedAt === null || task.stopReason !== undefined) return;
       if (end.result) {
         const result = Array.from(end.result).slice(0, RESULT_MAX).join('');
-        results.set(taskId, result);
-        writeResult(taskId, result);
+        // Read once for both (task-answers.ts): the same answer, kept at the task's end already, is not written again.
+        if (results.get(taskId) !== result) {
+          results.set(taskId, result);
+          writeResult(taskId, result);
+        }
       }
       write({ t: 'answer', id: taskId, at: now(), stopReason: STOP_REASON.test(end.stopReason) ? end.stopReason : 'unknown' });
+    },
+
+    keepAnswer(taskId, answer) {
+      const task = byId.get(taskId);
+      if (!task || task.source === 'acp' || task.endedAt === null || results.has(taskId) || !answer) return;
+      const result = Array.from(answer).slice(0, RESULT_MAX).join('');
+      results.set(taskId, result);
+      writeResult(taskId, result);
     },
 
     task(id) {
