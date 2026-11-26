@@ -58,6 +58,7 @@ export const SECTION_GROUPS: SettingsGroup[] = [
     children: [
       { id: 'ai-providers', label: 'Providers', description: 'Every CLI and API Tars can run. They are all equal here.', icon: Zap },
       { id: 'claude-accounts', label: 'Claude accounts', description: 'Several Claude subscriptions, and when your agents move between them.', icon: Users },
+      { id: 'inference-endpoints', label: 'Inference endpoints', description: 'OpenAI-compatible servers your agents can run on, and whether their sessions may be recorded as traces.', icon: Cloud },
       { id: 'cli', label: 'CLI Paths', description: 'Where each command line tool lives on this machine.', icon: Terminal },
       { id: 'permissions', label: 'Permissions', description: 'How far an agent may go before it asks you.', icon: Shield },
     ],

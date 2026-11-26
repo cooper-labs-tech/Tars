@@ -101,6 +101,9 @@ export function useElectronAgents() {
     obsidianVaultPaths?: string[];
     role?: 'orchestrator' | 'worker';
     cliPath?: string;
+    /** The inference endpoint an open harness runs on, and its Record traces switch. */
+    endpointId?: string;
+    traces?: boolean;
   }) => {
     if (!isElectron()) {
       throw new Error('Electron API not available');

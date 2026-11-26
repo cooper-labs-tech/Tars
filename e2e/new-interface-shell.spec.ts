@@ -17,7 +17,8 @@ import { DEV_URL, apiPort } from './ports.mjs';
  * Projects, Dashboard, Kanban, Schedules) with Chat current, New chat
  * disabled, "Tars, all projects" first, and "No chats yet" where the chats
  * will be, none of them made up; the pages of More are not in it. More opens
- * its ten pages, Resources between Usage and Brain since 2.0.5 (#539, frame
+ * its eleven pages, Resources between Usage and Brain since 2.0.5 (#539) and
+ * Traces between Usage and Resources since 2.0.7 (#599, frame
  * `Shell · chats · More open`). Settings opens as a card above the app, the chats page
  * still under it, with the switch on; Escape closes it and the page has not
  * moved. Usage opens the same way and its cross closes it. "Tars, all
@@ -35,7 +36,7 @@ import { DEV_URL, apiPort } from './ports.mjs';
 /** The launch splash, over the page on every document load until its checks answer (4 s at most). */
 const SPLASH = 'div.fixed.inset-0.z-\\[200\\]';
 const MAIN = ['Chat', 'Projects', 'Dashboard', 'Kanban', 'Schedules'];
-const MORE = ['Agents', 'Review', 'Logs', 'Vault', 'Extensions', 'Usage', 'Resources', 'Brain', 'Settings', "What's New"];
+const MORE = ['Agents', 'Review', 'Logs', 'Vault', 'Extensions', 'Usage', 'Traces', 'Resources', 'Brain', 'Settings', "What's New"];
 
 test('with the new interface on, the shell of the frames: the main menu, Tars first, no made-up chats, More and its pages as cards; turned off, the shell before', async () => {
   test.setTimeout(300_000);

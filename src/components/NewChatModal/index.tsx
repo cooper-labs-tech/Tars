@@ -22,6 +22,9 @@ import { ReplaceOrchestratorDialog } from './ReplaceOrchestratorDialog';
 import type { PendingReplace } from './ReplaceOrchestratorDialog';
 import { modeForProvider } from '@/lib/plan-mode';
 import { ipcReason } from '@/lib/ipc-error';
+import { useEndpoints } from '@/hooks/useEndpoints';
+import { runsOnEndpoints } from './EndpointFields';
+import type { EndpointChoice } from './EndpointFields';
 
 const MODE_OPTIONS: SegmentedOption<CreationMode>[] = [
   { value: 'agent', label: 'One agent' },
@@ -112,6 +115,10 @@ export default function NewChatModal({
   // the same project holds it is asked first (ReplaceOrchestratorDialog), and
   // the answer goes ahead with the save it interrupted.
   const [pendingReplace, setPendingReplace] = useState<PendingReplace | null>(null);
+  // The inference endpoint an open harness runs on, and its Record traces switch; why a save would be refused.
+  const [endpointChoice, setEndpointChoice] = useState<EndpointChoice>({ endpointId: null, traces: false });
+  const [endpointBlocked, setEndpointBlocked] = useState<string | null>(null);
+  const { endpoints, harnesses } = useEndpoints();
 
   const handleRefreshSkills = useCallback(() => {
     onRefreshSkills?.();
@@ -226,6 +233,7 @@ export default function NewChatModal({
       setProvider(editAgent.provider || 'claude');
       setIsOrchestrator(editAgent.role === 'orchestrator');
       setCliPath(editAgent.cliPath || '');
+      setEndpointChoice({ endpointId: editAgent.endpointId ?? null, traces: editAgent.traces === true });
     } else {
       setProjectPath(initialProjectPath || '');
       setSelectedSkills([]);
@@ -237,6 +245,7 @@ export default function NewChatModal({
       setProvider('claude');
       setModel('default');
       setCliPath('');
+      setEndpointChoice({ endpointId: null, traces: false });
 
       if (initialOrchestrator) {
         setCharacter('wizard');
@@ -339,6 +348,8 @@ export default function NewChatModal({
           worktree: worktreeConfig,
           role: isOrchestrator ? 'orchestrator' : 'worker',
           cliPath: cliPath || null,
+          endpointId: runsOnEndpoints(provider) ? endpointChoice.endpointId : null,
+          traces: endpointChoice.traces,
         });
         if (result === false) return;
         if (result && typeof result === 'object' && 'error' in result) {
@@ -354,7 +365,8 @@ export default function NewChatModal({
       const worktreeConfig = useWorktree ? { enabled: true, branchName: branchName.trim() } : undefined;
 
       setSaveRefusal(null);
-      const result = await onSubmit(projectPath, selectedSkills, finalPrompt, model, worktreeConfig, agentCharacter, finalName, undefined, permissionMode, provider, undefined, undefined, effort, isOrchestrator ? 'orchestrator' : 'worker', cliPath || undefined);
+      const result = await onSubmit(projectPath, selectedSkills, finalPrompt, model, worktreeConfig, agentCharacter, finalName, undefined, permissionMode, provider, undefined, undefined, effort, isOrchestrator ? 'orchestrator' : 'worker', cliPath || undefined,
+        { endpointId: runsOnEndpoints(provider) ? endpointChoice.endpointId : null, traces: endpointChoice.traces });
       if (result === false) return;
       if (result && typeof result === 'object' && 'error' in result) {
         setSaveRefusal(result.error);
@@ -373,16 +385,17 @@ export default function NewChatModal({
       setProvider('claude');
       setModel('default');
       setCliPath('');
+      setEndpointChoice({ endpointId: null, traces: false });
       setAgentOptionsOpen(false);
     } finally {
       setIsSubmitting(false);
     }
-  }, [projectPath, prompt, selectedSkills, useWorktree, branchName, model, permissionMode, effort, provider, cliPath, agentName, character, onSubmit, isEditMode, editAgent, onUpdate, onClose, isOrchestrator]);
+  }, [projectPath, prompt, selectedSkills, useWorktree, branchName, model, permissionMode, effort, provider, cliPath, agentName, character, onSubmit, isEditMode, editAgent, onUpdate, onClose, isOrchestrator, endpointChoice]);
 
   // Switching the toggle on, creating with it on and moving an orchestrator into
   // another project all end here: the project is the one the dialog now names.
   const handleSubmitAgent = useCallback(async () => {
-    if (!canSubmitAgent({ projectPath, useWorktree, branchName })) return;
+    if (!canSubmitAgent({ projectPath, useWorktree, branchName }) || endpointBlocked) return;
     if (isOrchestrator) {
       // Busy while it looks, as it is while it saves: a second click in
       // between would otherwise save twice.
@@ -404,7 +417,7 @@ export default function NewChatModal({
       }
     }
     await commitAgent();
-  }, [projectPath, useWorktree, branchName, isOrchestrator, currentOrchestrator, editAgent, isEditMode, agentName, commitAgent]);
+  }, [projectPath, useWorktree, branchName, isOrchestrator, currentOrchestrator, editAgent, isEditMode, agentName, commitAgent, endpointBlocked]);
 
   /* ── submit: a team ──────────────────────────────────────────────── */
   const selectedMembers = useMemo(
@@ -493,7 +506,7 @@ export default function NewChatModal({
     else await commitAgent();
   }, [pendingReplace, commitTeam, commitAgent]);
 
-  const canStartAgent = canSubmitAgent({ projectPath, useWorktree, branchName });
+  const canStartAgent = canSubmitAgent({ projectPath, useWorktree, branchName }) && !endpointBlocked;
   const canDeployTeam = canSubmitTeam({ projectPath, selectedCount: selectedMembers.length }) && !deploying;
 
   if (!open) return null;
@@ -573,6 +586,8 @@ export default function NewChatModal({
               provider={provider}
               onProviderChange={(next) => {
                 setProvider(next);
+                // Only the four open harnesses run on an endpoint: another provider runs on its own account.
+                if (!runsOnEndpoints(next)) setEndpointChoice({ endpointId: null, traces: false });
                 // Plan runs on Claude Code only: another CLI keeps manual (frame: Permissions · plan mode · states).
                 setPermissionMode(mode => modeForProvider(mode, next));
               }}
@@ -601,6 +616,11 @@ export default function NewChatModal({
               editing={isEditMode}
               cliPath={cliPath}
               onCliPathChange={setCliPath}
+              endpointChoice={endpointChoice}
+              onEndpointChoiceChange={setEndpointChoice}
+              onEndpointBlocked={setEndpointBlocked}
+              endpoints={endpoints}
+              harnesses={harnesses}
             />
           ) : (
             <TeamPanel

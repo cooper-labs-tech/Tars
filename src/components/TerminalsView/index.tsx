@@ -573,6 +573,7 @@ export default function TerminalsView() {
     effort?: 'low' | 'medium' | 'high' | 'xhigh' | 'max',
     role?: 'orchestrator' | 'worker',
     cliPath?: string,
+    endpoint?: { endpointId: string | null; traces: boolean },
   ) => {
     try {
       const resolvedModel = (provider !== 'local' && model && model !== 'default') ? model : undefined;
@@ -591,6 +592,8 @@ export default function TerminalsView() {
         obsidianVaultPaths,
         role,
         cliPath,
+        endpointId: endpoint?.endpointId ?? undefined,
+        traces: endpoint?.traces,
       });
       // Auto-add to active custom tab
       if (tabManager.isCustomTabActive && tabManager.activeCustomTab) {
