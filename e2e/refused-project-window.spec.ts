@@ -1,4 +1,5 @@
 import { test, expect, _electron as electron, type ElectronApplication } from '@playwright/test';
+import { execFileSync } from 'child_process';
 import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
@@ -20,7 +21,10 @@ import { DEV_URL, apiPort } from './ports.mjs';
  * 2. the agent's window, Memory: the Code panel shows main's reason word for word ([data-code-panel-refused]);
  * 3. the Projects page, + Project on ~/.azure/work (main's folder dialog answers with it): main's refusal shows where
  *    the add was made ([data-project-add-refused]), word for word.
- * Red on 99bdbcbbd: none of the three lines existed.
+ * 4. Review (since bbdd335bb main refuses its channels the same way): the held project says main's reason in the list
+ *    of projects ([data-review-project-refused]), and an untracked .env in the plain project's repository, picked among
+ *    its changed files, says main's own sentence in the patch's place ([data-review-file-error]), word for word.
+ * Red on 99bdbcbbd: none of the first three lines existed. Red on bbdd335bb: neither of Review's.
  * The artefact: values.json (main's answers, the lines shown) and refused-<n>.png.
  */
 
@@ -32,6 +36,8 @@ type Api = { electronAPI: {
   project: { listFiles(root: string, depth?: number): Promise<{ success: boolean; error?: string }> };
 } };
 
+type ReviewApi = { electronAPI: { review: { file(repo: string, file: string): Promise<{ success: boolean; error?: string }> } } };
+
 test('a project the window\'s rule refuses is said so on the Projects page, in the Code panel, and where an add is made', async () => {
   test.setTimeout(120_000);
   const home = fs.mkdtempSync(path.join(os.tmpdir(), 'dorothy-e2e-refused-project-'));
@@ -42,6 +48,12 @@ test('a project the window\'s rule refuses is said so on the Projects page, in t
   for (const d of [dir, plain, held, azure]) fs.mkdirSync(d, { recursive: true });
   fs.writeFileSync(path.join(held, 'lib.ts'), 'export const x = 1;\n');
   fs.writeFileSync(path.join(plain, 'index.ts'), 'export const y = 2;\n');
+  // The plain project is a repository with one commit, and a file named like a credential beside it, not committed.
+  const git = (...args: string[]) => execFileSync('git', args, { cwd: plain, stdio: 'pipe', env: { ...process.env, GIT_AUTHOR_NAME: 't', GIT_AUTHOR_EMAIL: 't@t', GIT_COMMITTER_NAME: 't', GIT_COMMITTER_EMAIL: 't@t' } });
+  git('init', '-q', '-b', 'main');
+  git('add', 'index.ts');
+  git('commit', '-q', '-m', 'first');
+  fs.writeFileSync(path.join(plain, '.env'), 'FAKE_SETTING=stand-in-of-the-e2e\n');
   const at = { status: 'idle', role: 'worker', skills: [], permissionMode: 'normal', provider: 'claude', character: 'robot', createdAt: '2026-11-26T08:00:00.000Z', lastActivity: '2026-11-26T08:00:00.000Z' };
   fs.writeFileSync(path.join(dir, 'agents.json'), JSON.stringify([{ id: 'held-agent', name: 'Held Agent', projectPath: held, ...at }], null, 2));
   fs.writeFileSync(path.join(dir, 'projects.json'), JSON.stringify([plain, held]));
@@ -94,7 +106,22 @@ test('a project the window\'s rule refuses is said so on the Projects page, in t
     const codeShown = await text('[data-code-panel-refused]');
     await shot(2);
 
-    keep({ cardShown, plainLines, addShown, codeShown, errors });
+    // 4. Review: the held project says main's reason and is not scanned; the plain one's .env says main's sentence.
+    const fileAnswer = await page.evaluate((r) => (window as unknown as ReviewApi).electronAPI.review.file(r, '.env'), fs.realpathSync(plain));
+    await page.goto(`${DEV_URL}/review`, { waitUntil: 'domcontentloaded' });
+    await expect.soft(page.locator('[data-review-project-refused]'), 'Review says why the held project is not read').toBeVisible({ timeout: 15_000 });
+    const reviewShown = await text('[data-review-project-refused]');
+    const envButton = page.getByRole('button', { name: /^\.env\b/ }).first();
+    await expect.soft(envButton, 'the .env listed among the changed files').toBeVisible({ timeout: 15_000 });
+    await envButton.click({ timeout: 5_000 }).catch(() => undefined);
+    await expect.soft(page.locator('[data-review-file-error]'), 'the .env says why it is not shown').toBeVisible({ timeout: 10_000 });
+    const fileShown = await text('[data-review-file-error]');
+    await shot(4);
+
+    keep({ cardShown, plainLines, addShown, codeShown, reviewShown, fileAnswer, fileShown, errors });
+    expect.soft(reviewShown, 'Review: main\'s reason, word for word').toBe(heldReason);
+    expect.soft(fileAnswer.success, 'main does not show the .env').toBe(false);
+    expect.soft(fileShown, 'Review: main\'s sentence for the .env, word for word').toBe(fileAnswer.error ?? '(no answer)');
     expect.soft(cardShown, 'the card: main\'s reason, word for word').toBe(heldReason);
     expect.soft(plainLines, 'the plain project says nothing').toBe(0);
     expect.soft(files.success, 'main reads no file of the held project').toBe(false);
