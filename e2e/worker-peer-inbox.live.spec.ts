@@ -169,7 +169,7 @@ test('another session\'s message reaches an orchestrator and is refused by a wor
       const workerPid = Number(path.basename(inboxOf(home, 'worker')!, '.sock'));
       const workerCommand = execFileSync('ps', ['-o', 'command=', '-p', String(workerPid)]).toString().trim();
       values.workerCommand = workerCommand.replace(home, '<home>');
-      expect(workerCommand).toContain('"crossSessionInbound":"refuse"');
+      expect.soft(workerCommand, 'the worker\'s command line without the setting').toContain('"crossSessionInbound":"refuse"');
       // Tars writes its hooks and status line there at launch; never this.
       expect(fs.readFileSync(settingsFile, 'utf8')).not.toContain('crossSessionInbound');
 

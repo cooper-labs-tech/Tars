@@ -174,7 +174,7 @@ test('codex: another session\'s queued message reaches an orchestrator and not a
       values.threads = threads;
       const workerLine = execFileSync('ps', ['-axo', 'command=']).toString().split('\n').find((l) => l.includes('sqlite_home=') && l.includes(home)) ?? '';
       values.workerSqliteHome = workerLine.match(/sqlite_home=("[^"]*"|\S+)/)?.[1]?.replace(home, '<home>') ?? null;
-      expect(values.workerSqliteHome, 'the worker\'s codex on the shared databases').toMatch(/<home>\/\.tars\/tmp\/[0-9a-f]{10}\/codex/);
+      expect.soft(values.workerSqliteHome, 'the worker\'s codex on the shared databases').toMatch(/<home>\/\.tars\/tmp\/[0-9a-f]{10}\/codex/);
       const leadLine = execFileSync('ps', ['-axo', 'command=']).toString().split('\n').filter((l) => l.includes(home) && l.includes(projects.lead));
       values.leadSqliteHome = leadLine.some((l) => l.includes('sqlite_home=')) ? 'set' : 'shared';
       recordValues(values);
@@ -272,10 +272,10 @@ test('Qwen Code: another session\'s message reaches an orchestrator, and a worke
       const settingsOf = (id: string) => JSON.parse(fs.readFileSync(path.join(home, '.tars', 'qwen-code', 'agents', `${id}.json`), 'utf8')).agents ?? null;
       values.settings = { lead: settingsOf('lead'), worker: settingsOf('worker') };
       recordValues(values);
-      expect(values.settings).toEqual({ lead: null, worker: { crossSessionMessaging: false } });
+      expect.soft(values.settings).toEqual({ lead: null, worker: { crossSessionMessaging: false } });
       expect(lead.ipcPath, 'the orchestrator lists no inbox').toBeTruthy();
-      expect(worker.ipcPath, 'the worker lists an inbox').toBeFalsy();
-      expect(values.workerSockets, 'a socket of the worker\'s process').toEqual([]);
+      expect.soft(worker.ipcPath, 'the worker lists an inbox').toBeFalsy();
+      expect.soft(values.workerSockets, 'a socket of the worker\'s process').toEqual([]);
 
       const TO_LEAD = `PEER-TO-LEAD-${nonce}`;
       const TO_WORKER = `PEER-TO-WORKER-${nonce}`;
