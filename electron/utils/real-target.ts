@@ -5,7 +5,7 @@ import { DATA_DIR_NAME, PRIVATE_DIR_NAME } from '../constants';
 import { LEGACY_DATA_DIR_NAME } from '../core/data-dir-move';
 import { isUnder, samePath } from '../platform/path-compare';
 import { isWithinDir } from './path-identity';
-import { fileId, isUnderSafeRoot, withoutHomeCover, type HomeRootDeps } from './home-root';
+import { fileId, isUnderSafeRoot, withoutHomeCover, type FileId, type HomeRootDeps } from './home-root';
 
 /**
  * Where a read or a write of a path really lands, and whether that is under a
@@ -127,28 +127,63 @@ function blockedPlaces(home: string): string[] {
 }
 
 /**
- * Inside ~/Library, the folders of the user's own documents, not of an application's: iCloud Drive's own folder,
+ * Below ~/Library, the folders of the user's own documents, not of an application's: iCloud Drive's own folder,
  * Obsidian's folder in iCloud Drive (where Obsidian keeps every vault it syncs through iCloud), and the cloud drives.
  * The rest of Mobile Documents is applications' iCloud storage, as Application Support is their local one.
  */
-function userDocuments(home: string): string[] {
-  const icloud = path.join(home, 'Library', 'Mobile Documents');
-  return [path.join(icloud, 'com~apple~CloudDocs'), path.join(icloud, 'iCloud~md~obsidian', 'Documents'), path.join(home, 'Library', 'CloudStorage')];
-}
+const DOCUMENTS_BELOW_LIBRARY = [
+  path.join('Mobile Documents', 'com~apple~CloudDocs'), path.join('Mobile Documents', 'iCloud~md~obsidian', 'Documents'), 'CloudStorage',
+];
+const inDocuments = (below: string | undefined) => below !== undefined && DOCUMENTS_BELOW_LIBRARY.some(d => samePath(below, d) || isUnder(below, d));
 
 const underPlace = (p: string, place: string) => p === place || p.startsWith(place + path.sep) || isWithinDir(p, place);
 const byName = (p: string, folder: string) => samePath(p, folder) || isUnder(p, folder);
+const sameId = (a: FileId | undefined, b: FileId | undefined) => !!a && !!b && a.dev === b.dev && a.ino === b.ino;
 
-/**
- * The documents folders by name only, under the home as spelled and where it really lies. Never by identity: a
- * documents folder that is another name for a refused one exempts nothing (the Audit's M3 on #648).
- */
-function documentsByName(home: string): string[] {
-  return [...new Set([home, realPath(home) ?? home])].flatMap(userDocuments);
+/** `real` and every folder above it, nearest first. */
+function upFrom(real: string): string[] {
+  const out: string[] = [];
+  for (let p = real; ; p = path.dirname(p)) {
+    out.push(p);
+    if (path.dirname(p) === p) return out;
+  }
 }
 
-/** `p` is in `place` (by identity too), and not in one of the user's documents folders inside it (by name). */
-const inBlocked = (p: string, place: string, docs: string[]) => underPlace(p, place) && !docs.some(d => byName(p, d));
+/**
+ * Where `p` lies below `dir`, found by identity: `p`'s real path walked up to the folder that is `dir` (its device
+ * and inode, `dir` followed when it is a link), and the names below that folder. Undefined when `p` is not in `dir`
+ * or cannot be followed. Whatever spelling either has, the same folder is the same folder.
+ */
+function belowByIdentity(p: string, dir: string): string | undefined {
+  const id = fileId(dir);
+  const real = realTarget(p);
+  if (!id || !real) return undefined;
+  for (const up of upFrom(real)) if (sameId(fileId(up), id)) return path.relative(up, real);
+  return undefined;
+}
+
+/**
+ * The name of the home's folder `p` is in or is, found by identity: `p`'s real path walked up to the folder whose
+ * parent is the home (its device and inode). A home reached by another spelling is the same home. Undefined for the
+ * home itself, outside it, or when it cannot be told.
+ */
+export function homeFolderOf(p: string, deps: { home?: string } = {}): string | undefined {
+  const home = fileId(deps.home ?? os.homedir());
+  const real = realTarget(p);
+  if (!home || !real) return undefined;
+  const ups = upFrom(real);
+  for (let i = 0; i + 1 < ups.length; i++) if (sameId(fileId(ups[i + 1]), home)) return path.basename(ups[i]);
+  return undefined;
+}
+
+/**
+ * `p` is in `place` (by spelling or by identity), and not, when `place` is ~/Library, in one of the user's documents
+ * folders there: told by the names below ~/Library where `p` really lies, ~/Library found by identity. The documents
+ * exception is ~/Library's alone: a credential folder kept in a documents folder stays refused, and a documents folder
+ * that is another name for a refused one exempts nothing (the Audit's M3 and M4 on #648).
+ */
+const inBlocked = (p: string, place: string, library: string) =>
+  underPlace(p, place) && !(place === library && inDocuments(belowByIdentity(p, place)));
 
 /**
  * Whether `target` is in a folder of credentials (~/.ssh, ~/.gnupg, ~/.aws,
@@ -163,33 +198,66 @@ const inBlocked = (p: string, place: string, docs: string[]) => underPlace(p, pl
 export function inCredentialPlace(target: string, real: string | null, deps: { home?: string } = {}): boolean {
   const home = deps.home ?? os.homedir();
   const own = new Set(['.claude', DATA_DIR_NAME, PRIVATE_DIR_NAME].map(name => path.join(home, name)));
-  const docs = documentsByName(home);
-  return blockedPlaces(home).filter(place => !own.has(place)).some(place => [target, real].some(p => !!p && inBlocked(p, place, docs)));
+  const library = path.join(home, 'Library');
+  return blockedPlaces(home).filter(place => !own.has(place)).some(place => [target, real].some(p => !!p && inBlocked(p, place, library)));
 }
 
+const fileIdAsync = (p: string): Promise<FileId | undefined> => fs.promises.stat(p, { bigint: true })
+  .then(st => (st.ino === BigInt(0) ? undefined : { dev: st.dev, ino: st.ino }), () => undefined);
+
+/** A place inPlaceTaken compares with: its names, its identity, and whether it is ~/Library. */
+export interface PlaceTaken { names: string[]; id?: FileId; library: boolean }
+
 /** The places inCredentialPlace judges, taken without blocking: what inPlaceTaken compares a path with. */
-export interface PlacesTaken { homes: string[]; places: string[]; docs: string[] }
+export interface PlacesTaken { homes: string[]; places: PlaceTaken[]; home?: FileId; own: FileId[] }
 
 /**
  * The credential places for a caller that must not block the main thread (fs:list-projects, Review's scan and search),
- * taken once per listing: the home and each place followed asynchronously, each place compared under the home as
- * spelled, under its real path, and where the place itself really lies, so a place that is another name for a folder
- * elsewhere covers that folder, as inCredentialPlace's identity does; the documents folders by name only.
+ * taken once per listing: the home, Tars's own folders and each place followed asynchronously. Each place is compared
+ * by its names under the home as spelled, under its real path, and where the place itself really lies, and by its
+ * identity, as inCredentialPlace compares it.
  */
 export async function takePlaces(deps: { home?: string } = {}): Promise<PlacesTaken> {
   const home = deps.home ?? os.homedir();
   const homes = [...new Set([home, await fs.promises.realpath(home).catch(() => home)])];
   const own = new Set(['.claude', DATA_DIR_NAME, PRIVATE_DIR_NAME]);
-  const mine = (h: string) => blockedPlaces(h).filter(place => !own.has(path.basename(place)));
-  const reals = await Promise.all(mine(home).map(place => fs.promises.realpath(place).catch(() => undefined)));
-  const places = [...new Set([...homes.flatMap(mine), ...reals.filter((r): r is string => !!r)])];
-  return { homes, places, docs: homes.flatMap(userDocuments) };
+  const places = await Promise.all(blockedPlaces(home).filter(place => !own.has(path.basename(place))).map(async (place) => {
+    const below = path.relative(home, place);
+    const real = await fs.promises.realpath(place).catch(() => undefined);
+    return { names: [...new Set([...homes.map(h => path.join(h, below)), ...(real ? [real] : [])])], id: await fileIdAsync(place), library: below === 'Library' };
+  }));
+  const [homeId, ...ownIds] = await Promise.all([home, path.join(home, DATA_DIR_NAME), path.join(home, PRIVATE_DIR_NAME)].map(fileIdAsync));
+  return { homes, places, home: homeId, own: ownIds.filter((o): o is FileId => !!o) };
 }
 
-/** inCredentialPlace against places taken by takePlaces: no disk is looked at. */
-export function inPlaceTaken(target: string, real: string, taken: PlacesTaken): boolean {
-  return taken.places.some(place => [target, real].some(p => byName(p, place) && !taken.docs.some(d => byName(p, d))));
+/** A real path and each folder above it, nearest first, with their identities: taken once per project, without blocking. */
+export type Ancestry = Array<{ path: string; id?: FileId }>;
+
+export async function takeAncestry(real: string): Promise<Ancestry> {
+  return Promise.all(upFrom(real).map(async (p) => ({ path: p, id: await fileIdAsync(p) })));
 }
+
+/** inCredentialPlace against places taken by takePlaces and the real path's ancestry: no disk is looked at. */
+export function inPlaceTaken(target: string, real: string, taken: PlacesTaken, ancestry: Ancestry): boolean {
+  return taken.places.some((place) => {
+    const exempt = (below: string) => place.library && inDocuments(below);
+    for (const p of [target, real]) {
+      const name = place.names.find(n => byName(p, n));
+      if (name && !exempt(path.relative(name, p))) return true;
+    }
+    const at = place.id ? ancestry.find(a => sameId(a.id, place.id)) : undefined;
+    return !!at && !exempt(path.relative(at.path, real));
+  });
+}
+
+/** homeFolderOf, from an ancestry taken without blocking. */
+export function homeFolderIn(ancestry: Ancestry, home: FileId | undefined): string | undefined {
+  for (let i = 0; i + 1 < ancestry.length; i++) if (sameId(ancestry[i + 1].id, home)) return path.basename(ancestry[i].path);
+  return undefined;
+}
+
+/** Whether a real path is in, or is, one of `own` (Tars's folders), by identity, from its ancestry. */
+export const ownIn = (ancestry: Ancestry, own: FileId[]) => ancestry.some(a => own.some(o => sameId(a.id, o)));
 
 const MARKDOWN = /\.(md|markdown|mdx)$/i;
 
@@ -213,8 +281,8 @@ export function linkedFileAllowed(realFile: string, deps: { home?: string } = {}
   } catch {
     return false;
   }
-  const docs = documentsByName(home);
-  return !blockedPlaces(home).some(place => inBlocked(realFile, place, docs));
+  const library = path.join(home, 'Library');
+  return !blockedPlaces(home).some(place => inBlocked(realFile, place, library));
 }
 
 export interface LandsOptions extends HomeRootDeps {

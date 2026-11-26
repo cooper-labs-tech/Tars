@@ -813,8 +813,10 @@ CLI's `user-settings.json`), and nothing in a folder of credentials (`~/.ssh`,
 home's application folders, `~/Library` but for iCloud Drive's own folder
 (`Mobile Documents/com~apple~CloudDocs`), Obsidian's folder in it
 (`Mobile Documents/iCloud~md~obsidian/Documents`) and the cloud drives
-(`CloudStorage`), told by their names only, so a documents folder that is
-another name for a refused folder exempts nothing, and `AppData`), as spelled or where
+(`CloudStorage`), told by their names below `~/Library` where a path really
+lies, so a documents folder that is another name for a refused folder exempts
+nothing, and the exception is `~/Library`'s alone: a credential folder kept in
+a documents folder stays refused; and `AppData`), as spelled or where
 it really lies, whatever names that folder as a project: a page could add any
 folder as a project and then read it, GitHub's token in `~/.config/gh` or a
 cluster's in `~/.kube` (the Audit's L1 on #466). `fs:add-custom-project` refuses
@@ -830,7 +832,9 @@ and the plugins' list (`~/.claude/plugins/installed_plugins.json`), which agents
 write too. `fs:list-projects`, and Review's scan and search, follow the project,
 the home and each place without blocking the window, and compare where each
 really lies, so a place that is another name for a folder elsewhere covers that
-folder there too. A
+folder there too. The home's folders, and Tars's own, are judged by identity
+in both forms, a path's real location walked up to the folder that is the home:
+a home reached by another spelling is the same home. A
 limit: an `AppData` that Windows folder redirection moved to a share is not
 under the home, and is not a folder of credentials to these rules. It is not
 looked up, since every read would then ask the share.

@@ -5,7 +5,9 @@ import { DATA_DIR, PRIVATE_DIR, VAULT_DIR } from '../constants';
 import { isUnder, samePath } from '../platform/path-compare';
 import { coversHome } from './home-root';
 import { isHardLinkInto, isWithinDir } from './path-identity';
-import { inCredentialPlace, inPlaceTaken, landsUnderSafeRoot, realTarget, takePlaces, type PlacesTaken } from './real-target';
+import {
+  homeFolderIn, homeFolderOf, inCredentialPlace, inPlaceTaken, landsUnderSafeRoot, ownIn, realTarget, takeAncestry, takePlaces, type PlacesTaken,
+} from './real-target';
 
 /**
  * What the window may read, write, and have local-file:// serve (the Audit's
@@ -92,10 +94,29 @@ function homeFolderNames(p: string, homes: string[] = [home(), realTarget(home()
   });
 }
 
-/** `p` is in a folder of the home whose name starts with a dot, other than the four CLI folders, or is one. */
-function inOtherDotFolderOfHome(p: string, homes?: string[]): boolean {
-  return homeFolderNames(p, homes).some((first) => first.startsWith('.') && !CLI_FOLDERS.includes(first.toLowerCase()));
+/**
+ * The names of the home's folder `p` is in or is: by name, and by identity (homeFolderOf), so a home reached by
+ * another spelling is the same home.
+ */
+const homeFoldersOf = (p: string) => [...homeFolderNames(p), ...[homeFolderOf(p)].filter((n): n is string => !!n)];
+/** A name of the home's folder that starts with a dot, other than the four CLI folders. */
+const otherDot = (first: string) => first.startsWith('.') && !CLI_FOLDERS.includes(first.toLowerCase());
+
+/** What refusalOf asks of a folder, answered by the rule itself or, without blocking, from what was taken. */
+interface Judge {
+  /** In a folder of credentials or an application folder of the home. */
+  credential(spelled: string, real: string): boolean;
+  /** In one of Tars's own folders, by identity. */
+  own(real: string): boolean;
+  /** The names of the home's folders it is in, by name and by identity. */
+  homeFolders(p: string): string[];
 }
+
+const judgeNow: Judge = {
+  credential: inCredentialPlace,
+  own: (real) => isWithinDir(real, DATA_DIR) || isWithinDir(real, PRIVATE_DIR),
+  homeFolders: homeFoldersOf,
+};
 
 /**
  * Why a folder may not be a project, or undefined when it may: one of Tars's own folders, a folder of credentials or
@@ -108,7 +129,7 @@ function inOtherDotFolderOfHome(p: string, homes?: string[]): boolean {
 export function projectRefusal(p: unknown): string | undefined {
   if (typeof p !== 'string' || !p) return 'A project is a folder named by its full path.';
   const resolved = path.resolve(p);
-  return refusalOf(resolved, () => realTarget(resolved), inCredentialPlace);
+  return refusalOf(resolved, realTarget(resolved), judgeNow);
 }
 
 /**
@@ -119,23 +140,30 @@ export function projectRefusal(p: unknown): string | undefined {
  */
 export async function projectRefusalAsync(p: string, taken?: PlacesTaken): Promise<string | undefined> {
   const resolved = path.resolve(p);
+  if (projectRoots([resolved]).length === 0) return refusalOf(resolved, undefined, judgeNow);
   const places = taken ?? await takePlaces();
   // A folder gone from the disk is judged by the folder it would be in, as realTarget judges it: Review says it is gone.
-  const real = projectRoots([resolved]).length === 0 ? undefined : await fs.promises.realpath(resolved)
+  const real = await fs.promises.realpath(resolved)
     .catch((err: NodeJS.ErrnoException) => (err.code === 'ENOENT' ? realTarget(resolved) : undefined));
-  return refusalOf(resolved, () => real, (spelled, r) => inPlaceTaken(spelled, r, places), places.homes);
+  const ancestry = real ? await takeAncestry(real) : [];
+  const byIdentity = homeFolderIn(ancestry, places.home);
+  return refusalOf(resolved, real, {
+    credential: (spelled, r) => inPlaceTaken(spelled, r, places, ancestry),
+    own: () => ownIn(ancestry, places.own),
+    homeFolders: (q) => [...homeFolderNames(q, places.homes), ...(byIdentity && q === real ? [byIdentity] : [])],
+  });
 }
 
 export { takePlaces };
 
-function refusalOf(resolved: string, realOf: () => string | undefined, credential: (spelled: string, real: string) => boolean, homes?: string[]): string | undefined {
+function refusalOf(resolved: string, real: string | undefined, judge: Judge): string | undefined {
   if (projectRoots([resolved]).length === 0) return "Tars's own folders cannot be a project.";
-  const real = realOf();
   if (!real) return 'This folder cannot be followed to where it really lies.';
-  if (credential(resolved, real)) {
+  if (judge.own(real)) return "Tars's own folders cannot be a project.";
+  if (judge.credential(resolved, real)) {
     return 'A folder of credentials, or an application folder of the home (~/Library, AppData), cannot be a project.';
   }
-  if (inOtherDotFolderOfHome(resolved, homes) || inOtherDotFolderOfHome(real, homes)) {
+  if ([resolved, real].some((q) => judge.homeFolders(q).some(otherDot))) {
     return 'A folder of the home whose name starts with a dot cannot be a project, but for ~/.claude, ~/.codex, ~/.gemini and ~/.grok.';
   }
   return undefined;
@@ -223,7 +251,7 @@ export function windowMaySearch(root: unknown, projects: string[]): boolean {
 
 /** `p` is in a folder of the home whose name starts with a dot (a CLI's settings, a credential place), or is one. */
 function inDotFolderOfHome(p: string): boolean {
-  return homeFolderNames(p).some((first) => first.startsWith('.'));
+  return homeFoldersOf(p).some((first) => first.startsWith('.'));
 }
 
 /**
