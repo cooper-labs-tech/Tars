@@ -120,7 +120,9 @@ export function projectRefusal(p: unknown): string | undefined {
  */
 export async function projectRefusalAsync(p: string): Promise<string | undefined> {
   const resolved = path.resolve(p);
-  const real = projectRoots([resolved]).length > 0 ? await fs.promises.realpath(resolved).catch(() => undefined) : undefined;
+  // A folder gone from the disk is judged by the folder it would be in, as realTarget judges it: Review says it is gone.
+  const real = projectRoots([resolved]).length === 0 ? undefined : await fs.promises.realpath(resolved)
+    .catch((err: NodeJS.ErrnoException) => (err.code === 'ENOENT' ? realTarget(resolved) : undefined));
   return refusalOf(resolved, () => real, inCredentialPlaceByName);
 }
 
