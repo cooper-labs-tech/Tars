@@ -7,6 +7,7 @@ import type { ChangedFile, ReviewDiff } from '@/types/electron';
 import { PATCH_LINES, cutNote, patchLines } from '@/lib/review';
 import { insidePath } from '@/lib/review-repositories';
 import { pathName, tildePath } from '@/lib/display-path';
+import { ipcReason } from '@/lib/ipc-error';
 import { RepositoryColumn, type ReviewPick } from '@/components/Review/RepositoryColumn';
 import { useReviewProjects, type ProjectView } from '@/components/Review/useReviewProjects';
 
@@ -86,7 +87,7 @@ export default function ReviewPage() {
       }
       setDiff(res.diff);
     } catch (err) {
-      if (treeAsked.current === path) setError(err instanceof Error ? err.message : String(err));
+      if (treeAsked.current === path) setError(ipcReason(err, 'Could not read this repository'));
     } finally {
       if (treeAsked.current === path) setLoading(false);
     }
@@ -104,7 +105,7 @@ export default function ReviewPage() {
     setFileError(null);
     const res: { success: boolean; patch?: string; error?: string } | undefined = await window.electronAPI?.review
       ?.file(diff.repo, file, diff.baseBranch ?? undefined)
-      .catch((err: unknown) => ({ success: false, error: err instanceof Error ? err.message : String(err) }));
+      .catch((err: unknown) => ({ success: false, error: ipcReason(err, 'unknown error') }));
     if (fileAsked.current !== file) return;
     if (res && !res.success) setFileError(res.error || 'unknown error');
     else setFilePatch(res?.patch || '');
@@ -172,7 +173,8 @@ export default function ReviewPage() {
                     what="Still reading the working tree…"
                     detail="git diff against the base branch"
                   />
-                  {error && <p className="text-xs text-danger py-4">{error}</p>}
+                  {/* Main's own sentence in the changed files' place: a repository the window's rule refuses, or none read. */}
+                  {error && <p data-review-error className="text-xs text-danger py-4">{error}</p>}
                   {diff && !loading && (
                     <>
                       <p className="text-[11px] font-mono text-muted-foreground">
@@ -227,8 +229,10 @@ export default function ReviewPage() {
                   {activeFile ? (
                     <>
                       <p className="text-xs font-mono text-foreground mb-2 sticky top-0 bg-card py-1">{activeFile}</p>
+                      {/* Main's own sentence in the patch's place, word for word (a file named like a credential, a
+                          repository the window's rule refuses), never an empty patch. */}
                       {fileError ? (
-                        <p className="text-xs text-danger">Could not read this file&apos;s patch: {fileError}</p>
+                        <p className="text-xs text-danger">Could not read this file&apos;s patch: <span data-review-file-error>{fileError}</span></p>
                       ) : filePatch ? <PatchView patch={filePatch} /> : (
                         <p className="text-xs text-muted-foreground">No textual change to show for this file.</p>
                       )}

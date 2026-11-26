@@ -1,6 +1,6 @@
 'use client';
 
-import { useMemo } from 'react';
+import { useMemo, useState } from 'react';
 import { tildePath } from '@/lib/display-path';
 import type { AgentEffort, AgentPermissionMode } from '@/types/agent';
 import type { AgentProvider } from '@/types/electron';
@@ -57,6 +57,8 @@ export function AgentPanel(props: {
   cliPath: string;
   onCliPathChange: (p: string) => void;
 }) {
+  /** Main's refusal of the folder chosen here, word for word (frame `Projects · a project the rule refuses · states`). */
+  const [addRefused, setAddRefused] = useState<string | null>(null);
   const orderedProjects = useMemo(() => {
     const rank = (p: Project) =>
       props.defaultProjectPath === p.path ? 0 : props.favoriteProjects.includes(p.path) ? 1 : 2;
@@ -113,9 +115,12 @@ export function AgentPanel(props: {
               ...(props.projectPath && !currentIsListed
                 ? [{ value: props.projectPath, label: tildePath(props.projectPath) }]
                 : []),
-              ...orderedProjects.map((p) => ({ value: p.path, label: tildePath(p.path) })),
+              // A project the window's project rule refuses: listed, not to be chosen, main's reason as its title.
+              ...orderedProjects.map((p) => (p.refused
+                ? { value: p.path, label: tildePath(p.path), hint: 'refused', hintClassName: 'text-status-error', disabled: true }
+                : { value: p.path, label: tildePath(p.path) })),
             ]}
-            onChange={props.onSelectProject}
+            onChange={(path) => { setAddRefused(null); props.onSelectProject(path); }}
           />
         </div>
         {props.onBrowseFolder && (
@@ -127,8 +132,15 @@ export function AgentPanel(props: {
                 const picked = await props.onBrowseFolder!();
                 if (!picked) return;
                 const normalized = picked.replace(/\/+$/, '');
+                // A folder the window's project rule refuses is not taken: main's reason shows under the row. A call
+                // that fails otherwise leaves the pick for this run, as before.
+                const answer = await window.electronAPI?.fs?.addCustomProject(normalized).catch(() => null);
+                if (answer && !answer.success) {
+                  setAddRefused(answer.error || 'The folder was not added.');
+                  return;
+                }
+                setAddRefused(null);
                 props.onSelectProject(normalized);
-                try { await window.electronAPI?.fs?.addCustomProject(normalized); } catch { /* still applies this run */ }
               }}
             >
               Choose a folder…
@@ -136,6 +148,7 @@ export function AgentPanel(props: {
           </div>
         )}
       </div>
+      {addRefused && <p data-project-add-refused className="-mt-1 text-[11px] leading-snug text-danger">{`not added: ${addRefused}`}</p>}
 
       <ProviderAndModel
         provider={props.provider}

@@ -601,7 +601,13 @@ agent's folder. `review:diff`, `review:file` and `review:repo` took any path the
 window named, and ran git there. The scan of a project follows no link, so a
 link to the home in a project brings none of its repositories in, and reads no
 file outside git; the search matches names and paths Tars already holds, so a
-query is text, never an option or a pattern.
+query is text, never an option or a pattern. Since 2.0.7 a project and a
+repository are judged by the window's project rule where they are used: a
+project it refuses is neither scanned nor searched (`review:repositories`
+answers its reason under the code `refused_project`), and a repository in such
+a folder is refused with the reason. The file `review:file` reads off the disk,
+an untracked one, is judged as the window's other reads are, so no file named
+like a credential is shown, ignored by git or not.
 
 ## 5. What is where on disk
 
@@ -803,12 +809,63 @@ file named as one (the settings and their copies, `api-token`, the Hermes files,
 and every `.env.*`, `.netrc`, a key), no CLI settings that hold a key (Claude
 Code's `settings.json` and `settings.local.json`, whose `env` may set one, Grok
 CLI's `user-settings.json`), and nothing in a folder of credentials (`~/.ssh`,
-`~/.gnupg`, `~/.aws`, `~/.config`, `~/.kube`, `~/.docker`), as spelled or where
+`~/.gnupg`, `~/.aws`, `~/.config`, `~/.kube`, `~/.docker`, and since 2.0.7 the
+home's application folders, `~/Library` but for iCloud Drive's own folder
+(`Mobile Documents/com~apple~CloudDocs`), Obsidian's folder in it
+(`Mobile Documents/iCloud~md~obsidian/Documents`) and the cloud drives
+(`CloudStorage`), told by their names below `~/Library` where a path really
+lies, so a documents folder that is another name for a refused folder exempts
+nothing, and the exception is `~/Library`'s alone: a credential folder kept in
+a documents folder stays refused; and `AppData`), as spelled or where
 it really lies, whatever names that folder as a project: a page could add any
 folder as a project and then read it, GitHub's token in `~/.config/gh` or a
 cluster's in `~/.kube` (the Audit's L1 on #466). `fs:add-custom-project` refuses
-such a folder, and since the projects' list lives in `~/.tars`, which every
-agent can write, each read judges its own target as well. `app:getSettings` and `settings:updated` carry no secret: a
+such a folder, and since 2.0.7 any folder of the home whose name starts with a
+dot but `~/.claude`, `~/.codex`, `~/.gemini` and `~/.grok`, with the reason.
+The same rule sets every agent's folders since 2.0.7, its project and the
+folder it is handed besides it, wherever it is created or moved: the window's
+`agent:create`, `POST /api/agents` (an agent's `create_agent`), and the update
+path `update_agent` shares with the window; an agent already in such a folder
+keeps it, and only a change of folder is judged.
+Since the projects' list lives in `~/.tars`, which every agent can write, each
+read judges its own target as well, and each use judges the projects the target
+lies in: a project the rule now refuses is read (`fs:read-text-file`,
+`fs:read-project-files`), written and searched by nothing, and
+`fs:list-projects` lists it with why. `fs:read-project-files` judges the same
+way the folders it takes from the skills (`~/.claude/skills`, `~/.agents/skills`)
+and the plugins' list (`~/.claude/plugins/installed_plugins.json`), which agents
+write too. `fs:list-projects`, and Review's scan and search, follow the project,
+the home and each place without blocking the window, and compare where each
+really lies, so a place that is another name for a folder elsewhere covers that
+folder there too. The home's folders, and Tars's own, are judged by identity
+in both forms, a path's real location walked up to the folder that is the home:
+a home reached by another spelling is the same home. A
+limit: an `AppData` that Windows folder redirection moved to a share is not
+under the home, and is not a folder of credentials to these rules. It is not
+looked up, since every read would then ask the share.
+
+Since 2.0.7 the list holds seven more, with the rules of the same file:
+- `obsidian:addVault`, `obsidian:readFile`, `obsidian:writeFile` and `obsidian:scan`. A vault is refused when it is
+  the home or a folder above it, a folder `fs:add-custom-project` refuses, or a folder of the home whose name starts
+  with a dot (a CLI's settings, a credential place). It is judged when added and at every use, since
+  `obsidianVaultPaths` lives in `~/.tars/app-settings.json`, which every agent can write: a stored vault so refused is
+  used by nothing, and `obsidian:scan` and `obsidian:getVaultInfo` name it with why. A read takes no secret, no file
+  with a second name, and follows no link out of the vault; a write is a markdown note whose real path is in the vault,
+  no dotfile and nothing in a dot folder; `obsidian:scan` lists no link and previews no note a read refuses.
+- `project:list-files`, `project:search-files` and `project:search-content` (the Code panel) take a root only when it
+  is, or lies in, a project Tars knows (added by hand, an agent's folder or worktree), where it really lies, and none
+  that is the home or above it. The walk follows no link, and each file `project:search-content` reads is judged as
+  `fs:read-project-files` judges one.
+- `vault:attachFile` copies only a file the user picked in Tars's own open dialog this run (`dialog:open-files`, kept
+  in the main process), once per pick, and no secret nor anything in a folder of credentials: the copy lands in
+  `~/.tars/vault/attachments`, which every agent reads.
+
+What these rules bind is the one call that reads or writes a file, and the files agents write that a channel takes
+as a place (the projects' list, the vaults). They do not stand between a page that runs script and the disk: a page
+that holds the preload also holds the terminals (`pty:create` and `pty:write`, `shell:startPty` and
+`shell:writePty`), which run what they are given as the user.
+
+`app:getSettings` and `settings:updated` carry no secret: a
 set one is a mask of bullets and `secretsSet` says which are set; `secrets:set`
 sets or clears one and answers whether it is set. Settings puts no mask in a
 field (`components/Settings/SecretRow.tsx`): a set secret reads set, replace

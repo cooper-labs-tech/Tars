@@ -66,11 +66,16 @@ export default function FirstRun() {
     try {
       const picked = await openFolderDialog();
       if (!picked) return;
-      await window.electronAPI?.fs?.addCustomProject(picked);
+      // A folder the window's project rule refuses is not added: main's reason, word for word, on the state line.
+      const answer = await window.electronAPI?.fs?.addCustomProject(picked);
+      if (answer && !answer.success) {
+        setAddError(`not added: ${answer.error || 'The folder was not added.'}`);
+        return;
+      }
       await refresh();
       setAdded(picked);
     } catch (err) {
-      setAddError(err instanceof Error ? err.message : String(err));
+      setAddError(ipcReason(err, 'The folder was not added.'));
     }
   };
 
@@ -149,7 +154,7 @@ export default function FirstRun() {
               return { error: ipcReason(err, 'The agent could not be made.') };
             }
           }}
-          projects={projects.map(p => ({ path: p.path, name: p.name }))}
+          projects={projects.map(p => ({ path: p.path, name: p.name, refused: p.refused }))}
           onBrowseFolder={openFolderDialog}
           initialMode="team"
           teamOnly

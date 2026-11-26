@@ -1797,7 +1797,8 @@ export interface ElectronAPI {
 
   // File system
   fs: {
-    listProjects: () => Promise<{ path: string; name: string; lastModified?: string; custom?: boolean }[]>;
+    /** `refused`: why the window's project rule no longer takes this folder (2.0.7); the window reads nothing of it. */
+    listProjects: () => Promise<{ path: string; name: string; lastModified?: string; custom?: boolean; refused?: string }[]>;
     readTextFile: (filePath: string) => Promise<{ content: string; error?: string }>;
     writeTextFile: (params: { filePath: string; content: string }) => Promise<{ success: boolean; error?: string }>;
     readProjectFiles: (params: { paths: string[]; relative: string[] }) => Promise<{ files: Record<string, string> }>;

@@ -419,7 +419,8 @@ export function useElectronSkills() {
 
 // Hook for file system operations via Electron IPC
 export function useElectronFS() {
-  const [projects, setProjects] = useState<{ path: string; name: string; lastModified?: string; custom?: boolean }[]>([]);
+  /** `refused`: main's reason the window's project rule no longer takes the folder (2.0.7), said where it is listed. */
+  const [projects, setProjects] = useState<{ path: string; name: string; lastModified?: string; custom?: boolean; refused?: string }[]>([]);
   const [isLoading, setIsLoading] = useState(true);
 
   const fetchProjects = useCallback(async () => {

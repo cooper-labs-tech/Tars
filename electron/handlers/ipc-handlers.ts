@@ -41,7 +41,7 @@ import { projectFolders } from '../services/project-index';
 import { marketplaceListing } from '../services/skills-marketplace';
 import { skillsProblem } from '../utils/skill-name';
 import { resolveWorktreePath } from '../utils/worktree-path';
-import { landsUnderSafeRoot } from '../utils/real-target';
+import { inCredentialPlace, landsUnderSafeRoot, realTarget } from '../utils/real-target';
 import { writeAtomicSync } from '../utils/secret-file';
 import { getProvider, getAllProviders } from '../providers';
 import { planModeRefusal } from '../providers/plan-mode';
@@ -86,7 +86,8 @@ import { probeVersion } from '../core/version-probe';
 import { readCodexModels } from '../providers/codex-cli';
 import { cliKeyStates, withCliKey } from '../services/cli-keys';
 import { keepSecrets, secretStates, setSecret, settingsForWindow, type SecretField } from '../services/settings-secrets';
-import { isSecretFile, mayBeProject, windowMayRead, windowMayWrite } from '../utils/window-file-access';
+import { isSecretFile, projectRefusal, projectRefusalAsync, projectRootsFor, takePlaces, windowMayRead, windowMayReadUnder, windowMaySearch, windowMayWrite } from '../utils/window-file-access';
+import { rememberPicked } from '../utils/picked-files';
 import { mcpConfigPathFor } from '../services/mcp-roles';
 import { registerFirstRunHandlers } from './first-run-handlers';
 import { setFirstTask, spendFirstTask, withFirstTask } from '../core/first-task';
@@ -353,6 +354,11 @@ function registerAgentHandlers(deps: IpcHandlerDependencies): void {
   };
   // The one creation of an agent from the window: agent:create, and every member of teams:deploy (first-run-handlers.ts).
   const createAgentFromConfig = async (config: AgentCreateConfig) => {
+    // The window's project rule, for the project and the folder handed besides it, before anything is made (2.0.7):
+    // the page lists a refused project but lets nobody choose it, and this holds it for every page that calls.
+    const folderRefused = projectRefusal(config.projectPath)
+      ?? (config.secondaryProjectPath ? projectRefusal(config.secondaryProjectPath) : undefined);
+    if (folderRefused) throw new Error(folderRefused);
     const id = uuidv4();
     const { shell, args: shellArgv } = agentShell({ setting: getAppSettings().terminalShell });
 
@@ -2312,15 +2318,19 @@ function registerFileSystemHandlers(deps: IpcHandlerDependencies): void {
   ipcMain.handle('fs:list-projects', async () => {
     try {
       const claudeDir = path.join(os.homedir(), '.claude', 'projects');
-      const projects: Array<{ id: string; path: string; name: string; custom?: boolean }> = [];
+      const projects: Array<{ id: string; path: string; name: string; custom?: boolean; refused?: string }> = [];
       const seen = new Set<string>();
+      // The home and the credential places, followed once for the whole listing.
+      const places = await takePlaces();
 
       const push = async (p: string, id: string, custom = false) => {
         if (!p || p === '/' || p === os.homedir()) return;
         if (seen.has(p) || /\/\.?worktrees\//.test(p)) return;
         seen.add(p);
         if (!await fs.promises.access(p).then(() => true, () => false)) return;
-        projects.push({ id, path: p, name: path.basename(p), ...(custom ? { custom: true } : {}) });
+        // One the project rule now refuses stays listed, with why: the window reads nothing of it (2.0.7).
+        const refused = await projectRefusalAsync(p, places);
+        projects.push({ id, path: p, name: path.basename(p), ...(custom ? { custom: true } : {}), ...(refused ? { refused } : {}) });
       };
 
       // Projects the user explicitly added (persisted here, not in the
@@ -2386,45 +2396,49 @@ function registerFileSystemHandlers(deps: IpcHandlerDependencies): void {
    * DATA_DIR is deliberately not a root here: it holds api-token and
    * app-settings.json, and no caller of this channel reads from it.
    */
-  const projectFileRoots = async (): Promise<string[]> => {
+  const projectFileRoots = async (): Promise<{ fixed: string[]; projects: string[] }> => {
     const roots = [
       path.join(os.homedir(), '.claude'),
       path.join(os.homedir(), '.codex'),
       path.join(os.homedir(), '.gemini'),
       path.join(os.homedir(), '.grok'),
       path.join(os.homedir(), '.agents'),
-      ...readCustomProjects(),
     ];
-
+    // The projects: the list agents can write, the agents' folders, the folders Claude Code has seen (same source as
+    // fs:list-projects). Each read judges the ones it lies in by the project rule (projectRootsFor, 2.0.7).
+    const projects = [...readCustomProjects()];
     for (const agent of agents.values()) {
-      if (agent.projectPath) roots.push(agent.projectPath);
-      if (agent.worktreePath) roots.push(agent.worktreePath);
+      if (agent.projectPath) projects.push(agent.projectPath);
+      if (agent.worktreePath) projects.push(agent.worktreePath);
     }
-
-    // Projects Claude Code has seen, same source as fs:list-projects.
     for (const folder of await projectFolders(path.join(os.homedir(), '.claude', 'projects'))) {
-      roots.push(folder.projectPath);
+      projects.push(folder.projectPath);
     }
 
     // Skills can be symlinks out of ~/.claude/skills, so allow the real paths
     // the app resolved rather than only the directory they are linked from.
+    // Those and the plugins' paths come from folders and a file agents write,
+    // so they are judged as the projects are (2.0.7); one in ~/.claude or
+    // ~/.agents lies under a root above already.
     try {
       for (const skill of await getClaudeSkills()) {
-        if (skill?.path) roots.push(skill.path);
+        if (skill?.path) projects.push(skill.path);
       }
     } catch { /* skills unreadable, skip */ }
 
-    return roots
+    const usable = (list: string[]) => list
       .filter(r => typeof r === 'string' && r && path.isAbsolute(r))
       .map(r => path.resolve(r))
       .filter(r => r !== path.parse(r).root && r !== os.homedir());
+    return { fixed: usable(roots), projects: usable(projects) };
   };
 
   ipcMain.handle('fs:read-project-files', async (_event, params: { paths: string[]; relative: string[] }) => {
     const out: Record<string, string> = {};
     const paths = Array.isArray(params?.paths) ? params.paths : [];
     const relative = Array.isArray(params?.relative) ? params.relative : [];
-    const roots = await projectFileRoots();
+    const { fixed, projects } = await projectFileRoots();
+    const roots = [...fixed, ...projects];
     for (const base of paths) {
       if (typeof base !== 'string' || !path.isAbsolute(base)) continue;
       const resolvedBase = path.resolve(base);
@@ -2441,8 +2455,11 @@ function registerFileSystemHandlers(deps: IpcHandlerDependencies): void {
           // really lands: a link in the base or in `rel` may lead out of every
           // root, except one file link to a markdown file (utils/real-target.ts).
           // Never a secret, whatever folder it is asked of (2.0.4).
+          // Nor anything in a folder of credentials, as spelled or where it
+          // really lies, as fs:read-text-file judges a target (2.0.7).
           if (fs.existsSync(target) && fs.statSync(target).isFile() && !isSecretFile(target)
-            && landsUnderSafeRoot(target, roots, (root, t) => t === root || t.startsWith(root + path.sep), { linkedMarkdown: true })) {
+            && !inCredentialPlace(target, realTarget(target) ?? null)
+            && landsUnderSafeRoot(target, projectRootsFor(target, fixed, projects), (root, t) => t === root || t.startsWith(root + path.sep), { linkedMarkdown: true })) {
             out[target] = fs.readFileSync(target, 'utf-8');
           }
         } catch { /* unreadable, skip */ }
@@ -2455,7 +2472,8 @@ function registerFileSystemHandlers(deps: IpcHandlerDependencies): void {
     try {
       const clean = String(projectPath || '').trim();
       if (!clean || !fs.existsSync(clean)) return { success: false, error: 'Folder not found' };
-      if (!mayBeProject(clean)) return { success: false, error: 'A folder of credentials or of Tars\'s own cannot be a project' };
+      const refusal = projectRefusal(clean);
+      if (refusal) return { success: false, error: refusal };
       const list = readCustomProjects();
       if (!list.includes(clean)) {
         list.push(clean);
@@ -2495,6 +2513,8 @@ function registerFileSystemHandlers(deps: IpcHandlerDependencies): void {
         { name: 'Documents', extensions: ['pdf', 'doc', 'docx', 'txt', 'md'] },
       ],
     });
+    // What the user picked here is what vault:attachFile may copy, and nothing else (utils/picked-files.ts).
+    rememberPicked(result.filePaths || []);
     return result.filePaths || [];
   });
 
@@ -2742,7 +2762,7 @@ function registerOllamaHandlers(deps: IpcHandlerDependencies): void {
 // ============== Shell IPC Handlers ==============
 
 function registerShellHandlers(deps: IpcHandlerDependencies): void {
-  const { quickPtyProcesses, getMainWindow } = deps;
+  const { quickPtyProcesses, getMainWindow, agents } = deps;
 
   /**
    * Open a directory in a terminal: Terminal.app on macOS, the first one installed on Linux.
@@ -2806,6 +2826,8 @@ function registerShellHandlers(deps: IpcHandlerDependencies): void {
       for (const entry of entries) {
         if (out.length >= limit) return;
         if (entry.name.startsWith('.') && entry.name !== '.env.example') continue;
+        // No link is followed, listed or read (2.0.7).
+        if (entry.isSymbolicLink()) continue;
         const full = path.join(dir, entry.name);
         if (entry.isDirectory()) {
           if (IGNORED_DIRS.has(entry.name)) continue;
@@ -2821,13 +2843,27 @@ function registerShellHandlers(deps: IpcHandlerDependencies): void {
     return out.sort();
   }
 
+  /**
+   * A folder these three may take: a project Tars knows (added by hand, an agent's folder or worktree) or one in it,
+   * as utils/window-file-access.ts judges it (windowMaySearch, 2.0.7).
+   */
+  const searchable = (root: unknown): root is string => {
+    if (typeof root !== 'string' || !root || !fs.existsSync(root)) return false;
+    const known = [...readCustomProjects(), ...[...agents.values()].flatMap((a) => [a.projectPath, a.worktreePath])]
+      .filter((p): p is string => typeof p === 'string' && !!p && path.isAbsolute(p));
+    return windowMaySearch(root, known);
+  };
+  const NOT_A_PROJECT = 'Only a project Tars knows, or a folder in one, is listed or searched from here';
+
   ipcMain.handle('project:list-files', async (_event, { root, maxDepth }: { root: string; maxDepth?: number }) => {
     if (!root || !fs.existsSync(root)) return { success: false as const, error: 'no such directory' };
+    if (!searchable(root)) return { success: false as const, error: projectRefusal(root) ?? NOT_A_PROJECT };
     return { success: true as const, files: walkProject(root, Math.min(maxDepth ?? 3, 6), 300) };
   });
 
   ipcMain.handle('project:search-files', async (_event, { root, query }: { root: string; query: string }) => {
     if (!root || !fs.existsSync(root) || !query) return { success: false as const, error: 'root and query are required' };
+    if (!searchable(root)) return { success: false as const, error: projectRefusal(root) ?? NOT_A_PROJECT };
     const needle = query.toLowerCase();
     return { success: true as const, files: walkProject(root, 6, 50, name => name.toLowerCase().includes(needle)) };
   });
@@ -2837,6 +2873,7 @@ function registerShellHandlers(deps: IpcHandlerDependencies): void {
     { root, query }: { root: string; query: string },
   ) => {
     if (!root || !fs.existsSync(root) || !query) return { success: false as const, error: 'root and query are required' };
+    if (!searchable(root)) return { success: false as const, error: projectRefusal(root) ?? NOT_A_PROJECT };
     const exts = new Set(['.ts', '.tsx', '.js', '.jsx', '.json', '.css', '.md']);
     const needle = query.toLowerCase();
     const hits: { path: string; line: number; text: string }[] = [];
@@ -2845,6 +2882,8 @@ function registerShellHandlers(deps: IpcHandlerDependencies): void {
       if (hits.length >= 50) break;
       const full = path.join(root, rel);
       if (!withinRoot(root, full)) continue;
+      // Never a secret, and where it really lies, inside the root (utils/window-file-access.ts).
+      if (!windowMayReadUnder(full, root)) continue;
       let content: string;
       try {
         if (fs.statSync(full).size > 512_000) continue;

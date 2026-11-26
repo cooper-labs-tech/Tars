@@ -29,6 +29,8 @@ export interface ProjectView {
   scanning: boolean;
   progress?: { foldersRead: number; repos: number };
   error?: string;
+  /** Main's reason the window's project rule no longer takes this folder (2.0.7): said in its place, nothing scanned. */
+  refused?: string;
 }
 
 export interface SearchState {
@@ -84,7 +86,11 @@ export function useReviewProjects() {
       return;
     }
     if ('error' in started) {
-      patch(path, (p) => ({ ...p, scanning: false, error: started.error }));
+      // A project the window's project rule refuses: main's reason in its place, not an error of reading.
+      const refused = 'code' in started && started.code === 'refused_project';
+      patch(path, (p) => (refused
+        ? { ...p, scanning: false, repositories: [], skipped: [], refused: started.error, error: undefined }
+        : { ...p, scanning: false, error: started.error }));
       return;
     }
     const cached = started.cached;
@@ -105,10 +111,17 @@ export function useReviewProjects() {
       api?.fs?.listProjects?.().catch(() => []) ?? [],
     ]);
     const custom = new Set((listed ?? []).filter((p) => p.custom).map((p) => p.path.replace(/[\\/]+$/, '')));
+    // A project the window's project rule refuses (fs.listProjects' `refused`): listed with main's reason, never scanned.
+    const refusedOf = new Map((listed ?? []).filter((p) => p.refused).map((p) => [p.path.replace(/[\\/]+$/, ''), p.refused as string]));
     const paths = reviewProjects((agents ?? []) as AgentStatus[], listed ?? []);
-    setProjects((prev) => paths.map((path) => prev.find((p) => p.path === path) ?? { path, custom: custom.has(path), repositories: [], skipped: [], scanning: true }));
+    setProjects((prev) => paths.map((path) => {
+      const known = prev.find((p) => p.path === path);
+      const refused = refusedOf.get(path);
+      if (refused) return { ...(known ?? { path, custom: custom.has(path) }), repositories: [], skipped: [], scanning: false, refused, error: undefined, state: undefined };
+      return known ?? { path, custom: custom.has(path), repositories: [], skipped: [], scanning: true };
+    }));
     setLoaded(true);
-    return paths;
+    return paths.filter((path) => !refusedOf.has(path));
   }, []);
 
   useEffect(() => {

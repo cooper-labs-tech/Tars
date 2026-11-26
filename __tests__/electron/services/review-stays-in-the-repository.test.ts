@@ -22,6 +22,9 @@ import { cannotSymlink } from '../../setup/symlink-privilege';
  * 5. a patch larger than git()'s 8 MB buffer comes back empty and marked as not cut, in the list's patch; and a file's
  *    own patch that large is replaced by "file is too large to show", as if the file were untracked.
  * And what must not change: an untracked file inside the repository is shown, as before.
+ * Added before its code after the Audit's M2 on #648 (2026-11-26):
+ * 6. the fallback for untracked files reads a file named like a credential off the disk, ignored by git or not
+ *    (`.env`, `.env.local`, `credentials.json`), which the window's other channels never hand it.
  *
  * Real git, real repositories and links in a temporary folder, the real reviewDiff and fileDiff.
  */
@@ -108,6 +111,17 @@ describe('review:file reads the repository and nothing else', () => {
 
     expect(shown).toMatch(/^refused: /);
     expect(shown).not.toContain('SECRET OUTSIDE');
+  });
+
+  it('6. an untracked file named like a credential is not read off the disk, ignored or not', async () => {
+    fs.writeFileSync(path.join(repo, '.gitignore'), '.env\n');
+    for (const name of ['.env', '.env.local', 'credentials.json']) {
+      fs.writeFileSync(path.join(repo, name), 'KEY=SECRET OUTSIDE ONE\n');
+      const shown = await fileDiff(repo, name).catch((e: Error) => `refused: ${e.message}`);
+      expect(shown, name).not.toContain('SECRET OUTSIDE');
+      fs.rmSync(path.join(repo, name));
+    }
+    fs.rmSync(path.join(repo, '.gitignore'));
   });
 
   it('what must not change: an untracked file inside the repository is shown', async () => {

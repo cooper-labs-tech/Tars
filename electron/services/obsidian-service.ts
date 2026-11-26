@@ -64,9 +64,10 @@ export function parseFrontmatter(content: string): Record<string, unknown> | und
 
 /**
  * Recursively scan an Obsidian vault.
- * Skips `.obsidian/` directory and non-`.md` files.
+ * Skips `.obsidian/` directory and non-`.md` files, every link, and any note `mayRead` refuses
+ * (utils/window-file-access.ts, windowMayReadInVault, 2.0.7).
  */
-export function scanVault(vaultPath: string): { files: (Omit<ObsidianFile, 'content'> & { preview?: string })[]; tree: ObsidianFolder } {
+export function scanVault(vaultPath: string, mayRead: (file: string) => boolean): { files: (Omit<ObsidianFile, 'content'> & { preview?: string })[]; tree: ObsidianFolder } {
   if (!fs.existsSync(vaultPath)) {
     return { files: [], tree: { name: path.basename(vaultPath), path: vaultPath, relativePath: '', children: [] } };
   }
@@ -100,11 +101,12 @@ export function scanVault(vaultPath: string): { files: (Omit<ObsidianFile, 'cont
     for (const entry of entries) {
       const fullPath = path.join(dirPath, entry.name);
 
+      if (entry.isSymbolicLink()) continue;
       if (entry.isDirectory()) {
         // Skip .obsidian config dir and hidden dirs
         if (entry.name.startsWith('.')) continue;
         folder.children.push(walkDir(fullPath, relativeTo));
-      } else if (entry.name.endsWith('.md')) {
+      } else if (entry.name.endsWith('.md') && mayRead(fullPath)) {
         const entryRelPath = path.relative(relativeTo, fullPath);
         try {
           const stat = fs.statSync(fullPath);

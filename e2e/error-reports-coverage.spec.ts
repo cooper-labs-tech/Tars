@@ -223,7 +223,7 @@ for (const newInterface of [false, true]) {
       keep({ started, cliExit });
 
       // ── F1: an IPC handler that faults (a number where its query is a string) ──
-      const ipcAnswer = await api((a) => a.project.searchFiles('/', 42).then(() => 'answered', (e: Error) => String(e)));
+      const ipcAnswer = await page.evaluate((root) => (window as unknown as Api).electronAPI.project.searchFiles(root, 42).then(() => 'answered', (e: Error) => String(e)), project);
       await expect.soft.poll(() => sentry.events.filter((e) => typesOf(e).includes('IpcHandlerError')).length, { timeout: 30_000, message: 'one report of the IPC handler that faulted' }).toBe(1);
       const ipcFault = sentry.events.find((e) => typesOf(e).includes('IpcHandlerError'));
       expect.soft(typesOf(ipcFault ?? {})).toEqual(['TypeError', 'IpcHandlerError']);
@@ -260,7 +260,7 @@ for (const newInterface of [false, true]) {
       await expect.soft.poll(last, { timeout: 15_000, message: 'the last report, for the window' }).toMatchObject({ kind: 'agent-tool', status: 200 });
       const lastBefore = await last();
       sentry.state.status = 503;
-      await api((a) => a.project.searchContent('/', 7).then(() => 'answered', (e: Error) => String(e)));
+      await page.evaluate((root) => (window as unknown as Api).electronAPI.project.searchContent(root, 7).then(() => 'answered', (e: Error) => String(e)), project);
       await expect.soft.poll(() => log.some((l) => l.includes('report: HTTP 503')), { timeout: 30_000, message: 'the 503 logged' }).toBe(true);
       await expect.soft.poll(last, { timeout: 15_000, message: "the last report's 503, for the window" }).toMatchObject({ kind: 'handled', status: 503 });
       const lastAfter = await last();

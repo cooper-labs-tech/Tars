@@ -16,7 +16,8 @@ import {
   Code2,
 } from 'lucide-react';
 import { Highlight, themes } from 'prism-react-renderer';
-import { BrandSpinner } from '@/components/ui';
+import { BrandSpinner, StatusSquare } from '@/components/ui';
+import { ipcReason } from '@/lib/ipc-error';
 import { getLanguageFromPath, type FileNode } from './constants';
 
 interface CodePanelProps {
@@ -197,6 +198,12 @@ export default function CodePanel({ projectPath, className = '' }: CodePanelProp
     Array<{ path: string; line?: number; match?: string }>
   >([]);
   const [isSearching, setIsSearching] = useState(false);
+  /**
+   * Why main read none of the project's files, word for word: a project the window's project rule refuses (2.0.7), or
+   * a call that failed. Said in the tree's place, never an empty tree (frame `Projects · a project the rule refuses ·
+   * states`).
+   */
+  const [treeRefused, setTreeRefused] = useState<string | null>(null);
 
   // Load file tree from project directory
   const loadFileTree = useCallback(async () => {
@@ -207,7 +214,13 @@ export default function CodePanel({ projectPath, className = '' }: CodePanelProp
     try {
       const result = await window.electronAPI.project.listFiles(projectPath, 3);
 
-      if (result.success && result.files) {
+      if (!result.success) {
+        setFileTree([]);
+        setTreeRefused(result.error || 'The project’s files were not read.');
+        return;
+      }
+      setTreeRefused(null);
+      if (result.files) {
         setFileTree(buildFileTree(result.files.map(f => `./${f}`), projectPath));
       }
 
@@ -219,7 +232,7 @@ export default function CodePanel({ projectPath, className = '' }: CodePanelProp
         setGitStatus(modified);
       }
     } catch (err) {
-      console.error('Failed to load file tree:', err);
+      setTreeRefused(ipcReason(err, 'The project’s files were not read.'));
     } finally {
       setLoading(false);
     }
@@ -447,6 +460,11 @@ export default function CodePanel({ projectPath, className = '' }: CodePanelProp
           ) : loading ? (
             <div className="flex items-center justify-center h-full">
               <BrandSpinner size={30} label="Loading files" />
+            </div>
+          ) : treeRefused ? (
+            <div className="flex items-start gap-1.5 p-3">
+              <StatusSquare tone="error" className="mt-[5px] shrink-0" />
+              <p data-code-panel-refused className="text-[11px] leading-snug text-danger">{treeRefused}</p>
             </div>
           ) : fileTree.length === 0 ? (
             <div className="p-3 text-xs text-text-muted text-center">No files found</div>

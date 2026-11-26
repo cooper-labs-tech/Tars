@@ -28,6 +28,7 @@ import { planModeRefusal } from '../../providers/plan-mode';
 import { cliPathProblem } from '../../platform/cli-path';
 import { skillsProblem } from '../../utils/skill-name';
 import { handedFolderProblem } from '../../utils/handed-folder';
+import { projectRefusal } from '../../utils/window-file-access';
 import { buildFullPath } from '../../utils/path-builder';
 import { toLaunch, withPath, LaunchError, type Launch } from '../../platform';
 import { cliPathDirs } from '../../utils/cli-path-dirs';
@@ -2439,6 +2440,12 @@ export function registerAgentRoutes(app_: RouteApp, ctx: RouteContext): void {
         sendJson({ error: handed }, 400);
         return;
       }
+    }
+    // The window's project rule, as its New agent holds it, for the project and the folder handed besides it (2.0.7).
+    const folderRefused = projectRefusal(projectPath) ?? (secondaryProjectPath ? projectRefusal(secondaryProjectPath) : undefined);
+    if (folderRefused) {
+      sendJson({ error: folderRefused }, 400);
+      return;
     }
     if (provider !== undefined && !isValidProvider(provider)) {
       sendJson({ error: `Unknown provider "${provider}". Providers: ${getAllProviders().map((p) => p.id).join(', ')}.` }, 400);

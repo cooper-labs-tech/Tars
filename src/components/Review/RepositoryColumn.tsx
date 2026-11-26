@@ -71,6 +71,16 @@ function ProjectBlock({ project, pick, onPick, onRemove }: {
   const pickedRepo = (repo: ReviewRepository) => pick?.kind === 'repo' && pick.repo === repo.path;
   const toRepo = (repo: ReviewRepository) => onPick({ kind: 'repo', project: project.path, repo: repo.path });
 
+  // A project the window's project rule refuses: main's reason, word for word, and nothing of it scanned (frame
+  // `Projects · a project the rule refuses · states`).
+  if (project.refused) {
+    return (
+      <div>
+        <Caption>{name}</Caption>
+        <p className="flex gap-2 text-[11.5px] leading-[1.45] text-danger"><StatusSquare tone="error" className="mt-1 shrink-0" /><span data-review-project-refused>{project.refused}</span></p>
+      </div>
+    );
+  }
   if (project.state === 'gone') {
     return (
       <div>

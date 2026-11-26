@@ -5,6 +5,8 @@ import type { ClaudeSkill } from '@/lib/claude-code';
 export interface Project {
   path: string;
   name: string;
+  /** Main's reason the window's project rule no longer takes the folder (2.0.7): listed, not to be chosen. */
+  refused?: string;
 }
 
 export interface WorktreeConfig {

@@ -3,8 +3,11 @@ import * as os from 'os';
 import * as path from 'path';
 import { DATA_DIR, PRIVATE_DIR, VAULT_DIR } from '../constants';
 import { isUnder, samePath } from '../platform/path-compare';
+import { coversHome } from './home-root';
 import { isHardLinkInto, isWithinDir } from './path-identity';
-import { inCredentialPlace, landsUnderSafeRoot, realTarget } from './real-target';
+import {
+  homeFolderIn, homeFolderOf, inCredentialPlace, inPlaceTaken, landsUnderSafeRoot, ownIn, realTarget, takeAncestry, takePlaces, type PlacesTaken,
+} from './real-target';
 
 /**
  * What the window may read, write, and have local-file:// serve (the Audit's
@@ -76,19 +79,113 @@ const inside = (root: string, p: string) => samePath(root, p) || isUnder(p, root
 const projectRoots = (projects: string[]) => projects.filter((p) => typeof p === 'string' && p
   && !inside(DATA_DIR, path.resolve(p)) && !inside(PRIVATE_DIR, path.resolve(p)));
 
+/** The CLIs' folders the window reads by their default paths: a project may be one, or lie in one. */
+const CLI_FOLDERS = ['.claude', '.codex', '.gemini', '.grok'];
+
 /**
- * A folder a page may add as a project: one that exists, none of Tars's own
- * folders, and no folder of credentials or one inside it, as spelled or where
- * it really lies. A page added any folder as a project and then read it (the
- * Audit's L1 on #466). The projects' list lives in ~/.tars, which every
- * agent can write, so a read judges its own target too (windowMayRead).
+ * The name of the home's folder `p` is in or is, under the home as spelled or where it really lies: none for the home
+ * itself or a path outside it. Outside is `..` and what is under it, never a folder whose name starts with two dots.
  */
-export function mayBeProject(p: unknown): boolean {
-  if (typeof p !== 'string' || !p) return false;
+function homeFolderNames(p: string, homes: string[] = [home(), realTarget(home())].filter((h): h is string => !!h)): string[] {
+  return homes.flatMap((h) => {
+    const rel = path.relative(h, p);
+    if (!rel || rel === '..' || rel.startsWith('..' + path.sep) || path.isAbsolute(rel)) return [];
+    return [rel.split(path.sep)[0]];
+  });
+}
+
+/**
+ * The names of the home's folder `p` is in or is: by name, and by identity (homeFolderOf), so a home reached by
+ * another spelling is the same home.
+ */
+const homeFoldersOf = (p: string) => [...homeFolderNames(p), ...[homeFolderOf(p)].filter((n): n is string => !!n)];
+/** A name of the home's folder that starts with a dot, other than the four CLI folders. */
+const otherDot = (first: string) => first.startsWith('.') && !CLI_FOLDERS.includes(first.toLowerCase());
+
+/** What refusalOf asks of a folder, answered by the rule itself or, without blocking, from what was taken. */
+interface Judge {
+  /** In a folder of credentials or an application folder of the home. */
+  credential(spelled: string, real: string): boolean;
+  /** In one of Tars's own folders, by identity. */
+  own(real: string): boolean;
+  /** The names of the home's folders it is in, by name and by identity. */
+  homeFolders(p: string): string[];
+}
+
+const judgeNow: Judge = {
+  credential: inCredentialPlace,
+  own: (real) => isWithinDir(real, DATA_DIR) || isWithinDir(real, PRIVATE_DIR),
+  homeFolders: homeFoldersOf,
+};
+
+/**
+ * Why a folder may not be a project, or undefined when it may: one of Tars's own folders, a folder of credentials or
+ * one of the home's application folders (inCredentialPlace), or, since 2.0.7, a folder of the home whose name starts
+ * with a dot other than the four CLI folders, as spelled or where it really lies. A page added any folder as a
+ * project and then read it (the Audit's L1 on #466). The projects' list lives in ~/.tars, which every agent can write,
+ * so each use judges a project again (windowMayRead, windowMayWrite, windowMaySearch), and fs:list-projects lists one
+ * the rule refuses with this reason.
+ */
+export function projectRefusal(p: unknown): string | undefined {
+  if (typeof p !== 'string' || !p) return 'A project is a folder named by its full path.';
   const resolved = path.resolve(p);
-  if (projectRoots([resolved]).length === 0) return false;
-  const real = realTarget(resolved);
-  return !!real && !inCredentialPlace(resolved, real);
+  return refusalOf(resolved, realTarget(resolved), judgeNow);
+}
+
+/**
+ * projectRefusal for the callers that run on the main thread for many projects (fs:list-projects at each listing,
+ * Review's scan and search): the project, the home and the places are followed asynchronously, then compared by
+ * their paths (takePlaces, inPlaceTaken), each place where it really lies included. `taken`: the places taken once for
+ * a whole listing.
+ */
+export async function projectRefusalAsync(p: string, taken?: PlacesTaken): Promise<string | undefined> {
+  const resolved = path.resolve(p);
+  if (projectRoots([resolved]).length === 0) return refusalOf(resolved, undefined, judgeNow);
+  const places = taken ?? await takePlaces();
+  // A folder gone from the disk is judged by the folder it would be in, as realTarget judges it: Review says it is gone.
+  const real = await fs.promises.realpath(resolved)
+    .catch((err: NodeJS.ErrnoException) => (err.code === 'ENOENT' ? realTarget(resolved) : undefined));
+  const ancestry = real ? await takeAncestry(real) : [];
+  const byIdentity = homeFolderIn(ancestry, places.home);
+  return refusalOf(resolved, real, {
+    credential: (spelled, r) => inPlaceTaken(spelled, r, places, ancestry),
+    own: () => ownIn(ancestry, places.own),
+    homeFolders: (q) => [...homeFolderNames(q, places.homes), ...(byIdentity && q === real ? [byIdentity] : [])],
+  });
+}
+
+export { takePlaces };
+
+function refusalOf(resolved: string, real: string | undefined, judge: Judge): string | undefined {
+  if (projectRoots([resolved]).length === 0) return "Tars's own folders cannot be a project.";
+  if (!real) return 'This folder cannot be followed to where it really lies.';
+  if (judge.own(real)) return "Tars's own folders cannot be a project.";
+  if (judge.credential(resolved, real)) {
+    return 'A folder of credentials, or an application folder of the home (~/Library, AppData), cannot be a project.';
+  }
+  if ([resolved, real].some((q) => judge.homeFolders(q).some(otherDot))) {
+    return 'A folder of the home whose name starts with a dot cannot be a project, but for ~/.claude, ~/.codex, ~/.gemini and ~/.grok.';
+  }
+  return undefined;
+}
+
+/** A folder a page may add as a project, and one a use takes as a project. */
+export function mayBeProject(p: unknown): boolean {
+  return projectRefusal(p) === undefined;
+}
+
+/**
+ * The projects among `projects` that `resolved` (or its real path) lies in, and that the rule allows. Only those are
+ * judged on the disk: a project on a mount gone offline is not looked at to read another (fs-roots-home.test.ts, 7).
+ */
+function projectsHolding(resolved: string, real: string | undefined, projects: string[]): string[] {
+  return projectRoots(projects).filter((p) => (inside(path.resolve(p), resolved) || (!!real && inside(path.resolve(p), real))) && mayBeProject(p));
+}
+
+/** fs:read-project-files' roots for one target: the fixed ones, and the projects it lies in that the rule allows. */
+export function projectRootsFor(target: string, fixed: string[], projects: string[]): string[] {
+  const resolved = path.resolve(target);
+  return [...fixed, ...projectsHolding(resolved, realTarget(resolved), projects)];
 }
 
 export function windowMayRead(target: string, projects: string[]): boolean {
@@ -100,7 +197,7 @@ export function windowMayRead(target: string, projects: string[]): boolean {
   // The target's own place, never the list's: a project on a mount gone
   // offline is not looked at to read another (fs-roots-home.test.ts, 7).
   if (inCredentialPlace(resolved, real)) return false;
-  const roots = [path.join(home(), '.claude'), path.join(home(), '.codex'), path.join(home(), '.gemini'), path.join(home(), '.grok'), ...projectRoots(projects)];
+  const roots = [path.join(home(), '.claude'), path.join(home(), '.codex'), path.join(home(), '.gemini'), path.join(home(), '.grok'), ...projectsHolding(resolved, real, projects)];
   return landsUnderSafeRoot(resolved, roots, inside, { linkedMarkdown: true });
 }
 
@@ -117,9 +214,116 @@ export function windowMayWrite(target: string, projects: string[]): boolean {
   const resolved = path.resolve(target);
   if (!instructionFiles(projects).some((f) => samePath(f, resolved))) return false;
   if (isSecretFile(resolved)) return false;
+  // A project's instruction file, of a project the rule allows: judged for the project it belongs to only.
+  const owners = projectRoots(projects).filter((p) => ['CLAUDE.md', path.join('.claude', 'CLAUDE.md')].some((f) => samePath(path.join(p, f), resolved)));
+  if (owners.length > 0 && !owners.some((p) => mayBeProject(p))) return false;
   // Followed as the write follows it: what it really writes is a markdown file.
   const real = realTarget(resolved);
   return !!real && real.toLowerCase().endsWith('.md');
+}
+
+/**
+ * A file under `root` the window may read: never a secret, in no credential place, and where it really lies, inside
+ * `root` itself, so a link in it leads nowhere out (strict: not even the markdown exception). What the Code panel's
+ * search and the Obsidian vaults read (2.0.7).
+ */
+export function windowMayReadUnder(target: string, root: string): boolean {
+  const resolved = path.resolve(target);
+  if (isSecretFile(resolved)) return false;
+  const real = realTarget(resolved);
+  if (!real || inCredentialPlace(resolved, real)) return false;
+  return landsUnderSafeRoot(resolved, [path.resolve(root)], inside);
+}
+
+/**
+ * A folder the Code panel may list and search (project:list-files, search-files, search-content): one a project
+ * Tars knows is, or lies in, where it really lies. `projects` are those added by hand and the agents' folders and
+ * worktrees; ~/.tars/projects.json is every agent's to write, so each is judged as a project is (mayBeProject),
+ * and none that is the home or above it opens anything (landsUnderSafeRoot).
+ */
+export function windowMaySearch(root: unknown, projects: string[]): boolean {
+  if (typeof root !== 'string' || !root || !path.isAbsolute(root)) return false;
+  const resolved = path.resolve(root);
+  const real = realTarget(resolved);
+  if (!real || isWithinDir(real, DATA_DIR) || inCredentialPlace(resolved, real)) return false;
+  return landsUnderSafeRoot(resolved, projectsHolding(resolved, real, projects), inside);
+}
+
+/** `p` is in a folder of the home whose name starts with a dot (a CLI's settings, a credential place), or is one. */
+function inDotFolderOfHome(p: string): boolean {
+  return homeFoldersOf(p).some((first) => first.startsWith('.'));
+}
+
+/**
+ * Why a folder may not be an Obsidian vault the window reads and writes, or undefined when it may (2.0.7). Judged
+ * at every use too, not only when added: the vaults live in ~/.tars/app-settings.json, which every agent can write.
+ */
+export function vaultRefusal(p: unknown): string | undefined {
+  if (typeof p !== 'string' || !p || !path.isAbsolute(p)) return 'A vault is a folder named by its full path.';
+  const resolved = path.resolve(p);
+  const real = realTarget(resolved);
+  if (!real) return 'This folder cannot be followed to where it really lies.';
+  if (coversHome(resolved) || coversHome(real)) {
+    return 'The home folder, or a folder above it, cannot be a vault: every file in the home would be open to the window.';
+  }
+  if (inDotFolderOfHome(resolved) || inDotFolderOfHome(real)) {
+    return "A folder of the home whose name starts with a dot (a CLI's settings, credentials) cannot be a vault.";
+  }
+  if (!mayBeProject(resolved)) {
+    return "Tars's own folders, folders of credentials and the home's application folders cannot be a vault.";
+  }
+  return undefined;
+}
+
+export const mayBeVault = (p: unknown): boolean => vaultRefusal(p) === undefined;
+
+/** A file with a second name may be that of anything (SECURITY.md §5): one with no name but its own, or none yet. */
+function oneName(real: string): boolean {
+  try {
+    return fs.statSync(real).nlink < 2;
+  } catch {
+    return true;
+  }
+}
+
+/** A file of a vault the window may read (obsidian:readFile, the previews of obsidian:scan). */
+export function windowMayReadInVault(target: string, vault: string): boolean {
+  if (!mayBeVault(vault) || !windowMayReadUnder(target, vault)) return false;
+  const real = realTarget(path.resolve(target));
+  return !!real && oneName(real);
+}
+
+/**
+ * A file of a vault the window may write (obsidian:writeFile): a markdown note, as spelled and where it really lies,
+ * inside the vault, and no dotfile nor anything in a dot folder (.obsidian's own files, a CLI's settings), as spelled
+ * and as it lies.
+ */
+export function windowMayWriteInVault(target: string, vault: string): boolean {
+  if (!windowMayReadInVault(target, vault)) return false;
+  const resolved = path.resolve(target);
+  const real = realTarget(resolved);
+  const realVault = realTarget(path.resolve(vault));
+  if (!real || !realVault) return false;
+  if (!resolved.toLowerCase().endsWith('.md') || !real.toLowerCase().endsWith('.md')) return false;
+  const dotted = (p: string, root: string) => path.relative(root, p).split(path.sep).some((part) => part.startsWith('.'));
+  return !dotted(resolved, path.resolve(vault)) && !dotted(real, realVault);
+}
+
+/**
+ * A file the window may copy into the vault's attachments (vault:attachFile), once the user picked it in the dialog
+ * (utils/picked-files.ts): a regular file, never a secret, nothing in a folder of credentials, as spelled or where it
+ * really lies. The copy lands in ~/.tars, which every agent reads (2.0.7).
+ */
+export function windowMayAttach(target: string): boolean {
+  const resolved = path.resolve(target);
+  if (isSecretFile(resolved)) return false;
+  const real = realTarget(resolved);
+  if (!real || inCredentialPlace(resolved, real)) return false;
+  try {
+    return fs.statSync(real).isFile();
+  } catch {
+    return false;
+  }
 }
 
 export function localFileServes(target: string): boolean {

@@ -5,6 +5,8 @@ import { v4 as uuidv4 } from 'uuid';
 import { getVaultDb, ftsSearch } from '../services/vault-db';
 import { VAULT_DIR } from '../constants';
 import { unlinkRetryingSync } from '../platform/rename-replacing';
+import { consumePicked, wasPicked } from '../utils/picked-files';
+import { windowMayAttach } from '../utils/window-file-access';
 
 // Types
 export interface VaultFolder {
@@ -303,6 +305,16 @@ export function registerVaultHandlers(deps: VaultHandlerDependencies): void {
       if (!fs.existsSync(params.file_path)) {
         return { success: false, error: 'File not found' };
       }
+      // A file the user picked in the dialog, and no secret: the copy lands in ~/.tars, which every agent reads
+      // (utils/picked-files.ts, 2.0.7).
+      if (!wasPicked(params.file_path)) {
+        return { success: false, error: 'Only a file picked in the dialog is attached from here' };
+      }
+      if (!windowMayAttach(params.file_path)) {
+        return { success: false, error: 'A secret, or a file in a folder of credentials, is not copied into the vault' };
+      }
+      // Good for this attach only: pick it again to attach it again.
+      consumePicked(params.file_path);
 
       const id = uuidv4();
       const filename = path.basename(params.file_path);
