@@ -29,7 +29,10 @@ import { DEV_URL, apiPort } from './ports.mjs';
  *        never saw, or main's refusal is not said, or the notice keeps the old lists.
  *    4e. Approve on what the notice shows now does not approve it, or the next request does not carry it.
  * 5. Put back the approved ones does not restore them, or leaves the endpoint waiting.
- * 6. An uncaught error in the page.
+ * 6. (the Audit's M-b on #596, #596 at 7a651ed95, written before the window's part) An editor opened before an
+ *    agent moved the address saves over it: the save is taken, or approves the move, or turns traces off, or sends a
+ *    request; or main's refusal is not said under the row, or says an ISO time, or the move is not shown waiting.
+ * 7. An uncaught error in the page.
  * The artefact: values.json (each step's view, the stand-in's requests as seen), step screenshots, the app's log.
  */
 
@@ -37,7 +40,7 @@ const LEAD = 'dddd4444-0000-4000-8000-0000000000b1';
 /** main keeps an endpoint whose id is `ep-` and six hex digits only. */
 const EP = 'ep-0e2e5a';
 const ENDPOINT = 'Remote host';
-type View = { id: string; approved: boolean; allowTraces: boolean; extraHeaders: Record<string, string>; approvedExtraHeaders?: Record<string, string> };
+type View = { id: string; approved: boolean; allowTraces: boolean; baseUrl: string; approvedBaseUrl?: string; extraHeaders: Record<string, string>; approvedExtraHeaders?: Record<string, string> };
 type Api = { electronAPI: Record<string, Record<string, (...a: unknown[]) => Promise<unknown>>> };
 const lines = (file: string) => (fs.existsSync(file) ? fs.readFileSync(file, 'utf8').trim().split('\n').filter(Boolean).map(l => JSON.parse(l)) : []) as Array<{ method?: string; url?: string; headers?: Record<string, string> }>;
 
@@ -130,10 +133,11 @@ test('an endpoint\'s extra headers: added by the owner and sent, a credential\'s
       const tokens = process.mainModule!.require(`${dist}/core/agent-tokens.js`);
       return tokens.mintRunToken(lead).token as string;
     }, { dist, lead: LEAD });
-    const byLead = (extraHeaders: Record<string, string>) => fetch(`http://127.0.0.1:${port}/api/endpoints/${EP}`, {
+    const leadPosts = (body: Record<string, unknown>) => fetch(`http://127.0.0.1:${port}/api/endpoints/${EP}`, {
       method: 'POST', headers: { 'content-type': 'application/json', authorization: `Bearer ${token}`, 'X-Tars-Caller-Id': LEAD },
-      body: JSON.stringify({ extraHeaders }),
+      body: JSON.stringify(body),
     }).then(async r => ({ status: r.status, body: await r.json() as { needsApproval?: boolean; error?: string } }));
+    const byLead = (extraHeaders: Record<string, string>) => leadPosts({ extraHeaders });
     const changed = await byLead({ 'X-Route': 'green-pool', 'X-Batch': 'nightly' });
     const notice = row.locator('[data-endpoint-notice]');
     await expect(row).toContainText('new extra headers waiting for your approval', { timeout: 15_000 });
@@ -210,7 +214,31 @@ test('an endpoint\'s extra headers: added by the owner and sent, a credential\'s
     await stepShot(page, '4-put-back');
     expect.soft(putBack, 'put back').toMatchObject({ approved: true, extraHeaders: { 'X-Route': 'amber-pool', 'X-Batch': 'nightly' } });
 
-    // 6.
+    // 6. The owner opens the editor; Lead moves the address meanwhile; the owner turns traces off in the editor and
+    // saves. The save names what the editor showed (`shown`), so main refuses it in its words and approves nothing,
+    // the editor closes, the row says main's sentence and shows Lead's move waiting, and no request leaves.
+    const beforeRace = await view();
+    await row.getByRole('button', { name: ENDPOINT, exact: true }).click();
+    await expect(form).toBeVisible();
+    const moved = await leadPosts({ baseUrl: 'http://127.0.0.1:9/v1' });
+    await expect(row).toContainText('new base URL waiting for your approval', { timeout: 15_000 });
+    const sentBeforeSave = lines(endpointLog).length;
+    await form.getByRole('switch', { name: 'Allows traces', exact: true }).click();
+    await form.getByRole('button', { name: 'Save', exact: true }).click();
+    const raceRefusal = row.locator('[data-endpoint-row-error]');
+    await expect(raceRefusal).toContainText('changed since it was shown', { timeout: 15_000 });
+    await expect(form).toHaveCount(0);
+    await page.waitForTimeout(1_500);
+    const race = { moved, refused: await raceRefusal.innerText(), view: await view(), row: await row.innerText(), sent: lines(endpointLog).length - sentBeforeSave };
+    keep({ race });
+    await stepShot(page, '5-stale-editor-refused');
+    expect.soft(race.moved, 'Lead\'s move').toMatchObject({ status: 200, body: { needsApproval: true } });
+    expect.soft(race.refused, 'main\'s sentence, its time in two zones').toMatch(/^The endpoint "Remote host" changed since it was shown \(Lead, \d\d:\d\d UTC \(\d\d:\d\d [+-]\d\d(:?\d\d)?\)\): look at it again before you save\.$/);
+    expect.soft(race.view, 'nothing approved, traces as they were').toMatchObject({ approved: false, approvedBaseUrl: beforeRace.approvedBaseUrl, allowTraces: beforeRace.allowTraces });
+    expect.soft(race.row, 'the move shown, waiting').toContain('approved   ' + beforeRace.approvedBaseUrl);
+    expect.soft(race.sent, 'no request sent').toBe(0);
+
+    // 7.
     keep({ errors });
     expect(errors).toEqual([]);
   } finally {
