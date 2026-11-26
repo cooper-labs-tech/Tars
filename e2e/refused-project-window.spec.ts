@@ -107,7 +107,9 @@ test('a project the window\'s rule refuses is said so on the Projects page, in t
     await shot(2);
 
     // 4. Review: the held project says main's reason and is not scanned; the plain one's .env says main's sentence.
-    const fileAnswer = await page.evaluate((r) => (window as unknown as ReviewApi).electronAPI.review.file(r, '.env'), fs.realpathSync(plain));
+    // The repository as Tars lists it and as the page asks for it. Its real path is another spelling under a temp folder
+    // reached through a link (macOS's /var/folders), which no project names: main refuses it before it judges the file.
+    const fileAnswer = await page.evaluate((r) => (window as unknown as ReviewApi).electronAPI.review.file(r, '.env'), plain);
     await page.goto(`${DEV_URL}/review`, { waitUntil: 'domcontentloaded' });
     await expect.soft(page.locator('[data-review-project-refused]'), 'Review says why the held project is not read').toBeVisible({ timeout: 15_000 });
     const reviewShown = await text('[data-review-project-refused]');
