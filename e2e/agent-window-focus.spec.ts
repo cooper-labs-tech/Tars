@@ -112,6 +112,8 @@ test('an agent window gives its terminal the focus, but never over a field the u
     const sent = await sentTo('typed');
     await page.screenshot({ path: test.info().outputPath('focus-kept.png') });
 
+    // The window keeps its footer's text from one agent to the next: emptied, so case 3 reads its own keys alone.
+    await field.fill('');
     await page.getByRole('button', { name: 'close', exact: true }).first().click();
 
     // 3. A window whose shell is open, opened again and typed into at once.
