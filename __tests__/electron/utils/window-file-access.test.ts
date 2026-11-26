@@ -75,9 +75,23 @@ import * as path from 'node:path';
  *      exempts what lies in the refused one: an application folder of
  *      ~/Library or AppData taken for a project and read, or a markdown file
  *      in a folder of credentials read through a link in a project.
+ * Added before their code after the Audit's M4 and M5 on #648 (2026-11-26):
+ *  W11 also: a folder of credentials kept in a documents folder (a cloud
+ *      drive, iCloud Drive) and named in the home through a link, or on
+ *      Windows a junction: where it really lies, taken for a project, read
+ *      and searched, by the rule and by its asynchronous form; the documents
+ *      exception holds for ~/Library alone.
+ *  W11 also: the home reached by another spelling that its real path keeps
+ *      (macOS's Data volume; a link or a junction is always resolved, so
+ *      elsewhere a test cannot make one without a mount): a folder of the
+ *      home whose name starts with a dot, a folder of credentials, and
+ *      Tars's own folders taken for a project, read and searched, by both
+ *      forms; and a dot folder of the home, the CLI folders among them, or
+ *      Tars's own, taken for a vault. A home reached by another spelling is
+ *      the same home.
  */
 
-import { windowMayRead, windowMayWrite, localFileServes, mayBeProject } from '../../../electron/utils/window-file-access';
+import { windowMayRead, windowMayWrite, localFileServes, mayBeProject, windowMaySearch, projectRefusalAsync, vaultRefusal } from '../../../electron/utils/window-file-access';
 import { DATA_DIR, PRIVATE_DIR } from '../../../electron/constants';
 
 const home = () => os.homedir();
@@ -266,3 +280,61 @@ describe('the project rule and the home\'s other folders (the Audit\'s L3 on #64
   });
 });
 
+describe('a credential folder kept in a documents folder stays refused (the Audit\'s M4 on #648)', () => {
+  it('W11 also: where it really lies is no project, by either form, and nothing of it is read or searched', async () => {
+    const kept: Array<[string, string, string]> = [
+      ['.config', at('Library', 'CloudStorage', 'Dropbox', 'dotfiles', 'config'), path.join('gh', 'hosts.yml')],
+      ['.kube', at('Library', 'Mobile Documents', 'com~apple~CloudDocs', 'kube'), 'config'],
+      ['.ssh', at('Library', 'CloudStorage', 'Dropbox', 'ssh'), 'id_ecdsa'],
+    ];
+    for (const [name, where, file] of kept) {
+      put(path.join(where, file), 'a token');
+      fs.rmSync(at(name), { recursive: true, force: true });
+      // A junction where the type is read (Windows), a link elsewhere.
+      fs.symlinkSync(where, at(name), 'junction');
+      try {
+        expect(mayBeProject(where), where).toBe(false);
+        expect(windowMayRead(path.join(where, file), [where]), where).toBe(false);
+        expect(windowMaySearch(where, [where]), where).toBe(false);
+        expect(await projectRefusalAsync(where), where).toBeDefined();
+      } finally {
+        fs.unlinkSync(at(name));
+      }
+    }
+    // Still a project: one in the same cloud drive that is no credential folder.
+    const work = at('Library', 'CloudStorage', 'Dropbox', 'work');
+    fs.mkdirSync(work, { recursive: true });
+    expect(mayBeProject(work)).toBe(true);
+    expect(await projectRefusalAsync(work)).toBeUndefined();
+  });
+});
+
+/** The Data volume's spelling of a path, where macOS has one: the same folder, kept so by its real path. */
+const dataVolume = '/System/Volumes/Data';
+const otherSpelling = (p: string) => path.join(dataVolume, fs.realpathSync(p));
+const hasOtherSpelling = process.platform === 'darwin' && fs.existsSync(dataVolume);
+
+describe('a home reached by another spelling is the same home (the Audit\'s M5 on #648)', () => {
+  it.skipIf(!hasOtherSpelling)('W11 also: its dot folders, credential folders and Tars\'s own are no project, by either form, and no vault', async () => {
+    const azure = path.dirname(put(at('.azure', 'msal_token_cache.json'), 'a token'));
+    const aws = path.dirname(put(at('.aws', 'notes.md'), 'a token'));
+    const lib = path.dirname(put(at('Library', 'Application Support', 'SomeApp', 'notes.md'), 'a token'));
+    fs.mkdirSync(PRIVATE_DIR, { recursive: true });
+    fs.mkdirSync(DATA_DIR, { recursive: true });
+    fs.mkdirSync(at('.claude'), { recursive: true });
+    for (const dir of [azure, aws, lib, DATA_DIR, PRIVATE_DIR]) {
+      const other = otherSpelling(dir);
+      expect(mayBeProject(other), other).toBe(false);
+      expect(await projectRefusalAsync(other), other).toBeDefined();
+      expect(windowMaySearch(other, [other]), other).toBe(false);
+    }
+    const token = path.join(otherSpelling(azure), 'msal_token_cache.json');
+    expect(windowMayRead(token, [otherSpelling(azure)])).toBe(false);
+    for (const dir of [azure, at('.claude'), PRIVATE_DIR]) {
+      expect(vaultRefusal(otherSpelling(dir)), dir).toBeDefined();
+    }
+    // Still a project, by that spelling too: one that is none of these.
+    expect(mayBeProject(otherSpelling(project))).toBe(true);
+    expect(await projectRefusalAsync(otherSpelling(project))).toBeUndefined();
+  });
+});

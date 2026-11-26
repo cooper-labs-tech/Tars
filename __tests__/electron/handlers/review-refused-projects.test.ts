@@ -29,6 +29,11 @@ import * as path from 'node:path';
  *     project in that folder named where it really lies: review:repositories scans it and
  *     review:search searches it (its repositories' names, branches, changed files), since they
  *     judge the place by its name only, while every other use refuses it.
+ * Added before their code after the Audit's M4 and M5 on #648 (2026-11-26):
+ * R7. A folder of credentials kept in a cloud drive and named in the home through a link: a
+ *     project where it really lies is scanned by review:repositories.
+ * R8. The home reached by another spelling its real path keeps (macOS's Data volume): a folder of
+ *     credentials of the home by that spelling is scanned by review:repositories.
  *
  * Real git, real folders in the suite's throwaway home, the real handlers.
  */
@@ -141,6 +146,36 @@ describe('Review and the project rule', () => {
       expect(found).toContain('allowedrepo');
     } finally {
       fs.unlinkSync(config);
+    }
+  });
+
+  it('R7. a project where a credential folder kept in a cloud drive really lies is not scanned', async () => {
+    const where = path.join(home, 'Library', 'CloudStorage', 'Dropbox', 'kube');
+    const project = path.dirname(repoAt(path.join(where, 'clusters', 'clusterrepo')));
+    const kube = path.join(home, '.kube');
+    fs.rmSync(kube, { recursive: true, force: true });
+    fs.symlinkSync(where, kube, 'junction');
+    try {
+      fs.writeFileSync(path.join(DATA_DIR, 'projects.json'), JSON.stringify([allowed, project]));
+      const answer = await handlers.get('review:repositories')!({}, { projectPath: project, refresh: true }) as { code?: string; scanId?: string };
+      expect(answer.scanId).toBeUndefined();
+      expect(answer.code).toBe('refused_project');
+    } finally {
+      fs.unlinkSync(kube);
+      fs.rmSync(path.join(home, 'Library'), { recursive: true, force: true });
+    }
+  });
+
+  it.skipIf(!(process.platform === 'darwin' && fs.existsSync('/System/Volumes/Data')))('R8. a credential folder of a home reached by another spelling is not scanned', async () => {
+    const aws = path.dirname(repoAt(path.join(home, '.aws', 'awsrepo')));
+    const project = path.join('/System/Volumes/Data', fs.realpathSync(aws));
+    try {
+      fs.writeFileSync(path.join(DATA_DIR, 'projects.json'), JSON.stringify([allowed, project]));
+      const answer = await handlers.get('review:repositories')!({}, { projectPath: project, refresh: true }) as { code?: string; scanId?: string };
+      expect(answer.scanId).toBeUndefined();
+      expect(answer.code).toBe('refused_project');
+    } finally {
+      fs.rmSync(aws, { recursive: true, force: true });
     }
   });
 
