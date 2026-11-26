@@ -183,8 +183,14 @@ test('a message to an idle agent whose panel is mounted goes in, whatever the pa
     });
     await step('idle-70s', async () => { await sleep(70_000); });
     await step('theme-toggle', async () => {
-      const toggle = page.getByText(/Light Mode|Dark Mode/).first();
-      if (await toggle.count()) { await toggle.click(); await sleep(1500); await toggle.click(); await sleep(1500); }
+      // The theme is Settings, Preferences, Appearance since 2.1.0 (the classic sidebar's toggle went with it): its
+      // card opens over the Dashboard, whose terminals stay mounted under it and see both switches.
+      await page.getByRole('complementary', { name: 'Sidebar' }).getByRole('button', { name: 'More' }).click();
+      await page.getByRole('menu', { name: 'More' }).getByRole('menuitem', { name: 'Settings', exact: true }).click();
+      const appearance = page.getByRole('dialog', { name: 'Settings' }).getByRole('radiogroup', { name: 'Appearance' });
+      await appearance.getByRole('radio', { name: 'Light' }).click(); await sleep(1500);
+      await appearance.getByRole('radio', { name: 'Dark' }).click(); await sleep(1500);
+      await page.keyboard.press('Escape');
     });
 
     values.colourQueries = await queries();

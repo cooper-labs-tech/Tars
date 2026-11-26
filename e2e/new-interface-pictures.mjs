@@ -31,7 +31,7 @@
  *   harbor-billing, its orchestrator and one worker;
  * - chats in every section: both Mains pinned, two chats whose orchestrators
  *   work, two open, one snoozed until tomorrow, three settled;
- * - the new interface on, and the E2E's RAM figure, 15 GB: three chats at once,
+ * - the new shell, the only one since 2.1.0, and the E2E's RAM figure, 15 GB: three chats at once,
  *   so the list reads 2 of 3 working;
  * - the CLIs are stand-ins named claude, as the chat specs write them: they run
  *   Tars's hooks, and write their transcript where Claude Code keeps it. Each
@@ -225,7 +225,7 @@ function seed(cli) {
   ];
   writeFileSync(join(dir, 'chats.json'), JSON.stringify({ version: 1, numbers: { [TARS]: 7, [HARBOR]: 3 }, chats }, null, 2));
   writeFileSync(join(dir, 'hermes-connection.json'), JSON.stringify({ mode: 'local', localPort: 9, authMode: 'token' }));
-  writeFileSync(join(dir, 'app-settings.json'), JSON.stringify({ autoStartAgentsOnLaunch: false, ollamaBaseUrl: 'http://127.0.0.1:9', newInterface: true }));
+  writeFileSync(join(dir, 'app-settings.json'), JSON.stringify({ autoStartAgentsOnLaunch: false, ollamaBaseUrl: 'http://127.0.0.1:9' }));
   return chats;
 }
 

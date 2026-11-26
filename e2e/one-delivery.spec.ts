@@ -128,91 +128,89 @@ const alive = (pid: number) => {
 
 test.skip(process.platform === 'win32', 'the stand-ins are typed into a POSIX shell, and the CLI count reads ps; the rules are platform-free and their unit tests (delivery-proof.test.ts, agent-watch.test.ts) run everywhere');
 
-for (const newInterface of [false, true]) {
-  test(`a task goes into an agent once${newInterface ? ' (new interface)' : ''}`, async () => {
-    test.setTimeout(300_000);
-    const home = fs.mkdtempSync(path.join(os.tmpdir(), `dorothy-e2e-once-${newInterface ? 'ni' : 'classic'}-`));
-    const project = path.join(home, 'projects', 'demo');
-    const dir = path.join(home, '.tars');
-    const bin = path.join(home, 'bin');
-    for (const d of [project, dir, bin]) fs.mkdirSync(d, { recursive: true });
-    const cli = path.join(bin, 'claude');
-    fs.writeFileSync(cli, `#!${process.execPath}\nconst HOOKS = ${JSON.stringify(HOOKS)};\n${STAND_IN}`, { mode: 0o755 });
-    const agent = (id: string, name: string, role = 'worker') => ({
-      id, name, character: 'robot', provider: 'claude', status: 'idle', role, permissionMode: 'normal',
-      projectPath: project, skills: [], cliPath: cli, createdAt: '2026-10-28T08:00:00.000Z', lastActivity: '2026-10-28T08:00:00.000Z',
-    });
-    fs.writeFileSync(path.join(dir, 'agents.json'), JSON.stringify([agent('lead', 'Project Lead', 'orchestrator'), agent('slow', 'Slow Hooks'), agent('drop', 'Dropper'), agent('bg', 'Background Worker'), agent('again', 'Stopped And Started')], null, 2));
-    fs.writeFileSync(path.join(dir, 'projects.json'), JSON.stringify([project]));
-    fs.writeFileSync(path.join(dir, 'hermes-connection.json'), JSON.stringify({ mode: 'local', localPort: 9, authMode: 'token' }));
-    fs.writeFileSync(path.join(dir, 'app-settings.json'), JSON.stringify({ autoStartAgentsOnLaunch: false, ollamaBaseUrl: 'http://127.0.0.1:9', newInterface }));
-    const port = apiPort(31510 + (newInterface ? 1 : 0));
-    const seen: Record<string, unknown> = { newInterface };
-    const soft = expect.soft;
-    const app = await launchSandboxed(electron, home, {
-      env: { NODE_ENV: 'development', DOROTHY_DEV_URL: DEV_URL, DOROTHY_API_PORT: port, DOROTHY_E2E: '1' },
-    });
-    try {
-      const page = await app.firstWindow();
-      await page.goto(`${DEV_URL}/agents`, { waitUntil: 'domcontentloaded' });
-      await page.waitForFunction(() => !!(window as unknown as Partial<Api>).electronAPI);
-      const start = (id: string, prompt: string) => page.evaluate((p) => (window as unknown as Api).electronAPI.agent.start(p), { id, prompt });
-      const get = (id: string) => page.evaluate((i) => (window as unknown as Api).electronAPI.agent.get(i), id);
-      const type = (id: string, input: string) => page.evaluate((p) => (window as unknown as Api).electronAPI.agent.sendInput(p), { id, input });
-      const handed = (who: string, word: string) => lines(path.join(home, 'prompts.jsonl')).filter((p) => p.id === who && String(p.prompt).includes(word));
-      const typedInto = (who: string, word: string) => lines(path.join(home, 'typed.jsonl')).filter((p) => p.id === who && String(p.prompt).includes(word));
-
-      // Every scenario at once.
-      await start('lead', '');
-      await start('slow', 'SLOW>> the slow task');
-      await start('drop', 'DROP>> the dropped task');
-      await start('again', '');
-
-      // ── F1: taken 40 s late, typed once, never `error` ──
-      const statuses: string[] = [];
-      for (const until = Date.now() + 55_000; Date.now() < until;) {
-        statuses.push((await get('slow')).status);
-        if (handed('slow', 'the slow task').length && lines(path.join(home, 'prompts.jsonl')).some((p) => p.id === 'slow') && statuses.at(-1) === 'idle') break;
-        await new Promise((r) => setTimeout(r, 1_000));
-      }
-      seen.slow = { statuses: [...new Set(statuses)], handed: handed('slow', 'the slow task').length, typed: typedInto('slow', 'the slow task').length, agent: await get('slow') };
-      soft(typedInto('slow', 'the slow task').length, 'F1: the task is never typed again').toBe(0);
-      soft(handed('slow', 'the slow task').length, 'F1: it is handed once').toBe(1);
-      soft(statuses, 'F1: never said error').not.toContain('error');
-
-      // ── F2: really dropped, typed once more, on proof ──
-      await soft.poll(() => typedInto('drop', 'the dropped task').length, { timeout: 40_000, message: 'F2: a task the CLI dropped is typed again' }).toBe(1);
-      await new Promise((r) => setTimeout(r, 20_000));
-      seen.drop = { typed: typedInto('drop', 'the dropped task').length, handed: handed('drop', 'the dropped task').length, agent: await get('drop') };
-      soft(typedInto('drop', 'the dropped task').length, 'F2: and only once').toBe(1);
-
-      // ── F3: a stop then a start leaves one CLI ──
-      await expect.poll(async () => (await get('again')).cliRunning, { timeout: 30_000 }).toBe(true);
-      await page.evaluate(() => (window as unknown as Api).electronAPI.agent.stop('again'));
-      await start('again', 'AGAIN>> after the start');
-      await expect.poll(() => handed('again', 'after the start').length, { timeout: 30_000 }).toBe(1);
-      await new Promise((r) => setTimeout(r, 3_000));
-      const cliPids = lines(path.join(home, 'launches.jsonl')).filter((l) => l.id === 'again').map((l) => l.pid as number);
-      seen.again = { launches: cliPids, alive: cliPids.filter(alive) };
-      soft(cliPids.filter(alive).length, 'F3: one CLI of the agent').toBe(1);
-
-      // ── F4: the background-work note, told once ──
-      await start('bg', '');
-      await expect.poll(async () => (await get('bg')).cliRunning, { timeout: 30_000 }).toBe(true);
-      // The lead hands it a task, as delegate_task's terminal path types it: the lead is its requester.
-      await type('lead', `CALL>> POST /api/agents/bg/dispatch ${JSON.stringify({ message: 'BG>> leave a job running', intent: 'task' })}\r`);
-      await expect.poll(() => handed('bg', 'leave a job running').length, { timeout: 30_000 }).toBe(1);
-      // Its idle prompt, 62 s after its rest, then a moment for a second note.
-      await expect.poll(() => lines(path.join(home, 'idle-prompted.jsonl')).filter((l) => l.id === 'bg').length, { timeout: 90_000 }).toBe(1);
-      await new Promise((r) => setTimeout(r, 6_000));
-      // Every note about it, whatever it says: a second rest read as a second end of turn may come without the
-      // background work (read again 60 s later), and is a twin all the same.
-      const notes = lines(path.join(home, 'prompts.jsonl')).filter((p) => p.id === 'lead' && String(p.prompt).includes('"Background Worker" ("bg")'));
-      seen.bgNotes = notes.map((n) => n.prompt);
-      soft(notes.length, 'F4: the note is told once').toBe(1);
-    } finally {
-      recordValues(seen);
-      await app.close().catch(() => { /* gone */ });
-    }
+test(`a task goes into an agent once`, async () => {
+  test.setTimeout(300_000);
+  const home = fs.mkdtempSync(path.join(os.tmpdir(), `dorothy-e2e-once-ni-`));
+  const project = path.join(home, 'projects', 'demo');
+  const dir = path.join(home, '.tars');
+  const bin = path.join(home, 'bin');
+  for (const d of [project, dir, bin]) fs.mkdirSync(d, { recursive: true });
+  const cli = path.join(bin, 'claude');
+  fs.writeFileSync(cli, `#!${process.execPath}\nconst HOOKS = ${JSON.stringify(HOOKS)};\n${STAND_IN}`, { mode: 0o755 });
+  const agent = (id: string, name: string, role = 'worker') => ({
+    id, name, character: 'robot', provider: 'claude', status: 'idle', role, permissionMode: 'normal',
+    projectPath: project, skills: [], cliPath: cli, createdAt: '2026-10-28T08:00:00.000Z', lastActivity: '2026-10-28T08:00:00.000Z',
   });
-}
+  fs.writeFileSync(path.join(dir, 'agents.json'), JSON.stringify([agent('lead', 'Project Lead', 'orchestrator'), agent('slow', 'Slow Hooks'), agent('drop', 'Dropper'), agent('bg', 'Background Worker'), agent('again', 'Stopped And Started')], null, 2));
+  fs.writeFileSync(path.join(dir, 'projects.json'), JSON.stringify([project]));
+  fs.writeFileSync(path.join(dir, 'hermes-connection.json'), JSON.stringify({ mode: 'local', localPort: 9, authMode: 'token' }));
+  fs.writeFileSync(path.join(dir, 'app-settings.json'), JSON.stringify({ autoStartAgentsOnLaunch: false, ollamaBaseUrl: 'http://127.0.0.1:9' }));
+  const port = apiPort(31510 + 1);
+  const seen: Record<string, unknown> = {};
+  const soft = expect.soft;
+  const app = await launchSandboxed(electron, home, {
+    env: { NODE_ENV: 'development', DOROTHY_DEV_URL: DEV_URL, DOROTHY_API_PORT: port, DOROTHY_E2E: '1' },
+  });
+  try {
+    const page = await app.firstWindow();
+    await page.goto(`${DEV_URL}/agents`, { waitUntil: 'domcontentloaded' });
+    await page.waitForFunction(() => !!(window as unknown as Partial<Api>).electronAPI);
+    const start = (id: string, prompt: string) => page.evaluate((p) => (window as unknown as Api).electronAPI.agent.start(p), { id, prompt });
+    const get = (id: string) => page.evaluate((i) => (window as unknown as Api).electronAPI.agent.get(i), id);
+    const type = (id: string, input: string) => page.evaluate((p) => (window as unknown as Api).electronAPI.agent.sendInput(p), { id, input });
+    const handed = (who: string, word: string) => lines(path.join(home, 'prompts.jsonl')).filter((p) => p.id === who && String(p.prompt).includes(word));
+    const typedInto = (who: string, word: string) => lines(path.join(home, 'typed.jsonl')).filter((p) => p.id === who && String(p.prompt).includes(word));
+
+    // Every scenario at once.
+    await start('lead', '');
+    await start('slow', 'SLOW>> the slow task');
+    await start('drop', 'DROP>> the dropped task');
+    await start('again', '');
+
+    // ── F1: taken 40 s late, typed once, never `error` ──
+    const statuses: string[] = [];
+    for (const until = Date.now() + 55_000; Date.now() < until;) {
+      statuses.push((await get('slow')).status);
+      if (handed('slow', 'the slow task').length && lines(path.join(home, 'prompts.jsonl')).some((p) => p.id === 'slow') && statuses.at(-1) === 'idle') break;
+      await new Promise((r) => setTimeout(r, 1_000));
+    }
+    seen.slow = { statuses: [...new Set(statuses)], handed: handed('slow', 'the slow task').length, typed: typedInto('slow', 'the slow task').length, agent: await get('slow') };
+    soft(typedInto('slow', 'the slow task').length, 'F1: the task is never typed again').toBe(0);
+    soft(handed('slow', 'the slow task').length, 'F1: it is handed once').toBe(1);
+    soft(statuses, 'F1: never said error').not.toContain('error');
+
+    // ── F2: really dropped, typed once more, on proof ──
+    await soft.poll(() => typedInto('drop', 'the dropped task').length, { timeout: 40_000, message: 'F2: a task the CLI dropped is typed again' }).toBe(1);
+    await new Promise((r) => setTimeout(r, 20_000));
+    seen.drop = { typed: typedInto('drop', 'the dropped task').length, handed: handed('drop', 'the dropped task').length, agent: await get('drop') };
+    soft(typedInto('drop', 'the dropped task').length, 'F2: and only once').toBe(1);
+
+    // ── F3: a stop then a start leaves one CLI ──
+    await expect.poll(async () => (await get('again')).cliRunning, { timeout: 30_000 }).toBe(true);
+    await page.evaluate(() => (window as unknown as Api).electronAPI.agent.stop('again'));
+    await start('again', 'AGAIN>> after the start');
+    await expect.poll(() => handed('again', 'after the start').length, { timeout: 30_000 }).toBe(1);
+    await new Promise((r) => setTimeout(r, 3_000));
+    const cliPids = lines(path.join(home, 'launches.jsonl')).filter((l) => l.id === 'again').map((l) => l.pid as number);
+    seen.again = { launches: cliPids, alive: cliPids.filter(alive) };
+    soft(cliPids.filter(alive).length, 'F3: one CLI of the agent').toBe(1);
+
+    // ── F4: the background-work note, told once ──
+    await start('bg', '');
+    await expect.poll(async () => (await get('bg')).cliRunning, { timeout: 30_000 }).toBe(true);
+    // The lead hands it a task, as delegate_task's terminal path types it: the lead is its requester.
+    await type('lead', `CALL>> POST /api/agents/bg/dispatch ${JSON.stringify({ message: 'BG>> leave a job running', intent: 'task' })}\r`);
+    await expect.poll(() => handed('bg', 'leave a job running').length, { timeout: 30_000 }).toBe(1);
+    // Its idle prompt, 62 s after its rest, then a moment for a second note.
+    await expect.poll(() => lines(path.join(home, 'idle-prompted.jsonl')).filter((l) => l.id === 'bg').length, { timeout: 90_000 }).toBe(1);
+    await new Promise((r) => setTimeout(r, 6_000));
+    // Every note about it, whatever it says: a second rest read as a second end of turn may come without the
+    // background work (read again 60 s later), and is a twin all the same.
+    const notes = lines(path.join(home, 'prompts.jsonl')).filter((p) => p.id === 'lead' && String(p.prompt).includes('"Background Worker" ("bg")'));
+    seen.bgNotes = notes.map((n) => n.prompt);
+    soft(notes.length, 'F4: the note is told once').toBe(1);
+  } finally {
+    recordValues(seen);
+    await app.close().catch(() => { /* gone */ });
+  }
+});

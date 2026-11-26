@@ -224,7 +224,8 @@ test('review: a project with no agent, the files without their patches, a patch 
   // first), so main may answer the panel from what it kept: what shows the
   // panel asked is review:diff's own check of the tree, `status -z`.
   const code = path.join(home, 'projects', 'code');
-  await page.locator('aside').getByRole('link', { name: 'Agents', exact: true }).click();
+  await page.getByRole('complementary', { name: 'Sidebar' }).getByRole('button', { name: 'More' }).click();
+  await page.getByRole('menu', { name: 'More' }).getByRole('menuitem', { name: 'Agents', exact: true }).click();
   const card = page.locator('div').filter({ has: page.getByText('Code Reader', { exact: true }) })
     .filter({ has: page.getByRole('button', { name: 'open', exact: true }) }).last();
   fs.writeFileSync(gitLog, '');

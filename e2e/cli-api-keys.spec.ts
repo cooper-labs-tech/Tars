@@ -14,7 +14,7 @@ import { DEV_URL, apiPort } from './ports.mjs';
  * cliPath of an agent of that provider: launched in the agent's terminal, each records its argv and the NAMES of the
  * key variables it got, with a sha256 of each value so the test can tell whose key it is without writing one down.
  *
- * Asserted, once with the classic shell and once with the new interface:
+ * Asserted:
  * 1. keys set from the window (cliKeys.set) for codex, gemini, grok, amp, opencode (under OPENROUTER_API_KEY, its
  *    choice) and pi (MISTRAL_API_KEY); a variable name that is not one, and a key with a line break, are refused;
  * 2. cliKeys.list names every CLI with its variable and hasKey, and carries no key; appSettings.get carries none;
@@ -79,109 +79,107 @@ function filesHolding(dir: string, needles: string[], out: string[] = []): strin
   return out;
 }
 
-for (const newInterface of [false, true]) {
-  test(`an api key per cli reaches that cli's agents only, by its variable, never an argument, a file or the window${newInterface ? ' (new interface)' : ''}`, async () => {
-    test.setTimeout(240_000);
-    const home = fs.mkdtempSync(path.join(os.tmpdir(), 'dorothy-e2e-cli-keys-'));
-    const project = path.join(home, 'projects', 'demo');
-    const dir = path.join(home, '.tars');
-    const bin = path.join(home, 'bin');
-    for (const d of [project, dir, bin]) fs.mkdirSync(d, { recursive: true });
-    const cliPaths: Record<string, string> = {};
-    for (const cli of Object.keys(KEYS)) {
-      cliPaths[cli] = path.join(bin, cli);
-      fs.writeFileSync(cliPaths[cli], `#!${process.execPath}\n${STAND_IN}`, { mode: 0o755 });
-    }
-    const agent = (id: string, provider: string) => ({
-      id, name: `${provider} agent`, character: 'robot', provider, status: 'idle', role: 'worker', projectPath: project, skills: [],
-      permissionMode: 'normal', cliPath: cliPaths[provider], createdAt: '2026-10-18T08:00:00.000Z', lastActivity: '2026-10-18T08:00:00.000Z',
-    });
-    fs.writeFileSync(path.join(dir, 'agents.json'), JSON.stringify(Object.keys(KEYS).map((cli) => agent(`a-${cli}`, cli)), null, 2));
-    fs.writeFileSync(path.join(dir, 'projects.json'), JSON.stringify([project]));
-    fs.writeFileSync(path.join(dir, 'hermes-connection.json'), JSON.stringify({ mode: 'local', localPort: 9, authMode: 'token' }));
-    fs.writeFileSync(path.join(dir, 'app-settings.json'), JSON.stringify({
-      autoStartAgentsOnLaunch: false, ollamaBaseUrl: 'http://127.0.0.1:9', cliPaths: { ...cliPaths, additionalPaths: [bin] }, newInterface,
-      ...Object.fromEntries(Object.keys(KEYS).map((cli) => [`${cli}Enabled`, true])),
-    }));
-    const port = apiPort(newInterface ? 31422 : 31421);
-    const values: Record<string, unknown> = { newInterface, home };
-    const keep = (more: Record<string, unknown>) => { Object.assign(values, more); recordValues(values); };
-    const records = () => (fs.existsSync(path.join(home, 'stand-in.jsonl'))
-      ? fs.readFileSync(path.join(home, 'stand-in.jsonl'), 'utf8').trim().split('\n').filter(Boolean).map((l) => JSON.parse(l) as Rec) : []);
-    const allKeys = Object.values(KEYS).map((k) => k.key);
-
-    const app: ElectronApplication = await launchSandboxed(electron, home, {
-      env: { NODE_ENV: 'development', DOROTHY_DEV_URL: DEV_URL, DOROTHY_API_PORT: port, DOROTHY_E2E: '1' },
-    });
-    try {
-      const page = await app.firstWindow();
-      await page.goto(`${DEV_URL}/agents`, { waitUntil: 'domcontentloaded' });
-      await page.waitForFunction(() => !!(window as unknown as Partial<Api>).electronAPI);
-      await expect(page.getByRole('navigation', { name: 'Main menu' })).toHaveCount(newInterface ? 1 : 0, { timeout: 30_000 });
-      const api = <T>(fn: (api: Api['electronAPI'], arg: unknown) => Promise<T>, arg?: unknown) =>
-        page.evaluate(([src, a]) => (new Function('api', 'arg', `return (${src})(api, arg)`))((window as unknown as Api).electronAPI, a), [fn.toString(), arg] as const) as Promise<T>;
-
-      // 1. Keys set from the window; what is not a key or not a variable name is refused.
-      const set: Record<string, unknown> = {};
-      for (const [cli, k] of Object.entries(KEYS)) {
-        set[cli] = await api((a, arg) => { const [id, patch] = arg as [string, object]; return a.cliKeys.set(id, patch); }, [cli, { key: k.key, ...(k.set ? { envVar: k.set } : {}) }]);
-      }
-      const badName = await api((a) => a.cliKeys.set('opencode', { envVar: 'NODE_OPTIONS' }));
-      const badKey = await api((a) => a.cliKeys.set('gemini', { key: 'line\nOTHER_API_KEY=x' }));
-      for (const [cli, r] of Object.entries(set)) expect.soft(r, cli).toMatchObject({ success: true });
-      expect.soft(badName).toMatchObject({ success: false });
-      expect.soft(badKey).toMatchObject({ success: false });
-
-      // 2. What the window can read carries no key, and a save from the window erases none.
-      const list = await api((a) => a.cliKeys.list());
-      const settings = await api((a) => a.appSettings.get());
-      await api((a) => a.appSettings.get().then((s) => a.appSettings.save(s)));
-      const listAfterSave = await api((a) => a.cliKeys.list());
-      keep({ set, badName, badKey, list, listAfterSave });
-      expect.soft(JSON.stringify(list)).not.toMatch(new RegExp(allKeys.join('|')));
-      expect.soft(JSON.stringify(settings)).not.toMatch(new RegExp(allKeys.join('|')));
-      expect.soft(list.map((c) => c.id).sort()).toEqual(['amp', 'cline', 'codex', 'gemini', 'grok', 'kilo', 'omp', 'opencode', 'pi', 'qwen-code']);
-      for (const [cli, k] of Object.entries(KEYS)) {
-        expect.soft(list.find((c) => c.id === cli), cli).toMatchObject({ hasKey: true, envVar: k.envVar });
-        expect.soft(listAfterSave.find((c) => c.id === cli)?.hasKey, `${cli} after a save from the window`).toBe(true);
-      }
-
-      // 3, 4. Each agent started from the window.
-      for (const cli of Object.keys(KEYS)) await api((a, id) => a.agent.start({ id: id as string, prompt: '' }), `a-${cli}`);
-      await expect.poll(() => new Set(records().map((r) => r.agent)).size, { timeout: 60_000, message: 'every stand-in started' }).toBe(Object.keys(KEYS).length);
-      const first = records();
-      keep({ first });
-      for (const [cli, k] of Object.entries(KEYS)) {
-        const rec = first.find((r) => r.agent === `a-${cli}`)!;
-        expect.soft(rec.hashes[k.envVar], `${cli} got its key under ${k.envVar}`).toBe(sha(k.key));
-        const others = Object.entries(KEYS).filter(([c]) => c !== cli).map(([, o]) => sha(o.key));
-        expect.soft(Object.values(rec.hashes).filter((h) => others.includes(h)), `${cli} got another CLI's key`).toEqual([]);
-        expect.soft(rec.argv.join(' '), `${cli}'s argv`).not.toMatch(new RegExp(allKeys.join('|')));
-      }
-      const codexArgv = first.find((r) => r.agent === 'a-codex')!.argv.join(' ');
-      expect.soft(codexArgv).toContain('model_provider=');
-      expect.soft(codexArgv).toContain('env_key="CODEX_API_KEY"');
-
-      // 5. No file but Tars's private settings holds a key.
-      const holding = filesHolding(home, allKeys).map((p) => path.relative(home, p));
-      keep({ holding });
-      expect.soft(holding).toEqual([path.join('.tars-private', 'settings-secrets.json')]);
-
-      // 6. Codex's key cleared: started again, it runs on its own login.
-      const cleared = await api((a) => a.cliKeys.set('codex', { key: null }));
-      // The CLI ends by itself; its shell stays.
-      process.kill(first.find((r) => r.agent === 'a-codex')!.pid, 'SIGKILL');
-      await expect.poll(async () => (await api((a) => a.agent.list())).find((x) => x.id === 'a-codex')?.cliRunning ?? false, { timeout: 30_000 }).toBe(false);
-      await api((a) => a.agent.start({ id: 'a-codex', prompt: '' }));
-      await expect.poll(() => records().filter((r) => r.agent === 'a-codex').length, { timeout: 60_000 }).toBe(2);
-      const again = records().filter((r) => r.agent === 'a-codex')[1];
-      keep({ cleared, again });
-      expect.soft(cleared).toMatchObject({ success: true });
-      expect.soft(again.keys).not.toContain('CODEX_API_KEY');
-      expect.soft(again.argv.join(' ')).not.toContain('model_provider=');
-    } finally {
-      await app.close().catch(() => undefined);
-      await removeHome(home);
-    }
+test(`an api key per cli reaches that cli's agents only, by its variable, never an argument, a file or the window`, async () => {
+  test.setTimeout(240_000);
+  const home = fs.mkdtempSync(path.join(os.tmpdir(), 'dorothy-e2e-cli-keys-'));
+  const project = path.join(home, 'projects', 'demo');
+  const dir = path.join(home, '.tars');
+  const bin = path.join(home, 'bin');
+  for (const d of [project, dir, bin]) fs.mkdirSync(d, { recursive: true });
+  const cliPaths: Record<string, string> = {};
+  for (const cli of Object.keys(KEYS)) {
+    cliPaths[cli] = path.join(bin, cli);
+    fs.writeFileSync(cliPaths[cli], `#!${process.execPath}\n${STAND_IN}`, { mode: 0o755 });
+  }
+  const agent = (id: string, provider: string) => ({
+    id, name: `${provider} agent`, character: 'robot', provider, status: 'idle', role: 'worker', projectPath: project, skills: [],
+    permissionMode: 'normal', cliPath: cliPaths[provider], createdAt: '2026-10-18T08:00:00.000Z', lastActivity: '2026-10-18T08:00:00.000Z',
   });
-}
+  fs.writeFileSync(path.join(dir, 'agents.json'), JSON.stringify(Object.keys(KEYS).map((cli) => agent(`a-${cli}`, cli)), null, 2));
+  fs.writeFileSync(path.join(dir, 'projects.json'), JSON.stringify([project]));
+  fs.writeFileSync(path.join(dir, 'hermes-connection.json'), JSON.stringify({ mode: 'local', localPort: 9, authMode: 'token' }));
+  fs.writeFileSync(path.join(dir, 'app-settings.json'), JSON.stringify({
+    autoStartAgentsOnLaunch: false, ollamaBaseUrl: 'http://127.0.0.1:9', cliPaths: { ...cliPaths, additionalPaths: [bin] },
+    ...Object.fromEntries(Object.keys(KEYS).map((cli) => [`${cli}Enabled`, true])),
+  }));
+  const port = apiPort(31422);
+  const values: Record<string, unknown> = { home };
+  const keep = (more: Record<string, unknown>) => { Object.assign(values, more); recordValues(values); };
+  const records = () => (fs.existsSync(path.join(home, 'stand-in.jsonl'))
+    ? fs.readFileSync(path.join(home, 'stand-in.jsonl'), 'utf8').trim().split('\n').filter(Boolean).map((l) => JSON.parse(l) as Rec) : []);
+  const allKeys = Object.values(KEYS).map((k) => k.key);
+
+  const app: ElectronApplication = await launchSandboxed(electron, home, {
+    env: { NODE_ENV: 'development', DOROTHY_DEV_URL: DEV_URL, DOROTHY_API_PORT: port, DOROTHY_E2E: '1' },
+  });
+  try {
+    const page = await app.firstWindow();
+    await page.goto(`${DEV_URL}/agents`, { waitUntil: 'domcontentloaded' });
+    await page.waitForFunction(() => !!(window as unknown as Partial<Api>).electronAPI);
+    await expect(page.getByRole('navigation', { name: 'Main menu' })).toHaveCount(1, { timeout: 30_000 });
+    const api = <T>(fn: (api: Api['electronAPI'], arg: unknown) => Promise<T>, arg?: unknown) =>
+      page.evaluate(([src, a]) => (new Function('api', 'arg', `return (${src})(api, arg)`))((window as unknown as Api).electronAPI, a), [fn.toString(), arg] as const) as Promise<T>;
+
+    // 1. Keys set from the window; what is not a key or not a variable name is refused.
+    const set: Record<string, unknown> = {};
+    for (const [cli, k] of Object.entries(KEYS)) {
+      set[cli] = await api((a, arg) => { const [id, patch] = arg as [string, object]; return a.cliKeys.set(id, patch); }, [cli, { key: k.key, ...(k.set ? { envVar: k.set } : {}) }]);
+    }
+    const badName = await api((a) => a.cliKeys.set('opencode', { envVar: 'NODE_OPTIONS' }));
+    const badKey = await api((a) => a.cliKeys.set('gemini', { key: 'line\nOTHER_API_KEY=x' }));
+    for (const [cli, r] of Object.entries(set)) expect.soft(r, cli).toMatchObject({ success: true });
+    expect.soft(badName).toMatchObject({ success: false });
+    expect.soft(badKey).toMatchObject({ success: false });
+
+    // 2. What the window can read carries no key, and a save from the window erases none.
+    const list = await api((a) => a.cliKeys.list());
+    const settings = await api((a) => a.appSettings.get());
+    await api((a) => a.appSettings.get().then((s) => a.appSettings.save(s)));
+    const listAfterSave = await api((a) => a.cliKeys.list());
+    keep({ set, badName, badKey, list, listAfterSave });
+    expect.soft(JSON.stringify(list)).not.toMatch(new RegExp(allKeys.join('|')));
+    expect.soft(JSON.stringify(settings)).not.toMatch(new RegExp(allKeys.join('|')));
+    expect.soft(list.map((c) => c.id).sort()).toEqual(['amp', 'cline', 'codex', 'gemini', 'grok', 'kilo', 'omp', 'opencode', 'pi', 'qwen-code']);
+    for (const [cli, k] of Object.entries(KEYS)) {
+      expect.soft(list.find((c) => c.id === cli), cli).toMatchObject({ hasKey: true, envVar: k.envVar });
+      expect.soft(listAfterSave.find((c) => c.id === cli)?.hasKey, `${cli} after a save from the window`).toBe(true);
+    }
+
+    // 3, 4. Each agent started from the window.
+    for (const cli of Object.keys(KEYS)) await api((a, id) => a.agent.start({ id: id as string, prompt: '' }), `a-${cli}`);
+    await expect.poll(() => new Set(records().map((r) => r.agent)).size, { timeout: 60_000, message: 'every stand-in started' }).toBe(Object.keys(KEYS).length);
+    const first = records();
+    keep({ first });
+    for (const [cli, k] of Object.entries(KEYS)) {
+      const rec = first.find((r) => r.agent === `a-${cli}`)!;
+      expect.soft(rec.hashes[k.envVar], `${cli} got its key under ${k.envVar}`).toBe(sha(k.key));
+      const others = Object.entries(KEYS).filter(([c]) => c !== cli).map(([, o]) => sha(o.key));
+      expect.soft(Object.values(rec.hashes).filter((h) => others.includes(h)), `${cli} got another CLI's key`).toEqual([]);
+      expect.soft(rec.argv.join(' '), `${cli}'s argv`).not.toMatch(new RegExp(allKeys.join('|')));
+    }
+    const codexArgv = first.find((r) => r.agent === 'a-codex')!.argv.join(' ');
+    expect.soft(codexArgv).toContain('model_provider=');
+    expect.soft(codexArgv).toContain('env_key="CODEX_API_KEY"');
+
+    // 5. No file but Tars's private settings holds a key.
+    const holding = filesHolding(home, allKeys).map((p) => path.relative(home, p));
+    keep({ holding });
+    expect.soft(holding).toEqual([path.join('.tars-private', 'settings-secrets.json')]);
+
+    // 6. Codex's key cleared: started again, it runs on its own login.
+    const cleared = await api((a) => a.cliKeys.set('codex', { key: null }));
+    // The CLI ends by itself; its shell stays.
+    process.kill(first.find((r) => r.agent === 'a-codex')!.pid, 'SIGKILL');
+    await expect.poll(async () => (await api((a) => a.agent.list())).find((x) => x.id === 'a-codex')?.cliRunning ?? false, { timeout: 30_000 }).toBe(false);
+    await api((a) => a.agent.start({ id: 'a-codex', prompt: '' }));
+    await expect.poll(() => records().filter((r) => r.agent === 'a-codex').length, { timeout: 60_000 }).toBe(2);
+    const again = records().filter((r) => r.agent === 'a-codex')[1];
+    keep({ cleared, again });
+    expect.soft(cleared).toMatchObject({ success: true });
+    expect.soft(again.keys).not.toContain('CODEX_API_KEY');
+    expect.soft(again.argv.join(' ')).not.toContain('model_provider=');
+  } finally {
+    await app.close().catch(() => undefined);
+    await removeHome(home);
+  }
+});

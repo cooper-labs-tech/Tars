@@ -8,8 +8,7 @@ import { launchSandboxed, recordValues, removeHome, writeNodeCli } from './fixtu
 import { DEV_URL, apiPort } from './ports.mjs';
 
 /**
- * Tars's MCP servers shared between agents (2.0.5, lot 3 item G, the second step), in the real app, once with the
- * classic shell and once with the new interface.
+ * Tars's MCP servers shared between agents (2.0.5, lot 3 item G, the second step), in the real app.
  *
  * Tars registers its servers as a packaged Tars does at its start (setupMcpOrchestrator, on the six bundles of this
  * tree): the shared ones run once, and claude's config names each as an HTTP server on Tars's API whose header names
@@ -127,153 +126,151 @@ function serversOf(resources: string): Array<{ pid: number; mb: number; bundle: 
 
 test.skip(process.platform === 'win32', 'the process table is read with ps');
 
-for (const newInterface of [false, true]) {
-  test(`two agents use one process of each shared MCP server, each call answered as its own agent${newInterface ? ' (new interface)' : ''}`, async () => {
-    test.setTimeout(360_000);
-    const home = fs.mkdtempSync(path.join(os.tmpdir(), `dorothy-e2e-shared-mcp-${newInterface ? 'ni' : 'classic'}-`));
-    const project = path.join(home, 'projects', 'harbor');
-    fs.mkdirSync(project, { recursive: true });
-    const dir = path.join(home, '.tars');
-    fs.mkdirSync(dir, { recursive: true });
-    const base = { character: 'robot', provider: 'claude', status: 'idle', projectPath: project, skills: [], createdAt: '2026-10-28T08:00:00.000Z', lastActivity: '2026-10-28T08:00:00.000Z' };
-    fs.writeFileSync(path.join(dir, 'agents.json'), JSON.stringify([
-      { ...base, id: 'a', name: 'Harbor Worker', role: 'worker', cliPath: standIn(home, 'b') },
-      { ...base, id: 'b', name: 'Harbor Tester', role: 'worker', cliPath: standIn(home, 'a') },
-    ], null, 2));
-    fs.writeFileSync(path.join(dir, 'projects.json'), JSON.stringify([project]));
-    fs.writeFileSync(path.join(dir, 'hermes-connection.json'), JSON.stringify({ mode: 'local', localPort: 9, authMode: 'token' }));
-    fs.writeFileSync(path.join(dir, 'app-settings.json'), JSON.stringify({ autoStartAgentsOnLaunch: false, ollamaBaseUrl: 'http://127.0.0.1:9', newInterface }));
-    // The bundles of this tree where a packaged Tars has them: a development run finds none under its resources.
-    // The six it ships: mcp-telegram went with Tars's own bot in 2.0.5 (#545), and a clone has no such folder.
-    const resources = path.join(home, 'resources');
-    for (const s of SHARED) {
-      fs.mkdirSync(path.join(resources, s, 'dist'), { recursive: true });
-      fs.copyFileSync(path.resolve(s, 'dist', 'bundle.js'), path.join(resources, s, 'dist', 'bundle.js'));
-      fs.copyFileSync(path.resolve(s, 'package.json'), path.join(resources, s, 'package.json'));
-    }
-    const seenBy = (id: string): Seen | undefined => { try { return JSON.parse(fs.readFileSync(path.join(home, `seen-${id}.json`), 'utf8')); } catch { return undefined; } };
-    const values: Record<string, unknown> = { newInterface };
-    const keep = (more: Record<string, unknown>) => { Object.assign(values, more); recordValues(values); };
+test(`two agents use one process of each shared MCP server, each call answered as its own agent`, async () => {
+  test.setTimeout(360_000);
+  const home = fs.mkdtempSync(path.join(os.tmpdir(), `dorothy-e2e-shared-mcp-ni-`));
+  const project = path.join(home, 'projects', 'harbor');
+  fs.mkdirSync(project, { recursive: true });
+  const dir = path.join(home, '.tars');
+  fs.mkdirSync(dir, { recursive: true });
+  const base = { character: 'robot', provider: 'claude', status: 'idle', projectPath: project, skills: [], createdAt: '2026-10-28T08:00:00.000Z', lastActivity: '2026-10-28T08:00:00.000Z' };
+  fs.writeFileSync(path.join(dir, 'agents.json'), JSON.stringify([
+    { ...base, id: 'a', name: 'Harbor Worker', role: 'worker', cliPath: standIn(home, 'b') },
+    { ...base, id: 'b', name: 'Harbor Tester', role: 'worker', cliPath: standIn(home, 'a') },
+  ], null, 2));
+  fs.writeFileSync(path.join(dir, 'projects.json'), JSON.stringify([project]));
+  fs.writeFileSync(path.join(dir, 'hermes-connection.json'), JSON.stringify({ mode: 'local', localPort: 9, authMode: 'token' }));
+  fs.writeFileSync(path.join(dir, 'app-settings.json'), JSON.stringify({ autoStartAgentsOnLaunch: false, ollamaBaseUrl: 'http://127.0.0.1:9' }));
+  // The bundles of this tree where a packaged Tars has them: a development run finds none under its resources.
+  // The six it ships: mcp-telegram went with Tars's own bot in 2.0.5 (#545), and a clone has no such folder.
+  const resources = path.join(home, 'resources');
+  for (const s of SHARED) {
+    fs.mkdirSync(path.join(resources, s, 'dist'), { recursive: true });
+    fs.copyFileSync(path.resolve(s, 'dist', 'bundle.js'), path.join(resources, s, 'dist', 'bundle.js'));
+    fs.copyFileSync(path.resolve(s, 'package.json'), path.join(resources, s, 'package.json'));
+  }
+  const seenBy = (id: string): Seen | undefined => { try { return JSON.parse(fs.readFileSync(path.join(home, `seen-${id}.json`), 'utf8')); } catch { return undefined; } };
+  const values: Record<string, unknown> = {};
+  const keep = (more: Record<string, unknown>) => { Object.assign(values, more); recordValues(values); };
 
-    const app = await launchSandboxed(electron, home, {
-      env: { NODE_ENV: 'development', DOROTHY_DEV_URL: DEV_URL, DOROTHY_API_PORT: apiPort(newInterface ? 31358 : 31357), DOROTHY_E2E: '1' },
-    });
-    try {
-      const page = await app.firstWindow();
-      await page.goto(`${DEV_URL}/agents`, { waitUntil: 'domcontentloaded' });
-      await expect(page.getByRole('navigation', { name: 'Main menu' })).toHaveCount(newInterface ? 1 : 0, { timeout: 30_000 });
-      const dist = path.resolve('electron', 'dist');
-      await app.evaluate(async (_e, { resources, dist }) => {
-        const was = process.resourcesPath;
-        Object.defineProperty(process, 'resourcesPath', { value: resources, configurable: true, writable: true });
-        try {
-          await process.mainModule!.require(`${dist}/services/mcp-orchestrator.js`).setupMcpOrchestrator({});
-        } finally {
-          Object.defineProperty(process, 'resourcesPath', { value: was, configurable: true, writable: true });
-        }
-      }, { resources, dist });
-      const config = JSON.parse(fs.readFileSync(path.join(home, '.claude', 'mcp.json'), 'utf8')) as { mcpServers?: Record<string, unknown> };
-      const userFile = path.join(home, '.claude.json');
-      const user = (fs.existsSync(userFile) ? JSON.parse(fs.readFileSync(userFile, 'utf8')) : {}) as { mcpServers?: Record<string, { type?: string }> };
-      keep({ config: config.mcpServers, user: user.mcpServers });
-      // The user scope every claude session loads holds no shared entry (the Audit's M3 on #541).
-      expect(Object.values(user.mcpServers ?? {}).filter(e => e.type === 'http')).toEqual([]);
-
-      type Win = { electronAPI: { agent: { start(p: { id: string; prompt: string }): Promise<unknown> } } };
-      for (const id of ['a', 'b']) await page.evaluate(i => (window as unknown as Win).electronAPI.agent.start({ id: i, prompt: '' }), id);
-      const stepsOf = (id: string): unknown => { try { return JSON.parse(fs.readFileSync(path.join(home, `steps-${id}.json`), 'utf8')); } catch { return null; } };
+  const app = await launchSandboxed(electron, home, {
+    env: { NODE_ENV: 'development', DOROTHY_DEV_URL: DEV_URL, DOROTHY_API_PORT: apiPort(31358), DOROTHY_E2E: '1' },
+  });
+  try {
+    const page = await app.firstWindow();
+    await page.goto(`${DEV_URL}/agents`, { waitUntil: 'domcontentloaded' });
+    await expect(page.getByRole('navigation', { name: 'Main menu' })).toHaveCount(1, { timeout: 30_000 });
+    const dist = path.resolve('electron', 'dist');
+    await app.evaluate(async (_e, { resources, dist }) => {
+      const was = process.resourcesPath;
+      Object.defineProperty(process, 'resourcesPath', { value: resources, configurable: true, writable: true });
       try {
-        await expect.poll(() => [seenBy('a'), seenBy('b')].filter(Boolean).length, { timeout: 150_000 }).toBe(2);
+        await process.mainModule!.require(`${dist}/services/mcp-orchestrator.js`).setupMcpOrchestrator({});
       } finally {
-        // Which agent got how far, kept whether or not both answered (the QA's F8 of the final verification).
-        keep({ steps: { a: stepsOf('a'), b: stepsOf('b') }, seen: { a: seenBy('a') ?? null, b: seenBy('b') ?? null } });
+        Object.defineProperty(process, 'resourcesPath', { value: was, configurable: true, writable: true });
       }
-      const a = seenBy('a')!;
-      const b = seenBy('b')!;
-      const servers = serversOf(resources);
-      keep({ a, b, servers });
+    }, { resources, dist });
+    const config = JSON.parse(fs.readFileSync(path.join(home, '.claude', 'mcp.json'), 'utf8')) as { mcpServers?: Record<string, unknown> };
+    const userFile = path.join(home, '.claude.json');
+    const user = (fs.existsSync(userFile) ? JSON.parse(fs.readFileSync(userFile, 'utf8')) : {}) as { mcpServers?: Record<string, { type?: string }> };
+    keep({ config: config.mcpServers, user: user.mcpServers });
+    // The user scope every claude session loads holds no shared entry (the Audit's M3 on #541).
+    expect(Object.values(user.mcpServers ?? {}).filter(e => e.type === 'http')).toEqual([]);
 
-      // 1. One process each.
-      expect(servers.filter(s => s.bundle === 'mcp-orchestrator')).toHaveLength(1);
-      expect.soft(SHARED.map(s => servers.filter(p => p.bundle === s).length)).toEqual(SHARED.map(() => 1));
-      // 2. Each answered as itself.
-      expect(a.error, 'a').toBeUndefined();
-      expect(b.error, 'b').toBeUndefined();
-      expect(a.whoami?.text).toMatch(/^You are "Harbor Worker" \(agent id: a\)/);
-      expect(b.whoami?.text).toMatch(/^You are "Harbor Tester" \(agent id: b\)/);
-      // 3. Never as the other.
-      expect([a.asOther, b.asOther, a.noToken, b.noToken]).toEqual([403, 403, 401, 401]);
-      // 4. The token in no file and no command line.
-      expect(a.entry?.headers?.Authorization).toBe('Bearer ${CLAUDE_MGR_API_TOKEN}');
-      expect([a.tokenInConfig, b.tokenInConfig, a.tokenInCommandLines, b.tokenInCommandLines]).toEqual([false, false, false, false]);
-      // 5. The keep-alive's progress event came through the door, as an event stream.
-      expect(a.waitType).toContain('text/event-stream');
-      expect(a.progress?.event).toMatchObject({ method: 'notifications/progress', params: { progressToken: 'keep' } });
-      // A real wait: the agent waited on is in its turn, and the keep-alive comes a minute in.
-      expect(a.progress?.after ?? 0).toBeGreaterThanOrEqual(50_000);
-    } finally {
-      await app.close().catch(() => undefined);
-      await removeHome(home);
-    }
-  });
-
-  test(`an agent started while another process holds Tars's port starts once Tars binds it, and that process gets no token${newInterface ? ' (new interface)' : ''}`, async () => {
-    test.setTimeout(180_000);
-    const home = fs.mkdtempSync(path.join(os.tmpdir(), `dorothy-e2e-shared-mcp-port-${newInterface ? 'ni' : 'classic'}-`));
-    const project = path.join(home, 'projects', 'harbor');
-    fs.mkdirSync(project, { recursive: true });
-    const dir = path.join(home, '.tars');
-    fs.mkdirSync(dir, { recursive: true });
-    // Its first act is a call with its token, as claude's initialize of a shared server would be.
-    const cli = writeNodeCli(path.join(home, 'cli-early.cjs'), [
-      "const fs = require('fs');",
-      "if (process.argv.includes('--version')) { console.log('2.1.312 (Claude Code)'); process.exit(0); }",
-      `const out = ${JSON.stringify(path.join(home, 'early.json'))};`,
-      "fetch(process.env.CLAUDE_MGR_API_URL + '/api/agents/' + process.env.CLAUDE_AGENT_ID, { headers: { Authorization: 'Bearer ' + process.env.CLAUDE_MGR_API_TOKEN } })",
-      "  .then(async r => fs.writeFileSync(out, JSON.stringify({ at: Date.now(), status: r.status, body: (await r.text()).slice(0, 200) })),",
-      "        e => fs.writeFileSync(out, JSON.stringify({ at: Date.now(), error: String(e) })));",
-      "process.stdout.write('stand-in ready\\r\\n');",
-      'process.stdin.resume();',
-      '',
-    ].join('\n'));
-    fs.writeFileSync(path.join(dir, 'agents.json'), JSON.stringify([{
-      id: 'early', name: 'Harbor Worker', character: 'robot', provider: 'claude', status: 'idle', role: 'worker', projectPath: project,
-      skills: [], cliPath: cli, createdAt: '2026-10-28T08:00:00.000Z', lastActivity: '2026-10-28T08:00:00.000Z',
-    }], null, 2));
-    fs.writeFileSync(path.join(dir, 'projects.json'), JSON.stringify([project]));
-    fs.writeFileSync(path.join(dir, 'hermes-connection.json'), JSON.stringify({ mode: 'local', localPort: 9, authMode: 'token' }));
-    fs.writeFileSync(path.join(dir, 'app-settings.json'), JSON.stringify({ autoStartAgentsOnLaunch: false, ollamaBaseUrl: 'http://127.0.0.1:9', newInterface }));
-    // Another process holds Tars's port when it launches, and records every request that reaches it.
-    const port = Number(apiPort(newInterface ? 31362 : 31361));
-    const heard: Array<{ at: number; url?: string; authorization?: string }> = [];
-    const squatter = http.createServer((req, res) => { heard.push({ at: Date.now(), url: req.url, authorization: req.headers.authorization }); res.end('{}'); });
-    await new Promise<void>(r => squatter.listen(port, '127.0.0.1', r));
-    let released = 0;
-    const app = await launchSandboxed(electron, home, {
-      env: { NODE_ENV: 'development', DOROTHY_DEV_URL: DEV_URL, DOROTHY_API_PORT: String(port), DOROTHY_E2E: '1' },
-    });
+    type Win = { electronAPI: { agent: { start(p: { id: string; prompt: string }): Promise<unknown> } } };
+    for (const id of ['a', 'b']) await page.evaluate(i => (window as unknown as Win).electronAPI.agent.start({ id: i, prompt: '' }), id);
+    const stepsOf = (id: string): unknown => { try { return JSON.parse(fs.readFileSync(path.join(home, `steps-${id}.json`), 'utf8')); } catch { return null; } };
     try {
-      const page = await app.firstWindow();
-      await page.goto(`${DEV_URL}/agents`, { waitUntil: 'domcontentloaded' });
-      type Win = { electronAPI: { agent: { start(p: { id: string; prompt: string }): Promise<unknown> } } };
-      // Started while the port is held: it must wait for Tars.
-      void page.evaluate(() => (window as unknown as Win).electronAPI.agent.start({ id: 'early', prompt: '' }).catch(() => undefined));
-      await page.waitForTimeout(4_000);
-      const early = path.join(home, 'early.json');
-      const startedBeforeBind = fs.existsSync(early);
-      released = Date.now();
-      await new Promise<void>(r => squatter.close(() => r()));
-      await expect.poll(() => fs.existsSync(early), { timeout: 90_000 }).toBe(true);
-      const call = JSON.parse(fs.readFileSync(early, 'utf8')) as { at: number; status?: number; error?: string };
-      recordValues({ newInterface, heard, call, released, startedBeforeBind });
-      expect(startedBeforeBind, 'the agent started while another process held the port').toBe(false);
-      expect(heard.filter(h => h.authorization), 'a token reached the process holding the port').toEqual([]);
-      expect(call.status).toBe(200);
-      expect(call.at).toBeGreaterThanOrEqual(released);
+      await expect.poll(() => [seenBy('a'), seenBy('b')].filter(Boolean).length, { timeout: 150_000 }).toBe(2);
     } finally {
-      await new Promise<void>(r => (squatter.listening ? squatter.close(() => r()) : r()));
-      await app.close().catch(() => undefined);
-      await removeHome(home);
+      // Which agent got how far, kept whether or not both answered (the QA's F8 of the final verification).
+      keep({ steps: { a: stepsOf('a'), b: stepsOf('b') }, seen: { a: seenBy('a') ?? null, b: seenBy('b') ?? null } });
     }
+    const a = seenBy('a')!;
+    const b = seenBy('b')!;
+    const servers = serversOf(resources);
+    keep({ a, b, servers });
+
+    // 1. One process each.
+    expect(servers.filter(s => s.bundle === 'mcp-orchestrator')).toHaveLength(1);
+    expect.soft(SHARED.map(s => servers.filter(p => p.bundle === s).length)).toEqual(SHARED.map(() => 1));
+    // 2. Each answered as itself.
+    expect(a.error, 'a').toBeUndefined();
+    expect(b.error, 'b').toBeUndefined();
+    expect(a.whoami?.text).toMatch(/^You are "Harbor Worker" \(agent id: a\)/);
+    expect(b.whoami?.text).toMatch(/^You are "Harbor Tester" \(agent id: b\)/);
+    // 3. Never as the other.
+    expect([a.asOther, b.asOther, a.noToken, b.noToken]).toEqual([403, 403, 401, 401]);
+    // 4. The token in no file and no command line.
+    expect(a.entry?.headers?.Authorization).toBe('Bearer ${CLAUDE_MGR_API_TOKEN}');
+    expect([a.tokenInConfig, b.tokenInConfig, a.tokenInCommandLines, b.tokenInCommandLines]).toEqual([false, false, false, false]);
+    // 5. The keep-alive's progress event came through the door, as an event stream.
+    expect(a.waitType).toContain('text/event-stream');
+    expect(a.progress?.event).toMatchObject({ method: 'notifications/progress', params: { progressToken: 'keep' } });
+    // A real wait: the agent waited on is in its turn, and the keep-alive comes a minute in.
+    expect(a.progress?.after ?? 0).toBeGreaterThanOrEqual(50_000);
+  } finally {
+    await app.close().catch(() => undefined);
+    await removeHome(home);
+  }
+});
+
+test(`an agent started while another process holds Tars's port starts once Tars binds it, and that process gets no token`, async () => {
+  test.setTimeout(180_000);
+  const home = fs.mkdtempSync(path.join(os.tmpdir(), `dorothy-e2e-shared-mcp-port-ni-`));
+  const project = path.join(home, 'projects', 'harbor');
+  fs.mkdirSync(project, { recursive: true });
+  const dir = path.join(home, '.tars');
+  fs.mkdirSync(dir, { recursive: true });
+  // Its first act is a call with its token, as claude's initialize of a shared server would be.
+  const cli = writeNodeCli(path.join(home, 'cli-early.cjs'), [
+    "const fs = require('fs');",
+    "if (process.argv.includes('--version')) { console.log('2.1.312 (Claude Code)'); process.exit(0); }",
+    `const out = ${JSON.stringify(path.join(home, 'early.json'))};`,
+    "fetch(process.env.CLAUDE_MGR_API_URL + '/api/agents/' + process.env.CLAUDE_AGENT_ID, { headers: { Authorization: 'Bearer ' + process.env.CLAUDE_MGR_API_TOKEN } })",
+    "  .then(async r => fs.writeFileSync(out, JSON.stringify({ at: Date.now(), status: r.status, body: (await r.text()).slice(0, 200) })),",
+    "        e => fs.writeFileSync(out, JSON.stringify({ at: Date.now(), error: String(e) })));",
+    "process.stdout.write('stand-in ready\\r\\n');",
+    'process.stdin.resume();',
+    '',
+  ].join('\n'));
+  fs.writeFileSync(path.join(dir, 'agents.json'), JSON.stringify([{
+    id: 'early', name: 'Harbor Worker', character: 'robot', provider: 'claude', status: 'idle', role: 'worker', projectPath: project,
+    skills: [], cliPath: cli, createdAt: '2026-10-28T08:00:00.000Z', lastActivity: '2026-10-28T08:00:00.000Z',
+  }], null, 2));
+  fs.writeFileSync(path.join(dir, 'projects.json'), JSON.stringify([project]));
+  fs.writeFileSync(path.join(dir, 'hermes-connection.json'), JSON.stringify({ mode: 'local', localPort: 9, authMode: 'token' }));
+  fs.writeFileSync(path.join(dir, 'app-settings.json'), JSON.stringify({ autoStartAgentsOnLaunch: false, ollamaBaseUrl: 'http://127.0.0.1:9' }));
+  // Another process holds Tars's port when it launches, and records every request that reaches it.
+  const port = Number(apiPort(31362));
+  const heard: Array<{ at: number; url?: string; authorization?: string }> = [];
+  const squatter = http.createServer((req, res) => { heard.push({ at: Date.now(), url: req.url, authorization: req.headers.authorization }); res.end('{}'); });
+  await new Promise<void>(r => squatter.listen(port, '127.0.0.1', r));
+  let released = 0;
+  const app = await launchSandboxed(electron, home, {
+    env: { NODE_ENV: 'development', DOROTHY_DEV_URL: DEV_URL, DOROTHY_API_PORT: String(port), DOROTHY_E2E: '1' },
   });
-}
+  try {
+    const page = await app.firstWindow();
+    await page.goto(`${DEV_URL}/agents`, { waitUntil: 'domcontentloaded' });
+    type Win = { electronAPI: { agent: { start(p: { id: string; prompt: string }): Promise<unknown> } } };
+    // Started while the port is held: it must wait for Tars.
+    void page.evaluate(() => (window as unknown as Win).electronAPI.agent.start({ id: 'early', prompt: '' }).catch(() => undefined));
+    await page.waitForTimeout(4_000);
+    const early = path.join(home, 'early.json');
+    const startedBeforeBind = fs.existsSync(early);
+    released = Date.now();
+    await new Promise<void>(r => squatter.close(() => r()));
+    await expect.poll(() => fs.existsSync(early), { timeout: 90_000 }).toBe(true);
+    const call = JSON.parse(fs.readFileSync(early, 'utf8')) as { at: number; status?: number; error?: string };
+    recordValues({ heard, call, released, startedBeforeBind });
+    expect(startedBeforeBind, 'the agent started while another process held the port').toBe(false);
+    expect(heard.filter(h => h.authorization), 'a token reached the process holding the port').toEqual([]);
+    expect(call.status).toBe(200);
+    expect(call.at).toBeGreaterThanOrEqual(released);
+  } finally {
+    await new Promise<void>(r => (squatter.listening ? squatter.close(() => r()) : r()));
+    await app.close().catch(() => undefined);
+    await removeHome(home);
+  }
+});

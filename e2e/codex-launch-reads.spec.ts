@@ -18,7 +18,7 @@ import { DEV_URL, apiPort } from './ports.mjs';
  * session, so Tars saw nothing, and the agent read as starting, then running.
  *
  * codex is e2e/fake-codex.mjs: its --help answers after FAKE_CODEX_HELP_MS, and with FAKE_CODEX_SIGN_IN=1 it reads its
- * login from its home's auth.json and shows 0.163's sign-in screen when there is none. Asserted, in both shells:
+ * login from its home's auth.json and shows 0.163's sign-in screen when there is none. Asserted:
  * 1. Cody, an auto agent started from the window while codex takes 8 s to answer --help, leaves the window answering:
  *    its calls to the main process answer within 3 s all along, and Cody then starts with `--approve-for-me`, the
  *    flag codex listed, codex asked once;
@@ -35,7 +35,7 @@ type Listed = { id: string; status: string; error?: string };
 type Api = { electronAPI: { agent: { start(p: { id: string; prompt: string }): Promise<unknown>; list(): Promise<Listed[]> } } };
 
 /** A sandbox home with a git project, a fake codex whose wrapper sets `fakeEnv`, and one codex agent seeded. */
-function sandbox(prefix: string, agent: Record<string, unknown>, fakeEnv: Record<string, string>, newInterface: boolean) {
+function sandbox(prefix: string, agent: Record<string, unknown>, fakeEnv: Record<string, string>) {
   const home = fs.mkdtempSync(`/tmp/dorothy-e2e-${prefix}-`);
   const project = path.join(home, 'projects', 'demo');
   const dir = path.join(home, '.tars');
@@ -52,97 +52,95 @@ function sandbox(prefix: string, agent: Record<string, unknown>, fakeEnv: Record
   }], null, 2));
   fs.writeFileSync(path.join(dir, 'projects.json'), JSON.stringify([project]));
   fs.writeFileSync(path.join(dir, 'hermes-connection.json'), JSON.stringify({ mode: 'local', localPort: 9, authMode: 'token' }));
-  fs.writeFileSync(path.join(dir, 'app-settings.json'), JSON.stringify({ autoStartAgentsOnLaunch: false, ollamaBaseUrl: 'http://127.0.0.1:9', cliPaths: { codex }, newInterface }, null, 2));
+  fs.writeFileSync(path.join(dir, 'app-settings.json'), JSON.stringify({ autoStartAgentsOnLaunch: false, ollamaBaseUrl: 'http://127.0.0.1:9', cliPaths: { codex } }, null, 2));
   const entries = () => (fs.existsSync(codexLog) ? fs.readFileSync(codexLog, 'utf8').trim().split('\n').filter(Boolean).map(l => JSON.parse(l)) : []) as Array<Record<string, unknown>>;
   return { home, project, entries };
 }
 
-async function open(home: string, port: string, newInterface: boolean): Promise<{ app: ElectronApplication; page: Page }> {
+async function open(home: string, port: string): Promise<{ app: ElectronApplication; page: Page }> {
   // Tars as the Dock starts it: no CODEX_HOME of its own, whatever the runner has.
   const app = await launchSandboxed(electron, home, { env: { NODE_ENV: 'development', DOROTHY_DEV_URL: DEV_URL, DOROTHY_API_PORT: port, DOROTHY_E2E: '1', CODEX_HOME: '' } });
   const appLog = test.info().outputPath('app.log');
   app.process().stdout?.on('data', (d) => fs.appendFileSync(appLog, d));
   app.process().stderr?.on('data', (d) => fs.appendFileSync(appLog, d));
   const page = await app.firstWindow();
-  await expect(page.getByRole('navigation', { name: 'Main menu' })).toHaveCount(newInterface ? 1 : 0, { timeout: 30_000 });
+  await expect(page.getByRole('navigation', { name: 'Main menu' })).toHaveCount(1, { timeout: 30_000 });
   return { app, page };
 }
 
 const launched = (e: Record<string, unknown>) => !!e.launch && !e.refused && Array.isArray(e.argv);
 
-for (const newInterface of [false, true]) {
-  test(`codex's --help is read off the main thread: the window answers while it runs${newInterface ? ' (new interface)' : ''}`, async () => {
-    test.setTimeout(3 * 60_000);
-    const { home, entries } = sandbox('codex-help-slow', { id: CODY, name: 'Cody', permissionMode: 'auto' }, { FAKE_CODEX_HELP_MS: '8000' }, newInterface);
-    const values: Record<string, unknown> = { newInterface };
-    const keep = (more: Record<string, unknown>) => { Object.assign(values, more); recordValues(values); };
-    let app: ElectronApplication | undefined;
-    try {
-      let page: Page;
-      ({ app, page } = await open(home, apiPort(newInterface ? 31335 : 31334), newInterface));
+test(`codex's --help is read off the main thread: the window answers while it runs`, async () => {
+  test.setTimeout(3 * 60_000);
+  const { home, entries } = sandbox('codex-help-slow', { id: CODY, name: 'Cody', permissionMode: 'auto' }, { FAKE_CODEX_HELP_MS: '8000' });
+  const values: Record<string, unknown> = {};
+  const keep = (more: Record<string, unknown>) => { Object.assign(values, more); recordValues(values); };
+  let app: ElectronApplication | undefined;
+  try {
+    let page: Page;
+    ({ app, page } = await open(home, apiPort(31335)));
 
-      // 1. Cody started from the window; the window's own calls to the main process timed meanwhile.
-      const delays = await page.evaluate(async (id) => {
-        const api = (window as unknown as Api).electronAPI;
-        void api.agent.start({ id, prompt: 'ECHO started' }).catch(() => {});
-        const took: number[] = [];
-        const end = Date.now() + 12_000;
-        while (Date.now() < end) {
-          const asked = performance.now();
-          await api.agent.list();
-          took.push(Math.round(performance.now() - asked));
-          await new Promise(resolve => setTimeout(resolve, 200));
-        }
-        return took;
-      }, CODY);
-      await expect.poll(() => entries().some(launched), { timeout: 30_000 }).toBe(true);
-      const launch = entries().find(launched)!;
-      const helps = entries().filter(e => e.help).length;
-      keep({ delays, slowest: Math.max(...delays), launch, helps });
-      expect.soft(Math.max(...delays), 'the window waited on codex --help').toBeLessThan(3_000);
-      expect.soft(launch.argv as string[], "Cody's launch").toContain('--approve-for-me');
-      expect.soft(helps, 'codex was asked --help more than once').toBe(1);
-      await stepShot(page, newInterface ? 'codex-help-slow-new-interface' : 'codex-help-slow');
-      keep({ entries: entries() });
-    } finally {
-      await app?.close();
-      await removeHome(home);
-    }
-  });
+    // 1. Cody started from the window; the window's own calls to the main process timed meanwhile.
+    const delays = await page.evaluate(async (id) => {
+      const api = (window as unknown as Api).electronAPI;
+      void api.agent.start({ id, prompt: 'ECHO started' }).catch(() => {});
+      const took: number[] = [];
+      const end = Date.now() + 12_000;
+      while (Date.now() < end) {
+        const asked = performance.now();
+        await api.agent.list();
+        took.push(Math.round(performance.now() - asked));
+        await new Promise(resolve => setTimeout(resolve, 200));
+      }
+      return took;
+    }, CODY);
+    await expect.poll(() => entries().some(launched), { timeout: 30_000 }).toBe(true);
+    const launch = entries().find(launched)!;
+    const helps = entries().filter(e => e.help).length;
+    keep({ delays, slowest: Math.max(...delays), launch, helps });
+    expect.soft(Math.max(...delays), 'the window waited on codex --help').toBeLessThan(3_000);
+    expect.soft(launch.argv as string[], "Cody's launch").toContain('--approve-for-me');
+    expect.soft(helps, 'codex was asked --help more than once').toBe(1);
+    await stepShot(page, 'codex-help-slow-new-interface');
+    keep({ entries: entries() });
+  } finally {
+    await app?.close();
+    await removeHome(home);
+  }
+});
 
-  test(`a codex agent not signed in on Tars's home, while the shell's CODEX_HOME is, says so${newInterface ? ' (new interface)' : ''}`, async () => {
-    test.setTimeout(3 * 60_000);
-    const { home, entries } = sandbox('codex-sign-in', { id: SID, name: 'Sid', permissionMode: 'normal' }, { FAKE_CODEX_SIGN_IN: '1' }, newInterface);
-    // The user's rc files send CODEX_HOME where their login is; Tars's home (~/.codex) has none.
-    const elsewhere = path.join(home, 'elsewhere');
-    fs.mkdirSync(elsewhere);
-    fs.writeFileSync(path.join(elsewhere, 'auth.json'), '{"auth_mode":"chatgpt"}', { mode: 0o600 });
-    for (const rc of ['.zshrc', '.zprofile', '.bashrc', '.bash_profile', '.profile']) fs.writeFileSync(path.join(home, rc), 'export CODEX_HOME="$HOME/elsewhere"\n');
-    const values: Record<string, unknown> = { newInterface };
-    const keep = (more: Record<string, unknown>) => { Object.assign(values, more); recordValues(values); };
-    let app: ElectronApplication | undefined;
-    try {
-      let page: Page;
-      ({ app, page } = await open(home, apiPort(newInterface ? 31337 : 31336), newInterface));
-      const sid = () => page.evaluate(async (id) => (await (window as unknown as Api).electronAPI.agent.list()).find(a => a.id === id), SID);
+test(`a codex agent not signed in on Tars's home, while the shell's CODEX_HOME is, says so`, async () => {
+  test.setTimeout(3 * 60_000);
+  const { home, entries } = sandbox('codex-sign-in', { id: SID, name: 'Sid', permissionMode: 'normal' }, { FAKE_CODEX_SIGN_IN: '1' });
+  // The user's rc files send CODEX_HOME where their login is; Tars's home (~/.codex) has none.
+  const elsewhere = path.join(home, 'elsewhere');
+  fs.mkdirSync(elsewhere);
+  fs.writeFileSync(path.join(elsewhere, 'auth.json'), '{"auth_mode":"chatgpt"}', { mode: 0o600 });
+  for (const rc of ['.zshrc', '.zprofile', '.bashrc', '.bash_profile', '.profile']) fs.writeFileSync(path.join(home, rc), 'export CODEX_HOME="$HOME/elsewhere"\n');
+  const values: Record<string, unknown> = {};
+  const keep = (more: Record<string, unknown>) => { Object.assign(values, more); recordValues(values); };
+  let app: ElectronApplication | undefined;
+  try {
+    let page: Page;
+    ({ app, page } = await open(home, apiPort(31337)));
+    const sid = () => page.evaluate(async (id) => (await (window as unknown as Api).electronAPI.agent.list()).find(a => a.id === id), SID);
 
-      // 2. Sid started from the window: his codex asks to sign in, and his status says why.
-      await page.evaluate((id) => (window as unknown as Api).electronAPI.agent.start({ id, prompt: 'ECHO hello' }), SID);
-      await expect.poll(() => entries().some(e => e.signInShown), { timeout: 30_000 }).toBe(true);
-      let seen: Listed | undefined;
-      await expect.poll(async () => { seen = await sid(); return seen?.status; }, { timeout: 30_000 }).toBe('error').catch(() => {});
-      const shown = entries().find(e => e.signInShown)!;
-      keep({ sid: seen, shown, logins: entries().filter(e => e.login) });
-      expect.soft(seen?.status, "Sid's status").toBe('error');
-      expect.soft(seen?.error ?? '', 'the folder Tars starts codex on').toContain('~/.codex');
-      expect.soft(seen?.error ?? '', 'the folder the shell sets').toContain('~/elsewhere');
-      expect.soft(shown.codexHome, "Sid's codex reads another home than Tars's").toBe(path.join(home, '.codex'));
-      expect.soft(entries().some(e => e.turn), 'a turn ran with no login').toBe(false);
-      await stepShot(page, newInterface ? 'codex-sign-in-new-interface' : 'codex-sign-in');
-      keep({ entries: entries() });
-    } finally {
-      await app?.close();
-      await removeHome(home);
-    }
-  });
-}
+    // 2. Sid started from the window: his codex asks to sign in, and his status says why.
+    await page.evaluate((id) => (window as unknown as Api).electronAPI.agent.start({ id, prompt: 'ECHO hello' }), SID);
+    await expect.poll(() => entries().some(e => e.signInShown), { timeout: 30_000 }).toBe(true);
+    let seen: Listed | undefined;
+    await expect.poll(async () => { seen = await sid(); return seen?.status; }, { timeout: 30_000 }).toBe('error').catch(() => {});
+    const shown = entries().find(e => e.signInShown)!;
+    keep({ sid: seen, shown, logins: entries().filter(e => e.login) });
+    expect.soft(seen?.status, "Sid's status").toBe('error');
+    expect.soft(seen?.error ?? '', 'the folder Tars starts codex on').toContain('~/.codex');
+    expect.soft(seen?.error ?? '', 'the folder the shell sets').toContain('~/elsewhere');
+    expect.soft(shown.codexHome, "Sid's codex reads another home than Tars's").toBe(path.join(home, '.codex'));
+    expect.soft(entries().some(e => e.turn), 'a turn ran with no login').toBe(false);
+    await stepShot(page, 'codex-sign-in-new-interface');
+    keep({ entries: entries() });
+  } finally {
+    await app?.close();
+    await removeHome(home);
+  }
+});

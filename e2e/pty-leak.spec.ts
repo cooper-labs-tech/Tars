@@ -27,8 +27,7 @@ const CYCLES = 12;
 
 test.skip(process.platform === 'win32', 'ConPTY has no PTY master pool to leak');
 
-for (const newInterface of [false, true]) {
-test(`starting and stopping an agent twelve times leaves no terminal behind${newInterface ? ' (new interface)' : ''}`, async () => {
+test(`starting and stopping an agent twelve times leaves no terminal behind`, async () => {
   test.setTimeout(240_000);
   const home = fs.mkdtempSync(path.join(os.tmpdir(), 'dorothy-e2e-pty-leak-'));
   const project = path.join(home, 'projects', 'harbor');
@@ -44,11 +43,11 @@ test(`starting and stopping an agent twelve times leaves no terminal behind${new
     skills: [], cliPath: cli, createdAt: '2026-10-29T08:00:00.000Z', lastActivity: '2026-10-29T08:00:00.000Z',
   }], null, 2));
   fs.writeFileSync(path.join(dir, 'projects.json'), JSON.stringify([project]));
-  fs.writeFileSync(path.join(dir, 'app-settings.json'), JSON.stringify({ autoStartAgentsOnLaunch: false, ollamaBaseUrl: 'http://127.0.0.1:9', newInterface }));
-  const values: Record<string, unknown> = { newInterface };
+  fs.writeFileSync(path.join(dir, 'app-settings.json'), JSON.stringify({ autoStartAgentsOnLaunch: false, ollamaBaseUrl: 'http://127.0.0.1:9' }));
+  const values: Record<string, unknown> = {};
 
   const app = await launchSandboxed(electron, home, {
-    env: { NODE_ENV: 'development', DOROTHY_DEV_URL: DEV_URL, DOROTHY_API_PORT: apiPort(newInterface ? 31572 : 31571), DOROTHY_E2E: '1', DOROTHY_HEALTH_EVERY_MS: '500' },
+    env: { NODE_ENV: 'development', DOROTHY_DEV_URL: DEV_URL, DOROTHY_API_PORT: apiPort(31572), DOROTHY_E2E: '1', DOROTHY_HEALTH_EVERY_MS: '500' },
   });
   try {
     const pid = app.process().pid!;
@@ -100,4 +99,3 @@ test(`starting and stopping an agent twelve times leaves no terminal behind${new
     await removeHome(home);
   }
 });
-}

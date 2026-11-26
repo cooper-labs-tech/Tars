@@ -204,7 +204,7 @@ test('a project with only Main, the new interface off, reads on Telegram and in 
   const hermes = await startFakeRelay('e2e-hermes-token');
   const port = apiPort(31444);
   const values: Record<string, unknown> = {};
-  const { app, call, atRest } = await boot(home, project, port, {}, { hermesRelayEnabled: true, newInterface: false });
+  const { app, call, atRest } = await boot(home, project, port, {}, { hermesRelayEnabled: true });
   try {
     const dist = path.resolve('electron', 'dist');
     await app.evaluate((_e, { dist, port, token }) => {

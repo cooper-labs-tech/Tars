@@ -13,7 +13,7 @@
 // - lead hands wk a task (run-task, lead's own token): wk starts on it, answers, and its turn's end is a notice
 //   Tars writes into lead's terminal ("has finished its turn");
 // - wk sends lead a message (/api/agents/lead/message, wk's own token), as send_message does.
-// Asserted, once with the classic shell and once with the new interface:
+// Asserted:
 // 1. nothing reaches lead's model while the draft is in the field; the draft is still on lead's screen; the panel
 //    says a message is waiting;
 // 2. Enter: what reaches the model is the draft, whole, and nothing of Tars's;
@@ -42,7 +42,7 @@ function resolveClaude(): string {
   return found ? fs.realpathSync(found) : '';
 }
 
-function seed(claude: string, newInterface: boolean): { home: string; project: string } {
+function seed(claude: string): { home: string; project: string } {
   const home = fs.mkdtempSync('/tmp/tars-draft-kept-');
   const project = path.join(home, 'projects', 'kept');
   for (const dir of [path.join(home, '.claude'), path.join(home, '.tars'), project]) fs.mkdirSync(dir, { recursive: true });
@@ -63,7 +63,7 @@ function seed(claude: string, newInterface: boolean): { home: string; project: s
   fs.writeFileSync(path.join(home, '.tars', 'projects.json'), JSON.stringify([project], null, 2));
   fs.writeFileSync(path.join(home, '.tars', 'hermes-connection.json'), JSON.stringify({ mode: 'local', localPort: 9, authMode: 'token' }, null, 2));
   fs.writeFileSync(path.join(home, '.tars', 'app-settings.json'), JSON.stringify({
-    autoStartAgentsOnLaunch: false, ollamaBaseUrl: 'http://127.0.0.1:9', cliPaths: { claude }, newInterface,
+    autoStartAgentsOnLaunch: false, ollamaBaseUrl: 'http://127.0.0.1:9', cliPaths: { claude },
   }, null, 2));
   return { home, project };
 }
@@ -165,167 +165,165 @@ const DRAFTS: Draft[] = [
   },
 ];
 
-for (const newInterface of [false, true]) {
-  test(`a draft in the orchestrator's field is never touched by a task-end notice or a message (${newInterface ? 'new' : 'classic'} interface)`, async () => {
-    test.skip(process.env.E2E_LIVE !== '1', 'live: E2E_LIVE=1 and a native claude');
-    test.setTimeout(20 * 60_000);
-    const CLAUDE = resolveClaude();
-    test.skip(!CLAUDE, 'no claude: set E2E_CLAUDE or put claude on PATH');
-    const shell = newInterface ? 'new' : 'classic';
-    const OUT = test.info().outputPath();
-    fs.mkdirSync(OUT, { recursive: true });
-    const FAKE_LOG = path.join(OUT, 'fake.log');
-    const FACTS = path.join(OUT, 'facts.jsonl');
-    const fact = (step: string, data: Record<string, unknown>) => fs.appendFileSync(FACTS, JSON.stringify({ t: new Date().toISOString(), step, ...data }) + '\n');
-    const { home } = seed(CLAUDE, newInterface);
-    const port = apiPort(newInterface ? 31309 : 31308);
-    const stubPort = (newInterface ? 31971 : 31970) + PORT_OFFSET;
-    const values: Record<string, unknown> = { claude: CLAUDE, shell, drafts: [] as unknown[] };
-    // A fake left by a run cut at its timeout would answer for this one, into its own log.
-    const taken = await fetch(`http://127.0.0.1:${stubPort}/`).then(() => true, () => false);
-    if (taken) throw new Error(`something already answers on ${stubPort}: a fake Messages API left by an earlier run?`);
-    const stub = spawn(process.execPath, [path.join(WT, 'e2e', 'live', 'fake-messages-api.mjs')], {
-      env: { PATH: process.env.PATH, FAKE_PORT: String(stubPort), FAKE_LOG }, stdio: 'ignore',
-    });
-    process.once('exit', () => stub.kill());
-    const requests = (): Request[] => (fs.existsSync(FAKE_LOG) ? fs.readFileSync(FAKE_LOG, 'utf8').trim().split('\n').filter(Boolean).map((l) => JSON.parse(l)) : [])
-      .filter((l: Request) => l.url && !l.side && l.stream);
-    // The whole turn: a message typed while lead works is queued by Claude Code and joined with the next one into a
-    // single turn, whose first 200 characters and last 200 (`last`, `tail`) can miss either.
-    const textOf = (r: Request) => r.full ?? `${r.last ?? ''}\n${r.tail ?? ''}`;
-    let app: ElectronApplication | undefined;
-    try {
-      await waitFor(async () => { try { await fetch(`http://127.0.0.1:${stubPort}/`); return true; } catch { return false; } }, 10_000, 'fake API up');
-      app = await launchSandboxed(electron, home, {
-        env: {
-          NODE_ENV: 'development', DOROTHY_DEV_URL: `${DEV_URL}/`, DOROTHY_API_PORT: port, DOROTHY_E2E: '1',
-          ANTHROPIC_BASE_URL: `http://127.0.0.1:${stubPort}`, ANTHROPIC_API_KEY: KEY,
-          CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC: '1', DISABLE_TELEMETRY: '1', DISABLE_ERROR_REPORTING: '1',
-        },
-      });
-      await app.context().tracing.start({ screenshots: true, snapshots: true }).catch(() => undefined);
-      // The main process's own log, which says why a message waits and when it goes in.
-      const mainLog = path.join(OUT, 'main.log');
-      app.process().stdout?.on('data', (d: Buffer) => fs.appendFileSync(mainLog, d));
-      app.process().stderr?.on('data', (d: Buffer) => fs.appendFileSync(mainLog, d));
-      const page = await app.firstWindow();
-      await page.setViewportSize({ width: 1600, height: 1000 }).catch(() => {});
-      await markWhatsNewSeen(page, WHATS_NEW_STORAGE_KEY, String(LATEST_RELEASE.id));
-      await page.goto(`${DEV_URL}/`, { waitUntil: 'domcontentloaded' });
-      await page.waitForFunction(() => !!(window as unknown as { electronAPI?: unknown }).electronAPI, null, { timeout: 300_000 });
-
-      // Every chunk a panel sends, recorded before the handler gets it.
-      await app.evaluate(({ ipcMain }) => {
-        const g = globalThis as unknown as { __rec: Array<{ at: number; id: string; input: string }> };
-        g.__rec = [];
-        const handlers = (ipcMain as unknown as { _invokeHandlers: Map<string, (...a: unknown[]) => unknown> })._invokeHandlers;
-        const h = handlers.get('agent:input')!;
-        handlers.set('agent:input', async (event: unknown, ...args: unknown[]) => {
-          const a = args[0] as { id: string; input: string };
-          g.__rec.push({ at: Date.now(), id: a?.id, input: a?.input });
-          return h(event, ...args);
-        });
-      });
-      const chunks = () => app!.evaluate(() => (globalThis as unknown as { __rec: Array<{ id: string; input: string }> }).__rec);
-
-      const ids = await app.evaluate((_e, dist) => {
-        const tokens = process.mainModule!.require(`${dist}/core/agent-tokens.js`);
-        return { lead: tokens.mintRunToken('lead').token as string, wk: tokens.mintRunToken('wk').token as string, tars: tokens.internalToken() as string };
-      }, DIST);
-      const api = (route: string, token: string, body: Record<string, unknown>, as?: string) => fetch(`http://127.0.0.1:${port}${route}`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}`, ...(as ? { 'X-Tars-Caller-Id': as } : {}) },
-        body: JSON.stringify(body),
-        signal: AbortSignal.timeout(90_000),
-      }).then(async (r) => ({ status: r.status, body: await r.json().catch(() => ({})) as Record<string, unknown> }));
-      const agentState = (id: string) => page.evaluate(async (who) => {
-        const a = (await (window as unknown as { electronAPI: { agent: { list(): Promise<Array<Record<string, unknown>>> } } }).electronAPI.agent.list()).find((x) => x.id === who)!;
-        return { status: String(a.status), session: !!a.currentSessionId, cli: !!a.cliRunning };
-      }, id);
-      const atRest = async (id: string) => waitFor(async () => { const s = await agentState(id); return s.session && s.status !== 'running'; }, 120_000, `${id} at rest`);
-      const leadScreen = () => page.locator('[data-agent-panel="lead"] .xterm-rows').innerText().catch(() => '');
-      const notice = page.locator('[data-agent-panel="lead"] [role="status"]').filter({ hasText: /waiting/i });
-
-      // Lead's session, started with a first turn and at rest.
-      const started = await api('/api/agents/lead/start', ids.tars, { prompt: 'LINES 1 boot' });
-      fact('lead started', { status: started.status, body: started.body });
-      await atRest('lead');
-      const panel = page.locator('[data-agent-panel="lead"] .xterm-screen');
-      await waitFor(async () => (await panel.count()) > 0 && (await panel.isVisible()), 60_000, "lead's panel on the Dashboard");
-      await sleep(3000);
-
-      // E2E_DRAFTS=1,3 runs only those drafts (numbered from 1), for a look at one of them.
-      const only = (process.env.E2E_DRAFTS ?? '').split(',').filter(Boolean).map(Number);
-      let n = 0;
-      for (const draft of DRAFTS) {
-        n += 1;
-        if (only.length && !only.includes(n)) continue;
-        const entry: Record<string, unknown> = { draft: draft.name };
-        (values.drafts as unknown[]).push(entry);
-        await atRest('lead');
-        await sleep(2000);
-        // Focus lead's field: a click on its prompt line, an empty field.
-        const box = (await panel.boundingBox())!;
-        await page.mouse.click(box.x + box.width / 2, box.y + box.height - 30);
-        await sleep(500);
-        await draft.type(page);
-        await sleep(800);
-        const before = requests().length;
-        const seenChunks = (await chunks()).length;
-
-        // The two messages, while the draft sits in the field.
-        const task = `LINES 1 tk${n}`;
-        const handed = await api('/api/agents/wk/run-task', ids.lead, { task }, 'lead');
-        const sent = await api('/api/agents/lead/message', ids.wk, { message: `SENDMSG${n} the review notes are in the folder` }, 'wk');
-        entry.handed = { status: handed.status, task: handed.body.taskId ?? handed.body.error };
-        entry.sent = { status: sent.status, body: sent.body };
-        // wk's task reaches its model and its turn ends: the notice is due in lead's terminal.
-        // wk's own turn: the task, which the notice quotes too, so not the notice.
-        const wksTurn = (r: Request) => textOf(r).includes(`tk${n}`) && !textOf(r).includes(NOTICE);
-        await waitFor(() => requests().some(wksTurn), 120_000, `wk took task tk${n}`);
-        await atRest('wk');
-        await sleep(12_000);
-
-        // 1. Nothing reached lead's model, the draft is on screen, the panel says a message waits.
-        const meanwhile = requests().slice(before).filter((r) => !wksTurn(r));
-        const screen = await leadScreen();
-        entry.whileInField = {
-          requests: meanwhile.map(textOf),
-          draftOnScreen: screen.includes(draft.onScreen),
-          notice: (await notice.count()) > 0 ? await notice.first().innerText() : null,
-        };
-        await stepShot(page, `${shell}-${n}-waiting`);
-        expect(meanwhile.map(textOf), `${draft.name}: nothing reaches lead's model while the draft is in its field`).toEqual([]);
-        expect(screen, `${draft.name}: the draft is still in lead's field`).toContain(draft.onScreen);
-        await expect(notice.first(), `${draft.name}: the panel says a message is waiting`).toBeVisible({ timeout: 10_000 });
-
-        // 2. The person sends: the draft, whole, and nothing of Tars's.
-        await page.keyboard.press('Enter');
-        const at = await waitFor(() => {
-          const i = requests().findIndex((r, k) => k >= before && draft.carried.every((piece) => textOf(r).includes(piece)));
-          return i >= 0 ? i + 1 : 0;
-        }, 60_000, `${draft.name} submitted`) - 1;
-        const own = requests()[at];
-        entry.submitted = textOf(own);
-        expect(textOf(own), `${draft.name}: the submission carries nothing of Tars's`).not.toContain(NOTICE);
-        expect(textOf(own)).not.toContain(`SENDMSG${n}`);
-
-        // 3. Then the notice and the message, each after the draft.
-        await waitFor(() => requests().slice(at + 1).some((r) => textOf(r).includes(`SENDMSG${n}`)), 120_000, `SENDMSG${n} delivered after the draft`);
-        await waitFor(() => requests().slice(at + 1).some((r) => textOf(r).includes(NOTICE) && textOf(r).includes('Wren')), 120_000, `the notice of tk${n} delivered after the draft`);
-        entry.deliveredAfter = requests().slice(at + 1).map(textOf);
-        entry.chunks = (await chunks()).slice(seenChunks).filter((c) => c.id === 'lead').map((c) => JSON.stringify(c.input));
-        fact(`draft ${n} done`, entry);
-        await expect(notice).toHaveCount(0, { timeout: 30_000 });
-      }
-      recordValues({ [shell]: values });
-    } finally {
-      recordValues({ [`${shell}-partial`]: values });
-      if (app) {
-        await app.context().tracing.stop({ path: path.join(OUT, 'app-trace.zip') }).catch(() => undefined);
-        await app.close().catch(() => undefined);
-      }
-      stub.kill();
-    }
+test(`a draft in the orchestrator's field is never touched by a task-end notice or a message`, async () => {
+  test.skip(process.env.E2E_LIVE !== '1', 'live: E2E_LIVE=1 and a native claude');
+  test.setTimeout(20 * 60_000);
+  const CLAUDE = resolveClaude();
+  test.skip(!CLAUDE, 'no claude: set E2E_CLAUDE or put claude on PATH');
+  const shell = 'new';
+  const OUT = test.info().outputPath();
+  fs.mkdirSync(OUT, { recursive: true });
+  const FAKE_LOG = path.join(OUT, 'fake.log');
+  const FACTS = path.join(OUT, 'facts.jsonl');
+  const fact = (step: string, data: Record<string, unknown>) => fs.appendFileSync(FACTS, JSON.stringify({ t: new Date().toISOString(), step, ...data }) + '\n');
+  const { home } = seed(CLAUDE);
+  const port = apiPort(31309);
+  const stubPort = 31971 + PORT_OFFSET;
+  const values: Record<string, unknown> = { claude: CLAUDE, shell, drafts: [] as unknown[] };
+  // A fake left by a run cut at its timeout would answer for this one, into its own log.
+  const taken = await fetch(`http://127.0.0.1:${stubPort}/`).then(() => true, () => false);
+  if (taken) throw new Error(`something already answers on ${stubPort}: a fake Messages API left by an earlier run?`);
+  const stub = spawn(process.execPath, [path.join(WT, 'e2e', 'live', 'fake-messages-api.mjs')], {
+    env: { PATH: process.env.PATH, FAKE_PORT: String(stubPort), FAKE_LOG }, stdio: 'ignore',
   });
-}
+  process.once('exit', () => stub.kill());
+  const requests = (): Request[] => (fs.existsSync(FAKE_LOG) ? fs.readFileSync(FAKE_LOG, 'utf8').trim().split('\n').filter(Boolean).map((l) => JSON.parse(l)) : [])
+    .filter((l: Request) => l.url && !l.side && l.stream);
+  // The whole turn: a message typed while lead works is queued by Claude Code and joined with the next one into a
+  // single turn, whose first 200 characters and last 200 (`last`, `tail`) can miss either.
+  const textOf = (r: Request) => r.full ?? `${r.last ?? ''}\n${r.tail ?? ''}`;
+  let app: ElectronApplication | undefined;
+  try {
+    await waitFor(async () => { try { await fetch(`http://127.0.0.1:${stubPort}/`); return true; } catch { return false; } }, 10_000, 'fake API up');
+    app = await launchSandboxed(electron, home, {
+      env: {
+        NODE_ENV: 'development', DOROTHY_DEV_URL: `${DEV_URL}/`, DOROTHY_API_PORT: port, DOROTHY_E2E: '1',
+        ANTHROPIC_BASE_URL: `http://127.0.0.1:${stubPort}`, ANTHROPIC_API_KEY: KEY,
+        CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC: '1', DISABLE_TELEMETRY: '1', DISABLE_ERROR_REPORTING: '1',
+      },
+    });
+    await app.context().tracing.start({ screenshots: true, snapshots: true }).catch(() => undefined);
+    // The main process's own log, which says why a message waits and when it goes in.
+    const mainLog = path.join(OUT, 'main.log');
+    app.process().stdout?.on('data', (d: Buffer) => fs.appendFileSync(mainLog, d));
+    app.process().stderr?.on('data', (d: Buffer) => fs.appendFileSync(mainLog, d));
+    const page = await app.firstWindow();
+    await page.setViewportSize({ width: 1600, height: 1000 }).catch(() => {});
+    await markWhatsNewSeen(page, WHATS_NEW_STORAGE_KEY, String(LATEST_RELEASE.id));
+    await page.goto(`${DEV_URL}/`, { waitUntil: 'domcontentloaded' });
+    await page.waitForFunction(() => !!(window as unknown as { electronAPI?: unknown }).electronAPI, null, { timeout: 300_000 });
+
+    // Every chunk a panel sends, recorded before the handler gets it.
+    await app.evaluate(({ ipcMain }) => {
+      const g = globalThis as unknown as { __rec: Array<{ at: number; id: string; input: string }> };
+      g.__rec = [];
+      const handlers = (ipcMain as unknown as { _invokeHandlers: Map<string, (...a: unknown[]) => unknown> })._invokeHandlers;
+      const h = handlers.get('agent:input')!;
+      handlers.set('agent:input', async (event: unknown, ...args: unknown[]) => {
+        const a = args[0] as { id: string; input: string };
+        g.__rec.push({ at: Date.now(), id: a?.id, input: a?.input });
+        return h(event, ...args);
+      });
+    });
+    const chunks = () => app!.evaluate(() => (globalThis as unknown as { __rec: Array<{ id: string; input: string }> }).__rec);
+
+    const ids = await app.evaluate((_e, dist) => {
+      const tokens = process.mainModule!.require(`${dist}/core/agent-tokens.js`);
+      return { lead: tokens.mintRunToken('lead').token as string, wk: tokens.mintRunToken('wk').token as string, tars: tokens.internalToken() as string };
+    }, DIST);
+    const api = (route: string, token: string, body: Record<string, unknown>, as?: string) => fetch(`http://127.0.0.1:${port}${route}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}`, ...(as ? { 'X-Tars-Caller-Id': as } : {}) },
+      body: JSON.stringify(body),
+      signal: AbortSignal.timeout(90_000),
+    }).then(async (r) => ({ status: r.status, body: await r.json().catch(() => ({})) as Record<string, unknown> }));
+    const agentState = (id: string) => page.evaluate(async (who) => {
+      const a = (await (window as unknown as { electronAPI: { agent: { list(): Promise<Array<Record<string, unknown>>> } } }).electronAPI.agent.list()).find((x) => x.id === who)!;
+      return { status: String(a.status), session: !!a.currentSessionId, cli: !!a.cliRunning };
+    }, id);
+    const atRest = async (id: string) => waitFor(async () => { const s = await agentState(id); return s.session && s.status !== 'running'; }, 120_000, `${id} at rest`);
+    const leadScreen = () => page.locator('[data-agent-panel="lead"] .xterm-rows').innerText().catch(() => '');
+    const notice = page.locator('[data-agent-panel="lead"] [role="status"]').filter({ hasText: /waiting/i });
+
+    // Lead's session, started with a first turn and at rest.
+    const started = await api('/api/agents/lead/start', ids.tars, { prompt: 'LINES 1 boot' });
+    fact('lead started', { status: started.status, body: started.body });
+    await atRest('lead');
+    const panel = page.locator('[data-agent-panel="lead"] .xterm-screen');
+    await waitFor(async () => (await panel.count()) > 0 && (await panel.isVisible()), 60_000, "lead's panel on the Dashboard");
+    await sleep(3000);
+
+    // E2E_DRAFTS=1,3 runs only those drafts (numbered from 1), for a look at one of them.
+    const only = (process.env.E2E_DRAFTS ?? '').split(',').filter(Boolean).map(Number);
+    let n = 0;
+    for (const draft of DRAFTS) {
+      n += 1;
+      if (only.length && !only.includes(n)) continue;
+      const entry: Record<string, unknown> = { draft: draft.name };
+      (values.drafts as unknown[]).push(entry);
+      await atRest('lead');
+      await sleep(2000);
+      // Focus lead's field: a click on its prompt line, an empty field.
+      const box = (await panel.boundingBox())!;
+      await page.mouse.click(box.x + box.width / 2, box.y + box.height - 30);
+      await sleep(500);
+      await draft.type(page);
+      await sleep(800);
+      const before = requests().length;
+      const seenChunks = (await chunks()).length;
+
+      // The two messages, while the draft sits in the field.
+      const task = `LINES 1 tk${n}`;
+      const handed = await api('/api/agents/wk/run-task', ids.lead, { task }, 'lead');
+      const sent = await api('/api/agents/lead/message', ids.wk, { message: `SENDMSG${n} the review notes are in the folder` }, 'wk');
+      entry.handed = { status: handed.status, task: handed.body.taskId ?? handed.body.error };
+      entry.sent = { status: sent.status, body: sent.body };
+      // wk's task reaches its model and its turn ends: the notice is due in lead's terminal.
+      // wk's own turn: the task, which the notice quotes too, so not the notice.
+      const wksTurn = (r: Request) => textOf(r).includes(`tk${n}`) && !textOf(r).includes(NOTICE);
+      await waitFor(() => requests().some(wksTurn), 120_000, `wk took task tk${n}`);
+      await atRest('wk');
+      await sleep(12_000);
+
+      // 1. Nothing reached lead's model, the draft is on screen, the panel says a message waits.
+      const meanwhile = requests().slice(before).filter((r) => !wksTurn(r));
+      const screen = await leadScreen();
+      entry.whileInField = {
+        requests: meanwhile.map(textOf),
+        draftOnScreen: screen.includes(draft.onScreen),
+        notice: (await notice.count()) > 0 ? await notice.first().innerText() : null,
+      };
+      await stepShot(page, `${shell}-${n}-waiting`);
+      expect(meanwhile.map(textOf), `${draft.name}: nothing reaches lead's model while the draft is in its field`).toEqual([]);
+      expect(screen, `${draft.name}: the draft is still in lead's field`).toContain(draft.onScreen);
+      await expect(notice.first(), `${draft.name}: the panel says a message is waiting`).toBeVisible({ timeout: 10_000 });
+
+      // 2. The person sends: the draft, whole, and nothing of Tars's.
+      await page.keyboard.press('Enter');
+      const at = await waitFor(() => {
+        const i = requests().findIndex((r, k) => k >= before && draft.carried.every((piece) => textOf(r).includes(piece)));
+        return i >= 0 ? i + 1 : 0;
+      }, 60_000, `${draft.name} submitted`) - 1;
+      const own = requests()[at];
+      entry.submitted = textOf(own);
+      expect(textOf(own), `${draft.name}: the submission carries nothing of Tars's`).not.toContain(NOTICE);
+      expect(textOf(own)).not.toContain(`SENDMSG${n}`);
+
+      // 3. Then the notice and the message, each after the draft.
+      await waitFor(() => requests().slice(at + 1).some((r) => textOf(r).includes(`SENDMSG${n}`)), 120_000, `SENDMSG${n} delivered after the draft`);
+      await waitFor(() => requests().slice(at + 1).some((r) => textOf(r).includes(NOTICE) && textOf(r).includes('Wren')), 120_000, `the notice of tk${n} delivered after the draft`);
+      entry.deliveredAfter = requests().slice(at + 1).map(textOf);
+      entry.chunks = (await chunks()).slice(seenChunks).filter((c) => c.id === 'lead').map((c) => JSON.stringify(c.input));
+      fact(`draft ${n} done`, entry);
+      await expect(notice).toHaveCount(0, { timeout: 30_000 });
+    }
+    recordValues({ [shell]: values });
+  } finally {
+    recordValues({ [`${shell}-partial`]: values });
+    if (app) {
+      await app.context().tracing.stop({ path: path.join(OUT, 'app-trace.zip') }).catch(() => undefined);
+      await app.close().catch(() => undefined);
+    }
+    stub.kill();
+  }
+});

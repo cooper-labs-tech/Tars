@@ -14,7 +14,7 @@ import { DEV_URL, apiPort } from './ports.mjs';
  * stops at its onboarding, which reports nothing). It runs as a grok agent, a CLI with no hooks, so its reports
  * are what moves the agent.
  *
- * Asserted, with the classic shell and with the new interface:
+ * Asserted:
  * 1. Tars answers the probe, from the main process, with the states and kinds it reads (the stand-in logs what
  *    reached it, and goes silent without an answer).
  * 2. The agent follows the reports: running, then waiting on a question with its message kept for the window,
@@ -51,72 +51,70 @@ setTimeout(() => {
 setInterval(() => {}, 1 << 30);
 `;
 
-for (const newInterface of [false, true]) {
-  const shell = newInterface ? ' (new interface)' : '';
-  test(`a cli's osc 7501 probe is answered and its reports move an agent tars cannot follow otherwise${shell}`, async () => {
-    test.setTimeout(360_000);
-    const home = fs.mkdtempSync(path.join(os.tmpdir(), `dorothy-e2e-program-status-${newInterface ? 'ni' : 'classic'}-`));
-    const project = path.join(home, 'projects', 'demo');
-    const dir = path.join(home, '.tars');
-    for (const d of [project, dir]) fs.mkdirSync(d, { recursive: true });
-    const cli = path.join(home, 'bin', 'grok');
-    const log = path.join(home, 'stand-in.log');
-    fs.mkdirSync(path.dirname(cli), { recursive: true });
-    // The stand-in takes its log as its first argument, whatever grok's own flags follow.
-    fs.writeFileSync(cli, STAND_IN.replace("process.argv[2]", JSON.stringify(log)), { mode: 0o755 });
-    fs.writeFileSync(path.join(dir, 'agents.json'), JSON.stringify([{ id: 'x-grok', name: 'Grok Agent', character: 'robot', provider: 'grok', status: 'idle', role: 'worker', projectPath: project, skills: [], permissionMode: 'bypass', cliPath: cli, createdAt: '2026-10-22T08:00:00.000Z', lastActivity: '2026-10-22T08:00:00.000Z' }]));
-    fs.writeFileSync(path.join(dir, 'projects.json'), JSON.stringify([project]));
-    fs.writeFileSync(path.join(dir, 'app-settings.json'), JSON.stringify({ autoStartAgentsOnLaunch: false, ollamaBaseUrl: 'http://127.0.0.1:9', newInterface, grokEnabled: true, cliPaths: { grok: cli } }));
-    const app = await launchSandboxed(electron, home, {
-      env: { NODE_ENV: 'development', DOROTHY_DEV_URL: DEV_URL, DOROTHY_API_PORT: apiPort(31506 + (newInterface ? 1 : 0)), DOROTHY_E2E: '1' },
-    });
-    const values: Record<string, unknown> = { newInterface, home };
-    const errors: string[] = [];
-    try {
-      const page = await app.firstWindow();
-      listenForErrors(page, errors);
-      await markWhatsNewSeen(page, WHATS_NEW_STORAGE_KEY, String(LATEST_RELEASE.id));
-      await page.goto(`${DEV_URL}/agents`, { waitUntil: 'domcontentloaded' });
-      await page.waitForFunction(() => !!(window as unknown as { electronAPI?: unknown }).electronAPI, undefined, { timeout: 60_000 });
-      await page.evaluate(() => {
-        const g = window as unknown as { __ticks: unknown[]; electronAPI: { agent: { onTick(cb: (list: Array<{ id: string; programStatus?: unknown }>) => void): void } } };
-        g.__ticks = [];
-        g.electronAPI.agent.onTick((list) => { const a = list.find((x) => x.id === 'x-grok'); if (a?.programStatus) g.__ticks.push(a.programStatus); });
-      });
-      type Seen = { status: string; waitingReason?: string; programStatus?: { state: string; kind?: string; msg?: string } } | null;
-      const read = () => page.evaluate(() => (window as unknown as { electronAPI: { agent: { get(id: string): Promise<unknown> } } }).electronAPI.agent.get('x-grok')) as Promise<Seen>;
-      await page.evaluate(() => (window as unknown as { electronAPI: { agent: { start(p: { id: string; prompt: string }): Promise<unknown> } } }).electronAPI.agent.start({ id: 'x-grok', prompt: 'go' }));
-
-      const seen: string[] = [];
-      let blocked: Seen = null;
-      const deadline = Date.now() + 40_000;
-      while (Date.now() < deadline) {
-        const a = await read();
-        const key = `${a?.status}/${a?.waitingReason ?? ''}/${a?.programStatus?.state ?? '-'}`;
-        if (seen.at(-1) !== key) seen.push(key);
-        if (a?.programStatus?.state === 'blocked') blocked = a;
-        if (a?.programStatus?.state === 'done') break;
-        await page.waitForTimeout(150);
-      }
-      values.statesSeen = seen;
-      values.blocked = blocked;
-      values.standIn = fs.existsSync(log) ? fs.readFileSync(log, 'utf8').trim().split('\n').map((l) => JSON.parse(l)) : null;
-      values.final = await read();
-      await expect.poll(() => page.evaluate(() => ((window as unknown as { __ticks: Array<{ state: string }> }).__ticks.at(-1))?.state), { timeout: 10_000 }).toBe('done');
-      const ticked = await page.evaluate(() => (window as unknown as { __ticks: Array<{ state: string; kind?: string; msg?: string }> }).__ticks);
-      values.ticked = ticked;
-      recordValues(values);
-
-      expect(values.standIn, 'what reached the stand-in').toEqual([{ answered: true, reply: '\x1b]7501;?:states=idle,working,done,blocked,error:kinds=permission,question,auth' }]);
-      expect(seen).toContain('running//working');
-      expect(blocked).toMatchObject({ status: 'waiting', waitingReason: 'permission', programStatus: { state: 'blocked', kind: 'question', msg: 'Which branch?' } });
-      expect(values.final).toMatchObject({ status: 'idle', programStatus: { state: 'done' } });
-      expect(ticked).toContainEqual(expect.objectContaining({ state: 'blocked', kind: 'question', msg: 'Which branch?' }));
-      expect(errors).toEqual([]);
-    } finally {
-      recordValues(values);
-      await app.close().catch(() => undefined);
-      await removeHome(home);
-    }
+const shell = ' (new interface)';
+test(`a cli's osc 7501 probe is answered and its reports move an agent tars cannot follow otherwise${shell}`, async () => {
+  test.setTimeout(360_000);
+  const home = fs.mkdtempSync(path.join(os.tmpdir(), `dorothy-e2e-program-status-ni-`));
+  const project = path.join(home, 'projects', 'demo');
+  const dir = path.join(home, '.tars');
+  for (const d of [project, dir]) fs.mkdirSync(d, { recursive: true });
+  const cli = path.join(home, 'bin', 'grok');
+  const log = path.join(home, 'stand-in.log');
+  fs.mkdirSync(path.dirname(cli), { recursive: true });
+  // The stand-in takes its log as its first argument, whatever grok's own flags follow.
+  fs.writeFileSync(cli, STAND_IN.replace("process.argv[2]", JSON.stringify(log)), { mode: 0o755 });
+  fs.writeFileSync(path.join(dir, 'agents.json'), JSON.stringify([{ id: 'x-grok', name: 'Grok Agent', character: 'robot', provider: 'grok', status: 'idle', role: 'worker', projectPath: project, skills: [], permissionMode: 'bypass', cliPath: cli, createdAt: '2026-10-22T08:00:00.000Z', lastActivity: '2026-10-22T08:00:00.000Z' }]));
+  fs.writeFileSync(path.join(dir, 'projects.json'), JSON.stringify([project]));
+  fs.writeFileSync(path.join(dir, 'app-settings.json'), JSON.stringify({ autoStartAgentsOnLaunch: false, ollamaBaseUrl: 'http://127.0.0.1:9', grokEnabled: true, cliPaths: { grok: cli } }));
+  const app = await launchSandboxed(electron, home, {
+    env: { NODE_ENV: 'development', DOROTHY_DEV_URL: DEV_URL, DOROTHY_API_PORT: apiPort(31506 + 1), DOROTHY_E2E: '1' },
   });
-}
+  const values: Record<string, unknown> = { home };
+  const errors: string[] = [];
+  try {
+    const page = await app.firstWindow();
+    listenForErrors(page, errors);
+    await markWhatsNewSeen(page, WHATS_NEW_STORAGE_KEY, String(LATEST_RELEASE.id));
+    await page.goto(`${DEV_URL}/agents`, { waitUntil: 'domcontentloaded' });
+    await page.waitForFunction(() => !!(window as unknown as { electronAPI?: unknown }).electronAPI, undefined, { timeout: 60_000 });
+    await page.evaluate(() => {
+      const g = window as unknown as { __ticks: unknown[]; electronAPI: { agent: { onTick(cb: (list: Array<{ id: string; programStatus?: unknown }>) => void): void } } };
+      g.__ticks = [];
+      g.electronAPI.agent.onTick((list) => { const a = list.find((x) => x.id === 'x-grok'); if (a?.programStatus) g.__ticks.push(a.programStatus); });
+    });
+    type Seen = { status: string; waitingReason?: string; programStatus?: { state: string; kind?: string; msg?: string } } | null;
+    const read = () => page.evaluate(() => (window as unknown as { electronAPI: { agent: { get(id: string): Promise<unknown> } } }).electronAPI.agent.get('x-grok')) as Promise<Seen>;
+    await page.evaluate(() => (window as unknown as { electronAPI: { agent: { start(p: { id: string; prompt: string }): Promise<unknown> } } }).electronAPI.agent.start({ id: 'x-grok', prompt: 'go' }));
+
+    const seen: string[] = [];
+    let blocked: Seen = null;
+    const deadline = Date.now() + 40_000;
+    while (Date.now() < deadline) {
+      const a = await read();
+      const key = `${a?.status}/${a?.waitingReason ?? ''}/${a?.programStatus?.state ?? '-'}`;
+      if (seen.at(-1) !== key) seen.push(key);
+      if (a?.programStatus?.state === 'blocked') blocked = a;
+      if (a?.programStatus?.state === 'done') break;
+      await page.waitForTimeout(150);
+    }
+    values.statesSeen = seen;
+    values.blocked = blocked;
+    values.standIn = fs.existsSync(log) ? fs.readFileSync(log, 'utf8').trim().split('\n').map((l) => JSON.parse(l)) : null;
+    values.final = await read();
+    await expect.poll(() => page.evaluate(() => ((window as unknown as { __ticks: Array<{ state: string }> }).__ticks.at(-1))?.state), { timeout: 10_000 }).toBe('done');
+    const ticked = await page.evaluate(() => (window as unknown as { __ticks: Array<{ state: string; kind?: string; msg?: string }> }).__ticks);
+    values.ticked = ticked;
+    recordValues(values);
+
+    expect(values.standIn, 'what reached the stand-in').toEqual([{ answered: true, reply: '\x1b]7501;?:states=idle,working,done,blocked,error:kinds=permission,question,auth' }]);
+    expect(seen).toContain('running//working');
+    expect(blocked).toMatchObject({ status: 'waiting', waitingReason: 'permission', programStatus: { state: 'blocked', kind: 'question', msg: 'Which branch?' } });
+    expect(values.final).toMatchObject({ status: 'idle', programStatus: { state: 'done' } });
+    expect(ticked).toContainEqual(expect.objectContaining({ state: 'blocked', kind: 'question', msg: 'Which branch?' }));
+    expect(errors).toEqual([]);
+  } finally {
+    recordValues(values);
+    await app.close().catch(() => undefined);
+    await removeHome(home);
+  }
+});
