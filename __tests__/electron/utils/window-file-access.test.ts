@@ -69,6 +69,12 @@ import * as path from 'node:path';
  *      starts with two dots (`..x`) taken for one outside the home.
  *  W12 also: a vault in Obsidian's own iCloud folder
  *      (Mobile Documents/iCloud~md~obsidian/Documents) refused.
+ * Added before their code after the Audit's M3 on #648 (2026-11-26):
+ *  W11 also: a documents folder that is another name for a refused one (a
+ *      link, or on Windows a junction, where the documents folder would be)
+ *      exempts what lies in the refused one: an application folder of
+ *      ~/Library or AppData taken for a project and read, or a markdown file
+ *      in a folder of credentials read through a link in a project.
  */
 
 import { windowMayRead, windowMayWrite, localFileServes, mayBeProject } from '../../../electron/utils/window-file-access';
@@ -229,6 +235,34 @@ describe('the project rule and the home\'s other folders (the Audit\'s L3 on #64
     }
     const doc = put(at('Library', 'Mobile Documents', 'com~apple~CloudDocs', 'work', 'src', 'a.ts'));
     expect(windowMayRead(doc, [at('Library', 'Mobile Documents', 'com~apple~CloudDocs', 'work')])).toBe(true);
+  });
+
+  it('W11 also: a documents folder that is another name for a refused one exempts nothing', () => {
+    const app = put(at('Library', 'Application Support', 'SomeApp', 'notes.md'), 'a token');
+    const roaming = put(at('AppData', 'Roaming', 'gcloud', 'notes.md'), 'a token');
+    const aws = put(at('.aws', 'notes.md'), 'a token');
+    const obsidianDocs = at('Library', 'Mobile Documents', 'iCloud~md~obsidian', 'Documents');
+    const cloud = at('Library', 'CloudStorage');
+    // A junction where the type is read (Windows), a link elsewhere.
+    const pointing = (link: string, to: string, check: () => void) => {
+      fs.mkdirSync(path.dirname(link), { recursive: true });
+      fs.symlinkSync(to, link, 'junction');
+      try { check(); } finally { fs.unlinkSync(link); }
+    };
+    for (const link of [obsidianDocs, cloud]) {
+      pointing(link, at('Library'), () => {
+        expect(mayBeProject(path.dirname(app)), link).toBe(false);
+        expect(windowMayRead(app, [path.dirname(app)]), link).toBe(false);
+      });
+    }
+    pointing(cloud, at('AppData'), () => {
+      expect(mayBeProject(path.dirname(roaming))).toBe(false);
+      expect(windowMayRead(roaming, [path.dirname(roaming)])).toBe(false);
+    });
+    fs.symlinkSync(aws, path.join(project, 'notes.md'));
+    pointing(obsidianDocs, at('.aws'), () => {
+      expect(windowMayRead(path.join(project, 'notes.md'), [project])).toBe(false);
+    });
   });
 });
 

@@ -24,6 +24,11 @@ import * as path from 'node:path';
  * R5. Over-correction: a project gone from the disk is refused as one that cannot be followed,
  *     instead of scanned and said `gone`, as the rule judges a missing folder by the folder it
  *     would be in.
+ * Added before its code after the Audit's L4 on #648 (2026-11-26):
+ * R6. A folder of credentials of the home that is another name for a folder elsewhere, and a
+ *     project in that folder named where it really lies: review:repositories scans it and
+ *     review:search searches it (its repositories' names, branches, changed files), since they
+ *     judge the place by its name only, while every other use refuses it.
  *
  * Real git, real folders in the suite's throwaway home, the real handlers.
  */
@@ -115,6 +120,28 @@ describe('Review and the project rule', () => {
     await until(() => events.some((e) => e.scanId === answer.scanId && e.kind === 'done'));
     expect(events.some((e) => e.scanId === answer.scanId && e.kind === 'found' && e.repo === allowedRepo)).toBe(true);
     expect(refuseUnknownRepository(allowedRepo)).toBeNull();
+  });
+
+  it('R6. a project where a folder of credentials of the home really lies is neither scanned nor searched', async () => {
+    const elsewhere = path.join(home, 'work', 'kept-config');
+    const inside = repoAt(path.join(elsewhere, 'inner', 'innerrepo'));
+    const config = path.join(home, '.config');
+    fs.rmSync(config, { recursive: true, force: true });
+    fs.symlinkSync(elsewhere, config, 'junction');
+    try {
+      const project = path.dirname(inside);
+      fs.writeFileSync(path.join(DATA_DIR, 'projects.json'), JSON.stringify([allowed, project]));
+      const answer = await handlers.get('review:repositories')!({}, { projectPath: project, refresh: true }) as { code?: string; scanId?: string };
+      expect(answer.scanId).toBeUndefined();
+      expect(answer.code).toBe('refused_project');
+      const search = await handlers.get('review:search')!({}, { query: 'repo' }) as { searchId?: string };
+      await until(() => events.some((e) => e.searchId === search.searchId && e.kind === 'done' && e.channel === 'review:search:event'));
+      const found = JSON.stringify(events.filter((e) => e.channel === 'review:search:event'));
+      expect(found).not.toContain('innerrepo');
+      expect(found).toContain('allowedrepo');
+    } finally {
+      fs.unlinkSync(config);
+    }
   });
 
   it('R5. a project gone from the disk is still scanned, and said gone', async () => {
