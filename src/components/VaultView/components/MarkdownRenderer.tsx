@@ -2,6 +2,7 @@
 
 import React from 'react';
 import { reportLinkTarget } from '@/lib/report-links';
+import { localFileUrl } from '@/lib/local-file-url';
 
 /**
  * A project's report, which an agent wrote (2.0.4, #471): a link opens a file of its folder here or a page in the
@@ -64,9 +65,13 @@ export function isSafeUrl(href: string): string {
   return '#';
 }
 
-function resolveLocalSrc(src: string): string {
+/**
+ * A local picture is read through this Tars's own API (localFileUrl). With no port known it has no source, and shows
+ * its alt text as a missing picture does.
+ */
+function resolveLocalSrc(src: string): string | undefined {
   if (src.startsWith('/') || /^[A-Z]:\\/.test(src)) {
-    return `http://127.0.0.1:31415/api/local-file?path=${encodeURIComponent(src)}`;
+    return localFileUrl(src) ?? undefined;
   }
   return src;
 }
