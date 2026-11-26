@@ -130,16 +130,19 @@ export const InferenceEndpointsSection = () => {
   };
 
   // A call that fails is said under its row, as a refusal is: never an uncaught rejection (the Audit's I-2 on PR 599).
-  const approve = async (id: string) => {
+  // Approve sends what the row and its notice showed (`seen`, #596 at c31811361): main approves only that. When an
+  // agent changed the endpoint since, main refuses in its words, said under the row, and the list is read again, so
+  // the notice shows the new change.
+  const approve = async (e: EndpointView) => {
     if (!api) return;
     let r: Awaited<ReturnType<typeof api.approve>>;
     try {
-      r = await api.approve(id);
+      r = await api.approve(e.id, { baseUrl: e.baseUrl, extraHeaders: e.extraHeaders ?? {} });
     } catch (err) {
-      setRowError(m => ({ ...m, [id]: reasonOf(err) }));
+      setRowError(m => ({ ...m, [e.id]: reasonOf(err) }));
       return;
     }
-    setRowError(m => ({ ...m, [id]: r.ok ? '' : r.error }));
+    setRowError(m => ({ ...m, [e.id]: r.ok ? '' : r.error }));
     void reload();
   };
 
@@ -256,7 +259,7 @@ export const InferenceEndpointsSection = () => {
 
             {!e.approved && !baseUrlWaits && !headersWait && (
               <Notice answers={<>
-                <Button size="sm" variant="primary" className="font-mono lowercase" onClick={() => { void approve(e.id); }}>approve</Button>
+                <Button size="sm" variant="primary" className="font-mono lowercase" onClick={() => { void approve(e); }}>approve</Button>
                 <Button size="sm" className="font-mono lowercase" onClick={() => askRemove(e)}>remove</Button>
               </>}>
                 <p>{`${e.changedBy?.agentName ?? 'An agent'} added it${e.changedBy ? ` at ${clockOf(e.changedBy.at)}` : ''}. No agent can use it until you approve it here: agents cannot approve an endpoint.`}</p>
@@ -266,10 +269,10 @@ export const InferenceEndpointsSection = () => {
             {baseUrlWaits && (
               <Notice answers={<>
                 {!e.keySet && <Button size="sm" className="font-mono lowercase" onClick={() => setForm({ id: e.id })}>set the key</Button>}
-                <Button size="sm" variant="primary" className="font-mono lowercase" onClick={() => { void approve(e.id); }}>approve the new URL</Button>
+                <Button size="sm" variant="primary" className="font-mono lowercase" onClick={() => { void approve(e); }}>approve the new URL</Button>
                 <Button size="sm" className="font-mono lowercase" onClick={() => { void putBack(e); }}>put back the approved one</Button>
               </>}>
-                <p>{`${e.changedBy?.agentName ?? 'An agent'} changed its base URL${headersWait ? ' and its extra headers' : ''}${e.changedBy ? ` at ${clockOf(e.changedBy.at)}` : ''}.${e.keySet ? ' Requests still go to the approved one until you approve the new one.' : ' Its key went with the old address: set it again, then approve the new one.'}`}</p>
+                <p>{`${e.changedBy?.agentName ?? 'An agent'} changed its base URL${headersWait ? ' and its extra headers' : ''}${e.changedBy ? ` at ${clockOf(e.changedBy.at)}` : ''}. No agent can use this endpoint until you approve the new one, or put back the approved one.${e.keySet ? '' : ' Its key went with the old address: set it again before you approve.'}`}</p>
                 <p className="font-mono text-[11px] text-text-secondary">{`approved   ${e.approvedBaseUrl}`}</p>
                 <p className="font-mono text-[11px] text-status-waiting">{`new        ${e.baseUrl}`}</p>
                 {headerLines}
@@ -278,7 +281,7 @@ export const InferenceEndpointsSection = () => {
 
             {headersWait && !baseUrlWaits && (
               <Notice answers={<>
-                <Button size="sm" variant="primary" className="font-mono lowercase" onClick={() => { void approve(e.id); }}>approve the new headers</Button>
+                <Button size="sm" variant="primary" className="font-mono lowercase" onClick={() => { void approve(e); }}>approve the new headers</Button>
                 <Button size="sm" className="font-mono lowercase" onClick={() => { void putBack(e); }}>put back the approved ones</Button>
               </>}>
                 <p>{`${e.changedBy?.agentName ?? 'An agent'} changed its extra headers${e.changedBy ? ` at ${clockOf(e.changedBy.at)}` : ''}. No agent can use this endpoint until you approve them, or put back the approved ones. Its key stays: the address did not change.`}</p>

@@ -443,7 +443,8 @@ test('the traces window: an endpoint added with its key never shown back, plain 
     await stepShot(page, '7-moved-address');
     keep({ repointed, waitingRow, waitingView: (await views()).find(v => v.id === added.id) });
     expect.soft(waitingRow, 'the key line').toContain('key to set again: it went with the old address');
-    expect.soft(waitingRow, 'the notice').toContain('Its key went with the old address: set it again, then approve the new one.');
+    // What main does while the address waits: it takes no request (endpointTarget refuses it), the window says so.
+    expect.soft(waitingRow, 'the notice').toContain('No agent can use this endpoint until you approve the new one, or put back the approved one. Its key went with the old address: set it again before you approve.');
     expect.soft(waitingRow, 'both addresses').toEqual(expect.stringMatching(new RegExp(`approved\\s+${standin.baseUrl.replace(/[.*+?^${}()|[\]\\/]/g, '\\$&')}[\\s\\S]*new\\s+${moved.baseUrl.replace(/[.*+?^${}()|[\]\\/]/g, '\\$&')}`)));
     await expect(row(ENDPOINT).getByRole('button', { name: 'set the key', exact: true })).toBeVisible();
     await row(ENDPOINT).getByRole('button', { name: 'approve the new URL', exact: true }).click();
