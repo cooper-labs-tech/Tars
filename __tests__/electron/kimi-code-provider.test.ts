@@ -44,6 +44,11 @@ import { ENDPOINT_HARNESSES } from '../../electron/services/inference-endpoints'
  * 9. On an endpoint, the launch's own variables (KIMI_MODEL_NAME, _PROVIDER_TYPE, _BASE_URL) never reach the terminal:
  *    the endpoint session fills only the token's variable (services/traces-runtime.ts openEndpointSession), so the
  *    provider must add the rest, and only for the agent on an endpoint (Tars-Backend's note, 19/11).
+ * 16. (27/11, the orchestrator's note on #655) kimi installs a newer version of itself (its `upgrade.autoInstall`, true
+ *     by default, read in 2.8.1's published code) from a terminal Tars started, into the user's own install. Its own
+ *     switch, KIMI_CODE_NO_AUTO_UPDATE=1, must be in the terminal's environment; on macOS and Linux on the line too,
+ *     before the binary, since the terminal's login shell runs rc files after that environment; on Windows, where the
+ *     line's first word is the binary and nothing is sourced, the environment only.
  */
 
 // The fleet's endpoint choice, as traces-runtime resolves it: agent 'on-ep' runs kimi-code on an endpoint, no other.
@@ -56,6 +61,9 @@ vi.mock('../../electron/services/traces-runtime', async () => {
 });
 
 const BASE = 'http://127.0.0.1:31417/v1';
+
+/** What kimi's line starts with before its binary: its own update switch, on macOS and Linux (16). */
+const LEAD = process.platform === 'win32' ? '' : 'env KIMI_CODE_NO_AUTO_UPDATE=1 ';
 
 /**
  * A stand-in of kimi 2.6.3's `fork` in the test's home: it records the arguments it was given, and forks (printing
@@ -107,9 +115,25 @@ describe('KimiCodeProvider', () => {
   });
 
   it('2: auto and bypass start with --auto, normal without', () => {
-    expect(p.buildInteractiveCommand({ binaryPath: 'kimi', prompt: '', permissionMode: 'bypass' })).toBe("'kimi' --auto");
-    expect(p.buildInteractiveCommand({ binaryPath: 'kimi', prompt: '', permissionMode: 'auto' })).toBe("'kimi' --auto");
-    expect(p.buildInteractiveCommand({ binaryPath: 'kimi', prompt: '', permissionMode: 'normal' })).toBe("'kimi'");
+    expect(p.buildInteractiveCommand({ binaryPath: 'kimi', prompt: '', permissionMode: 'bypass' })).toBe(`${LEAD}'kimi' --auto`);
+    expect(p.buildInteractiveCommand({ binaryPath: 'kimi', prompt: '', permissionMode: 'auto' })).toBe(`${LEAD}'kimi' --auto`);
+    expect(p.buildInteractiveCommand({ binaryPath: 'kimi', prompt: '', permissionMode: 'normal' })).toBe(`${LEAD}'kimi'`);
+  });
+
+  it('16: its own update off: KIMI_CODE_NO_AUTO_UPDATE=1 in its environment, and before the binary on macOS and Linux', () => {
+    expect(p.getPtyEnvVars('a1', '/p', [])).toMatchObject({ KIMI_CODE_NO_AUTO_UPDATE: '1' });
+    const asPlatform = (platform: NodeJS.Platform) => {
+      const original = Object.getOwnPropertyDescriptor(process, 'platform')!;
+      Object.defineProperty(process, 'platform', { value: platform });
+      try {
+        return p.buildInteractiveCommand({ binaryPath: '/opt/kimi/kimi', prompt: '', permissionMode: 'auto' });
+      } finally {
+        Object.defineProperty(process, 'platform', original);
+      }
+    };
+    expect(asPlatform('darwin')).toBe("env KIMI_CODE_NO_AUTO_UPDATE=1 '/opt/kimi/kimi' --auto");
+    expect(asPlatform('linux')).toBe("env KIMI_CODE_NO_AUTO_UPDATE=1 '/opt/kimi/kimi' --auto");
+    expect(asPlatform('win32').startsWith("'/opt/kimi/kimi'")).toBe(true);
   });
 
   it('13: never --plan: an agent saved in plan is refused at its launch, with the reason an update gives', () => {
@@ -122,17 +146,17 @@ describe('KimiCodeProvider', () => {
     const uuid = 'feabbac1-fc87-4756-8076-0c6adc57127b';
     // The UUID the hook routes took (services/kimi-sessions.ts posts it), resumed under kimi's own name for it.
     expect(p.buildInteractiveCommand({ binaryPath: 'kimi', prompt: '', model: 'my/alias-1.5', resumeSessionId: uuid }))
-      .toBe(`'kimi' -m 'my/alias-1.5' --session 'session_${uuid}'`);
-    expect(p.buildInteractiveCommand({ binaryPath: 'kimi', prompt: '', resumeSessionId: `session_${uuid}` })).toBe(`'kimi' --session 'session_${uuid}'`);
+      .toBe(`${LEAD}'kimi' -m 'my/alias-1.5' --session 'session_${uuid}'`);
+    expect(p.buildInteractiveCommand({ binaryPath: 'kimi', prompt: '', resumeSessionId: `session_${uuid}` })).toBe(`${LEAD}'kimi' --session 'session_${uuid}'`);
     expect(() => p.buildInteractiveCommand({ binaryPath: 'kimi', prompt: '', model: 'a;rm -rf' })).toThrow();
     for (const bad of ['session_x; rm -rf /', '../session_feabbac1', 'session_feabbac1', `${uuid}'; rm -rf /`]) {
-      expect(p.buildInteractiveCommand({ binaryPath: 'kimi', prompt: '', resumeSessionId: bad })).toBe("'kimi'");
+      expect(p.buildInteractiveCommand({ binaryPath: 'kimi', prompt: '', resumeSessionId: bad })).toBe(`${LEAD}'kimi'`);
     }
   });
 
   it('10: a restart that forks starts a new session, never the tombstone under its own id', () => {
     const sid = 'feabbac1-fc87-4756-8076-0c6adc57127b';
-    expect(p.buildInteractiveCommand({ binaryPath: 'kimi', prompt: '', resumeSessionId: sid, forkSession: true })).toBe("'kimi'");
+    expect(p.buildInteractiveCommand({ binaryPath: 'kimi', prompt: '', resumeSessionId: sid, forkSession: true })).toBe(`${LEAD}'kimi'`);
   });
 
   it('14, 15: a restart forks the session with kimi fork -y in the agent\'s folder, and resumes the fork under its new id', async () => {
@@ -142,7 +166,7 @@ describe('KimiCodeProvider', () => {
     expect(await p.forkAhead!(kimi.bin, sid, folder)).toBe('9a5cf0db-b84c-499c-b67c-a5179db5e1d5');
     expect(kimi.asked()).toEqual(['fork', '-y', `session_${sid}`]);
     expect(kimi.cwd()).toBe(fs.realpathSync(folder));
-    expect(p.buildInteractiveCommand({ binaryPath: 'kimi', prompt: '', resumeSessionId: '9a5cf0db-b84c-499c-b67c-a5179db5e1d5' })).toBe("'kimi' --session 'session_9a5cf0db-b84c-499c-b67c-a5179db5e1d5'");
+    expect(p.buildInteractiveCommand({ binaryPath: 'kimi', prompt: '', resumeSessionId: '9a5cf0db-b84c-499c-b67c-a5179db5e1d5' })).toBe(`${LEAD}'kimi' --session 'session_9a5cf0db-b84c-499c-b67c-a5179db5e1d5'`);
   });
 
   it('14: a fork that fails or prints no session gives none; a session not of kimi\'s form never reaches kimi', async () => {
@@ -186,8 +210,8 @@ describe('KimiCodeProvider', () => {
   });
 
   it('11: an agent on an endpoint is started without -m; another agent keeps its alias', () => {
-    expect(p.buildInteractiveCommand({ agentId: 'on-ep', binaryPath: 'kimi', prompt: '', model: 'org/Model-1', permissionMode: 'bypass' })).toBe("'kimi' --auto");
-    expect(p.buildInteractiveCommand({ agentId: 'not-on-ep', binaryPath: 'kimi', prompt: '', model: 'my-alias', permissionMode: 'bypass' })).toBe("'kimi' --auto -m 'my-alias'");
+    expect(p.buildInteractiveCommand({ agentId: 'on-ep', binaryPath: 'kimi', prompt: '', model: 'org/Model-1', permissionMode: 'bypass' })).toBe(`${LEAD}'kimi' --auto`);
+    expect(p.buildInteractiveCommand({ agentId: 'not-on-ep', binaryPath: 'kimi', prompt: '', model: 'my-alias', permissionMode: 'bypass' })).toBe(`${LEAD}'kimi' --auto -m 'my-alias'`);
   });
 
   it('9: an agent on an endpoint gets the launch\'s variables in its terminal; another agent does not', () => {
