@@ -2,7 +2,7 @@ import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
-import { ORCHESTRATOR_ONLY_MCP, mcpConfigPathFor, geminiRoleArgs, isTarsBundleEntry } from '../../../electron/services/mcp-roles';
+import { ORCHESTRATOR_ONLY_MCP, mcpConfigPathFor, geminiRoleArgs, codexRoleArgs, isTarsBundleEntry } from '../../../electron/services/mcp-roles';
 import { ClaudeProvider } from '../../../electron/providers/claude-provider';
 import { CodexProvider } from '../../../electron/providers/codex-provider';
 import { QwenCodeProvider } from '../../../electron/providers/qwen-code-provider';
@@ -41,6 +41,16 @@ import { QwenCodeProvider } from '../../../electron/providers/qwen-code-provider
  *    never leaves the user scope.
  * 9. (L1) gemini settings holding only telegram and x give a worker an empty allow-list, which takes every
  *    server away.
+ *
+ * Added on 2026-11-27, written before the code (found by the peer-message E2E of #656):
+ * 10. codex: a worker is handed `-c mcp_servers.<name>.enabled=false` for a server its config.toml does not hold,
+ *     and codex 0.163 refuses to start: "Error: invalid transport in `mcp_servers.claude-mgr-telegram`". Telegram
+ *     is no longer shipped, so on any CODEX_HOME that never ran 2.0.4 no codex worker started. A server is switched
+ *     off only where the config Tars hands codex holds it, under a bare or a quoted name, in a table or inline; a
+ *     config that does not exist, or does not parse, holds none. An orchestrator still gets no switch.
+ *     Measured the same day, nothing to change: Qwen Code 0.25.2 starts with `--disable-mcp-server` (and
+ *     `--exclude-tools`) naming what it lacks; gemini's allow-list is made of the names its settings hold (5, 9);
+ *     claude 2.1.332 takes a deny rule for a tool it lacks without a word.
  */
 
 let home: string;
@@ -164,14 +174,52 @@ process.stderr.write('not in this stand-in: ' + a.join(' ')); process.exit(2);
 });
 
 describe('the CLIs that read their own config: a switch per run', () => {
+  /** A codex line for the role, with CODEX_HOME holding `toml` as its config.toml (none when null). */
+  function codexLine(orchestrator: boolean, toml: string | null): string {
+    const dir = path.join(home, 'codex-home');
+    fs.rmSync(dir, { recursive: true, force: true });
+    fs.mkdirSync(dir, { recursive: true });
+    if (toml !== null) fs.writeFileSync(path.join(dir, 'config.toml'), toml);
+    const was = process.env.CODEX_HOME;
+    process.env.CODEX_HOME = dir;
+    try {
+      return new CodexProvider().buildInteractiveCommand({ binaryPath: '/bin/codex', prompt: 'go', orchestratorMode: orchestrator, appSettings: {} as never });
+    } finally {
+      if (was === undefined) delete process.env.CODEX_HOME; else process.env.CODEX_HOME = was;
+    }
+  }
+  const BOTH = ['[mcp_servers.claude-mgr-telegram]', 'command = "node"', '', '[mcp_servers."dorothy-x"]', 'command = "node"', ''].join('\n');
+
   it('3. codex: a worker runs with the two switched off, an orchestrator with all', () => {
-    const codex = new CodexProvider();
-    const worker = codex.buildInteractiveCommand({ binaryPath: '/bin/codex', prompt: 'go', orchestratorMode: false, appSettings: {} as never });
-    const lead = codex.buildInteractiveCommand({ binaryPath: '/bin/codex', prompt: 'go', orchestratorMode: true, appSettings: {} as never });
+    const worker = codexLine(false, BOTH);
+    const lead = codexLine(true, BOTH);
     for (const name of ORCHESTRATOR_ONLY_MCP) {
       expect(worker).toContain(`-c 'mcp_servers.${name}.enabled=false'`);
       expect(lead).not.toContain(`mcp_servers.${name}.enabled`);
     }
+  });
+
+  it('10. codex: no switch for a server its config does not hold, which codex refuses to start on', () => {
+    // A fresh CODEX_HOME: Tars's servers but neither of the two.
+    const fresh = codexLine(false, ['model = "gpt-6-luna"', '', '[mcp_servers.claude-mgr-orchestrator]', 'command = "node"', ''].join('\n'));
+    expect(fresh).not.toContain('mcp_servers.');
+    // x only, inline in the [mcp_servers] table: x is switched off, telegram is not named.
+    const xOnly = codexLine(false, ['[mcp_servers]', '"dorothy-x" = { command = "node" }', ''].join('\n'));
+    expect(xOnly).toContain(`-c 'mcp_servers.dorothy-x.enabled=false'`);
+    expect(xOnly).not.toContain('claude-mgr-telegram');
+    // No config at all, or one that does not parse: nothing named.
+    expect(codexLine(false, null)).not.toContain('mcp_servers.');
+    expect(codexLine(false, '[mcp_servers.claude-mgr-telegram\ncommand = ')).not.toContain('mcp_servers.');
+  });
+
+  it('10. codex: the switches read the config Tars hands codex, at each launch', () => {
+    expect(codexRoleArgs(false, path.join(home, 'nowhere', 'config.toml'))).toEqual([]);
+    const file = path.join(home, 'config.toml');
+    fs.writeFileSync(file, '[mcp_servers.claude-mgr-telegram]\ncommand = "node"\n');
+    expect(codexRoleArgs(false, file)).toEqual(['-c', 'mcp_servers.claude-mgr-telegram.enabled=false']);
+    expect(codexRoleArgs(true, file)).toEqual([]);
+    fs.writeFileSync(file, BOTH);
+    expect(codexRoleArgs(false, file)).toEqual(ORCHESTRATOR_ONLY_MCP.flatMap(name => ['-c', `mcp_servers.${name}.enabled=false`]));
   });
 
   it('4. Qwen Code: a worker runs with the two disabled, an orchestrator with all', () => {
