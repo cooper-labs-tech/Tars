@@ -21,6 +21,12 @@
 // - it holds its rollout open from its first line to its end, as 0.163 does (measured with lsof: at the file's first
 //   sight, through the turn and at rest), which is how Tars knows a session nobody named is its agent's;
 // - `--help` answers after FAKE_CODEX_HELP_MS, a codex slow to answer as under a heavy load (0 unless set);
+// - its update prompt, as 0.170.0 draws it at its start (measured 21/11 in a sandbox): from the version.json an earlier
+//   start wrote in its home ({"latest_version":"0.171.0","last_checked_at":...,"dismissed_version":null}), when it
+//   names a newer version than this one and not the one skipped for good, unless the line says
+//   `-c check_for_update_on_startup=false`. A task on its line waits behind it. Its Enter takes the option shown
+//   selected, "1. Update now": codex ran npm install -g @openai/codex, said to restart it and exited 0 (QA's gate of
+//   the #601 stack). This one installs nothing: it logs the choice and exits 0. Esc or 2 skips it, 3 skips that version;
 // - `codex login status` exits 0 "Logged in using ChatGPT" or 1 "Not logged in", as 0.163 does (measured). With
 //   FAKE_CODEX_SIGN_IN=1 it reads its login as codex does by default, from its home's auth.json, and a home with none
 //   shows 0.163's sign-in screen, waits for a key and writes no session (measured on 0.163); without, it is signed in.
@@ -164,6 +170,49 @@ function boot() {
     log({ session: sessionId, [opts.sub]: opts.session });
   }
   out('>_ OpenAI Codex (v0.163.0)\n\n› ');
+  const latest = updateOffer();
+  if (latest) {
+    updatePrompt = { selected: 1, latest };
+    log({ updatePrompt: 'shown', latest });
+    out(`\n  Update available · ${OWN_VERSION} → ${latest}\n  Release notes: https://github.com/openai/codex/releases/latest\n\n› 1. Update now (runs \`npm install -g @openai/codex\`)\n  2. Skip\n  3. Skip until next version\n\n  enter continue · esc skip\n`);
+    return;
+  }
+  if (opts.prompt) queue(opts.prompt);
+}
+
+const OWN_VERSION = '0.163.0';
+/** Whether version `a` is after `b`, part by part. */
+const newer = (a, b) => {
+  const x = a.split('.').map(Number), y = b.split('.').map(Number);
+  for (let i = 0; i < 3; i++) if ((x[i] || 0) !== (y[i] || 0)) return (x[i] || 0) > (y[i] || 0);
+  return false;
+};
+/** The newer version the update prompt offers, or null: none known, already skipped, or the check switched off. */
+function updateOffer() {
+  if (opts.configs.some(c => /^check_for_update_on_startup\s*=\s*false$/.test(c))) return null;
+  let known;
+  try { known = JSON.parse(fs.readFileSync(path.join(home, 'version.json'), 'utf8')); } catch { return null; }
+  const latest = typeof known?.latest_version === 'string' ? known.latest_version : null;
+  return latest && newer(latest, OWN_VERSION) && latest !== known.dismissed_version ? latest : null;
+}
+let updatePrompt = null; // the update prompt on screen: the option selected, and the version offered
+/** An option of the update prompt taken: 1 "installs" and exits, as codex does; 2 and 3 go on to the session. */
+function chooseUpdate(option) {
+  const { latest } = updatePrompt;
+  updatePrompt = null;
+  if (option === 1) {
+    log({ updatePrompt: 'update-now', latest });
+    out('\nUpdating Codex via `npm install -g @openai/codex`...\n\nUpdate ran successfully. Please restart Codex.\n');
+    process.exit(0);
+  }
+  if (option === 3) {
+    try {
+      const file = path.join(home, 'version.json');
+      fs.writeFileSync(file, JSON.stringify({ ...JSON.parse(fs.readFileSync(file, 'utf8')), dismissed_version: latest }));
+    } catch { /* nothing to remember it in */ }
+  }
+  log({ updatePrompt: option === 3 ? 'skip-version' : 'skip', latest });
+  out('\x1b[2J\x1b[H>_ OpenAI Codex (v0.163.0)\n\n› ');
   if (opts.prompt) queue(opts.prompt);
 }
 
@@ -300,6 +349,15 @@ process.stdin.on('data', (chunk) => {
   if (!booted) {
     if (/[1y\r]/.test(data)) boot();
     else if (/[2n\x1b]/.test(data)) process.exit(0);
+    return;
+  }
+  if (updatePrompt) {
+    // A selection list: the arrows and 1 to 3 move the selection, Enter takes it, Esc skips; a paste is not for it.
+    if (data.includes('\x1b[B')) updatePrompt.selected = Math.min(3, updatePrompt.selected + 1);
+    else if (data.includes('\x1b[A')) updatePrompt.selected = Math.max(1, updatePrompt.selected - 1);
+    else if (/^[123]$/.test(data)) updatePrompt.selected = Number(data);
+    if (data.includes('\r')) chooseUpdate(updatePrompt.selected);
+    else if (data === '\x1b') chooseUpdate(2);
     return;
   }
   if (holding && data === '\x1b') { const h = holding; holding = null; h(); return; }

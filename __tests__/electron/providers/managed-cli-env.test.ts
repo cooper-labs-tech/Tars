@@ -94,6 +94,17 @@ afterAll(() => { Object.defineProperty(process, 'platform', hostPlatform); });
 const FOREIGN_BINARIES = ['amp', 'codex', 'gemini', 'grok', 'opencode', 'pi', 'qwen'];
 
 /**
+ * What a binary of its own is given: the one variable that turns its own update check off, where it reads one (the
+ * CLI's own documentation or code, 27/11: update-check-off.test.ts). codex, gemini, qwen and amp turn theirs off
+ * elsewhere (a -c on the line, system settings, a settings file), so they get nothing here.
+ */
+const FOREIGN_MANAGED_ENV: Record<string, Record<string, string>> = {
+  grok: { GROK_DISABLE_AUTOUPDATER: '1' },
+  opencode: { OPENCODE_DISABLE_AUTOUPDATE: '1' },
+  pi: { PI_SKIP_VERSION_CHECK: '1' },
+};
+
+/**
  * What a CLI running the claude binary is given, written out rather than read
  * from managedCliEnv for the same reason as the list above. The mouse clicks
  * variable is there because a Tars terminal passes Claude Code the wheel and
@@ -188,9 +199,9 @@ describe('which CLIs the variable is for', () => {
         expect(vars, `${provider.id} runs claude and must have it`).toEqual(CLAUDE_MANAGED_ENV);
         claudeFamily.push(provider.id);
       } else {
-        // Setting it on a binary that never reads it would only look like
-        // coverage. codex/gemini/grok/opencode/pi update themselves.
-        expect(vars, `${provider.id} does not run claude and must not have it`).toEqual({});
+        // Setting claude's on a binary that never reads it would only look like
+        // coverage: a binary of its own gets its own update switch, or nothing.
+        expect(vars, `${provider.id} does not run claude: its own update switch only`).toEqual(FOREIGN_MANAGED_ENV[provider.binaryName] ?? {});
         foreign.push(provider.binaryName);
       }
     }
