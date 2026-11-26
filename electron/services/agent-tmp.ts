@@ -47,6 +47,29 @@ export function agentTmpEnv(agentId: string, root = TMP_ROOT): { TMPDIR: string;
 }
 
 /**
+ * Where a codex worker keeps its databases (`-c sqlite_home=`): `codex/` in the
+ * agent's folder, the same at every launch. The queue `codex queue --thread`
+ * writes into, read by every codex of a CODEX_HOME, is one of them, so a
+ * worker on its own is out of that queue's reach, and out of the shared
+ * app-server daemon too (measured on codex 0.163; SECURITY.md, "What other
+ * sessions can send an agent"). Its conversations stay in CODEX_HOME's
+ * sessions, which `codex resume` reads with these databases or without them.
+ * With no agent id, a folder of this launch alone: never the shared ones.
+ */
+export function agentCodexDbDir(agentId: string | undefined, root = TMP_ROOT): string {
+  ownDir(root);
+  if (!agentId) {
+    const once = fs.mkdtempSync(path.join(root, 'codex-'));
+    fs.chmodSync(once, 0o700);
+    return once;
+  }
+  const dir = path.join(root, shortIdOf(agentId));
+  const db = path.join(dir, 'codex');
+  for (const each of [dir, db]) ownDir(each);
+  return db;
+}
+
+/**
  * The same, or nothing when the folder cannot be made (a full disk, a file in
  * its way): the CLI then starts with the temporary folder it would have had,
  * rather than not at all.

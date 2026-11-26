@@ -184,6 +184,7 @@ Plus `local`: the `claude` binary pointed at a running Tasmania server (`ANTHROP
 | Prompt-injected memory | every provider whose `configDir` is not `~/.claude` (see §5) |
 | ACP mode | `claude`, `codex`, `gemini`, `grok`, `opencode`, `pi` (see §4), no longer used to delegate since 2.0.4 |
 | Orchestrator tool block | a CLI flag on the claude-binary family (`--disallowed-tools`) and on `qwen-code` (`--exclude-tools`); `codex`, `gemini`, `grok`, `opencode`, `pi` and `amp` get none, so their orchestrator is told and not stopped. ACP permission arbitration denied the same tools to a delegated run until 2.0.4, when delegation left ACP |
+| A worker's door to other sessions (2.0.7) | shut on every CLI that opens one, an orchestrator left as its CLI and the user's settings have it: the claude-binary family refuses posts to its inbox and loses ListAgents and SendMessage (`workerPeerFlags`, `--settings '{"crossSessionInbound":"refuse"}'` and `--disallowed-tools`, Tars's one-shot run too); `codex` runs on databases of its own (`-c sqlite_home=`, the agent's `~/.tars/tmp/<id>/codex`), out of the shared queue and daemon; `qwen-code`'s settings file of Tars's turns `agents.crossSessionMessaging` off. `gemini`, `grok`, `opencode`, `pi` and `amp` open none as Tars starts them. SECURITY.md, section 9 |
 
 ### Qwen Code (2.0.4): `providers/qwen-code-provider.ts`, `services/qwen-code.ts`
 

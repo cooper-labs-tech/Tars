@@ -243,7 +243,7 @@ async function spawnAgentSessionInSlot(
 
   // Provider env vars: CLAUDE_* tracking vars + ANTHROPIC_BASE_URL /
   // ANTHROPIC_API_KEY for alt providers (OpenRouter, DeepSeek, Moonshot...).
-  const providerEnvVars = cliProvider.getPtyEnvVars(agent.id, agent.projectPath, agent.skills || [], appSettings, { model: opts.model ?? agent.model, effort: agent.effort });
+  const providerEnvVars = cliProvider.getPtyEnvVars(agent.id, agent.projectPath, agent.skills || [], appSettings, { model: opts.model ?? agent.model, effort: agent.effort, orchestratorMode: isSuperAgentApi });
 
   const keyRefusal = missingKeyRefusal(agent.provider, providerEnvVars);
   if (keyRefusal) {
@@ -1971,7 +1971,7 @@ function updateFrom(body: unknown, agent: AgentStatus, ctx: RouteContext): { upd
   }
   // Refused as its next launch would be: an API-key provider without its key.
   if (update.provider !== undefined) {
-    const keyRefusal = missingKeyRefusal(update.provider, getProvider(update.provider).getPtyEnvVars(agent.id, agent.projectPath, agent.skills, ctx.getAppSettings()));
+    const keyRefusal = missingKeyRefusal(update.provider, getProvider(update.provider).getPtyEnvVars(agent.id, agent.projectPath, agent.skills, ctx.getAppSettings(), { orchestratorMode: hasOrchestratorPowers(agent) }));
     if (keyRefusal) return { status: 400, error: keyRefusal };
   }
   return { update };
@@ -2492,7 +2492,7 @@ export function registerAgentRoutes(app_: RouteApp, ctx: RouteContext): void {
 
     const id = uuidv4();
     // Refused as its first launch would be: an API-key provider without its key.
-    const keyRefusal = missingKeyRefusal(provider as AgentStatus['provider'], getProvider(provider as AgentStatus['provider']).getPtyEnvVars(id, projectPath, skills, ctx.getAppSettings()));
+    const keyRefusal = missingKeyRefusal(provider as AgentStatus['provider'], getProvider(provider as AgentStatus['provider']).getPtyEnvVars(id, projectPath, skills, ctx.getAppSettings(), { orchestratorMode: false }));
     if (keyRefusal) {
       sendJson({ error: keyRefusal }, 400);
       return;

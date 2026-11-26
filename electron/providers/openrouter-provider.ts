@@ -9,7 +9,7 @@ import type {
   ProviderModel,
   HookConfig,
 } from './cli-provider';
-import { servedPathMatches, orchestratorToolFlags, promptOperand, effortFlag, resumeFlags, shellQuote, keyProviderEnv } from './cli-provider';
+import { servedPathMatches, roleToolFlags, promptOperand, effortFlag, resumeFlags, shellQuote, keyProviderEnv } from './cli-provider';
 import { DATA_DIR, GITHUB_REPO } from '../constants';
 import { addMcpServerToJson, removeMcpServerFromJson } from '../utils/mcp-json';
 
@@ -78,7 +78,7 @@ export class OpenRouterProvider implements CLIProvider {
       command += ' --permission-mode bypassPermissions';
     }
 
-    command += orchestratorToolFlags(params.orchestratorMode);
+    command += roleToolFlags(params.orchestratorMode);
 
     command += effortFlag(params.effort);
 

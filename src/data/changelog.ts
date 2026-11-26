@@ -7,6 +7,14 @@ export interface Release {
 
 export const CHANGELOG: Release[] = [
   {
+    id: 64,
+    version: '2.0.7',
+    date: '2026-11-27',
+    updates: [
+      'A worker agent no longer takes messages other sessions on the computer send it, and no longer has the tools to message them, on Claude Code and the providers that run it, Codex and Qwen Code. Orchestrators keep what their CLI and your own settings give them. And Tars no longer types into the dialog in which Claude Code holds such a message.',
+    ],
+  },
+  {
     id: 63,
     version: '2.0.6',
     date: '2026-10-29',

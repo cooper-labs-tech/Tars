@@ -1040,3 +1040,85 @@ says around them, in a message of its own, is the owner's; anything the owner
 typed by hand into a terminal, or said in Slack or Discord. The mark says
 "these are words the owner sent Tars, at that time, for that project or chat,
 as that kind of word", and no more.
+
+---
+
+## 9. What other sessions can send an agent
+
+Written on 2026-11-27, after JeanBrasse's decision of the 26th on the Audit's
+review of the agent-inbox plan: keep the channel for the orchestrators, and
+check every CLI, not only Claude Code.
+
+Several of the CLIs Tars runs open, in each session, a door through which
+another process of the same user account hands the session a message, and
+give its model tools that list and reach the other sessions of the machine.
+None of it goes through Tars: the cross-project guard of the local API (section
+2) decides who may message whom through Tars, and these doors are beside it.
+Every agent Tars runs is a process of the same account, so on a machine where
+two projects run, an agent of one could reach a worker of the other.
+
+**The rule now.** A worker takes no message from another session and has no
+tool that reaches one. An orchestrator, its project's or a chat's runner (which
+has an orchestrator's powers, `hasOrchestratorPowers`), keeps what its CLI and
+the user's own settings give it: Tars hands it no setting either way. The
+role is read at each launch: an agent made a worker starts closed, one made an
+orchestrator starts as its CLI would.
+
+What each CLI opens, as Tars starts it, measured on macOS 26.6.1 on the 26th
+and 27th of November 2026, each CLI installed alone in a throwaway home with
+its endpoint on a stand-in (the bench and its runs are kept with the review's
+reports):
+
+| CLI | What it opens to other processes | On as Tars starts it | What Tars does for a worker | What remains |
+|---|---|---|---|---|
+| Claude Code 2.1.332, and the thirteen API-key providers that run it | An inbox per session (a Unix socket under the agent's own `~/.tars/tmp/<id>/c` on macOS and Linux, a named pipe that takes a token on Windows), and the tools ListAgents and SendMessage, in interactive and print mode | Yes | Refuses every message (`crossSessionInbound` "refuse") and takes the two tools away, on its own command line | The worker's socket still exists and answers by refusing. An administrator's managed settings outrank a command line |
+| Codex 0.163 | A queue of messages for a session (`codex queue`), kept in a database of `CODEX_HOME` that every codex of that home reads; the shared app-server daemon, which the TUI joins | Yes | Runs the worker on databases of its own (`sqlite_home`, the agent's `~/.tars/tmp/<id>/codex`) | That folder is under `~/.tars`, which every agent can write: a process set on reaching the worker still can |
+| Qwen Code 0.25.2 | An inbox per session, its address and token in a record under `~/.qwen/sessions`, and send_message behind its tool search | Yes | Turns cross-session messaging off in the settings file of Tars's it runs with | The worker's record still names it. An administrator's own value stands over Tars's |
+| opencode 1.19.6 | A local server only when asked (`--port`, `serve`, `attach`) | No | Nothing to turn off: Tars passes none of them | |
+| Pi 1.5.2 | Nothing (its RPC mode is a process of its own) | No | Nothing | |
+| Gemini CLI 0.71 | Nothing at start (its ACP mode is a process of its own) | No | Nothing | Measured before sign-in only |
+| Grok 1.0.92 | Nothing at start; its dashboard and its shared daemon are the user's own choice in its config | No | Nothing | A user who turns the shared daemon on shares it between grok sessions |
+| Amp | Nothing local; its sessions meet through Amp's own servers | No | Nothing Tars can reach | Measured before sign-in only |
+
+Not Tars providers yet, measured the same way for when they are: Kilo 7.8.32
+and Kimi Code 2.8.1 open nothing at start; Goose 1.61.1 opens nothing in a
+`goose session`; Cline 3.0.76 starts a hub on a loopback port with its TUI,
+which a Cline worker would have to be kept from.
+
+**Claude Code.** The setting rides on the worker's command line, a settings
+source of Tars's for that launch alone: never a file of the user's, and flag
+settings rank above the user's and the project's own. Measured on 2.1.332:
+refused from another process and from the session's own MCP servers alike, in
+normal and bypass modes, with no dialog; and the tools gone from what the model
+is offered, in the TUI and in print mode, bypass or not. On 2.1.280 both tools
+already existed and the setting is taken without a word. Tars's own one-shot
+run (a kanban card's text) gets the same. Without the setting, a session that
+prompts for permissions takes such a message as a turn, two sessions in bypass
+deliver to each other with no review, and a session in bypass that cannot tell
+the sender's mode holds the message behind a dialog of its own. That dialog
+ends on no "Esc to cancel", and an Enter typed into it answers it: Tars now
+counts it as a dialog on the screen (`dialogOnScreen`, `core/terminal-mirror.ts`)
+and types nothing into it, so an orchestrator that meets one is left for the
+user to answer.
+
+**Codex.** Its queue is read by every codex of a `CODEX_HOME`, with or
+without the daemon (`--no-daemon` was measured not to be enough). A worker on
+databases of its own reads its own queue only, and stays off the shared daemon
+too (its thread was never among the daemon's loaded threads). Its
+conversations stay in `CODEX_HOME`'s sessions: `codex resume` finds them with
+those databases, with fresh ones, or with the shared ones, so a role change or
+the folder being pruned loses nothing but codex's own goals and logs. Codex
+0.163 ignores a configuration key it does not know; an older codex, which has
+no queue, could not be run on this machine to check.
+
+**Qwen Code.** Its default takes a message from a session in the same review
+class without review: between two sessions in yolo, measured. With
+cross-session messaging off, the worker's session lists itself with no inbox at
+all, so there is nothing to post to; its send_message then reaches no other
+session (read in its code, not measured).
+
+**What this is not.** It does not stop a process of the user's account that is
+set on reaching a worker by other means: every agent runs as that account, and
+can read and write what the account can. It shuts the doors the CLIs open by
+default, and the tools that walk through them, so that what reaches a worker
+comes through Tars, under a sender line Tars wrote.

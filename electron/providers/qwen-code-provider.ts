@@ -48,7 +48,7 @@ export class QwenCodeProvider implements CLIProvider {
     // Its settings file of Tars's, again for this launch: the effort it runs
     // on now, and the hooks and MCP servers as they are now. The terminal's
     // environment names the file (getPtyEnvVars).
-    if (params.agentId) writeQwenAgentSettings(params.agentId, { effort: params.effort });
+    if (params.agentId) writeQwenAgentSettings(params.agentId, { effort: params.effort, orchestratorMode: params.orchestratorMode === true });
     let command = shellQuote(params.binaryPath);
     if (params.model) {
       if (!QWEN_MODEL_ID.test(params.model)) throw new Error('Invalid model name');
@@ -106,7 +106,7 @@ export class QwenCodeProvider implements CLIProvider {
       // Its API key from Settings, under its model's envKey (services/cli-keys.ts).
       ...keyEnvFor('qwen-code', appSettings, { model: launch.model }),
       // Its settings file of Tars's: hooks, MCP servers, effort, no updater.
-      QWEN_CODE_SYSTEM_SETTINGS_PATH: writeQwenAgentSettings(agentId, { effort: launch.effort }),
+      QWEN_CODE_SYSTEM_SETTINGS_PATH: writeQwenAgentSettings(agentId, { effort: launch.effort, orchestratorMode: launch.orchestratorMode === true }),
     };
   }
 
