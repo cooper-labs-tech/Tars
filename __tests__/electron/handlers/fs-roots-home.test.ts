@@ -47,6 +47,8 @@ vi.mock('electron', () => ({
   Notification: vi.fn(),
   ipcMain: { handle: (channel: string, handler: unknown) => { handlers.set(channel, handler as Handler); } },
   protocol: { handle: (scheme: string, handler: unknown) => { protocols.set(scheme, handler as Protocol); }, registerSchemesAsPrivileged: vi.fn() },
+  // A development build sets the window's policy on next dev's pages through the session (window-csp.ts).
+  session: { defaultSession: { webRequest: { onHeadersReceived: vi.fn() } } },
   shell: { openExternal: vi.fn() },
   dialog: { showOpenDialog: vi.fn() },
 }));

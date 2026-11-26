@@ -564,6 +564,8 @@ means its own single-instance lock, so it would otherwise start beside the real 
 agents, settings, tokens, bots and port. Start it with `scripts/sandbox.sh`. It never checks for
 updates either. `e2e/sandbox-build.packed.spec.ts` checks a packed build:
 `TARS_PACKED_APP="release/mac-arm64/Tars Sandbox.app" npx playwright test e2e/sandbox-build.packed.spec.ts`.
+`e2e/window-csp.packed.spec.ts` takes the same variable and measures the window's Content Security Policy
+on it (SPECS §11): every surface with no violation, and a script added to the page refused.
 
 Note `electron:pack` does **not** run `next build`: it packages whatever is already in `out/`.
 Run `npm run build:renderer` first if the renderer changed.

@@ -4,6 +4,7 @@ import React, { useState } from 'react';
 import type { VaultDocumentElectron, VaultAttachmentElectron } from '@/types/electron';
 import { Button, MetaChip, PanelCaption } from '@/components/ui';
 import { SimpleMarkdown } from './MarkdownRenderer';
+import { localFileUrl } from '@/lib/local-file-url';
 
 interface DocumentViewerProps {
   document: VaultDocumentElectron;
@@ -95,10 +96,11 @@ export default function DocumentViewer({ document, attachments, onEdit, onDelete
               // Copied into ~/.tars/vault/attachments on attach, so this is
               // the only route allowed to serve it back out: see the allowedDir
               // check on /api/local-file. Without this link the file was listed
-              // but nothing let you ever open it again.
+              // but nothing let you ever open it again. Through this Tars's own
+              // API port (localFileUrl); with none known, the row is no link.
               <a
                 key={att.id}
-                href={`http://127.0.0.1:31415/api/local-file?path=${encodeURIComponent(att.filepath)}`}
+                href={localFileUrl(att.filepath) ?? undefined}
                 target="_blank"
                 rel="noopener noreferrer"
                 className="flex items-center gap-2 h-8 px-2 bg-secondary/50 text-xs hover:bg-secondary transition-colors"

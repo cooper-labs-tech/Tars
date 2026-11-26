@@ -1,5 +1,5 @@
 import { BrowserWindow, screen } from 'electron';
-import { hardenWindow, isDevBuild, resolveDevUrl } from './window-manager';
+import { hardenWindow, isDevBuild, resolveDevUrl, windowArguments } from './window-manager';
 import * as path from 'path';
 import { isClickThatClosedPanel, isWindowsShell, trayPanelPosition } from '../platform/desktop-shell';
 
@@ -37,6 +37,7 @@ export function createTrayPanel(): BrowserWindow {
       preload: path.join(__dirname, '..', 'preload.js'),
       contextIsolation: true,
       nodeIntegration: false,
+      additionalArguments: windowArguments(),
     },
   });
 

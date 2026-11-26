@@ -1,11 +1,12 @@
-import { BrowserWindow, protocol, app, shell } from 'electron';
+import { BrowserWindow, protocol, app, shell, session } from 'electron';
 import * as path from 'path';
 import * as fs from 'fs';
 import { getAppBasePath } from '../utils';
-import { MIME_TYPES } from '../constants';
+import { API_PORT, MIME_TYPES } from '../constants';
 import { localFileServes } from '../utils/window-file-access';
 import { titleBarOptions } from '../platform/desktop-shell';
 import { installEditContextMenu } from './edit-context-menu';
+import { inlineScriptHashes, windowCsp } from './window-csp';
 
 // Global reference to the main window
 let mainWindow: BrowserWindow | null = null;
@@ -109,6 +110,19 @@ function isE2E(): boolean {
   return process.env.DOROTHY_E2E === '1';
 }
 
+/**
+ * What main hands every window that loads the bridge, in its process's arguments: the port this Tars's local
+ * API listens on (API_PORT, DOROTHY_API_PORT's override included), and nothing else, never a token. The preload
+ * reads it once and gives it to the page as `electronAPI.apiPort`, synchronously, so a vault note's local
+ * picture is built on this Tars's own API while it renders. Arguments, not IPC: the preload is sandboxed and
+ * cannot import this module, and Electron documents additionalArguments for exactly this.
+ */
+export const API_PORT_SWITCH = '--tars-api-port=';
+
+export function windowArguments(): string[] {
+  return [`${API_PORT_SWITCH}${API_PORT}`];
+}
+
 export function createWindow() {
   const e2e = isE2E();
 
@@ -132,6 +146,7 @@ export function createWindow() {
       preload: path.join(__dirname, '..', 'preload.js'),
       contextIsolation: true,
       nodeIntegration: false,
+      additionalArguments: windowArguments(),
       // No renderer of ours ever needs to reach out on its own.
       webviewTag: false,
       // An unfocused window is throttled by default, which for a test run
@@ -350,6 +365,7 @@ export function setupProtocolHandler() {
       if (fs.existsSync(filePath) && fs.statSync(filePath).isFile()) {
         const ext = path.extname(filePath).toLowerCase();
         const mimeType = MIME_TYPES[ext] || 'application/octet-stream';
+        if (mimeType === 'text/html') return servePage(filePath);
 
         return new Response(await fs.promises.readFile(filePath), {
           headers: { 'Content-Type': mimeType },
@@ -359,13 +375,52 @@ export function setupProtocolHandler() {
       // If it's a page route without .html, try adding index.html
       const htmlPath = path.join(basePath, relativePath, 'index.html');
       if (isUnder(basePath, htmlPath) && fs.existsSync(htmlPath)) {
-        return new Response(await fs.promises.readFile(htmlPath), {
-          headers: { 'Content-Type': 'text/html' },
-        });
+        return servePage(htmlPath);
       }
 
       console.error(`File not found: ${filePath}`);
       return new Response('Not Found', { status: 404 });
     });
+  } else {
+    setDevPolicy();
   }
+}
+
+/**
+ * A page of the bundle, served with the window's policy and the hashes of that page's own inline scripts
+ * (window-csp.ts). Only a page: the policy binds the document, and a script, a stylesheet or a picture would
+ * carry it for nothing.
+ */
+async function servePage(filePath: string): Promise<Response> {
+  const page = await fs.promises.readFile(filePath);
+  return new Response(page, {
+    headers: {
+      'Content-Type': 'text/html',
+      'Content-Security-Policy': windowCsp({ apiPort: API_PORT, scriptHashes: inlineScriptHashes(page.toString('utf8')) }),
+    },
+  });
+}
+
+/**
+ * Development: next dev serves the pages, so the session sets the policy on them, its development form
+ * (window-csp.ts says what differs). On next dev's own pages and frames only, over any policy it sent.
+ */
+function setDevPolicy(): void {
+  const origin = new URL(resolveDevUrl()).origin;
+  const policy = windowCsp({ apiPort: API_PORT, devOrigin: origin });
+  session.defaultSession.webRequest.onHeadersReceived((details, callback) => {
+    const page = details.resourceType === 'mainFrame' || details.resourceType === 'subFrame';
+    let ours = false;
+    try {
+      ours = new URL(details.url).origin === origin;
+    } catch {
+      ours = false;
+    }
+    if (!page || !ours) {
+      callback({});
+      return;
+    }
+    const kept = Object.entries(details.responseHeaders ?? {}).filter(([name]) => name.toLowerCase() !== 'content-security-policy');
+    callback({ responseHeaders: { ...Object.fromEntries(kept), 'Content-Security-Policy': [policy] } });
+  });
 }
