@@ -18,6 +18,9 @@ import * as os from 'node:os';
  *    spaces, are not recognised.
  * 3. A false alarm holds messages for nothing: "Esc to cancel" said in the
  *    conversation, above the input box, or a running turn's footer.
+ * 4. (2026-11-27) The dialog in which claude 2.1.332 holds another session's
+ *    message, in bypass, is typed into: it ends on no "Esc to cancel", and an
+ *    Enter denies or delivers the message. Nor its words said in conversation.
  * The screen is only ever a reason to hold, never a reason to type: a dialog
  * whose hook said so stays a dialog whatever the screen shows.
  */
@@ -86,6 +89,31 @@ describe('a dialog on the screen', () => {
 
   it('2. is seen when the footer is drawn with cursor moves instead of spaces', () => {
     expect(dialogOnScreen(mirrored(['Do you want to proceed?', '❯ 1. Yes', ' Esc\x1b[1Cto\x1b[1Ccancel\x1b[3C·\x1b[1CTab\x1b[1Cto\x1b[1Camend']))).toBe(true);
+  });
+
+  // Claude Code 2.1.332 holds a post from another session behind a dialog of its own in bypass (cli-inbound-channels
+  // bench, 2026-11-27). It ends on no "Esc to cancel": its three bottom rows are its two options and a footer, and
+  // Enter on it denies or delivers the post. An orchestrator keeps that channel, so Tars can meet the dialog there.
+  // These are the bytes claude drew, the rows' starts moved by cursor sequences.
+  const HELD_PEER_TAIL = ' Deliver by default: /config → Messaging → Messages from your other sessions\x1b[39m\x1b[K\r\x1b[1B'
+    + ' \x1b[38;5;153m❯\x1b[39m \x1b[38;5;153mDeny — drop it and tell the sender it was declined\r\x1b[1B\x1b[39m'
+    + '   Deliver this message to Claude\x1b[K\r\x1b[1C\x1b[1B\x1b[1mctrl+x a to always deliver ›\x1b[22m\x1b[K';
+
+  it('4. is seen in the dialog that holds another session\'s message, which says no "Esc to cancel"', () => {
+    const p = fakePty();
+    attachTerminalMirror(p as never, { cols: 160, rows: 48, watchRepaint: false, label: 't' });
+    p.emit('\x1b[2J\x1b[44;1H' + HELD_PEER_TAIL);
+    expect(dialogOnScreen(p as never)).toBe(true);
+    expect(dialogOnScreen(mirrored([
+      ' Held message from another session', ' Message body (this is what will be delivered):', ' INBOX-MID posted while a tool runs',
+      ' ❯ Deny — drop it and tell the sender it was declined', '   Deliver this message to Claude', ' ctrl+x a to always deliver ›',
+    ]))).toBe(true);
+  });
+
+  it('4. is not seen when the same words are only said in the conversation', () => {
+    expect(dialogOnScreen(mirrored([
+      'It offered: Deliver this message to Claude, or ctrl+x a to always deliver.', '', '', '─'.repeat(100), '❯ ', '─'.repeat(100), '  ? for shortcuts',
+    ]))).toBe(false);
   });
 
   it('3. is not seen in a running turn, nor in the conversation above the input box', () => {
