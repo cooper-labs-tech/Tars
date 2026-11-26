@@ -14,7 +14,7 @@ import type {
   ProviderModel,
   HookConfig,
 } from './cli-provider';
-import { safeEffort } from './cli-provider';
+import { lineEnvPrefix, safeEffort, updateCheckOffEnv } from './cli-provider';
 
 /**
  * Provider for xAI's Grok CLI ("Grok Build", https://x.ai/cli).
@@ -57,7 +57,9 @@ export class GrokProvider implements CLIProvider {
   }
 
   buildInteractiveCommand(params: InteractiveCommandParams): string {
-    let command = `'${params.binaryPath.replace(/'/g, "'\\''")}'`;
+    // Its own update check off (cli-provider.ts updateCheckOffEnv), on the line where a shell runs it.
+    let command = lineEnvPrefix(updateCheckOffEnv(this.binaryName));
+    command += `'${params.binaryPath.replace(/'/g, "'\\''")}'`;
 
     // Model
     if (params.model) {

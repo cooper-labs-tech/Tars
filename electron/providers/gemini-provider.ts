@@ -15,7 +15,8 @@ import type {
   ProviderModel,
   HookConfig,
 } from './cli-provider';
-import { servedPathMatches, shellQuote } from './cli-provider';
+import { lineEnvPrefix, servedPathMatches, shellQuote } from './cli-provider';
+import { geminiSystemSettingsFile, writeGeminiSystemSettings } from '../services/gemini-settings';
 import { geminiRoleArgs } from '../services/mcp-roles';
 import { writeSharedJsonSync } from '../utils/shared-file';
 
@@ -39,7 +40,10 @@ export class GeminiProvider implements CLIProvider {
   }
 
   buildInteractiveCommand(params: InteractiveCommandParams): string {
-    let command = `'${params.binaryPath.replace(/'/g, "'\\''")}'`;
+    // Its own update flow off, through Tars's system settings (services/gemini-settings.ts), named on the line where a
+    // shell runs it; getPtyEnvVars writes the file and names it in the terminal's environment.
+    let command = lineEnvPrefix({ GEMINI_CLI_SYSTEM_SETTINGS_PATH: geminiSystemSettingsFile() });
+    command += `'${params.binaryPath.replace(/'/g, "'\\''")}'`;
 
     // Model (Gemini uses -m flag)
     if (params.model) {
@@ -127,6 +131,8 @@ export class GeminiProvider implements CLIProvider {
       CLAUDE_PROVIDER: this.id,
       // Its API key from Settings, under the variable it reads (services/cli-keys.ts).
       ...keyEnvFor('gemini', appSettings),
+      // Its update check and self-install off, the administrator's settings over Tars's (services/gemini-settings.ts).
+      GEMINI_CLI_SYSTEM_SETTINGS_PATH: writeGeminiSystemSettings(),
     };
   }
 

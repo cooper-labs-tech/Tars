@@ -100,6 +100,11 @@ export class CodexProvider implements CLIProvider {
 
     command += this.modelAndEffort(params.model, params.effort);
 
+    // Its startup update check off, this run only (cli-provider.ts updateCheckOffEnv says why). With a newer codex on
+    // record, 0.163 and 0.170 draw "Update available" and a menu whose first entry, "Update now", runs npm install -g:
+    // a task's Enter, typed by Tars, picked it. Measured on 0.163 in a throwaway home, 27/11: no menu with this key.
+    command += ` -c ${shellQuote('check_for_update_on_startup=false')}`;
+
     // The mode in flags the installed codex has: 0.163 refuses --full-auto, and
     // every agent in auto or bypass died at launch on it (codex-cli.ts).
     const permission = codexPermissionArgs(params.permissionMode, codexAccepts(params.binaryPath));

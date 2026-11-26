@@ -10,7 +10,7 @@ import type {
   ProviderModel,
   HookConfig,
 } from './cli-provider';
-import { safeEffort } from './cli-provider';
+import { lineEnvPrefix, safeEffort, updateCheckOffEnv } from './cli-provider';
 import { updateSharedJsonSync } from '../utils/shared-file';
 
 /**
@@ -62,7 +62,9 @@ export class OpenCodeProvider implements CLIProvider {
   }
 
   buildInteractiveCommand(params: InteractiveCommandParams): string {
-    let command = `'${params.binaryPath.replace(/'/g, "'\\''")}'`;
+    // Its own update check off (cli-provider.ts updateCheckOffEnv), on the line where a shell runs it.
+    let command = lineEnvPrefix(updateCheckOffEnv(this.binaryName));
+    command += `'${params.binaryPath.replace(/'/g, "'\\''")}'`;
 
     // OpenCode CLI:
     //   opencode [project]:       start TUI (default, interactive)

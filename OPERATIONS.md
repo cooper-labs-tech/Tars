@@ -856,7 +856,10 @@ and a manifest deleted by hand is one that nothing can compare any more.
 ## The agents' CLIs: kept up to date by Tars
 
 Tars starts every claude with `DISABLE_AUTOUPDATER=1` and every Amp with its update check off,
-so neither updates itself inside a Tars terminal. Tars updates them instead
+so neither updates itself inside a Tars terminal. The other CLIs start with theirs off too (codex,
+gemini, Qwen Code, grok, opencode, pi: SPECS.md, "Environment injected into every agent PTY"), since a task Tars types
+would answer whatever their update flow draws; those Tars does not update: run their own update
+command. Tars updates claude and Amp instead
 (`electron/services/cli-updater.ts`): 5 s after launch, then every 30 minutes, one CLI at a time,
 while "Check for updates" is on in Settings (the one switch for Tars's own updates and these), and
 only the CLIs at least one agent runs. An agent with no provider, and the thirteen providers pointed
