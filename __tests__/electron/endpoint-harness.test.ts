@@ -16,7 +16,10 @@ import { endpointLaunchFor, piModelsWithEndpoint, ENDPOINT_TOKEN_VAR, ENDPOINT_P
  * 4. A model id with TOML, JSON or shell metacharacters reaches a config value unescaped.
  * 5. opencode is given the bare model id, which it reads as a provider of its own.
  * 6. Qwen Code keeps the key a user set for its own provider: OPENAI_API_KEY must be the proxy token, filled at spawn.
- * 7. A harness that is not one of the four gets a launch.
+ * 7. A harness that is not one of the five gets a launch.
+ * 8. Hermes (27/11) is given the endpoint or the token in its terminal: one gateway per home runs every Hermes
+ *    agent's sessions and keeps the environment of the terminal that started it, so that terminal's token would be
+ *    every Hermes agent's. Its endpoint goes into the agent's own profile (services/hermes-home.ts), never its terminal.
  */
 
 const BASE = 'http://127.0.0.1:31417/v1';
@@ -69,14 +72,22 @@ describe('endpoint launches', () => {
 
   it('4: a model id with metacharacters is refused rather than escaped into a config', () => {
     for (const model of ['a"b', "a'b", 'a b', 'a\nb', 'a$b', 'a`b', 'a\\b', '']) {
-      for (const h of ['codex', 'qwen-code', 'pi', 'opencode'] as const) {
+      for (const h of ['codex', 'qwen-code', 'pi', 'opencode', 'hermes'] as const) {
         expect(endpointLaunchFor(h, { proxyBase: BASE, model }), `${h} ${JSON.stringify(model)}`).toBeNull();
       }
     }
     expect(endpointLaunchFor('codex', { proxyBase: BASE, model: 'org/Model-1.5:fp8_x' })).not.toBeNull();
   });
 
-  it('7: only the four harnesses', () => {
+  it('8: hermes takes nothing from its terminal, and its profile gets the proxy and the model', () => {
+    const l = endpointLaunchFor('hermes', { proxyBase: BASE, model: 'open-coder-1' })!;
+    expect(l.args).toEqual([]);
+    expect(l.env).toEqual({});
+    expect(l.tokenVars).toEqual([]);
+    expect(l.profile).toEqual({ baseUrl: BASE, model: 'open-coder-1' });
+  });
+
+  it('7: only the five harnesses', () => {
     for (const h of ['claude', 'gemini', 'custom-openai', 'grok']) {
       expect(endpointLaunchFor(h, { proxyBase: BASE, model: 'GLM' }), h).toBeNull();
     }

@@ -37,7 +37,7 @@ export function registerEndpointTools(server: McpServer): void {
   registerTools(server, [
     tool({
       name: "endpoint_list",
-      description: "List the inference endpoints Tars knows (OpenAI-compatible, for codex, pi, qwen-code or opencode agents): approval, key set or not (never the key), models, last health check, and which agents use each.",
+      description: "List the inference endpoints Tars knows (OpenAI-compatible, for codex, pi, qwen-code, opencode or hermes agents): approval, key set or not (never the key), models, last health check, and which agents use each.",
       schema: {},
       failure: "listing the endpoints",
       async run() {

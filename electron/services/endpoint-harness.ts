@@ -11,7 +11,8 @@
  *   Tars's there (piModelsWithEndpoint), next to the user's own, which stay as they are.
  *
  * Measured on 19/11 against the stand-in endpoint, a tool call each: Codex 0.163 (Responses only: it refuses
- * `wire_api = "chat"` at load), Qwen Code 0.25.2, Pi 1.5.2 and opencode 1.19.6 (chat completions).
+ * `wire_api = "chat"` at load), Qwen Code 0.25.2, Pi 1.5.2 and opencode 1.19.6 (chat completions); Hermes Agent 0.23.4
+ * on 27/11 (chat completions), which takes it all from the agent's profile (`profile`).
  */
 
 export const ENDPOINT_TOKEN_VAR = 'TARS_ENDPOINT_TOKEN';
@@ -23,6 +24,12 @@ export interface EndpointLaunch {
   tokenVars: string[];
   modelArg?: string;
   files?: string[];
+  /**
+   * Hermes only: the endpoint for the agent's own profile, its token there too (services/hermes-home.ts), and nothing
+   * in its terminal. One gateway per Hermes home runs every Hermes agent's sessions with the environment of the
+   * terminal that started it, and hands a session no credential of the terminal that typed its task (0.23.4, 27/11).
+   */
+  profile?: { baseUrl: string; model: string };
 }
 
 /** A model id safe in a TOML string, a JSON string and a shell word alike: letters, digits and . _ : / - only. */
@@ -73,6 +80,8 @@ export function endpointLaunchFor(harness: string, o: { proxyBase: string; model
         tokenVars: [ENDPOINT_TOKEN_VAR],
         modelArg: `${p}/${o.model}`,
       };
+    case 'hermes':
+      return { args: [], env: {}, tokenVars: [], profile: { baseUrl: o.proxyBase, model: o.model } };
     default:
       return null;
   }

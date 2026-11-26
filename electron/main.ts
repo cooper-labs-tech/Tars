@@ -143,6 +143,8 @@ import { startStallWatch, stopStallWatch, readProcesses, cliProcess, processTree
 import { filesOpenBy, openFilesReadable } from './platform/open-files';
 import { startCodexSessionWatch, type HookPost } from './services/codex-sessions';
 import { startPiSessionWatch, piSessionDir } from './services/pi-sessions';
+import { startHermesTurnWatch } from './services/hermes-agent-turns';
+import { endHermesOnQuit, hermesStateDbOf, sweepHermesAtStart } from './core/hermes-terminals';
 import { codexHome, codexSignInGap, loginShellCodexHome } from './providers/codex-cli';
 import { codexKeyConfig } from './services/cli-keys';
 import { getProvider } from './providers';
@@ -872,6 +874,10 @@ app.whenReady().then(async () => {
       scheduleTick();
     },
   });
+  // Hermes's turns, read from each agent's profile's state.db (services/hermes-agent-turns.ts); and before any Hermes
+  // terminal, what a previous run left in Tars's Hermes home: a profile's .env, its gateway (core/hermes-terminals.ts).
+  void sweepHermesAtStart();
+  startHermesTurnWatch({ dbOf: hermesStateDbOf, post: postAsTerminal('hermes-agent-turns') });
   // pi's turns, read from its session file (services/pi-sessions.ts).
   startPiSessionWatch({
     dirOf: (agentId) => piSessionDir(DATA_DIR, agentId),
@@ -1124,6 +1130,8 @@ app.on('before-quit', (event) => {
     ]);
     void terminals
       .catch(err => console.error('Failed to end the terminals on quit:', err))
+      // Tars's Hermes home: the profiles' .env and the gateway its agents shared (core/hermes-terminals.ts). Never throws.
+      .finally(() => endHermesOnQuit())
       .finally(() => {
         terminalsEnded = true;
         app.quit();

@@ -217,7 +217,7 @@ Measured on codex-cli 0.163.0 (standalone install, ChatGPT account), the version
 
 ### Inference endpoints and native traces (`services/inference-endpoints.ts`, `endpoint-proxy.ts`, `trace-store.ts`)
 
-An agent running codex, pi, qwen-code or opencode can run on an OpenAI-compatible inference endpoint, chosen per
+An agent running codex, pi, qwen-code, opencode or Hermes Agent can run on an OpenAI-compatible inference endpoint, chosen per
 agent (`endpointId`, with `model` one of the endpoint's own `/v1/models`).
 
 **The proxy.** Tars writes everything the harness needs, through one adapter per harness (`endpoint-harness.ts`).
@@ -229,6 +229,15 @@ token as its key. Measured on 19/11 against a stand-in endpoint, a tool call eac
   `OPENAI_API_KEY`.
 - **pi 1.5.2:** one provider of Tars's in its `models.json`, named with `--provider`.
 - **opencode 1.19.6:** an inline provider in `OPENCODE_CONFIG_CONTENT`, and `--model tars-endpoint/<model>`.
+- **Hermes Agent 0.23.4** (27/11), on an endpoint only:
+  - It runs in a Hermes home of Tars's own, `~/.tars/hermes`, never the user's `~/.hermes`. Each agent is a profile
+    of it, `profiles/<agent id>`, its `HERMES_HOME` (`services/hermes-home.ts`, `core/hermes-terminals.ts`).
+  - One gateway per home runs every profile's sessions and takes no credential from the terminal that typed the task.
+    So the endpoint and the token go into the profile: the proxy and the model in its `config.yaml`, the terminal's
+    two tokens in its 0600 `.env`, removed when the terminal ends (SECURITY.md § 10).
+  - Its line: `hermes chat --source tool -m <model>`, `--yolo` in bypass. Its turns are read from the profile's
+    `state.db` (`services/hermes-agent-turns.ts`).
+  - Its first start downloads its Python packages once, about 135 MB from PyPI, about 1.2 GB on disk.
 
 The proxy:
 - swaps the token for the endpoint's key;

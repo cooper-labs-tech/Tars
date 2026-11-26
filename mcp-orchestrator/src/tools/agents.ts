@@ -506,7 +506,7 @@ export function keepCallerListening(
 }
 
 /** The providers by id, as create_agent and update_agent name them. */
-const PROVIDERS = "The provider, by id. Its own CLI: claude, codex, gemini, grok, opencode, pi, amp, qwen-code (Qwen Code, the CLI qwen, on the models of its own settings). Claude Code run against another provider, with the key set in Tars's Settings (refused without it): openrouter, deepseek, mimo, moonshot, qwen (the Qwen API), zhipu, minimax, nvidia, nous-portal, ollama, ollama-cloud, venice, custom-openai.";
+const PROVIDERS = "The provider, by id. Its own CLI: claude, codex, gemini, grok, opencode, pi, amp, qwen-code (Qwen Code, the CLI qwen, on the models of its own settings), hermes (Hermes Agent, on an inference endpoint only, with endpointId and one of its models). Claude Code run against another provider, with the key set in Tars's Settings (refused without it): openrouter, deepseek, mimo, moonshot, qwen (the Qwen API), zhipu, minimax, nvidia, nous-portal, ollama, ollama-cloud, venice, custom-openai.";
 
 const CHARACTERS = ["robot", "ninja", "wizard", "astronaut", "knight", "pirate", "alien", "viking"] as const;
 

@@ -23,7 +23,8 @@ import { randomBytes } from 'node:crypto';
 import * as path from 'node:path';
 
 export const MODEL_ID = 'stand-in-coder';
-const SHELL_NAMES = /^(shell|bash|exec_command|run_shell_command|exec|local_shell|shell_command)$/i;
+// `terminal` is Hermes Agent's shell tool (0.23.4): without it, the first name saying exec was `browser_exec`.
+const SHELL_NAMES = /^(shell|bash|exec_command|run_shell_command|exec|local_shell|shell_command|terminal)$/i;
 
 const asObj = (v) => (v && typeof v === 'object' && !Array.isArray(v) ? v : {});
 const asArr = (v) => (Array.isArray(v) ? v : []);

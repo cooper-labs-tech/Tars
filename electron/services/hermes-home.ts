@@ -1,0 +1,233 @@
+import * as fs from 'fs';
+import * as path from 'path';
+import { DATA_DIR } from '../constants';
+import { writeAtomicSync, writeSecretFileSync } from '../utils/secret-file';
+
+/**
+ * Tars's own Hermes home and its profiles (Hermes Agent, measured on 0.23.4, 26 and 27/11).
+ *
+ * - **The home** is `~/.tars/hermes`, never the user's `~/.hermes`: that one runs the user's own gateway (their
+ *   messaging platforms), memory, skills and kanban. Its Python dependencies are synced once, on the first start
+ *   (about 135 MB from PyPI, about 1.2 GB on disk), and kept: a home of its own is a data root of its own.
+ * - **One gateway per home runs every session,** multiplexing the profiles (`gateway.multiplex_profiles`), and a chat
+ *   hands it only allowlisted, non-secret variables of its terminal. A session's provider key and its MCP servers'
+ *   `${VAR}` come from its profile's `.env`, Hermes's secret scope for that profile, never from the terminal.
+ * - **So each agent is a profile,** `profiles/<agent id>`, its `HERMES_HOME`, with:
+ *   - a `config.yaml` written whole at each start: the endpoint (through Tars's proxy), the guards below, the
+ *     approvals of its permission mode, and Tars's MCP servers with their variables, the token by `${...}` only;
+ *   - a `.env` at 0600 holding that terminal's proxy token, the proxy's address and its Tars token, and nothing
+ *     else: never an endpoint's real key (it stays in ~/.tars-private, the proxy swaps it in) nor a user's
+ *     credential. Written when the terminal starts, removed when it ends, and swept at the next start after a crash.
+ *     SECURITY.md says what it is and is not.
+ * - **The guards,** each a default of Hermes that reaches past the home: the telemetry question at the first start
+ *   (answered no), `auth.adopt_external_logins` (it borrows and refreshes the Codex CLI's and Claude Code's logins,
+ *   whose refresh tokens are single use), passive update checks, and the catalog fetches those leave on.
+ * - **Hooks are not how Tars reads its turns:** a hook runs in the gateway with the profile's HERMES_HOME but neither
+ *   token (measured 27/11), so it could not report to Tars as its agent. Each profile has its own `state.db`, which
+ *   hermes-agent-turns.ts reads instead.
+ * - **The gateway** outlives the terminal that started it (`--idle-exit`). Tars stops its home's gateway by the pid its
+ *   record names, once that pid is checked to run a Hermes gateway, when the last Hermes agent's terminal ends and
+ *   at quit. hermes-home.test.ts lists each way this goes wrong.
+ */
+
+export const HERMES_SECRET_VARS = ['OPENAI_BASE_URL', 'OPENAI_API_KEY', 'CLAUDE_MGR_API_TOKEN'] as const;
+type SecretVar = typeof HERMES_SECRET_VARS[number];
+export type HermesSecrets = { OPENAI_BASE_URL: string } & Partial<Record<Exclude<SecretVar, 'OPENAI_BASE_URL'>, string>>;
+
+/** The one variable of Tars's MCP servers that is a secret: written as `${...}`, its value in the `.env` only. */
+const TOKEN_VAR: SecretVar = 'CLAUDE_MGR_API_TOKEN';
+
+export interface HermesMcpServer {
+  command: string;
+  args: string[];
+  /** The names of the variables it reads (mcp-orchestrator-env.ts). */
+  env: readonly string[];
+}
+
+export interface HermesProfileSpec {
+  /** Tars's endpoint proxy, `http://127.0.0.1:<port>/v1`. */
+  baseUrl: string;
+  model: string;
+  permissionMode?: string;
+  mcpServers: Record<string, HermesMcpServer>;
+  /** The values of the servers' variables that are not secrets (the agent's id, name, project, Tars's address). */
+  mcpValues: Record<string, string>;
+}
+
+export function hermesRoot(dataDir: string = DATA_DIR): string {
+  return path.join(dataDir, 'hermes');
+}
+
+const AGENT_ID = /^[A-Za-z0-9._-]+$/;
+
+export function hermesProfileDir(root: string, agentId: string): string {
+  if (!AGENT_ID.test(agentId) || agentId === '.' || agentId === '..') throw new Error(`not an agent id: ${JSON.stringify(agentId)}`);
+  return path.join(root, 'profiles', agentId);
+}
+
+/** normal (and plan, which Hermes does not have) ask before a dangerous command; auto and bypass let Hermes judge. */
+export function approvalsModeFor(permissionMode: string | undefined): 'manual' | 'smart' {
+  return permissionMode === 'auto' || permissionMode === 'bypass' ? 'smart' : 'manual';
+}
+
+// ---- YAML, written by hand: maps, lists of strings, strings, booleans and numbers. Every string is a double-quoted
+// scalar whose characters outside printable ASCII are escapes, so no value can end a line, start a comment or a key.
+
+function yamlString(s: string): string {
+  let out = '"';
+  for (const ch of s) {
+    const cp = ch.codePointAt(0)!;
+    if (ch === '"' || ch === '\\') out += `\\${ch}`;
+    else if (cp >= 0x20 && cp < 0x7f) out += ch;
+    else if (cp <= 0xffff) out += `\\u${cp.toString(16).padStart(4, '0')}`;
+    else out += `\\U${cp.toString(16).padStart(8, '0')}`;
+  }
+  return `${out}"`;
+}
+
+type Yaml = string | boolean | number | string[] | { [key: string]: Yaml | undefined };
+
+function yamlKey(key: string): string {
+  return /^[A-Za-z_][A-Za-z0-9_-]*$/.test(key) ? key : yamlString(key);
+}
+
+function yamlMap(map: { [key: string]: Yaml | undefined }, indent = ''): string {
+  let out = '';
+  for (const [key, value] of Object.entries(map)) {
+    if (value === undefined) continue;
+    const head = `${indent}${yamlKey(key)}:`;
+    if (Array.isArray(value)) out += `${head} [${value.map(yamlString).join(', ')}]\n`;
+    else if (typeof value === 'object') {
+      const inner = yamlMap(value, `${indent}  `);
+      out += inner ? `${head}\n${inner}` : `${head} {}\n`;
+    } else if (typeof value === 'string') out += `${head} ${yamlString(value)}\n`;
+    else out += `${head} ${String(value)}\n`;
+  }
+  return out;
+}
+
+const HEADER = '# Written by Tars at each start of the agent: changes made here are replaced.\n';
+
+/** What every config of Tars's home says, the root's and each profile's. */
+const GUARDS = {
+  telemetry: { shared_metrics: { enabled: false, send: false, offer_version: 2 } },
+  auth: { adopt_external_logins: false },
+  updates: { check: false },
+  // updates.check off leaves three fetches on (27/11, through a logging proxy): the model catalog
+  // (raw.githubusercontent.com), the plugin catalog (hermes-agent.nousresearch.com) and a model capability list
+  // (openrouter.ai). With these two, a chat and a minute of its gateway idling reached no host but the proxy.
+  model_catalog: { enabled: false },
+  plugins: { auto_update_check_hours: 0 },
+};
+
+/** The root's config: the gateway's own settings, which every profile's sessions run under. */
+export function hermesRootConfig(): string {
+  return HEADER + yamlMap({ gateway: { multiplex_profiles: true }, ...GUARDS });
+}
+
+/** One agent's config: its endpoint, the guards, its approvals and Tars's MCP servers. */
+export function hermesProfileConfig(spec: HermesProfileSpec): string {
+  const servers: { [name: string]: Yaml } = {};
+  for (const [name, server] of Object.entries(spec.mcpServers)) {
+    const env: { [name: string]: string } = {};
+    for (const v of server.env) {
+      if (v === TOKEN_VAR) env[v] = `\${${TOKEN_VAR}}`;
+      else if (spec.mcpValues[v] !== undefined) env[v] = spec.mcpValues[v];
+    }
+    servers[name] = { command: server.command, args: [...server.args], env };
+  }
+  return HEADER + yamlMap({
+    model: { provider: 'custom', base_url: spec.baseUrl, default: spec.model },
+    ...GUARDS,
+    approvals: { mode: approvalsModeFor(spec.permissionMode) },
+    mcp_servers: servers,
+  });
+}
+
+/** A value of the `.env`: one word Hermes's reader takes as it is, nothing it could expand or end a line with. */
+const ENV_VALUE = /^[A-Za-z0-9._:/+=-]+$/;
+
+/** The `.env` of a profile: the three variables, in order, each checked. */
+export function hermesEnvText(secrets: HermesSecrets): string {
+  const extra = Object.keys(secrets).filter(k => !(HERMES_SECRET_VARS as readonly string[]).includes(k));
+  if (extra.length) throw new Error(`a Hermes profile's .env holds only ${HERMES_SECRET_VARS.join(', ')}, not ${extra.join(', ')}`);
+  let out = '';
+  for (const name of HERMES_SECRET_VARS) {
+    const value = secrets[name];
+    if (value === undefined) continue;
+    if (!ENV_VALUE.test(value)) throw new Error(`${name} is not a value a Hermes .env can hold as it is`);
+    out += `${name}=${value}\n`;
+  }
+  return out;
+}
+
+/**
+ * At an agent terminal's start: the root's config, the agent's config and its `.env` (0600, written as every secret
+ * of Tars is, with no readable temporary copy). The `.env` first goes, so a failure leaves no stale token behind.
+ */
+export function writeHermesProfile(root: string, agentId: string, spec: HermesProfileSpec, secrets: HermesSecrets): void {
+  const dir = hermesProfileDir(root, agentId);
+  const envText = hermesEnvText(secrets);
+  removeHermesSecrets(root, agentId);
+  fs.mkdirSync(dir, { recursive: true, mode: 0o700 });
+  writeAtomicSync(path.join(root, 'config.yaml'), hermesRootConfig());
+  writeAtomicSync(path.join(dir, 'config.yaml'), hermesProfileConfig(spec));
+  writeSecretFileSync(path.join(dir, '.env'), envText);
+}
+
+/** At the terminal's end: its `.env`, the tokens it held being revoked with the terminal anyway. */
+export function removeHermesSecrets(root: string, agentId: string): void {
+  fs.rmSync(path.join(hermesProfileDir(root, agentId), '.env'), { force: true });
+}
+
+/**
+ * At Tars's start, and whenever asked: the `.env` of every profile whose terminal is gone (a crash, a quit that did
+ * not finish). A link named `.env` is removed as a link. Returns the profiles swept.
+ */
+export function sweepHermesSecrets(root: string, isLive: (agentId: string) => boolean): string[] {
+  let names: string[];
+  try { names = fs.readdirSync(path.join(root, 'profiles')); } catch { return []; }
+  const swept: string[] = [];
+  for (const name of names) {
+    if (!AGENT_ID.test(name) || name === '.' || name === '..' || isLive(name)) continue;
+    const file = path.join(root, 'profiles', name, '.env');
+    try { fs.lstatSync(file); } catch { continue; }
+    fs.rmSync(file, { force: true });
+    swept.push(name);
+  }
+  return swept;
+}
+
+export interface GatewayStopDeps {
+  /** The command line of the process under the pid, or null when there is none (or it cannot be read). */
+  commandOf: (pid: number) => Promise<string | null>;
+  stop: (pid: number) => Promise<void>;
+}
+
+const samePath = (a: string, b: string) => {
+  const norm = (p: string) => path.resolve(p).replace(/[\\/]+$/, '');
+  return process.platform === 'win32' || process.platform === 'darwin'
+    ? norm(a).toLowerCase() === norm(b).toLowerCase()
+    : norm(a) === norm(b);
+};
+
+/** A Hermes gateway's command line: `python3 -m hermes_cli.main [--profile <p>] gateway run ...` (measured). */
+const GATEWAY_COMMAND = /\bhermes_cli[./\\]main\b.*\bgateway\s+run\b/;
+
+/**
+ * Stops the gateway of Tars's home: the pid its record (`<home>/gateway.pid`, `{"pid", "hermes_home", ...}`) names,
+ * only when that record is this home's and the process under the pid runs a Hermes gateway. Anything else stops
+ * nothing: the user's own gateway has a record in their home, never in this one.
+ */
+export async function stopHermesGateway(root: string, deps: GatewayStopDeps): Promise<'stopped' | 'none' | 'not-this-home' | 'not-a-gateway'> {
+  let record: unknown;
+  try { record = JSON.parse(fs.readFileSync(path.join(root, 'gateway.pid'), 'utf8')); } catch { return 'none'; }
+  const { pid, hermes_home: home } = (record && typeof record === 'object' ? record : {}) as { pid?: unknown; hermes_home?: unknown };
+  if (typeof pid !== 'number' || !Number.isSafeInteger(pid) || pid <= 1 || pid === process.pid) return 'none';
+  if (typeof home !== 'string' || !samePath(home, root)) return 'not-this-home';
+  const command = await deps.commandOf(pid);
+  if (!command) return 'none';
+  if (!GATEWAY_COMMAND.test(command)) return 'not-a-gateway';
+  await deps.stop(pid);
+  return 'stopped';
+}

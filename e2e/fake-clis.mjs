@@ -46,6 +46,8 @@ export const FAKE_KINDS = {
   pi: { binary: 'pi', version: '0.73.0' },
   amp: { binary: 'amp', version: '0.0.1788811227-gce258b' },
   grok: { binary: 'grok', version: '0.2.64' },
+  // Hermes Agent (Nous Research), as measured on 0.23.4 (26 and 27/11, reports of the Hermes harness).
+  hermes: { binary: 'hermes', version: 'Hermes Agent v0.23.4' },
 };
 
 /**
@@ -66,10 +68,13 @@ export function writeFakeClis(home, kinds = [...Object.keys(FAKE_KINDS), 'codex'
     if (!spec) throw new Error(`no stand-in for ${kind}`);
     paths[kind] = path.join(bin, spec.binary);
     fs.writeFileSync(paths[kind], [
-      `#!${process.execPath}`,
+      // Hermes's stand-in writes its state.db through node:sqlite, whose warning would land in the agent's terminal.
+      `#!${process.execPath}${kind === 'hermes' ? ' --no-warnings' : ''}`,
       `process.env.FAKE_CLI_KIND = ${JSON.stringify(kind)};`,
       `process.env.FAKE_CLI_LOG = ${JSON.stringify(path.join(home, 'fake-cli.jsonl'))};`,
       ...(delegateTimeoutS ? [`process.env.FAKE_DELEGATE_TIMEOUT_S = '${delegateTimeoutS}';`] : []),
+      // The schema Hermes 0.23.4 created its state.db with (its sessions and messages tables, from a real profile).
+      ...(kind === 'hermes' ? [`process.env.FAKE_HERMES_SCHEMA = ${JSON.stringify(path.resolve('__tests__', 'fixtures', 'hermes-agent', 'profile-state.sql'))};`] : []),
       `import(${JSON.stringify(path.join(HERE, 'fake-clis.mjs'))}).then((m) => m.run());`,
       '',
     ].join('\n'), { mode: 0o755 });
@@ -107,6 +112,26 @@ function addTomlServer(file, name, command, args) {
 }
 
 const GEMINI_REDACTED = /TOKEN|SECRET|PASSWORD|KEY|AUTH|CREDENTIAL/i;
+
+/** Hermes's mcp_servers, from a config.yaml as Tars writes it: double-quoted scalars, flow lists of strings. */
+function hermesMcp(text) {
+  const servers = {};
+  let inBlock = false;
+  let name = null;
+  let inEnv = false;
+  for (const line of text.split('\n')) {
+    if (/^mcp_servers:/.test(line)) { inBlock = true; continue; }
+    if (!inBlock || !line.trim() || line.startsWith('#')) continue;
+    if (/^\S/.test(line)) break;
+    let m;
+    if ((m = /^ {2}("(?:[^"\\]|\\.)*"|[A-Za-z0-9_-]+):\s*$/.exec(line))) { name = m[1].startsWith('"') ? JSON.parse(m[1]) : m[1]; servers[name] = { args: [], env: {} }; inEnv = false; }
+    else if (name && (m = /^ {4}command: (.+)$/.exec(line))) servers[name].command = JSON.parse(m[1]);
+    else if (name && (m = /^ {4}args: (.+)$/.exec(line))) servers[name].args = JSON.parse(m[1]);
+    else if (name && /^ {4}env:/.test(line)) inEnv = !/\{\}\s*$/.test(line);
+    else if (name && inEnv && (m = /^ {6}([A-Za-z0-9_]+): (.+)$/.exec(line))) servers[name].env[m[1]] = JSON.parse(m[2]);
+  }
+  return servers;
+}
 
 export async function run() {
   const kind = process.env.FAKE_CLI_KIND;
@@ -253,6 +278,37 @@ export async function run() {
       else if (a === '--dangerously-allow-all') opts.bypass = true;
       else if (a === '--mode') i++;
     }
+  } else if (kind === 'hermes') {
+    // hermes chat [--source <tag>] [-m <model>] [--yolo] [--resume <id>] [-q <text>] [--oneshot] [--format <f>] (0.23.4).
+    if (argv[0] !== 'chat') { log({ command: argv[0], argv }); out('ok\n'); process.exit(0); }
+    for (let i = 1; i < argv.length; i++) {
+      const a = argv[i];
+      if (a === '--source') opts.source = argv[++i];
+      else if (a === '-m' || a === '--model') opts.model = argv[++i];
+      else if (a === '--yolo') opts.bypass = true;
+      else if (a === '--resume') opts.resume = argv[++i];
+      else if (a === '-q' || a === '--query') opts.prompt = argv[++i];
+      else if (a === '--oneshot') opts.oneShot = true;
+      else if (a === '--format') i++;
+      else { log({ launch: true, argv, refused: [a] }); process.stderr.write(`hermes chat: error: unrecognized arguments: ${a}\n`); process.exit(2); }
+    }
+    // Its gateway takes the tags it knows, `tool` for an integration's sessions (measured: `tars` refused).
+    if (opts.source && !['cli', 'tool'].includes(opts.source)) {
+      log({ launch: true, argv, refused: [`--source ${opts.source}`] });
+      process.stderr.write(`Gateway does not support source '${opts.source}'\n`);
+      process.exit(1);
+    }
+  }
+
+  // ---- Hermes's home (HERMES_HOME, else ~/.hermes): its profile's secret scope (.env), which the gateway hands a
+  // session's provider and its MCP servers' ${VAR}, and its config.yaml (0.23.4, measured 27/11). The terminal's own
+  // variables do not reach a session: the one gateway of the home was started by whichever terminal came first.
+  const hermesHome = kind === 'hermes' ? (process.env.HERMES_HOME || path.join(HOME, '.hermes')) : null;
+  const hermesScope = {};
+  let hermesConfig = '';
+  if (hermesHome) {
+    try { for (const l of fs.readFileSync(path.join(hermesHome, '.env'), 'utf8').split('\n')) { const m = /^([A-Z0-9_]+)=(.*)$/.exec(l); if (m) hermesScope[m[1]] = m[2]; } } catch { /* none */ }
+    try { hermesConfig = fs.readFileSync(path.join(hermesHome, 'config.yaml'), 'utf8'); } catch { /* none */ }
   }
 
   // ---- Its settings: hooks, MCP servers.
@@ -287,6 +343,8 @@ export async function run() {
     } else if (kind === 'pi') {
       add(readJson(path.join(HOME, '.pi', 'agent', 'mcp.json'))?.mcpServers, '~/.pi/agent/mcp.json');
       add(readJson(path.join(process.cwd(), '.pi', 'mcp.json'))?.mcpServers, '.pi/mcp.json');
+    } else if (kind === 'hermes') {
+      add(hermesMcp(hermesConfig), 'config.yaml');
     }
     return found;
   }
@@ -294,6 +352,13 @@ export async function run() {
   /** What an MCP server this CLI starts gets of its environment. */
   function serverEnv(server) {
     const own = server.env ?? {};
+    if (kind === 'hermes') {
+      // A safe list of the gateway's variables, and the server's own `env`, its ${VAR} from the profile's .env only.
+      const SAFE = ['PATH', 'HOME', 'USER', 'LOGNAME', 'LANG', 'TERM', 'SHELL', 'TMPDIR'];
+      const base = Object.fromEntries(Object.entries(process.env).filter(([k]) => SAFE.includes(k) || k.startsWith('XDG_')));
+      const expanded = Object.fromEntries(Object.entries(own).map(([k, v]) => [k, String(v).replace(/\$\{([A-Za-z0-9_]+)\}/g, (_, n) => hermesScope[n] ?? '')]));
+      return { policy: 'measured: safe list, ${VAR} from the profile .env', env: { ...base, ...expanded } };
+    }
     if (kind === 'gemini') {
       const base = Object.fromEntries(Object.entries(process.env).filter(([k]) => !GEMINI_REDACTED.test(k)));
       const expanded = Object.fromEntries(Object.entries(own).map(([k, v]) => [k, String(v).replace(/\$\{?([A-Z0-9_]+)\}?/g, (_, n) => process.env[n] ?? '')]));
@@ -379,7 +444,24 @@ export async function run() {
 
   // ---- Its session: id, transcript, hooks.
   const cwd = process.cwd();
-  const sid = opts.resume || opts.sessionId || crypto.randomUUID();
+  const sid = opts.resume || opts.sessionId || (kind === 'hermes' ? `local-${crypto.randomBytes(32).toString('hex')}` : crypto.randomUUID());
+  // Hermes's session store: <HERMES_HOME>/state.db (WAL), its sessions and messages tables as 0.23.4 creates them, one
+  // row per message as it ends: an assistant's finish_reason tool_calls while the turn goes on, stop at its end.
+  let hermesDb = null;
+  if (kind === 'hermes' && hermesHome) {
+    const { DatabaseSync } = await import('node:sqlite');
+    fs.mkdirSync(hermesHome, { recursive: true });
+    // Only the two tables Tars reads: sessions' key to system_prompts, which is not made here, is not enforced.
+    hermesDb = new DatabaseSync(path.join(hermesHome, 'state.db'), { enableForeignKeyConstraints: false });
+    hermesDb.exec('PRAGMA journal_mode=WAL');
+    const schema = fs.readFileSync(process.env.FAKE_HERMES_SCHEMA, 'utf8').split('\n').filter((l) => !/^(INSERT|PRAGMA|BEGIN|COMMIT)/.test(l)).join('\n');
+    hermesDb.exec(schema.replace(/CREATE TABLE (\w+)/g, 'CREATE TABLE IF NOT EXISTS $1'));
+  }
+  const hermesRow = (role, content, finish = null, tool = null) => {
+    if (!hermesDb) return;
+    hermesDb.prepare("INSERT OR IGNORE INTO sessions (id, source, model, started_at, profile_name, cwd) VALUES (?, 'tool', ?, ?, ?, ?)").run(sid, opts.model ?? null, Date.now() / 1000, path.basename(hermesHome), cwd);
+    hermesDb.prepare('INSERT INTO messages (session_id, role, content, tool_name, timestamp, finish_reason) VALUES (?, ?, ?, ?, ?, ?)').run(sid, role, content, tool, Date.now() / 1000, finish);
+  };
   const transcript = kind === 'claude' ? path.join(claudeDir, 'projects', cwd.replace(/[^a-zA-Z0-9]/g, '-'), `${sid}.jsonl`)
     : kind === 'qwen-code' ? path.join(HOME, '.qwen', 'projects', cwd.replace(/[^a-zA-Z0-9]/g, '-'), 'chats', `${sid}.jsonl`)
       : kind === 'gemini' ? path.join(HOME, '.gemini', 'tmp', crypto.createHash('sha256').update(cwd).digest('hex'), 'chats', `session-${sid}.json`)
@@ -390,6 +472,7 @@ export async function run() {
   if (transcript) fs.mkdirSync(path.dirname(transcript), { recursive: true });
   let n = 0;
   const record = (type, text, usage) => {
+    if (kind === 'hermes') { hermesRow(type, text, type === 'assistant' ? 'stop' : null); return; }
     if (!transcript || kind === 'gemini') return;
     n += 1;
     const at = new Date().toISOString();
@@ -434,9 +517,26 @@ export async function run() {
     else if (apiKey && !approved) question = 'api-key';
     if (process.env.ANTHROPIC_BASE_URL && !process.env.ANTHROPIC_AUTH_TOKEN && !approved) loggedIn = false;
   }
+  // Hermes asks about telemetry at its first interactive start, unless its config answered it (0.23.4, measured 26/11).
+  if (kind === 'hermes' && !opts.oneShot && !/^ {4}offer_version: 2$/m.test(hermesConfig)) question = 'telemetry';
 
   const permissionMode = opts.bypass ? 'bypassPermissions' : 'default';
   log({ launch: true, argv, cwd, token: !!process.env.CLAUDE_MGR_API_TOKEN, instance: !!process.env.TARS_INSTANCE_ID, sid, prompt: opts.prompt, oneShot: opts.oneShot, question, loggedIn, servers: Object.keys(mcpServers()) });
+  // What Hermes was started with: which home, what its profile's .env names (never a value), what its terminal holds,
+  // and which of Tars's guards its config carries.
+  if (kind === 'hermes') {
+    const has = (re) => re.test(hermesConfig);
+    log({
+      hermes: true, home: hermesHome, scope: Object.keys(hermesScope).sort(), source: opts.source ?? null,
+      terminal: { token: !!process.env.CLAUDE_MGR_API_TOKEN, endpointToken: !!process.env.TARS_ENDPOINT_TOKEN, openaiKey: !!process.env.OPENAI_API_KEY, openaiBase: !!process.env.OPENAI_BASE_URL },
+      envMode: (() => { try { return (fs.statSync(path.join(hermesHome, '.env')).mode & 0o777).toString(8); } catch { return null; } })(),
+      guards: {
+        telemetry: has(/^ {4}offer_version: 2$/m), adoptLogins: has(/^ {2}adopt_external_logins: false$/m), updates: has(/^updates:\n {2}check: false$/m),
+        modelCatalog: has(/^model_catalog:\n {2}enabled: false$/m), pluginChecks: has(/^plugins:\n {2}auto_update_check_hours: 0$/m),
+        approvals: /^approvals:\n {2}mode: "(\w+)"$/m.exec(hermesConfig)?.[1] ?? null,
+      },
+    });
+  }
 
   let dialog = null;
   function ask(tag) {
@@ -461,7 +561,26 @@ export async function run() {
       return;
     }
     const directive = /\b(DELEGATE|SEND|ECHO|APPROVE) (\S+)(?: (.+))?$/ms.exec(text);
-    if (kind === 'qwen-code' && process.env.OPENAI_BASE_URL) answer = await modelTurn(text);
+    if (kind === 'hermes') {
+      // A SEND goes through Tars's MCP server first, as the agent it runs for (its token from the profile's .env).
+      let sent = '';
+      // WHOAMI: who Tars says this agent is, through its MCP server (a token of another agent's is refused there).
+      if (/\bWHOAMI\b/.test(text)) {
+        const r = await callTars('whoami', {});
+        sent += `whoami ${r.isError ? 'refused' : 'answered'}: ${r.text.split('\n')[0]} `;
+      }
+      if (directive?.[1] === 'SEND') {
+        const r = await callTars('send_message', { id: directive[2], message: (directive[3] ?? '').trim() });
+        sent = `send_message ${r.isError ? 'refused' : 'sent'}. `;
+      }
+      // The endpoint, its key and its model from the profile (the .env and config.yaml), never the terminal's; the
+      // shell tool is `terminal`, each step a row of state.db.
+      const model = /^model:\n(?: {2}.*\n)*? {2}default: "([^"]*)"$/m.exec(hermesConfig)?.[1];
+      answer = sent + await modelTurn(text, {
+        base: hermesScope.OPENAI_BASE_URL, key: hermesScope.OPENAI_API_KEY ?? '', model: opts.model ?? model, tool: 'terminal',
+        onStep: (s) => hermesRow(s.role, s.content, s.finish ?? null, s.tool ?? null),
+      });
+    } else if (kind === 'qwen-code' && process.env.OPENAI_BASE_URL) answer = await modelTurn(text);
     else if (!directive) answer = 'ok';
     else if (directive[1] === 'ECHO') answer = `echo ${directive[2]}`;
     else if (directive[1] === 'APPROVE') answer = (opts.bypass || await ask(directive[2])) ? `ran echo ${directive[2]}` : `did not run echo ${directive[2]}`;
@@ -486,21 +605,21 @@ export async function run() {
   // argument), on every system alike, and its output is sent back as the tool's result. Logged: each request's
   // status, the time its first chunk came and the time it ended, and what the key looked like (its first four
   // characters), never the key.
-  async function modelTurn(text) {
-    const base = process.env.OPENAI_BASE_URL.replace(/\/+$/, '');
-    const key = process.env.OPENAI_API_KEY ?? '';
-    const tools = [{ type: 'function', function: { name: 'run_shell_command', description: 'Run a shell command', parameters: { type: 'object', properties: { command: { type: 'string' } }, required: ['command'] } } }];
+  async function modelTurn(text, endpoint = { base: process.env.OPENAI_BASE_URL, key: process.env.OPENAI_API_KEY ?? '', model: process.env.OPENAI_MODEL, tool: 'run_shell_command' }) {
+    const base = String(endpoint.base ?? '').replace(/\/+$/, '');
+    const key = endpoint.key ?? '';
+    const tools = [{ type: 'function', function: { name: endpoint.tool, description: 'Run a shell command', parameters: { type: 'object', properties: { command: { type: 'string' } }, required: ['command'] } } }];
     const messages = [{ role: 'system', content: 'You are a stand-in coding agent.' }, { role: 'user', content: text }];
     // A task that asks for a title gets a side request first, as opencode's title call is (no tools, a system prompt of
     // its own, not streamed): what a trace marks `side`.
     if (/\btitle\b/i.test(text)) {
-      const res = await fetch(`${base}/chat/completions`, { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${key}` }, body: JSON.stringify({ model: process.env.OPENAI_MODEL, messages: [{ role: 'system', content: 'Generate a short title for the conversation.' }, { role: 'user', content: text }], stream: false }) });
+      const res = await fetch(`${base}/chat/completions`, { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${key}` }, body: JSON.stringify({ model: endpoint.model, messages: [{ role: 'system', content: 'Generate a short title for the conversation.' }, { role: 'user', content: text }], stream: false }) });
       await res.text();
       log({ model: true, side: true, status: res.status, keyHead: key.slice(0, 4), keyLength: key.length });
     }
     for (let step = 0; step < 4; step++) {
       const sentAt = Date.now();
-      const res = await fetch(`${base}/chat/completions`, { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${key}` }, body: JSON.stringify({ model: process.env.OPENAI_MODEL, messages, tools, stream: true, stream_options: { include_usage: true } }) });
+      const res = await fetch(`${base}/chat/completions`, { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${key}` }, body: JSON.stringify({ model: endpoint.model, messages, tools, stream: true, stream_options: { include_usage: true } }) });
       let firstChunkAt;
       let raw = '';
       const reader = res.body.getReader();
@@ -510,7 +629,7 @@ export async function run() {
         if (firstChunkAt === undefined) firstChunkAt = Date.now();
         raw += Buffer.from(value).toString('utf8');
       }
-      log({ model: true, status: res.status, sentAt, firstChunkAt, endAt: Date.now(), keyHead: key.slice(0, 4), keyLength: key.length, model_: process.env.OPENAI_MODEL });
+      log({ model: true, status: res.status, sentAt, firstChunkAt, endAt: Date.now(), keyHead: key.slice(0, 4), keyLength: key.length, keyHash: crypto.createHash("sha256").update(key).digest("hex").slice(0, 16), model_: process.env.OPENAI_MODEL });
       if (!res.ok) return `the endpoint answered ${res.status}`;
       let content = '';
       const calls = new Map();
@@ -533,11 +652,14 @@ export async function run() {
       if (!calls.size) return content || 'no answer';
       const list = [...calls.values()];
       messages.push({ role: 'assistant', content: null, tool_calls: list.map((c) => ({ id: c.id, type: 'function', function: { name: c.name, arguments: c.arguments } })) });
+      endpoint.onStep?.({ role: 'assistant', content: content || null, finish: 'tool_calls' });
       for (const c of list) {
         let command = '';
         try { command = JSON.parse(c.arguments).command ?? ''; } catch { /* nothing */ }
         const echoed = /^echo (.+)$/.exec(String(command).trim());
-        messages.push({ role: 'tool', tool_call_id: c.id, content: echoed ? `${echoed[1]}\n` : `ran ${command}` });
+        const result = echoed ? `${echoed[1]}\n` : `ran ${command}`;
+        messages.push({ role: 'tool', tool_call_id: c.id, content: result });
+        endpoint.onStep?.({ role: 'tool', content: result, tool: c.name });
       }
     }
     return 'too many steps';
@@ -556,6 +678,7 @@ export async function run() {
   }
   if (question === 'trust') out('\nDo you trust the files in this folder?\n> 1. Yes, proceed\n  2. No, exit\n');
   else if (question === 'api-key') out('\nDetected a custom API key in your environment\nDo you want to use this API key?\n  1. Yes\n> 2. No (recommended)\n');
+  else if (question === 'telemetry') out('\nHelp improve Hermes?\n  ( ) Share with Nous\n  (*) No thanks\n');
   else out(`${kind} stand-in ready\n> `);
   if (opts.prompt && !question) queue(opts.prompt);
   else if (opts.prompt) log({ lost: 'the first prompt went to the question', question });
@@ -571,6 +694,8 @@ export async function run() {
     if (!text) return;
     log({ typed: text.slice(-1500), head: text.slice(0, 300) });
     if (question === 'trust') { question = null; log({ answered: 'trust', with: text }); return; }
+    // Hermes's question takes the first line typed, its Enter choosing the default (measured 26/11): the task is lost.
+    if (question === 'telemetry') { question = null; log({ answered: 'telemetry', lost: text.slice(-200) }); out('\n> '); return; }
     if (question === 'api-key') {
       // A prompt typed into the question answers it, No being preselected: the key refused for good (#458).
       const cfg = readJson(claudeJson) ?? {};

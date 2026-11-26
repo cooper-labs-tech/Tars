@@ -1259,7 +1259,7 @@ What it is: SPECS.md § 2, "Inference endpoints and native traces". What it guar
 
 **Add an endpoint.**
 1. In Settings: a name, a base URL up to the routes (`https://host.example.com/v1`) and the key, then Refresh models.
-2. Then, in an agent's panel: codex, pi, qwen-code or opencode, the endpoint and one of its models.
+2. Then, in an agent's panel: codex, pi, qwen-code, opencode or hermes, the endpoint and one of its models.
 
 The agent's next terminal runs on it. A change of endpoint, model or traces ends the current terminal, so that the new
 one carries the new session.
