@@ -128,6 +128,9 @@ export async function updateAgent(params: AgentUpdate, opts: AgentUpdateOptions 
   // Never ~/.tars-private, from the window as from update_agent (the Audit's L4 on #480).
   const handed = params.secondaryProjectPath ? handedFolderProblem(params.secondaryProjectPath) : null;
   if (handed) return { success: false, error: `Not saved: ${handed}.` };
+  // The template's folders are handed the same way (--add-dir, --include-directories): the same check, each of them.
+  const vault = (params.obsidianVaultPaths ?? []).map(folder => (typeof folder === 'string' ? handedFolderProblem(folder) : 'a template folder is not a path')).find(Boolean);
+  if (vault) return { success: false, error: `Not saved: ${vault}.` };
   if (params.secondaryProjectPath && !fs.existsSync(params.secondaryProjectPath)) {
     return { success: false, error: 'Secondary project path does not exist' };
   }

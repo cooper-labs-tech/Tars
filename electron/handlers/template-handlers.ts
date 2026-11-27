@@ -6,6 +6,7 @@ import { DATA_DIR } from '../constants';
 import { BUILTIN_TEMPLATES } from '../constants/builtin-templates';
 import { isValidProvider } from '../providers';
 import { skillsProblem } from '../utils/skill-name';
+import { handedFolderProblem } from '../utils/handed-folder';
 import { quoted } from '../utils/reveal';
 import type {
   AgentTemplate,
@@ -164,6 +165,9 @@ function templateProblem(t: unknown, patch = false): string | undefined {
     if (f.obsidianVaultPaths.some(folder => typeof folder !== 'string' || !path.isAbsolute(folder))) {
       return `${name} asks for a folder that is not an absolute path`;
     }
+    // Handed to the agents it makes as their secondary folder is (utils/handed-folder.ts): never one they may not be.
+    const handed = (f.obsidianVaultPaths as string[]).map(folder => handedFolderProblem(folder)).find(Boolean);
+    if (handed) return `${name}: ${handed}`;
   }
   if (f.skills != null) {
     const problem = skillsProblem(f.skills);

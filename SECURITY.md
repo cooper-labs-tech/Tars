@@ -376,6 +376,16 @@ under it.
 agents in the fleet run with `--dangerously-skip-permissions`, where the flag
 decides nothing at all.
 
+What Tars hands an agent besides its project (its secondary folder, a template's
+folders) is never `~/.tars-private`, nor a folder where credentials are kept, nor
+one inside or holding one (`utils/handed-folder.ts`, `CREDENTIAL_FOLDERS`: `~/.ssh`,
+`~/.gnupg`, the cloud CLIs', GitHub CLI's, Docker's and kubectl's folders, the
+system's keychain or credential store, the folders where the CLIs Tars runs keep
+their login, and Tars's own `~/.claude-accounts`, per system). That keeps them out
+of the agent's workspace and out of what Claude Code finds trusted: an agent in a
+normal or auto mode asks before it reads there. It is no boundary for an agent in
+bypass, whose Bash reads them all the same.
+
 ### What was measured
 
 A real `claude` (2.1.273), under `sandbox-exec`, on a disposable project, with a
