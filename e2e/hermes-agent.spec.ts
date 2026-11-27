@@ -241,7 +241,9 @@ async function hermesAgents(real: string | undefined): Promise<void> {
       await expect.poll(() => alive(record.pid), { timeout: 30_000 }).toBe(false);
       // And at quit: A started again starts a gateway again, which the quit stops.
       await call('agent', 'start', { id: A, prompt: '' });
-      await expect.poll(async () => (((await call('agent', 'get', A)) as { output?: string[] } | null)?.output?.join('') ?? '').includes('❯'), { timeout: 120_000, intervals: [2_000] }).toBe(true);
+      const screenA = async () => ((await call('agent', 'get', A)) as { output?: string[] } | null)?.output?.join('') ?? '';
+      await expect.poll(async () => (await screenA()).includes('❯'), { timeout: 120_000, intervals: [2_000] }).toBe(true)
+        .finally(async () => fs.writeFileSync(test.info().outputPath('screen-at-restart-A.txt'), await screenA().catch(() => '')));
       // A new gateway: its record names a live pid other than the first one's.
       const newGateway = () => { try { const p = JSON.parse(fs.readFileSync(path.join(hermesRoot, 'gateway.pid'), 'utf8')).pid; return typeof p === 'number' && p !== record.pid && alive(p) ? p : 0; } catch { return 0; } };
       await expect.poll(newGateway, { timeout: 60_000 }).toBeGreaterThan(0);
@@ -366,6 +368,16 @@ async function hermesAgents(real: string | undefined): Promise<void> {
     for (const s of servers) s.kill();
     await app?.close().catch(() => {});
     if (fs.existsSync(fakeLog)) fs.copyFileSync(fakeLog, test.info().outputPath('fake-hermes.jsonl'));
+    // The real binary: what its gateway said and recorded, before the sandbox goes (its own log of every start Tars
+    // made, its record, its state, its logs). Names and states only: no profile's .env, no session.
+    if (real) {
+      const keepDir = test.info().outputPath('hermes-root');
+      fs.mkdirSync(keepDir, { recursive: true });
+      for (const rel of ['logs/tars-gateway.log', 'logs/gateway.log', 'logs/errors.log', 'gateway.pid', 'gateway_state.json', 'gateway-starts.log']) {
+        const from = path.join(hermesRoot, rel);
+        if (fs.existsSync(from)) fs.copyFileSync(from, path.join(keepDir, rel.replace('/', '-')));
+      }
+    }
     await standin.close();
     await removeHome(home);
   }

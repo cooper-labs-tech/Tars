@@ -76,6 +76,7 @@ export class HermesGatewaySupervisor {
       return 'failed';
     }
     this.child = child;
+    this.log(`[hermes] started the gateway of Tars's Hermes home (pid ${child.pid ?? 'unknown'})`);
     const gone = () => this.exited(child);
     child.once('exit', gone);
     child.once('error', gone);
@@ -110,8 +111,14 @@ export class HermesGatewaySupervisor {
     const deadline = Date.now() + timeoutMs;
     for (;;) {
       if (await this.deps.find() !== null) return true;
-      if (!this.child && !this.ensuring) return false;
-      if (Date.now() >= deadline) return false;
+      if (!this.child && !this.ensuring) {
+        this.log('[hermes] no gateway of Tars\'s Hermes home is starting: the chat starts without one to attach to');
+        return false;
+      }
+      if (Date.now() >= deadline) {
+        this.log('[hermes] the gateway of Tars\'s Hermes home did not take its home in time: the chat starts anyway');
+        return false;
+      }
       await new Promise(r => setTimeout(r, everyMs));
     }
   }
