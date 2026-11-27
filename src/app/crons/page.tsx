@@ -249,7 +249,7 @@ export default function CronsPage() {
         {actionError && (
           <div role="status" className="flex items-center gap-2.5 mb-2 pl-3.5 pr-2 py-1.5 border border-border-accent bg-secondary">
             <StatusSquare tone="waiting" />
-            <p className="flex-1 min-w-0 text-[12.5px] leading-[1.4] text-foreground">{actionError.text}</p>
+            <p className="flex-1 min-w-0 text-[12.5px] leading-[1.4] text-foreground [overflow-wrap:anywhere]">{actionError.text}</p>
             <Button size="sm" className={ROW_ACTION} onClick={() => setActionError(null)}>dismiss</Button>
           </div>
         )}
@@ -297,7 +297,7 @@ export default function CronsPage() {
                 <StatusSquare tone={paused ? 'idle' : 'running'} className="mt-1" />
                 <div className="min-w-0 flex-1">
                   <div className="flex items-center gap-2 flex-wrap">
-                    <span className="text-sm font-medium text-foreground">{job.name || job.title || job.id}</span>
+                    <span className="max-w-full truncate text-sm font-medium text-foreground" title={nameOf(job)}>{nameOf(job)}</span>
                     {job.profile_name && (
                       <span className="text-[10px] font-mono px-1 bg-secondary text-muted-foreground">{job.profile_name}</span>
                     )}
