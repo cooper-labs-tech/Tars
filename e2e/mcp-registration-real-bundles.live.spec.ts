@@ -3,6 +3,7 @@ import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
 import { execFileSync } from 'child_process';
+import { createHash } from 'crypto';
 import { parse as parseToml } from 'smol-toml';
 import { launchSandboxed, recordValues, removeHome } from './fixture.mjs';
 import { DEV_URL, apiPort } from './ports.mjs';
@@ -25,8 +26,10 @@ import { DEV_URL, apiPort } from './ports.mjs';
  * - Qwen Code: Tars's own list of its servers (~/.tars/qwen-code/mcp-servers.json): the six, the tree's bundles.
  * - gemini and grok, not installed here: Tars ran neither CLI and wrote each one's own config file in the sandbox
  *   (settings.json, config.toml), the six in it; opencode, Pi and Amp: their config files, the six (Amp's settings.json
- *   made by Tars where there was none).
- * - Nothing named the tree's bundles in the real home's CLI configs that did not before (read for that, never written).
+ *   made by Tars where there was none, as the registration does today for every provider, installed or not).
+ * - The real home's ten CLI config files are as they were: each one's sha256 (or its absence) the same before and after,
+ *   so a write, a removal and a file made all show; ~/.claude.json, which every live Claude Code rewrites as it works,
+ *   on what Tars writes there (its MCP servers, top level and per project) and on naming the tree's bundles.
  * On a build whose registration drops a server, the six are not there: red.
  *
  * Live: E2E_LIVE=1 (codex read with this machine's codex when there is one); macOS and Linux. The artefact: values.json
@@ -61,17 +64,32 @@ test('the start-up registration writes the six servers, with the tree\'s bundles
   // As an install that has started a claude worker has it: the registration keeps it in step.
   fs.writeFileSync(path.join(home, '.claude', 'mcp-worker.json'), JSON.stringify({ mcpServers: {} }));
 
-  // The real home's CLI configs: how many times each names a bundle of this tree, before and after (read, never written).
+  // The real home's CLI configs, before and after (read, never written): each file's sha256, or 'absent', so a write, a
+  // removal and a file that appears all show. ~/.claude.json is rewritten by every live Claude Code as it works, so it is
+  // taken on what Tars writes there: its MCP servers (top level, and each project's that has some), and the tree named.
   const real = os.userInfo().homedir;
   const realFiles = ['.claude/mcp.json', '.claude/mcp-worker.json', '.claude.json', '.codex/config.toml', '.tars/qwen-code/mcp-servers.json',
     '.gemini/settings.json', '.grok/config.toml', '.config/opencode/opencode.json', '.pi/agent/mcp.json', '.config/amp/settings.json'].map((f) => path.join(real, f));
-  const mark = `${WT}/mcp-`;
-  const namings = () => Object.fromEntries(realFiles.map((f) => {
-    let n = 0;
-    try { n = fs.readFileSync(f, 'utf8').split(mark).length - 1; } catch { /* absent */ }
-    return [f.replace(real, '~'), n];
-  }));
-  const before = namings();
+  const liveClaudeJson = path.join(real, '.claude.json');
+  const sha = (text: string) => createHash('sha256').update(text).digest('hex');
+  const canonical = (v: unknown): unknown => (Array.isArray(v) ? v.map(canonical)
+    : v && typeof v === 'object' ? Object.fromEntries(Object.keys(v).sort().map((k) => [k, canonical((v as Record<string, unknown>)[k])])) : v);
+  const claudeJsonPart = (text: string): string => {
+    const cfg = JSON.parse(text) as { mcpServers?: unknown; projects?: Record<string, { mcpServers?: Record<string, unknown> }> };
+    const projects = Object.fromEntries(Object.entries(cfg.projects ?? {})
+      .filter(([, p]) => Object.keys(p?.mcpServers ?? {}).length).map(([dir, p]) => [dir, p.mcpServers]));
+    return `mcpServers ${sha(JSON.stringify(canonical({ top: cfg.mcpServers ?? {}, projects })))}, names the tree ${text.split(`${WT}/mcp-`).length - 1} times`;
+  };
+  const print = (f: string): string => {
+    for (let attempt = 0; ; attempt++) {
+      let text: string;
+      try { text = fs.readFileSync(f, 'utf8'); } catch { return 'absent'; }
+      if (f !== liveClaudeJson) return sha(text);
+      try { return claudeJsonPart(text); } catch (err) { if (attempt >= 4) return `not JSON: ${(err as Error).message}`; }
+    }
+  };
+  const fingerprints = () => Object.fromEntries(realFiles.map((f) => [f.replace(real, '~'), print(f)]));
+  const before = fingerprints();
   const values: Record<string, unknown> = { tree: '<tree>', codexForReading: CODEX ? path.basename(CODEX) : null };
   try {
     const app = await launchSandboxed(electron, home, {
@@ -157,7 +175,14 @@ test('the start-up registration writes the six servers, with the tree\'s bundles
       values.pi = pi ? Object.fromEntries(sorted(pi).map((n) => [n, lastArg(pi[n]?.args) === bundleOf(n) ? 'tree' : lastArg(pi[n]?.args)])) : 'not written';
       const amp = ((readJson(file.amp)?.['amp.mcpServers'] ?? null) as Record<string, { args?: string[] }> | null);
       values.amp = amp ? Object.fromEntries(sorted(amp).map((n) => [n, lastArg(amp[n]?.args) === bundleOf(n) ? 'tree' : lastArg(amp[n]?.args)])) : 'not written';
-      values.realHome = { before, after: namings() };
+      const after = fingerprints();
+      const files = Object.keys(before);
+      values.realHome = {
+        before, after,
+        changed: files.filter((f) => before[f] !== 'absent' && after[f] !== 'absent' && before[f] !== after[f]),
+        appeared: files.filter((f) => before[f] === 'absent' && after[f] !== 'absent'),
+        vanished: files.filter((f) => before[f] !== 'absent' && after[f] === 'absent'),
+      };
       recordValues(values);
 
       const all = (kindOf: string) => Object.fromEntries(NAMES.map((n) => [n, kindOf]));
@@ -173,7 +198,7 @@ test('the start-up registration writes the six servers, with the tree\'s bundles
       expect(values.opencode, 'opencode: its config').toEqual(all('tree'));
       expect(values.pi, 'Pi: its config').toEqual(all('tree'));
       expect(values.amp, 'Amp: its settings.json, made where there was none').toEqual(all('tree'));
-      expect((values.realHome as { after: unknown }).after, 'the real home\'s CLI configs name no more of the tree\'s bundles than before').toEqual(before);
+      expect(after, 'the real home\'s CLI configs: none written, removed or made').toEqual(before);
     } finally {
       recordValues(values);
       await app.close();
