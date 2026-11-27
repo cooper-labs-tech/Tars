@@ -6,7 +6,7 @@ type Spec =
   | { t: 'int' } | { t: 'bool' } | { t: 'enum'; of: readonly string[] } | { t: 'obj'; maxBytes: number }
   | { t: 'msgs' } | { t: 'count'; max: number } | { t: 'env' } | { t: 'events' }
   | { t: 'shape'; shape: Shape } | { t: 'list'; shape: Shape; max: number }
-  | { t: 're'; re: RegExp; desc: string } | { t: 'bytes'; max: number } | { t: 'cancel' }
+  | { t: 're'; re: RegExp; desc: string } | { t: 'cancel' }
   | { t: 'num' } | { t: 'true' } | { t: 'ms'; signed: boolean };
 type Shape = { [k: string]: Spec & { req?: boolean } };
 
@@ -62,7 +62,7 @@ const START: Shape = {
   trigger: r(enumOf('owner', 'task', 'channel', 'restart', 'start', 'wake', 'redelegation', 'unknown')),
   via: enumOf('window', 'chat', 'api', 'telegram', 'slack', 'discord', 'hermes', 'relay', 'settings', 'asked', 'tars'),
   taskRef: TASK_REF, taskId: str(200), requesterAgentId: str(200), queuedAt: int, handedAt: int, firstRequestAt: int,
-  commit: COMMIT, branch: { t: 'bytes', max: 255 }, redelegatedFrom: str(64),
+  commit: COMMIT, branch: str(4096), redelegatedFrom: str(64),
 };
 // A task that left the agent's queue never to start, while the session ran.
 const LOST_DEMAND: Shape = {
@@ -157,7 +157,6 @@ function checkValue(s: Spec, v: unknown): string | null {
     case 'num': return typeof v === 'number' && Number.isFinite(v) && v >= 0 ? null : 'a number >= 0';
     case 'ms': return typeof v === 'number' && Number.isFinite(v) && Math.abs(v) <= 1e10 && (s.signed || v >= 0) ? null : `milliseconds, ${s.signed ? '' : '>= 0, '}at most 1e10 in size`;
     case 'true': return v === true ? null : 'true';
-    case 'bytes': return typeof v === 'string' && Buffer.byteLength(v) <= s.max ? null : `a string of at most ${s.max} bytes`;
     case 'cancel': {
       const e = checkShape(v, CANCEL);
       if (e) return e;
@@ -216,6 +215,20 @@ function checkRow(kind: string, i: number, row: unknown, shape: Shape, errors: s
   }
 }
 
+/** The longest start of a string that fits in `max` UTF-8 bytes, never splitting a character. */
+function cutToBytes(s: string, max: number): string {
+  if (Buffer.byteLength(s) <= max) return s;
+  let out = '';
+  let size = 0;
+  for (const ch of s) {
+    const n = Buffer.byteLength(ch);
+    if (size + n > max) break;
+    out += ch;
+    size += n;
+  }
+  return out;
+}
+
 export function validateBatch(body: unknown): Batch | { errors: string[] } {
   if (!isObj(body)) return { errors: ['the body must be a JSON object'] };
   if (body.schema !== 1) return { errors: ['schema: must be 1'] };
@@ -232,5 +245,11 @@ export function validateBatch(body: unknown): Batch | { errors: string[] } {
     (out as unknown as Record<string, unknown[]>)[kind] = v;
     if (errors.length > 50) break;
   }
-  return errors.length ? { errors: errors.slice(0, 50) } : out;
+  if (errors.length) return { errors: errors.slice(0, 50) };
+  // A branch name Tars does not bound (Backend-4, 27/11): cut to 255 bytes rather than refuse the batch for it.
+  for (const s of out.sessions) {
+    const start = s.start as { branch?: string } | undefined;
+    if (start?.branch !== undefined) start.branch = cutToBytes(start.branch, 255);
+  }
+  return out;
 }

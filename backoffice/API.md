@@ -249,7 +249,7 @@ A *task ref* is `t-` and 8 lowercase hex characters. Every kind below is one of 
 | `redelegatedFrom` | string ≤ 64: the session that had this task before |
 | `queuedAt`, `handedAt`, `firstRequestAt` | ms |
 | `commit` | 40 or 64 lowercase hex |
-| `branch` | string ≤ 255 bytes (the client cuts a longer one) |
+| `branch` | string ≤ 4,096 characters. The server keeps at most its first 255 bytes, cut at a character's edge: a longer name is cut, never refused (Tars does not bound it, and git hosts refuse refs over 255 bytes) |
 
 **Environment.** An object of these keys and no other; a key may be left out. Any other key (a serial number,
 a host name, a user name) refuses the batch.
