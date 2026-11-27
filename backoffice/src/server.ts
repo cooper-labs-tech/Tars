@@ -5,7 +5,7 @@ import { connect, pending } from './db.ts';
 import { BlobStore } from './blobstore.ts';
 import { makeCtx, json, type Ctx } from './http.ts';
 import { HttpError } from './body.ts';
-import { register, me, deleteMe, missingBlobs, putBlob, putBatch } from './ingest.ts';
+import { register, me, deleteMe, deleteOneSession, missingBlobs, putBlob, putBatch } from './ingest.ts';
 import { listSessions, listDeletions, getSession, findRequests, getBlob } from './read.ts';
 import { admin } from './admin.ts';
 import { sweep } from './purge.ts';
@@ -23,6 +23,7 @@ async function route(ctx: Ctx, req: IncomingMessage, res: ServerResponse): Promi
   if (p === '/v1/installs' && m === 'POST') return register(ctx, req, res);
   if (p === '/v1/installs/me' && m === 'GET') return me(ctx, req, res);
   if (p === '/v1/installs/me' && m === 'DELETE') return deleteMe(ctx, req, res);
+  if ((x = /^\/v1\/sessions\/([^/]+)$/.exec(p)) && m === 'DELETE') return deleteOneSession(ctx, req, res, decodeURIComponent(x[1]!));
   if (p === '/v1/blobs/missing' && m === 'POST') return missingBlobs(ctx, req, res);
   if ((x = /^\/v1\/blobs\/([^/]+)$/.exec(p)) && m === 'PUT') return putBlob(ctx, req, res, x[1]!);
   if ((x = /^\/v1\/batches\/([^/]+)$/.exec(p)) && m === 'PUT') return putBatch(ctx, req, res, decodeURIComponent(x[1]!));

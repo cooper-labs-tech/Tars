@@ -18,7 +18,7 @@ records (an upstream request id, the session and agent ids) is a generic, option
 
 | Who | Credential | Opens |
 |---|---|---|
-| An install | `Authorization: Bearer tbi_...`, returned once by `POST /v1/installs` | `/v1/installs/me`, `/v1/blobs/*`, `/v1/batches/*`, and that install's data only |
+| An install | `Authorization: Bearer tbi_...`, returned once by `POST /v1/installs` | `/v1/installs/me`, `/v1/sessions/*`, `/v1/blobs/*`, `/v1/batches/*`, and that install's data only |
 | A reader | `Authorization: Bearer tbr_...`, issued by the operator in the back-office pages, shown once | `/v1/read/*`, read only |
 | The operator | the back-office login (and Cloudflare Access in front, when configured) | `/admin/*` |
 
@@ -105,6 +105,26 @@ It answers only once the deletion is committed:
 
 The `receipt` is kept in the operator's deletion log with the counts and the time, and never with
 the content. Calling again with the same token gets `401`: the token went with the data.
+
+### `DELETE /v1/sessions/{sessionId}`
+
+Deletes one session the install sent: its session, turns and requests, the install's references to
+the blobs its requests named that no other request of the install names (with their message
+metadata), and the blobs no install references any more. Readers are told (§ 6.4, `install_deleted`
+with the `sessionId`). Tars sends it for a session it sent and then deleted, by its user or by its own
+retention. It answers once the deletion is committed:
+
+```json
+{ "deleted": { "sessions": 1, "turns": 3, "requests": 12, "blobs": 20, "storedBytes": 81920 },
+  "deletedAt": 1763600000000, "receipt": "del_..." }
+```
+
+- Idempotent: a session the install does not hold (never sent, already deleted, or another
+  install's) answers `200` with zero counts and no `receipt`, and tells readers nothing. The answer
+  is the same either way, so an install learns nothing of another's sessions.
+- A batch's record (its id, its body's hash and counts, no content) is let go by the 30-day sweep,
+  as every batch's is.
+- `400 bad_id` for an id outside the pattern above.
 
 ## 4. Blobs: content, stored once
 
@@ -302,7 +322,8 @@ What was deleted, so a reader deletes its own copies:
 ```
 
 - `sessionId: null` means every session of the install.
-- Reasons: `install_deleted` (the install asked), `operator` (the operator deleted it), `retention`.
+- Reasons: `install_deleted` (the install asked: every session, or the one named, § 3), `operator`
+  (the operator deleted it), `retention`.
 - Same cursor rules as § 6.1. A reader that keeps copies must read this feed and act on it.
 
 ### 6.5 `GET /v1/read/requests?upstreamRequestId=...`

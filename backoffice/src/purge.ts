@@ -34,6 +34,52 @@ export async function deleteInstall(ctx: Ctx, installId: string, reason: 'instal
   return out;
 }
 
+/**
+ * One session deleted on its install's word (DELETE /v1/sessions/{sessionId}): its rows (turns, requests and their
+ * message references cascade from the session), the install's references to the blobs its requests named that no
+ * other request of the install names, with their message metadata, then the blobs no install references any more.
+ * Readers are told with a tombstone under `install_deleted` (the install asked) carrying the session's id, and the
+ * operator's log gets a receipt. A session the install does not hold deletes nothing, tells no one, and answers the
+ * same 200 with zero counts, so an install learns nothing of another's sessions. A batch's record (its id, its body's
+ * hash and counts, no content) goes with the 30-day sweep, as every batch's does.
+ */
+export async function deleteSession(ctx: Ctx, installId: string, sessionId: string): Promise<Deleted | { deleted: Deleted['deleted']; deletedAt: number }> {
+  const none = { sessions: 0, turns: 0, requests: 0, blobs: 0, storedBytes: 0 };
+  const { out, hashes } = await inTx(ctx.db, async (tx) => {
+    const held = await tx.query('SELECT 1 FROM sessions WHERE install_id = $1 AND session_id = $2 FOR UPDATE', [installId, sessionId]);
+    if (!held.rowCount) return { out: { deleted: none, deletedAt: Date.now() }, hashes: [] as string[] };
+    const c = (await tx.query(
+      `SELECT (SELECT count(*)::int FROM turns WHERE install_id = $1 AND session_id = $2) AS turns,
+              (SELECT count(*)::int FROM requests WHERE install_id = $1 AND session_id = $2) AS requests,
+              (SELECT stored_bytes FROM installs WHERE id = $1) AS stored`, [installId, sessionId])).rows[0];
+    const named = (await tx.query<{ hash: string }>(
+      `SELECT rm.hash FROM request_messages rm JOIN requests r USING (install_id, request_id) WHERE r.install_id = $1 AND r.session_id = $2
+        UNION SELECT tools_hash FROM requests WHERE install_id = $1 AND session_id = $2 AND tools_hash IS NOT NULL`, [installId, sessionId])).rows.map((r) => r.hash);
+    await tx.query('DELETE FROM sessions WHERE install_id = $1 AND session_id = $2', [installId, sessionId]);
+    // What the session named and no other request of this install still names: its reference, and its metadata.
+    const freed = (await tx.query<{ hash: string }>(
+      `DELETE FROM install_blobs ib WHERE ib.install_id = $1 AND ib.hash = ANY($2::text[])
+          AND NOT EXISTS (SELECT 1 FROM request_messages rm WHERE rm.install_id = ib.install_id AND rm.hash = ib.hash)
+          AND NOT EXISTS (SELECT 1 FROM requests r WHERE r.install_id = ib.install_id AND r.tools_hash = ib.hash)
+        RETURNING hash`, [installId, named])).rows.map((r) => r.hash);
+    await tx.query(`DELETE FROM messages m WHERE m.install_id = $1 AND m.hash = ANY($2::text[])
+                      AND NOT EXISTS (SELECT 1 FROM request_messages rm WHERE rm.install_id = m.install_id AND rm.hash = m.hash)`, [installId, named]);
+    const stored = (await tx.query<{ stored_bytes: string }>(
+      `UPDATE installs SET stored_bytes =
+         coalesce((SELECT sum(b.stored_size) FROM install_blobs ib JOIN blobs b USING (hash) WHERE ib.install_id = $1), 0)
+       + coalesce((SELECT sum(bytes) FROM batches WHERE install_id = $1), 0) WHERE id = $1 RETURNING stored_bytes`, [installId])).rows[0]!.stored_bytes;
+    const seq = await nextChange(tx);
+    await tx.query(`INSERT INTO tombstones (seq, install_id, session_id, reason) VALUES ($1, $2, $3, 'install_deleted')`, [seq, installId, sessionId]);
+    const receipt = `del_${randomBytes(12).toString('base64url')}`;
+    const deleted = { sessions: 1, turns: c.turns, requests: c.requests, blobs: freed.length, storedBytes: Math.max(0, Number(c.stored ?? 0) - Number(stored)) };
+    const at = (await tx.query<{ at: Date }>(
+      'INSERT INTO deletion_log (receipt, install_id, reason, counts) VALUES ($1, $2, $3, $4) RETURNING at', [receipt, installId, 'install_deleted', JSON.stringify(deleted)])).rows[0]!.at;
+    return { out: { deleted, deletedAt: at.getTime(), receipt }, hashes: freed };
+  });
+  await collectBlobs(ctx, hashes);
+  return out;
+}
+
 /** Removes the blobs among these that no install references any more, row and file. */
 export async function collectBlobs(ctx: Ctx, hashes: string[]): Promise<number> {
   let removed = 0;
