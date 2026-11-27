@@ -2953,7 +2953,7 @@
           "fill": "$text-secondary",
           "textGrowth": "fixed-width",
           "width": 1320,
-          "content": "The hero’s screenshot and the social image’s shot take landing/src/assets/dashboard.png, which still shows the classic shell. They are to show the Dashboard in the new shell, as Shell · Dashboard draws it in tars-redesign.pen: the sidebar with its chats beside the terminals of one project’s agents. The picture is taken from the real app against a seeded sandbox, never drawn, with the re-recorded screenshots that follow QA’s Q2, under the same file name.",
+          "content": "The hero’s screenshot and the social image’s shot take landing/src/assets/dashboard.png, the Dashboard in the new shell, re-taken on 27/11 from the real app: four real Claude Code sessions of one throwaway project in a sandbox, against a stand-in Messages API with scripted answers, in Equal grid, QA in the middle of a turn. Never drawn: re-take it under the same file name when the Dashboard changes.",
           "lineHeight": 1.5,
           "fontFamily": "$font-ui",
           "fontSize": 14,
