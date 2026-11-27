@@ -78,6 +78,11 @@ function postLocalDispatch(agentId: string, message: string): Promise<{ status: 
       // and JeanBrasse read "timeout" for a message typed a moment later.
       timeout: 30_000,
     }, res => {
+      // Cut off once it has begun: neither the request's error nor its timeout
+      // comes, and the confirmation never answered (the Audit's M1 on #660).
+      const cut = () => reject(new Error('Tars\'s own API cut its answer off before the end.'));
+      res.on('error', cut);
+      res.on('close', () => { if (!res.complete) cut(); });
       let raw = '';
       res.on('data', c => { raw += c; });
       res.on('end', () => {

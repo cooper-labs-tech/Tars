@@ -293,6 +293,12 @@ export function hermesRequest(
     let req: http.ClientRequest;
     try {
       req = mod.request(target, { method, headers, timeout: timeoutMs }, res => {
+        // An answer cut off once it has begun: the request's error never comes, and
+        // its timeout cannot fire on a socket that is gone, so it never settled and an
+        // overseer turn awaiting it held every later one "busy" (the Audit's M1 on #660).
+        const cut = () => reject(noAnswer(new Error('its answer was cut off before the end'), baseUrl));
+        res.on('error', cut);
+        res.on('close', () => { if (!res.complete) cut(); });
         let raw = '';
         res.on('data', c => { raw += c; });
         res.on('end', () => {

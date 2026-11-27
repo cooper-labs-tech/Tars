@@ -2099,6 +2099,10 @@ function registerAppSettingsHandlers(deps: IpcHandlerDependencies): void {
           headers: { 'Authorization': authHeader, 'Accept': 'application/json' },
           timeout: INTEGRATION_TEST_WAIT_MS,
         }, (res: import('http').IncomingMessage) => {
+          // Cut off once it has begun: neither the request's error nor its timeout comes (#660).
+          const cut = () => resolve({ success: false, error: 'X\'s answer was cut off before the end.' });
+          res.on('error', cut);
+          res.on('close', () => { if (!res.complete) cut(); });
           let data = '';
           res.on('data', (chunk: string) => { data += chunk; });
           res.on('end', () => {
@@ -2148,6 +2152,10 @@ function registerAppSettingsHandlers(deps: IpcHandlerDependencies): void {
           },
           timeout: INTEGRATION_TEST_WAIT_MS,
         }, (res: import('http').IncomingMessage) => {
+          // Cut off once it has begun: neither the request's error nor its timeout comes (#660).
+          const cut = () => resolve({ success: false, error: 'SocialData\'s answer was cut off before the end.' });
+          res.on('error', cut);
+          res.on('close', () => { if (!res.complete) cut(); });
           let data = '';
           res.on('data', (chunk: string) => { data += chunk; });
           res.on('end', () => {
