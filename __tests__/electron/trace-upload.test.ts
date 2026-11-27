@@ -101,6 +101,9 @@ import { hasPosixModes } from '../setup/platform-limits';
  *     the next one (a new uploader reading the same file).
  * 47. An id that is not a plain token (a line break, a space, over 128 characters) is given, and would break the
  *     request it goes on, or add a header to it.
+ * 48. (Found at 820d10452, before its fix.) Sharing stopped (the consent withdrawn, with no deletion) still gives the id:
+ *     the upload notice the user agreed to is what names it. And so a 401 whose install file could be neither removed
+ *     nor emptied gives the forgotten id again after a restart, where no deletion's moment dates it.
  */
 
 type Seen = { method: string; url: string; headers: http.IncomingHttpHeaders; body: Buffer };
@@ -896,6 +899,33 @@ describe('the install id an endpoint may be told (trace feature A4)', () => {
     const log = vi.spyOn(console, 'error').mockImplementation(() => {});
     try {
       expect(await u.deleteEverywhere()).toMatchObject({ ok: true });
+      expect(JSON.parse(fs.readFileSync(installFile(), 'utf8')).installId, 'the file is still there').toBe('inst-1');
+      expect(u.currentInstallId()).toBeNull();
+      expect(uploader().currentInstallId(), 'in the next run').toBeNull();
+    } finally {
+      fs.chmodSync(path.dirname(installFile()), 0o700);
+      fs.chmodSync(installFile(), 0o600);
+      log.mockRestore();
+    }
+  });
+
+  it('48: not while sharing is off, and not after a 401 whose file stayed, in the next run either', async () => {
+    seed('t1', 'first');
+    const u = uploader();
+    await u.runOnce();
+    expect(u.currentInstallId()).toBe('inst-1');
+    settings.consentAt = undefined;
+    expect(u.currentInstallId(), 'sharing off').toBeNull();
+    settings.consentAt = '2026-11-19T00:00:00Z';
+    expect(u.currentInstallId(), 'sharing on again').toBe('inst-1');
+    if (!hasPosixModes()) return;
+    bo.installs.clear();
+    seed('t2', 'second', 2000);
+    fs.chmodSync(installFile(), 0o400);
+    fs.chmodSync(path.dirname(installFile()), 0o500);
+    const log = vi.spyOn(console, 'error').mockImplementation(() => {});
+    try {
+      expect(await u.runOnce()).toMatchObject({ failed: 1 });
       expect(JSON.parse(fs.readFileSync(installFile(), 'utf8')).installId, 'the file is still there').toBe('inst-1');
       expect(u.currentInstallId()).toBeNull();
       expect(uploader().currentInstallId(), 'in the next run').toBeNull();
