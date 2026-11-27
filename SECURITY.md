@@ -1183,7 +1183,7 @@ them only for an endpoint whose "send session headers" option is on, which is of
 
 **Install header** (trace feature A4). An endpoint may keep its own copy of every request it serves, uploaded or not.
 With the owner's "send install id" switch on for that endpoint, the proxy adds `X-Install-Id` to every request: the
-install's back-office id, a pseudonymous uuid the back-office gave at registration, so that a deletion of the whole
+install's back-office id, a pseudonymous uuid the back-office gave at registration, in lower case, so that a deletion of the whole
 install at the back-office can be passed on to that copy. What leaves, and what does not:
 - the id only, never the install's token, its HMAC secret, a machine id or anything else;
 - only from the window: an agent's save that turns it on is refused, and turning it on is a grant like the session

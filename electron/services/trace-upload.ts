@@ -207,7 +207,7 @@ export class TraceUploader {
    * back), and this install is registered with the back-office the settings name now, with no deletion owed, and was
    * registered after the latest deletion's moment (so an install file that could not be removed after a deletion is
    * never told again, in a later run either), and not deleted or forgotten in this run. Only a plain token goes on a
-   * request: a back-office answer with a line break or a space in it is never a header.
+   * request: a back-office answer with a line break or a space in it is never a header. Given in lower case.
    */
   currentInstallId(): string | null {
     const s = this.deps.settings();
@@ -216,7 +216,8 @@ export class TraceUploader {
     if (!install || install.url !== s.url || typeof install.installId !== 'string' || !PLAIN_INSTALL_ID.test(install.installId)) return null;
     if (this.retired.has(install.installId)) return null;
     if (s.since !== undefined && !(typeof install.registeredAt === 'number' && install.registeredAt > s.since)) return null;
-    return install.installId;
+    // In lower case, as the header's value is pinned: one install, one spelling at the endpoint.
+    return install.installId.toLowerCase();
   }
 
   /** Whether a deletion is owed now: for the consent check, which must not touch what the window is told. */

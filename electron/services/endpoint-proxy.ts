@@ -102,14 +102,15 @@ const MAX_WAIT_MS = 60_000;
 const BACKOFF_S = [2, 4, 8, 30];
 export const DEFAULT_MAX_BODY = 16 * 1024 * 1024;
 
-/** Request headers never forwarded as the harness sent them: the hop's own, and its credential. */
 /**
- * The install's back-office id (trace feature A4): set by Tars alone, for an endpoint whose owner turned it on, while the
- * install is registered. A harness's own is always dropped, whatever the endpoint's switches: no harness names an install.
+ * The install's back-office id (trace feature A4), sent as exactly `X-Install-Id`, its value in lower case: set by Tars
+ * alone, for an endpoint whose owner turned it on, while the install is registered. A harness's own is always dropped,
+ * whatever the endpoint's switches: no harness names an install.
  */
-export const INSTALL_HEADER = 'x-install-id';
+export const INSTALL_HEADER = 'X-Install-Id';
+/** Request headers never forwarded as the harness sent them: the hop's own, its credential, and an install id. */
 const DROP_REQUEST = new Set(['host', 'connection', 'keep-alive', 'proxy-authorization', 'proxy-connection', 'te', 'trailer',
-  'transfer-encoding', 'upgrade', 'authorization', 'x-api-key', 'content-length', 'accept-encoding', INSTALL_HEADER]);
+  'transfer-encoding', 'upgrade', 'authorization', 'x-api-key', 'content-length', 'accept-encoding', INSTALL_HEADER.toLowerCase()]);
 /** Set by Tars when the endpoint asks for them, never a harness's then. */
 const SESSION_HEADERS = new Set(['x-session-id', 'x-agent-id']);
 /**
@@ -119,7 +120,7 @@ const SESSION_HEADERS = new Set(['x-session-id', 'x-agent-id']);
  */
 export const REFUSED_EXTRA_HEADERS = new Set(['authorization', 'x-api-key', 'cookie', 'set-cookie', 'host', 'content-length',
   'content-type', 'content-encoding', 'transfer-encoding', 'connection', 'keep-alive', 'te', 'trailer', 'upgrade', 'expect',
-  'accept-encoding', ...SESSION_HEADERS, INSTALL_HEADER]);
+  'accept-encoding', ...SESSION_HEADERS, INSTALL_HEADER.toLowerCase()]);
 export const isRefusedExtraHeader = (name: string): boolean => {
   const lower = name.toLowerCase();
   return REFUSED_EXTRA_HEADERS.has(lower) || lower.startsWith('proxy-');
