@@ -314,9 +314,12 @@ export function registerTracesHandlers(deps: TracesHandlerDeps): void {
       version: SCRUB_VERSION,
       catches: ['every secret Tars holds (settings keys, endpoint keys, its own tokens)', 'the values of the project\'s .env files', 'keys by shape (OpenAI, Anthropic, GitHub, Slack, AWS, Google, Stripe, npm, Hugging Face, JWT, private keys)', 'secrets after a telling name (password=, api_key:, "token":)', 'passwords in URLs, Bearer and Basic credentials',
         'home folders, yours and anyone else\'s, with the name in them', 'e-mail addresses', 'IP addresses (not 127.0.0.1, 0.0.0.0 or ::1)', 'phone numbers written as people write them (+33 6 12 34 56 78, (555) 201-4567, 06 12 34 56 78)',
-        'the names Tars knows: the authors and committers of the project\'s git history, and your own name as git and your system have it',
+        'the names Tars knows: the authors and committers of the project\'s git history, written whole (First Last, or Last, First), and your own name as git and your system have it, whole or by its parts',
         'each as a placeholder numbered within its session (<SECRET_1>, <EMAIL_2>, <HOME_1>...): the same value, the same number, and numbers start again in each session'],
-      cannot: ['a secret with no known shape and no telling name that Tars does not hold', 'a secret or personal data cut in two, encoded, or in an image', 'a name Tars does not know: someone outside the project\'s git history and you', 'a phone number written some other way', 'what the endpoint itself already received'],
+      cannot: ['a secret with no known shape and no telling name that Tars does not hold', 'a secret or personal data cut in two, encoded, or in an image', 'a name Tars does not know: someone outside the project\'s git history and you',
+        'another person\'s first or last name written alone, or a one-word name that is not yours: only their whole names are masked',
+        'a private address written after a user\'s name with every part under 100 (user@10.0.0.5)',
+        'a phone number written some other way', 'what the endpoint itself already received'],
     },
   }));
   ipcMain.handle('traces:preview', (_e, traceId: unknown) => previewUpload(String(traceId)));

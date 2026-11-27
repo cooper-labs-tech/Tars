@@ -342,11 +342,13 @@ export function scrubContextFor(projectPath: string | undefined): ScrubContext {
     try { known.push(fs.readFileSync(file, 'utf8').trim()); } catch { /* none */ }
   }
   const home = os.homedir();
+  const names = projectPath ? cachedPersonNames(projectPath) : { own: [], others: [] };
   return {
     homeDirs: [...new Set([home, home.replace(/\\/g, '/')])],
     knownSecrets: [...new Set(known.filter(k => k.length >= 8))],
     envValues: projectPath ? projectEnvValues(projectPath) : [],
-    personNames: projectPath ? cachedPersonNames(projectPath) : [],
+    personNames: names.others,
+    ownNames: names.own,
   };
 }
 

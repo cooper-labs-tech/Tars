@@ -6,7 +6,7 @@ import { describeSecretFileError, writeSecretFileSync } from '../utils/secret-fi
 import { canonicalJson } from './trace-wire';
 import { sessionDocument } from './trace-export';
 import { partsOf, type TraceStore } from './trace-store';
-import { maskCountsOf, newMaskSession, scrubValue, SCRUB_VERSION, type ScrubContext } from './trace-scrub';
+import { maskCountsOf, maskSessionFrom, maskSessionRows, scrubValue, SCRUB_VERSION, type ScrubContext } from './trace-scrub';
 
 /**
  * Uploading opted-in traces to a back-office (the trace back-office's HTTP API v1: register, blobs, batches,
@@ -312,8 +312,10 @@ export class TraceUploader {
           if (sent >= PASS_SESSIONS) break;
           if (!this.sendable(q, this.deps.settings().since)) continue;
           if (!this.mayGoOn(url)) return { sent, failed: 0 };
-          // The names of its project read first, so the scrubber has them when the session is built.
+          // The names of its project read first, so the scrubber has them when the session is built; the consent read
+          // again after that wait, as before any other (the Audit's L3 at 38ccde8cb).
           await this.deps.prepareScrub?.(q.projectPath);
+          if (!this.mayGoOn(url)) return { sent, failed: 0 };
           await this.sendSession(install, q.traceId, q.seq);
           this.deps.store.markUploaded(q.traceId, q.seq, this.now());
           sent++;
@@ -370,8 +372,10 @@ export class TraceUploader {
     const projectPath = String(t.project_path ?? '');
     const ctx = this.deps.scrubContext(projectPath);
     const counts: Record<string, number> = {};
-    // One numbering for the whole session: a value has the same number in its blobs, its rows and every batch.
-    const mask = newMaskSession();
+    // One numbering for the whole session: a value has the same number in its blobs, its rows and every batch, and in
+    // every build of the session, kept in the local store (the Audit's M2 at 38ccde8cb): a session that grew, or whose
+    // project's names changed, keeps the numbers its values had.
+    const mask = maskSessionFrom(this.deps.store.maskNumbers(traceId));
     const key = (v: string) => createHmac('sha256', secret).update(v).digest('hex');
 
     // Every message, system prompt and tool set as its scrubbed blob.
@@ -468,6 +472,7 @@ export class TraceUploader {
     if (parts.length > 1 && alone.length) {
       batches.push({ id: `${traceId}.${seq}.turns`, body: Buffer.from(JSON.stringify({ schema: 1, sessions: [sessionRow], turns: alone, requests: [], messages: [] })) });
     }
+    this.deps.store.keepMaskNumbers(traceId, maskSessionRows(mask));
     return { blobs, batches, counts };
   }
 

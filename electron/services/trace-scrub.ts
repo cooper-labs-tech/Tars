@@ -1,3 +1,4 @@
+import { createHash } from 'crypto';
 import * as fs from 'fs';
 import * as net from 'net';
 import * as path from 'path';
@@ -9,8 +10,9 @@ import * as path from 'path';
  *
  * What is replaced becomes a typed placeholder numbered per session, in the trace reader's pinned format (trace
  * feature B3, 27/11): `<SECRET_n>`, `<HOME_n>`, `<EMAIL_n>`, `<IP_n>`, `<PHONE_n>`, `<PERSON_n>`. The same value takes
- * the same number everywhere in a session (a MaskSession, one per session's upload), and numbering starts again in
- * each session, so a number links nothing across sessions. A placeholder is never masked again. What was replaced is
+ * the same number everywhere in a session and in every upload of it (a MaskSession, kept with the session in the local
+ * store), and numbering starts again in each session, so a number links nothing across sessions. A placeholder is
+ * never masked again. What was replaced is
  * counted by kind (the window's preview) and by type (`maskCounts`, sent with each session with `maskingVersion`).
  *
  * The secrets, in this order, each a `<SECRET_n>`:
@@ -32,22 +34,27 @@ import * as path from 'path';
  * name one `<EMAIL_n>`:
  * 8. `home`: a home path, up to and with the user's name: the account's own in each spelling given (only that folder,
  *    not one whose name merely starts alike), and anyone's under /Users, /home or a drive's \Users (a Windows name
- *    with a space when a separator follows it), not /Users/Shared or \Users\Public and their kin.
+ *    with a space when a separator follows it), slashes escaped or not, not /Users/Shared or \Users\Public and their
+ *    kin.
  * 9. `email`: an address with a dotted domain, Unicode letters included; not `git@host:` (a git remote over ssh).
- * 10. `ip`: IPv4 and IPv6 addresses, not the loopback, unspecified or broadcast ones, nor a four-part version written
- *     after v, version or build.
+ * 10. `ip`: IPv4 and IPv6 addresses, an IPv4-mapped one whole; not the loopback, unspecified or broadcast ones, x.0.0.0,
+ *     a four-part version written after v, version or build, or after @ with every part under 100 (pkg@1.2.3.4), nor a
+ *     pair of words in hex letters (add::bad).
  * 11. `phone`: a number as people write one: international (+, 8 to 15 digits), North American ((555) 201-4567,
  *     202-555-0123), national with a trunk 0 and one separator throughout (06 12 34 56 78, 020 7946 0958), or a bare
- *     national 0612345678. Never a timestamp, a port, a version, a hash, an id or a count (the false positives
- *     trace-scrub-personal.test.ts lists).
- * 12. `person`: the names Tars knows (trace-person-names.ts): a whole name in any case and spacing, and each part of
- *     three letters or more as written; in NFC and NFD; never inside a longer word.
+ *     national 0612345678. Never a timestamp, a port, a version, a build's number, a hash, an id or a count (the false
+ *     positives trace-scrub-personal.test.ts lists).
+ * 12. `person`: the names Tars knows (trace-person-names.ts), word by word, in NFC and NFD, never inside a longer word:
+ *     anyone's whole name in any case and spacing, as "First Last" or "Last, First"; the account's own by its parts
+ *     too (each word of three letters or more, as written) and its login.
  *
  * What it cannot catch: a secret with no known shape, no telling name and not held by Tars or a .env file (a password
  * in prose, a key in a YAML file under an innocent name); a secret shorter than its rule's floor; a secret or personal
- * data cut across two strings, encoded (base64, hex, URL-encoded) or inside an image; a name Tars does not know; a
- * phone number written another way, or in full-width digits; a home written ~name. And it applies to what is
- * uploaded only: the endpoint the agent talked to, and the local store, saw the session as it was.
+ * data cut across two strings, encoded (base64, hex, URL-encoded) or inside an image; a name Tars does not know;
+ * another person's given or family name alone, or a name of one word that is not the account's; a phone number
+ * written another way, or in full-width digits; a home written ~name; a private address after a user's name with
+ * every part under 100 (user@10.0.0.5). And it applies to what is uploaded only: the endpoint the agent talked to,
+ * and the local store, saw the session as it was.
  */
 
 /** The rules' version, sent with each session as its `maskingVersion`. */
@@ -58,20 +65,50 @@ export interface ScrubContext {
   homeDirs: string[];
   knownSecrets: string[];
   envValues: string[];
-  /** The names Tars knows for the session's project (trace-person-names.ts); none when not given. */
+  /** Other people's names Tars knows for the session's project (trace-person-names.ts), masked whole only. */
   personNames?: string[];
+  /** The account's own names (trace-person-names.ts), masked whole and by their parts. */
+  ownNames?: string[];
 }
 
 /** The placeholder types, in the order of `maskCounts`. */
 export const MASK_TYPES = ['SECRET', 'EMAIL', 'IP', 'PERSON', 'HOME', 'PHONE'] as const;
 export type MaskType = typeof MASK_TYPES[number];
 
-/** One session's numbering: per type, each value's number, in the order the values were met. */
-export interface MaskSession { numbers: Map<MaskType, Map<string, number>> }
+/**
+ * One session's numbering: per type, each value's number, in the order the values were met, and the highest given.
+ * A value is held by a hash of it, never as written, so the numbering can be kept with its session in the local
+ * store and loaded at its next build (the Audit's M2 at 38ccde8cb): a session's values keep their numbers as it grows
+ * and as the names Tars knows change.
+ */
+export interface MaskSession { numbers: Map<MaskType, Map<string, number>>; top: Map<MaskType, number> }
+
+/** A number given in a session, as the store keeps it. */
+export interface MaskNumber { type: MaskType; keyHash: string; n: number }
 
 export function newMaskSession(): MaskSession {
-  return { numbers: new Map() };
+  return { numbers: new Map(), top: new Map() };
 }
+
+/** A session's numbering from the numbers it was given before; a row that is not one is left out. */
+export function maskSessionFrom(rows: MaskNumber[]): MaskSession {
+  const s = newMaskSession();
+  for (const r of rows) {
+    if (!(MASK_TYPES as readonly string[]).includes(r.type) || typeof r.keyHash !== 'string' || !Number.isInteger(r.n) || r.n < 1) continue;
+    let numbers = s.numbers.get(r.type);
+    if (!numbers) { numbers = new Map(); s.numbers.set(r.type, numbers); }
+    numbers.set(r.keyHash, r.n);
+    s.top.set(r.type, Math.max(s.top.get(r.type) ?? 0, r.n));
+  }
+  return s;
+}
+
+/** Every number a session gave, to keep. */
+export function maskSessionRows(s: MaskSession): MaskNumber[] {
+  return [...s.numbers.entries()].flatMap(([type, numbers]) => [...numbers.entries()].map(([keyHash, n]) => ({ type, keyHash, n })));
+}
+
+const keyHash = (type: MaskType, key: string): string => createHash('sha256').update(`${type}\u0000${key}`).digest('hex').slice(0, 32);
 
 /** The kinds counted, by the type of their placeholder: every secret rule's kind is a SECRET. */
 const TYPE_OF_KIND: Record<string, MaskType> = { email: 'EMAIL', ip: 'IP', person: 'PERSON', home: 'HOME', phone: 'PHONE' };
@@ -124,8 +161,13 @@ function outside(text: string, fn: (part: string) => string): string {
 function placeholder(type: MaskType, key: string, kind: string, session: MaskSession, counts: Record<string, number>): string {
   let numbers = session.numbers.get(type);
   if (!numbers) { numbers = new Map(); session.numbers.set(type, numbers); }
-  let n = numbers.get(key);
-  if (n === undefined) { n = numbers.size + 1; numbers.set(key, n); }
+  const k = keyHash(type, key);
+  let n = numbers.get(k);
+  if (n === undefined) {
+    n = (session.top.get(type) ?? 0) + 1;
+    numbers.set(k, n);
+    session.top.set(type, n);
+  }
   counts[kind] = (counts[kind] ?? 0) + 1;
   return `<${type}_${n}>`;
 }
@@ -184,8 +226,11 @@ const NOT_A_PERSON_HOME = /^(?:shared|public|default|default user|all users|gues
 const HOME_NAME = '[^\\\\/\\s"\'<>:|?*,;()\\[\\]{}\\x00-\\x1f]+';
 /** A drive's Users folder: a name with spaces only when a separator follows it. */
 const WIN_HOME = new RegExp(`(?<![\\w])[A-Za-z]:[\\\\/]+Users[\\\\/]+(${HOME_NAME}(?: ${HOME_NAME})*(?=[\\\\/])|${HOME_NAME})`, 'gi');
-/** /Users and /home at a path's root (after a WSL drive, the Data volume or /var too), never inside another folder. */
-const UNIX_HOME = new RegExp(`(?:(?<=/mnt/[a-z])|(?<=/Volumes/Data)|(?<=/var)|(?<![\\w.~\\-]))/(?:Users|home)/(${HOME_NAME})`, 'gi');
+/**
+ * /Users and /home at a path's root (after a WSL drive, the Data volume or /var too), never inside another folder;
+ * with its slashes escaped too, as a JSON string may write them (`\/Users\/name`, the Audit's L1 at 38ccde8cb).
+ */
+const UNIX_HOME = new RegExp(`(?:(?<=/mnt/[a-z])|(?<=/Volumes/Data)|(?<=/var)|(?<![\\w.~\\-\\\\]))\\\\?/(?:Users|home)\\\\?/(${HOME_NAME})`, 'gi');
 
 function homeFinders(ctx: ScrubContext): Finder[] {
   const exact = [...new Set(ctx.homeDirs.filter(h => typeof h === 'string' && h.length > 1))].sort((a, b) => b.length - a.length)
@@ -213,27 +258,41 @@ const emailFinder: Finder = part => spansOf(EMAIL, part, (m) => {
 
 const OCTET = '(?:25[0-5]|2[0-4]\\d|1\\d\\d|[1-9]?\\d)';
 const IPV4 = new RegExp(`(?<![\\w.\\-])(?<!\\b(?:v|version|ver|build)\\s?)${OCTET}(?:\\.${OCTET}){3}(?![\\w\\-]|\\.\\d)`, 'gi');
-const IPV6 = /(?<![\w:.])(?:[0-9a-f]{0,4}:){2,7}[0-9a-f]{0,4}(?:%[\w.]+)?(?![\w:])/gi;
+/** IPv6, its IPv4-mapped form (::ffff:192.0.2.128) whole (the Audit's L1 at 38ccde8cb). */
+const IPV6 = new RegExp(`(?<![\\w:.])(?:[0-9a-f]{0,4}:){2,7}(?:${OCTET}(?:\\.${OCTET}){3}|[0-9a-f]{0,4})(?:%[\\w.]+)?(?![\\w:]|\\.\\d)`, 'gi');
 const ipFinders: Finder[] = [
-  part => spansOf(IPV4, part, (m) => (/^127\./.test(m[0]) || m[0] === '0.0.0.0' || m[0] === '255.255.255.255' ? null : { key: m[0] }), 'ip', 'IP'),
+  part => spansOf(IPV4, part, (m) => {
+    const addr = m[0];
+    if (/^127\./.test(addr) || addr === '0.0.0.0' || addr === '255.255.255.255') return null;
+    // x.0.0.0 is a network or a version (1.0.0.0), never a host (the Audit's L2).
+    if (/^\d+\.0\.0\.0$/.test(addr)) return null;
+    // After @, a package's version (pkg@1.2.3.4) when every part is under 100; else a user's host (root@203.0.113.5).
+    if (part[m.index! - 1] === '@' && addr.split('.').every(p => Number(p) < 100)) return null;
+    return { key: addr };
+  }, 'ip', 'IP'),
   part => spansOf(IPV6, part, (m) => {
     const addr = m[0].split('%')[0];
     if (!net.isIPv6(addr) || addr === '::1' || addr === '::') return null;
-    // Not a::b in code: three groups or more, or one of three digits or more.
+    // Not a::b in code: three groups or more, or one of three characters or more.
     const groups = addr.split(':').filter(Boolean);
     if (groups.length < 3 && !groups.some(g => g.length >= 3)) return null;
+    // Not a pair of words in hex letters (add::bad, dead::beef): an address has a digit (the Audit's L2).
+    if (!/\d/.test(addr)) return null;
     return { key: addr.toLowerCase() };
   }, 'ip', 'IP'),
 ];
 
-/** Before a phone number: not a word, a decimal, a sign, a path, an anchor, an address or an id going on. */
-const PHONE_BEFORE = '(?<![\\w.+/#@\\-])';
+/**
+ * Before a phone number: not a word, a decimal, a sign, a path, an anchor, an address or an id going on, nor a
+ * version's or a build's number ("build 0612345678", the Audit's L2 at 38ccde8cb).
+ */
+const PHONE_BEFORE = '(?<![\\w.+/#@\\-])(?<!\\b(?:v|version|ver|build)\\s?)';
 const PHONE_AFTER = '(?![\\w\\-]|\\.\\d)';
 const PHONE_SEP = '[ .\\-\\u00a0]';
-const PHONE_INTL = new RegExp(`${PHONE_BEFORE}\\+\\d{1,3}(?:${PHONE_SEP}?(?:\\(\\d{1,4}\\)|\\d{1,5})){1,6}${PHONE_AFTER}`, 'g');
-const PHONE_NANP = new RegExp(`${PHONE_BEFORE}(?:\\([2-9]\\d{2}\\)[ \\u00a0]?\\d{3}[ .\\-]\\d{4}|[2-9]\\d{2}([.\\-])\\d{3}\\1\\d{4})${PHONE_AFTER}`, 'g');
-const PHONE_TRUNK = new RegExp(`${PHONE_BEFORE}0\\d{1,4}(${PHONE_SEP})\\d{2,4}(?:\\1\\d{2,4}){1,3}${PHONE_AFTER}`, 'g');
-const PHONE_BARE = new RegExp(`${PHONE_BEFORE}0[1-9]\\d{8,9}${PHONE_AFTER}`, 'g');
+const PHONE_INTL = new RegExp(`${PHONE_BEFORE}\\+\\d{1,3}(?:${PHONE_SEP}?(?:\\(\\d{1,4}\\)|\\d{1,5})){1,6}${PHONE_AFTER}`, 'gi');
+const PHONE_NANP = new RegExp(`${PHONE_BEFORE}(?:\\([2-9]\\d{2}\\)[ \\u00a0]?\\d{3}[ .\\-]\\d{4}|[2-9]\\d{2}([.\\-])\\d{3}\\1\\d{4})${PHONE_AFTER}`, 'gi');
+const PHONE_TRUNK = new RegExp(`${PHONE_BEFORE}0\\d{1,4}(${PHONE_SEP})\\d{2,4}(?:\\1\\d{2,4}){1,3}${PHONE_AFTER}`, 'gi');
+const PHONE_BARE = new RegExp(`${PHONE_BEFORE}0[1-9]\\d{8,9}${PHONE_AFTER}`, 'gi');
 const digitsOf = (s: string): string => s.replace(/\D/g, '');
 const phoneFinders: Finder[] = [
   // International: 8 to 15 digits, and 10 or more when written with no separator (a diff's +1234 is no number).
@@ -271,29 +330,64 @@ export function usablePersonName(name: string): boolean {
   return !NOT_PERSONS.has(n.toLowerCase());
 }
 
-const NAME_EDGE_BEFORE = '(?<![\\p{L}\\p{M}\\p{N}_])';
-const NAME_EDGE_AFTER = '(?![\\p{L}\\p{M}\\p{N}_])';
+/** A word, as names are matched: letters, marks, digits and _, so a name is never matched inside a longer word. */
+const WORD = /[\p{L}\p{M}\p{N}_]+/gu;
+/** A whole name as words, lower-cased in NFC, with what stands between them (spaces as one), and its key. */
+interface NameForm { words: string[]; gaps: string[]; key: string }
 
+function nameForm(text: string, key: string): NameForm | undefined {
+  const words = [...text.matchAll(WORD)];
+  if (words.length < 2) return undefined;
+  return {
+    words: words.map(w => w[0].toLowerCase()),
+    gaps: words.slice(1).map((w, i) => text.slice(words[i].index! + words[i][0].length, w.index!).replace(/\s+/g, ' ')),
+    key,
+  };
+}
+
+/**
+ * The names Tars knows, found word by word (the Audit's M1 at 38ccde8cb: one pattern of 2000 names over 1 MB took
+ * 10.9 s; a lookup per word takes the same time for 20 names or 2000). Matched in NFC, so a decomposed spelling is
+ * the same name.
+ * - A whole name, anyone's, in any case and any spacing between its words: "First Last", and "Last, First" under the
+ *   same number.
+ * - The account's own names by their parts too, each word of three letters or more as written (case kept), and its
+ *   login. Not another person's parts, nor another person's name of one word: "Will this compile?", "Mark as done."
+ *   and a class Price stay with authors Will Pruitt and Mark Price (the Audit's M3).
+ */
 function personFinders(ctx: ScrubContext): Finder[] {
-  const names = [...new Set((ctx.personNames ?? []).filter(n => typeof n === 'string' && usablePersonName(n)).map(n => n.normalize('NFC').trim().replace(/\s+/g, ' ')))];
-  const forms = (s: string) => [...new Set([s, s.normalize('NFD')])];
-  const whole = names.filter(n => n.includes(' '));
-  // A part of a whole name, and a name of one word, as written: case kept, three letters or more.
-  const parts = [...new Set(names.flatMap(n => n.split(' ')))]
-    .filter(p => (p.match(/\p{L}/gu) ?? []).length >= 3 && !PARTICLES.has(p.toLowerCase()) && !NOT_PERSONS.has(p.toLowerCase()));
-  const alternation = (list: string[], spaced: boolean) => list.flatMap(forms).sort((a, b) => b.length - a.length)
-    .map(f => (spaced ? f.split(' ').map(escapeRe).join('\\s+') : escapeRe(f))).join('|');
-  const finders: Finder[] = [];
-  const key = (m: RegExpMatchArray) => ({ key: m[0].normalize('NFC').toLowerCase().replace(/\s+/g, ' ') });
-  if (whole.length) {
-    const re = new RegExp(`${NAME_EDGE_BEFORE}(?:${alternation(whole, true)})${NAME_EDGE_AFTER}`, 'giu');
-    finders.push(part => spansOf(re, part, key, 'person', 'PERSON'));
+  const clean = (list: string[] | undefined) =>
+    [...new Set((list ?? []).filter(n => typeof n === 'string' && usablePersonName(n)).map(n => n.normalize('NFC').trim().replace(/\s+/g, ' ')))];
+  const own = clean(ctx.ownNames);
+  const others = clean(ctx.personNames).filter(n => !own.includes(n));
+  const byFirst = new Map<string, NameForm[]>();
+  const add = (f: NameForm | undefined) => { if (f) byFirst.set(f.words[0], [...(byFirst.get(f.words[0]) ?? []), f]); };
+  for (const name of [...own, ...others]) {
+    const key = name.toLowerCase();
+    add(nameForm(name, key));
+    const spaced = name.split(' ');
+    if (spaced.length >= 2) add(nameForm(`${spaced[spaced.length - 1]}, ${spaced.slice(0, -1).join(' ')}`, key));
   }
-  if (parts.length) {
-    const re = new RegExp(`${NAME_EDGE_BEFORE}(?:${alternation(parts, false)})${NAME_EDGE_AFTER}`, 'gu');
-    finders.push(part => spansOf(re, part, key, 'person', 'PERSON'));
-  }
-  return finders;
+  const parts = new Set(own.flatMap(n => [...n.matchAll(WORD)].map(w => w[0]))
+    .filter(p => (p.match(/\p{L}/gu) ?? []).length >= 3 && !PARTICLES.has(p.toLowerCase()) && !NOT_PERSONS.has(p.toLowerCase())));
+  if (!byFirst.size && !parts.size) return [];
+  return [(part) => {
+    const out: Span[] = [];
+    const words = [...part.matchAll(WORD)].map(m => ({ start: m.index!, end: m.index! + m[0].length, word: m[0].normalize('NFC') }));
+    for (let i = 0; i < words.length; i++) {
+      const lower = words[i].word.toLowerCase();
+      for (const f of byFirst.get(lower) ?? []) {
+        const last = i + f.words.length - 1;
+        if (last >= words.length) continue;
+        let k = 1;
+        while (k < f.words.length && words[i + k].word.toLowerCase() === f.words[k]
+          && part.slice(words[i + k - 1].end, words[i + k].start).replace(/\s+/g, ' ') === f.gaps[k - 1]) k++;
+        if (k === f.words.length) out.push({ start: words[i].start, end: words[last].end, key: f.key, kind: 'person', type: 'PERSON' });
+      }
+      if (parts.has(words[i].word)) out.push({ start: words[i].start, end: words[i].end, key: lower, kind: 'person', type: 'PERSON' });
+    }
+    return out;
+  }];
 }
 
 /** The personal-data finders of a context, compiled once per context (one per session's upload). */

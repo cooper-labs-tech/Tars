@@ -53,44 +53,56 @@ export const systemNameSources: NameSources = {
 
 const MAX_NAMES = 2000;
 
+/**
+ * A project's names, apart: the account's own (masked whole and by their parts) and the other people's (whole only,
+ * the Audit's M3 at 38ccde8cb). A name that is both is the account's.
+ */
+export interface PersonNames { own: string[]; others: string[] }
+
+const NONE: PersonNames = { own: [], others: [] };
+
 /** The names Tars knows for a project: its git history's people and the account's own name, usable ones only. */
-export async function personNamesOf(projectPath: string, sources: NameSources = systemNameSources): Promise<string[]> {
+export async function personNamesOf(projectPath: string, sources: NameSources = systemNameSources): Promise<PersonNames> {
   const git = (args: string[]) => safeGit(projectPath, args, { timeout: 10_000, maxBuffer: 32 * 1024 * 1024 }).then(r => r.stdout, () => '');
   const [history, userName, fullName] = await Promise.all([
     git(['log', '--all', '-n', '20000', '--format=%an%x1f%aN%x1f%cn%x1f%cN']),
     git(['config', '--get', 'user.name']),
     sources.fullName().catch(() => undefined),
   ]);
-  const found = [...history.split(/[\n\x1f]/), userName, fullName, sources.login()];
-  const names = new Set<string>();
-  for (const raw of found) {
-    if (typeof raw !== 'string') continue;
+  const usable = (raw: unknown): string | undefined => {
+    if (typeof raw !== 'string') return undefined;
     const name = raw.normalize('NFC').trim().replace(/\s+/g, ' ');
-    if (name && usablePersonName(name)) names.add(name);
-    if (names.size >= MAX_NAMES) break;
+    return name && usablePersonName(name) ? name : undefined;
+  };
+  const own = new Set([userName, fullName, sources.login()].map(usable).filter((n): n is string => !!n));
+  const others = new Set<string>();
+  for (const raw of history.split(/[\n\x1f]/)) {
+    const name = usable(raw);
+    if (name && !own.has(name)) others.add(name);
+    if (others.size >= MAX_NAMES) break;
   }
-  return [...names];
+  return { own: [...own], others: [...others] };
 }
 
 /** How long a project's names are kept before they are read again. */
 const TTL_MS = 10 * 60_000;
-const cache = new Map<string, { at: number; names: string[] }>();
-const reading = new Map<string, Promise<string[]>>();
+const cache = new Map<string, { at: number; names: PersonNames }>();
+const reading = new Map<string, Promise<PersonNames>>();
 
 /** A project's names, read now unless read in the last ten minutes. Never rejects. */
-export function preparePersonNames(projectPath: string, now = Date.now()): Promise<string[]> {
+export function preparePersonNames(projectPath: string, now = Date.now()): Promise<PersonNames> {
   const held = cache.get(projectPath);
   if (held && now - held.at < TTL_MS) return Promise.resolve(held.names);
   const pending = reading.get(projectPath);
   if (pending) return pending;
   const read = personNamesOf(projectPath)
-    .catch(() => [] as string[])
+    .catch(() => NONE)
     .then((names) => { cache.set(projectPath, { at: Date.now(), names }); reading.delete(projectPath); return names; });
   reading.set(projectPath, read);
   return read;
 }
 
 /** The names last read for a project, none when never read. */
-export function cachedPersonNames(projectPath: string): string[] {
-  return cache.get(projectPath)?.names ?? [];
+export function cachedPersonNames(projectPath: string): PersonNames {
+  return cache.get(projectPath)?.names ?? NONE;
 }
