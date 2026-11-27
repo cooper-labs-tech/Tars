@@ -11,7 +11,10 @@ import { updateSharedJsonSync } from '../utils/shared-file';
 import { startEndpointProxy, stopEndpointProxy, type HoldEvent, type ProxySession } from './endpoint-proxy';
 import { endpointLaunchFor, piModelsWithEndpoint, type EndpointLaunch } from './endpoint-harness';
 import { ENDPOINT_HARNESSES, endpointTarget, ensureDropFolder, transportOf } from './inference-endpoints';
-import { CORRECTION_WINDOW_MS, TraceStore, boundOutcomeTasks, type InterventionEvent, type RequestCancel, type TraceStart, type TraceTask } from './trace-store';
+import {
+  CORRECTION_WINDOW_MS, TraceStore, boundOutcomeTasks, type InterventionDuring, type InterventionEvent, type RequestCancel, type TraceStart,
+  type TraceTask, type TurnAuthor,
+} from './trace-store';
 import { InterruptKeys, interruptKeyOf, type InterruptKey } from '../core/interrupt-keys';
 import { takeSessionStart } from '../core/session-start';
 import type { OneTaskQueue, QueueEvent } from '../core/one-task';
@@ -834,7 +837,7 @@ type Sender =
 export function noteTypedForTraces(origin: { agentId: string; from?: string; sender?: Sender; taskRef?: string } | undefined, text: string): void {
   if (!origin || !deps || !liveTraceOf(origin.agentId)) return;
   const s = origin.sender;
-  let author = 'user';
+  let author: Exclude<TurnAuthor, 'unknown'> = 'user';
   let detail: string | undefined;
   let closed = false;
   if (s?.kind === 'agent') {
@@ -880,7 +883,7 @@ const NAMED_ENDING_MS = 2000;
 
 /** Where Tars ends an agent's terminal: what a cut by Tars and an interruption say. */
 export type TarsEnding = 'stop' | 'restart' | 'sleep' | 'remove' | 'quit' | 'replace';
-type During = 'answer' | 'tools';
+type During = InterventionDuring;
 
 /** Each agent's requests in flight at the endpoint proxy. */
 const inFlight = new Map<string, number>();

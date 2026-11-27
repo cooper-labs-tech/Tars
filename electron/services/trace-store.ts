@@ -89,22 +89,44 @@ export type CancelBy = keyof typeof CANCEL_CAUSES;
 export interface RequestCancel { by: CancelBy; cause: string; at: number; deliveredBytes: number }
 
 /**
- * What a person, an orchestrator or Tars did to a session's work, as it happened (trace feature B3): an interruption
- * (`by`: esc, ctrl_c, cli, stop, remove, quit, sleep; `during`: the answer or the tools) or a restart (`by`: restart,
- * replace). Kept with the session; each lands on the turn it came in when read (TurnInterventions).
+ * How a turn was interrupted, a closed list (the back office checks it as an enum): a lone key from the window (`esc`,
+ * `ctrl_c`), the CLI's own log (`cli`), or Tars ending the terminal while the turn was open (`stop`, `remove`, `quit`,
+ * `sleep`).
  */
-export interface InterventionEvent { kind: 'interrupted' | 'restarted'; at: number; by: string; during?: 'answer' | 'tools' }
+export const INTERRUPTED_BY = ['esc', 'ctrl_c', 'cli', 'stop', 'remove', 'quit', 'sleep'] as const;
+export type InterruptedBy = typeof INTERRUPTED_BY[number];
+/** How a turn's agent restarted: asked or for its settings (`restart`), or its terminal replaced (`replace`). */
+export const RESTARTED_BY = ['restart', 'replace'] as const;
+export type RestartedBy = typeof RESTARTED_BY[number];
+/** What the agent was doing when interrupted: answering (a request in flight) or running its tools (the turn open). */
+export const INTERVENTION_DURING = ['answer', 'tools'] as const;
+export type InterventionDuring = typeof INTERVENTION_DURING[number];
+/** Who wrote a turn, by kind (authorFor): the owner, an orchestrator, an agent, a channel, Tars, or nobody known. */
+export const TURN_AUTHORS = ['user', 'orchestrator', 'agent', 'relay', 'tars', 'unknown'] as const;
+export type TurnAuthor = typeof TURN_AUTHORS[number];
+
+const isOneOf = <T extends string>(list: readonly T[], v: unknown): v is T => typeof v === 'string' && (list as readonly string[]).includes(v);
+
+/**
+ * What a person, an orchestrator or Tars did to a session's work, as it happened (trace feature B3): an interruption
+ * or a restart, each `by` of its closed list. Kept with the session; each lands on the turn it came in when read
+ * (TurnInterventions), and one a store holds outside the lists (an older or edited build's) is dropped there.
+ */
+export type InterventionEvent =
+  | { kind: 'interrupted'; at: number; by: InterruptedBy; during: InterventionDuring }
+  | { kind: 'restarted'; at: number; by: RestartedBy };
 
 /**
  * A turn's interventions, as read (trace feature B3): its first interruption and restart; `next`, the instruction that
- * opened the turn after it, by its author's kind and its delay in seconds from this turn's end, whatever the delay;
- * `corrected`, that instruction from the owner or an orchestrator within CORRECTION_WINDOW_MS of a turn that ended
- * done; `redelegated`, a later session that took this session's task (start.redelegatedFrom, A3), on the last turn.
+ * opened the turn after it, by its author's kind (one outside TURN_AUTHORS reads `unknown`) and its delay in seconds
+ * from this turn's end, a fraction, whatever the delay; `corrected`, that instruction from the owner or an orchestrator
+ * within CORRECTION_WINDOW_MS of a turn that ended done; `redelegated`, a later session that took this session's task
+ * (start.redelegatedFrom, A3), on the last turn.
  */
 export interface TurnInterventions {
-  interrupted?: { at: number; by: string; during: 'answer' | 'tools' };
-  restarted?: { at: number; by: string };
-  next?: { by: string; delaySec: number };
+  interrupted?: { at: number; by: InterruptedBy; during: InterventionDuring };
+  restarted?: { at: number; by: RestartedBy };
+  next?: { by: TurnAuthor; delaySec: number };
   corrected?: true;
   redelegated?: { to: string; at: number };
 }
@@ -112,7 +134,7 @@ export interface TurnInterventions {
 /** A correction: the next instruction within 10 minutes of a turn that ended done (the reader's N). */
 export const CORRECTION_WINDOW_MS = 10 * 60_000;
 /** Who may correct a turn: the owner and an orchestrator. */
-const CORRECTORS = new Set(['user', 'orchestrator']);
+const CORRECTORS: ReadonlySet<string> = new Set(['user', 'orchestrator']);
 
 /**
  * What started a session, read at its spawn (core/session-start.ts), and what it started from. Every field but the
@@ -172,8 +194,8 @@ export interface TraceTask {
 export interface TypedInput {
   agentId: string;
   at: number;
-  /** user | orchestrator | chat | relay | agent | tars */
-  author: string;
+  /** Who typed it, by kind: one of TURN_AUTHORS but `unknown`, which is no typist. */
+  author: Exclude<TurnAuthor, 'unknown'>;
   authorDetail?: string;
   text: string;
   /** The words come from a closed model (a Claude agent, say): the session becomes `mixed`. */
@@ -900,9 +922,15 @@ export class TraceStore {
       let i = -1;
       turns.forEach((t, k) => { if (num(t.started_at) <= e.at) i = k; });
       if (i < 0) continue;
-      const iv = of(i);
-      if (e.kind === 'interrupted' && !iv.interrupted) iv.interrupted = { at: e.at, by: e.by, during: e.during ?? 'answer' };
-      if (e.kind === 'restarted' && !iv.restarted) iv.restarted = { at: e.at, by: e.by };
+      // Only values of the closed lists: a store an older or edited build wrote may hold others, which never leave.
+      if (e.kind === 'interrupted' && isOneOf(INTERRUPTED_BY, e.by) && isOneOf(INTERVENTION_DURING, e.during)) {
+        const iv = of(i);
+        if (!iv.interrupted) iv.interrupted = { at: e.at, by: e.by, during: e.during };
+      }
+      if (e.kind === 'restarted' && isOneOf(RESTARTED_BY, e.by)) {
+        const iv = of(i);
+        if (!iv.restarted) iv.restarted = { at: e.at, by: e.by };
+      }
     }
     for (let i = 0; i + 1 < turns.length; i++) {
       const ended = optNum(turns[i].ended_at);
@@ -910,8 +938,10 @@ export class TraceStore {
       const next = turns[i + 1];
       const delayMs = Math.max(0, (optNum(next.instructed_at) ?? num(next.started_at)) - ended);
       const iv = of(i);
-      iv.next = { by: String(next.author), delaySec: delayMs / 1000 };
-      if (turns[i].final_status === 'done' && CORRECTORS.has(String(next.author)) && delayMs <= CORRECTION_WINDOW_MS) iv.corrected = true;
+      const by: TurnAuthor = isOneOf(TURN_AUTHORS, next.author) ? next.author : 'unknown';
+      // The raw delay, a fraction of seconds: never rounded.
+      iv.next = { by, delaySec: delayMs / 1000 };
+      if (turns[i].final_status === 'done' && CORRECTORS.has(by) && delayMs <= CORRECTION_WINDOW_MS) iv.corrected = true;
     }
     const later = this.db.prepare(`SELECT trace_id, started_at, json_extract(start_json, '$.handedAt') AS handed FROM traces
       WHERE json_extract(start_json, '$.redelegatedFrom') = ? ORDER BY started_at LIMIT 1`).get(traceId) as Row | undefined;

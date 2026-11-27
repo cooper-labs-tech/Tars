@@ -376,7 +376,7 @@ describe('redelegated, and what leaves', () => {
     traceStore().addIntervention(traceId, { kind: 'interrupted', at: t0 + 6, by: 'esc', during: 'sideways' } as never);
     traceStore().addIntervention(traceId, { kind: 'restarted', at: t0 + 7, by: 'reboot' } as never);
     vi.setSystemTime(t0 + 10 + 1234);
-    traceStore().noteTypedInput({ agentId: 'q', at: t0 + 10 + 1234, author: 'chat', text: 'from an old author kind', closed: false });
+    traceStore().noteTypedInput({ agentId: 'q', at: t0 + 10 + 1234, author: 'chat' as never, text: 'from an old author kind', closed: false });
     request(traceId, 'q', t0 + 2000, { said: 'from an old author kind' });
     const first = turnsOf(traceId)[0].interventions;
     expect.soft(first?.interrupted, 'an interruption outside the lists').toBeUndefined();
