@@ -1,8 +1,8 @@
 import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
-import type { CLIProvider } from '../providers/cli-provider';
 import { parse as parseToml } from 'smol-toml';
+import type { CLIProvider } from '../providers/cli-provider';
 import { writeAtomicSync } from '../utils/secret-file';
 
 /**
@@ -17,7 +17,7 @@ import { writeAtomicSync } from '../utils/secret-file';
  *   `~/.claude/mcp.json` for an orchestrator and `~/.claude/mcp-worker.json`, the same minus the two, for a
  *   worker. That holds only because no Tars server is in Claude Code's user scope (`~/.claude.json`), which
  *   every session loads whatever --mcp-config says (claude-provider.ts registers into the file only).
- * - codex: `-c mcp_servers.<name>.enabled=false` (0.163) for each its config holds, Qwen Code: `--disable-mcp-server <name>` (0.25.2),
+ * - codex: `-c mcp_servers.<name>.enabled=false` (0.163), Qwen Code: `--disable-mcp-server <name>` (0.25.2),
  *   gemini: `--allowed-mcp-server-names`, its other servers (codex-provider.ts, qwen-code-provider.ts,
  *   gemini-provider.ts).
  * - opencode, amp, grok and pi read their servers from their own config with no per-run switch Tars could
@@ -85,24 +85,152 @@ export function mcpConfigPathFor(
 }
 
 /**
- * codex: the two switched off for a worker, for this run (0.163 takes `-c` after `resume` too), each only where the
- * config Tars hands codex (`configFile`, CODEX_HOME's config.toml) holds it. codex 0.163 refuses to start on such a
- * switch for a server its config lacks ("invalid transport in `mcp_servers.claude-mgr-telegram`"), and Telegram is no
- * longer shipped: on a CODEX_HOME that never ran 2.0.4 no codex worker started. A config that does not exist or does
- * not parse holds none.
+ * codex: the two switched off for a worker, for this run (0.163 takes `-c` after `resume` too), each only where
+ * `configFile`, the config.toml codex reads, defines it: an override of a server it does not define makes an entry
+ * with nothing to run, and codex refuses to start on it ("invalid transport", exit 1, measured on 0.163.0 and 0.170.0,
+ * 20/11). Nothing when the file is missing. A file smol-toml cannot parse is read as text (definedInText): codex may
+ * still read it, and a worker must not get X from it.
  */
 export function codexRoleArgs(orchestrator: boolean, configFile: string): string[] {
   if (orchestrator) return [];
-  let held: Record<string, unknown>;
+  let text: string;
+  try { text = fs.readFileSync(configFile, 'utf-8'); } catch { return []; }
+  let isDefined: (name: string) => boolean;
   try {
-    const servers = (parseToml(fs.readFileSync(configFile, 'utf-8')) as { mcp_servers?: unknown }).mcp_servers;
-    held = servers && typeof servers === 'object' ? servers as Record<string, unknown> : {};
+    const servers = parseToml(text).mcp_servers;
+    const defined = servers && typeof servers === 'object' ? servers : {};
+    isDefined = name => Object.prototype.hasOwnProperty.call(defined, name);
   } catch {
-    return [];
+    // Not TOML to smol-toml, which codex, whose parser takes more, may still read and start X in a worker (the Audit's
+    // L1 on #608): the server is then looked for as text, in every form TOML allows (L3).
+    isDefined = name => definedInText(text, name);
   }
-  return ORCHESTRATOR_ONLY_MCP
-    .filter(name => Object.prototype.hasOwnProperty.call(held, name))
-    .flatMap(name => ['-c', `mcp_servers.${name}.enabled=false`]);
+  return ORCHESTRATOR_ONLY_MCP.filter(isDefined).flatMap(name => ['-c', `mcp_servers.${name}.enabled=false`]);
+}
+
+/** A TOML key matching `name` exactly: bare, double-quoted or single-quoted (a regular expression's source). */
+function tomlKey(name: string): string {
+  const escaped = name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  return `(?:${escaped}|"${escaped}"|'${escaped}')`;
+}
+
+const SERVERS_KEY = tomlKey('mcp_servers');
+
+/**
+ * Whether `text`, a config.toml that does not parse, defines the server `name`, in any form TOML allows (the Audit's L1
+ * and L3 on #608):
+ * - a table header of it or of one of its subtables, `[mcp_servers.<name>]`, `[mcp_servers.<name>.env]`;
+ * - under the `[mcp_servers]` header, a key `<name> = { ... }` or a dotted key `<name>.command = ...`;
+ * - before any header, a dotted key `mcp_servers.<name>.command = ...` or `mcp_servers.<name> = { ... }`, or a key of
+ *   the inline table `mcp_servers = { <name> = { ... } }`, on one line or on several;
+ * the name bare, double-quoted or single-quoted, spaces allowed around the dots. Never in a comment or a multi-line
+ * string, never a key of another table, never a value, never a longer name that begins with it.
+ */
+function definedInText(text: string, name: string): boolean {
+  const key = tomlKey(name);
+  const ownHeader = new RegExp(`^\\s*\\[\\s*${SERVERS_KEY}\\s*\\.\\s*${key}\\s*[.\\]]`);
+  const serversHeader = new RegExp(`^\\s*\\[\\s*${SERVERS_KEY}\\s*\\]\\s*$`);
+  const underServers = new RegExp(`^\\s*${key}\\s*[.=]`);
+  const dottedAtTop = new RegExp(`^\\s*${SERVERS_KEY}\\s*\\.\\s*${key}\\s*[.=]`);
+  const inlineAtTop = new RegExp(`^\\s*${SERVERS_KEY}\\s*=\\s*\\{`);
+  const plain = withoutCommentsOrLongStrings(text);
+  let table: 'top' | 'servers' | 'other' = 'top';
+  let at = 0;
+  for (const line of plain.split('\n')) {
+    const start = at;
+    at += line.length + 1;
+    if (ownHeader.test(line)) return true;
+    if (/^\s*\[/.test(line)) {
+      table = serversHeader.test(line) ? 'servers' : 'other';
+    } else if (table === 'servers') {
+      if (underServers.test(line)) return true;
+    } else if (table === 'top') {
+      if (dottedAtTop.test(line)) return true;
+      const inline = inlineAtTop.exec(line);
+      if (inline && inlineTableHasKey(plain, start + inline[0].length - 1, key)) return true;
+    }
+  }
+  return false;
+}
+
+/** Whether the character at `at` is escaped: an odd run of backslashes before it. */
+function escapedAt(text: string, at: number): boolean {
+  let n = 0;
+  while (at - 1 - n >= 0 && text[at - 1 - n] === '\\') n++;
+  return n % 2 === 1;
+}
+
+/** Where the one-line string whose quote is at `at` ends: after its closing quote, or at the line's end. */
+function oneLineStringEnd(text: string, at: number): number {
+  const quote = text[at];
+  let j = at + 1;
+  while (j < text.length && text[j] !== '\n' && !(text[j] === quote && (quote === "'" || !escapedAt(text, j)))) j++;
+  return j < text.length && text[j] === quote ? j + 1 : j;
+}
+
+/**
+ * `text` with its comments and multi-line strings blanked (each character a space, each line break kept), so neither
+ * is read as a definition. One-line strings are kept: a quoted key is one, and a line never starts inside one.
+ */
+function withoutCommentsOrLongStrings(text: string): string {
+  const blank = (part: string) => part.replace(/[^\n]/g, ' ');
+  let out = '';
+  let i = 0;
+  while (i < text.length) {
+    let end: number;
+    const three = text.slice(i, i + 3);
+    if (three === '"""' || three === "'''") {
+      let close = text.indexOf(three, i + 3);
+      while (three === '"""' && close !== -1 && escapedAt(text, close)) close = text.indexOf(three, close + 1);
+      end = close === -1 ? text.length : close + 3;
+      out += blank(text.slice(i, end));
+    } else if (text[i] === '"' || text[i] === "'") {
+      end = oneLineStringEnd(text, i);
+      out += text.slice(i, end);
+    } else if (text[i] === '#') {
+      const lineEnd = text.indexOf('\n', i);
+      end = lineEnd === -1 ? text.length : lineEnd;
+      out += blank(text.slice(i, end));
+    } else {
+      end = i + 1;
+      out += text[i];
+    }
+    i = end;
+  }
+  return out;
+}
+
+/**
+ * Whether the inline table opened at `open` (its `{`) has the key `key` (a regular expression's source) at its own
+ * level, alone or as the first part of a dotted key, never inside a value.
+ */
+function inlineTableHasKey(text: string, open: number, key: string): boolean {
+  const keyHere = new RegExp(`^${key}\\s*[.=]`);
+  let depth = 0;
+  let keyNext = false;
+  let i = open;
+  while (i < text.length) {
+    const c = text[i];
+    if (keyNext && depth === 1 && !/\s/.test(c)) {
+      if (keyHere.test(text.slice(i, i + key.length + 256))) return true;
+      keyNext = false;
+    }
+    if (c === '"' || c === "'") {
+      i = oneLineStringEnd(text, i);
+      continue;
+    }
+    if (c === '{' || c === '[') {
+      depth++;
+      keyNext = c === '{' && depth === 1;
+    } else if (c === '}' || c === ']') {
+      depth--;
+      if (depth === 0) return false;
+    } else if (c === ',') {
+      keyNext = true; // read only at the table's own level, above
+    }
+    i++;
+  }
+  return false;
 }
 
 /** Qwen Code: the two disabled for a worker, for this invocation (0.25.2). */
