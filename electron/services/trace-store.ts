@@ -610,7 +610,8 @@ export class TraceStore {
 
   /** The session's first request at the endpoint at or after `from`: one given up while held never reached it. */
   firstRequestAt(traceId: string, from: number = Number.MIN_SAFE_INTEGER): number | undefined {
-    const r = this.db.prepare('SELECT MIN(started_at) AS m FROM requests WHERE trace_id = ? AND started_at >= ? AND cancel_json IS NULL').get(traceId, from) as { m: number | null };
+    const r = this.db.prepare(`SELECT MIN(started_at) AS m FROM requests WHERE trace_id = ? AND started_at >= ?
+      AND (cancel_json IS NULL OR json_extract(cancel_json, '$.cause') IS NOT 'abandoned_while_held')`).get(traceId, from) as { m: number | null };
     return r.m ?? undefined;
   }
 
@@ -758,6 +759,9 @@ export class TraceStore {
   private ingestNow(rec: WireRecord): string {
     const trace = this.db.prepare('SELECT * FROM traces WHERE trace_id = ?').get(rec.traceId) as Row | undefined;
     if (!trace) throw new Error('no such trace');
+    // Given up while held: the one cancel that never reached the endpoint (counted in no request count, model time or
+    // first request). Every other cut request did, and counts.
+    const heldOnly = rec.cancel?.cause === 'abandoned_while_held';
     const req = parseRequest(rec.surface, rec.requestBody);
     const resp = parseResponse(rec.surface, rec.status, rec.contentType, rec.responseBody);
     const systemHash = req && req.system !== undefined ? hashOf(req.system) : undefined;
@@ -845,11 +849,12 @@ export class TraceStore {
       const status = cutByCaller ? 'abandoned' : failed ? 'failed' : resp.toolCalls > 0 ? 'open' : 'done';
       if (!side) {
         const toolMs = !opens && lastEnd !== undefined ? Math.max(0, rec.startedAt - lastEnd) : 0;
-        // A request given up while held never reached the endpoint: no request of the turn, no model time.
+        // A request given up while held never reached the endpoint: no request of the turn, no model time. Any other
+        // cut one did, and counts (an Esc mid-answer, a cut stream, a Tars stop...).
         this.db.prepare(`UPDATE turns SET ended_at = ?, request_count = request_count + ?, tool_call_count = tool_call_count + ?,
           tool_error_count = tool_error_count + ?, tool_ms = tool_ms + ?, model_ms = model_ms + ?, tokens_in = tokens_in + ?,
           tokens_cached = tokens_cached + ?, tokens_out = tokens_out + ?, final_status = ?, final_finish_reason = ? WHERE turn_id = ?`)
-          .run(rec.endedAt, rec.cancel ? 0 : 1, resp.toolCalls, toolErrors, toolMs, rec.cancel ? 0 : total, resp.usage.input, resp.usage.cached,
+          .run(rec.endedAt, heldOnly ? 0 : 1, resp.toolCalls, toolErrors, toolMs, heldOnly ? 0 : total, resp.usage.input, resp.usage.cached,
             resp.usage.output, status, resp.finishReason ?? null, turnId);
       } else {
         this.db.prepare('UPDATE turns SET tokens_in = tokens_in + ?, tokens_cached = tokens_cached + ?, tokens_out = tokens_out + ? WHERE turn_id = ?')
@@ -859,7 +864,7 @@ export class TraceStore {
     this.db.prepare(`UPDATE traces SET request_count = request_count + ?, turn_count = ?, tokens_in = tokens_in + ?,
       tokens_cached = tokens_cached + ?, tokens_out = tokens_out + ?, mixed = ?, unknown_turns = ?, main_system_hash = ?,
       last_end_at = CASE WHEN ? THEN last_end_at ELSE ? END, bytes = bytes + ?, updated_seq = ? WHERE trace_id = ?`).run(
-      rec.cancel ? 0 : 1, turnCount, resp.usage.input, resp.usage.cached, resp.usage.output, mixed ? 1 : 0, unknownTurns, mainSystem ?? null,
+      heldOnly ? 0 : 1, turnCount, resp.usage.input, resp.usage.cached, resp.usage.output, mixed ? 1 : 0, unknownTurns, mainSystem ?? null,
       side ? 1 : 0, rec.endedAt, added + ROW_BYTES, this.nextSeq(), rec.traceId);
     return requestId;
   }

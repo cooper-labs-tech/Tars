@@ -45,7 +45,8 @@ export function sessionDocument(store: TraceStore, traceId: string, seen: Set<st
   };
   for (const t of s.turns) {
     // A request given up while held never reached the endpoint: it is listed with its cancel, and counted in neither.
-    const reached = t.requests.filter(r => !r.cancel);
+    // Any other cut request reached it, and counts.
+    const reached = t.requests.filter(r => r.cancel?.cause !== 'abandoned_while_held');
     const main = reached.filter(r => !r.side);
     doc.turns.push({
       turn_id: t.turnId, trace_id: x.traceId, turn_index: t.index, started_at: t.startedAt, ended_at: t.endedAt ?? null,
