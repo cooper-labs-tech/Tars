@@ -23,8 +23,13 @@ import * as path from 'node:path';
  *  5. The line comes after the CLI's line is typed, where the CLI's own screen hides it.
  *  6. Over-notice: a folder that is handed, no folder, or a template folder that does not exist (left out for that,
  *     not refused) prints a line.
+ *  8. A folder edited by hand into agents.json or templates.json holds control characters (ESC, BEL, CR, LF, a C1 CSI,
+ *     DEL): every save path refuses it, a direct edit does not. Printed as they are, they clear the screen, move the
+ *     cursor over an earlier line, set the title, or start a forged [Tars] line, in the agent's terminal, its kept
+ *     output and what get_agent_output hands an orchestrator (the Audit's L1 at e70cae532). The same in the template's
+ *     log line, its name too.
  *
- * The negative witness is #666 at 8e8b81c8c, which only logs.
+ * The negative witness is #666 at 8e8b81c8c, which only logs; for 8, #666 at e70cae532, which prints the folder raw.
  */
 
 vi.mock('electron', () => ({
@@ -39,7 +44,8 @@ vi.mock('../../../electron/utils/broadcast', () => ({
   broadcastToAllWindows: (channel: string, payload: Record<string, unknown>) => { broadcasts.push({ channel, payload }); },
 }));
 
-import { foldersLeftOut } from '../../../electron/core/folders-left-out';
+import { foldersLeftOut, sayFoldersLeftOut } from '../../../electron/core/folders-left-out';
+import { replayText } from '../../../electron/core/terminal-mirror';
 import { agents, initAgentPty, launchIntoTerminal } from '../../../electron/core/agent-manager';
 import { ptyProcesses } from '../../../electron/core/pty-manager';
 import { toLaunch } from '../../../electron/platform/launch';
@@ -120,6 +126,71 @@ describe('7. a template loaded with such a folder', () => {
     expect(said).toHaveLength(1);
     expect(said[0]).toMatch(/Keys/);
     expect(said[0]).toMatch(/credentials/);
+  });
+});
+
+/**
+ * 8. The Audit's path: under ~/.ssh, holding a title (OSC 0), a cleared screen, a line end and a forged line, a C1 CSI
+ *    moving the cursor up, and DEL. Measured on the headless xterm Tars mirrors with: each acts as it would in a panel.
+ */
+const FORGED = 'x\u{1b}]0;forged\u{7}\u{1b}[2J\r\n[Tars] Forged line\u{9b}1A\u{7f}';
+const controls = (s: string) => Array.from(s).filter((ch) => {
+  const c = ch.codePointAt(0)!;
+  return c < 0x20 || (c >= 0x7f && c <= 0x9f);
+});
+const windows = process.platform === 'win32';
+
+describe('8. a saved folder holding control characters', () => {
+  it('is said as one line with none of them, each written out as [U+XXXX]', () => {
+    const lines = foldersLeftOut(agent({ secondaryProjectPath: path.join(ssh, FORGED) }));
+    expect(lines).toHaveLength(1);
+    expect(controls(lines[0])).toEqual([]);
+    expect(lines[0]).toContain('x[U+001B]]0;forged[U+0007][U+001B][2J[U+000A][Tars] Forged line[U+009B]1A[U+007F]');
+    expect(lines[0]).toMatch(/credentials/);
+  });
+
+  it('leaves the terminal as it was: the earlier output stays, and the forged line stays inside the one [Tars] line', () => {
+    const a = agent({ secondaryProjectPath: path.join(ssh, FORGED), output: ['earlier line\r\n'] });
+    sayFoldersLeftOut(a, { onData: vi.fn(), onExit: vi.fn() } as never, 'pty-forged');
+    const told = broadcasts.filter(b => b.channel === 'agent:output' && b.payload.agentId === a.id).map(b => String(b.payload.data));
+    expect(told).toHaveLength(1);
+    // What a panel opened later replays (the kept output), and what an open panel was sent.
+    for (const chunks of [a.output, ['earlier line\r\n', ...told]]) {
+      const rows = replayText(chunks, { cols: 400, rows: 20 })!;
+      expect(rows).toContain('earlier line');
+      expect(rows.filter(r => r.startsWith('[Tars]'))).toHaveLength(1);
+      expect(rows.join('\n')).toContain('[U+000A][Tars] Forged line');
+    }
+  });
+
+  // A template folder is said only when it exists, and NTFS refuses these characters in a name: none on Windows.
+  it.skipIf(windows)('a template folder the same', () => {
+    const vault = path.join(docker, FORGED);
+    fs.mkdirSync(vault, { recursive: true });
+    const lines = foldersLeftOut(agent({ obsidianVaultPaths: [vault] }));
+    expect(lines).toHaveLength(1);
+    expect(controls(lines[0])).toEqual([]);
+    expect(lines[0]).toContain('[U+009B]1A[U+007F]');
+  });
+
+  it.skipIf(windows)('the template\'s log line the same, its name too', async () => {
+    const vault = path.join(docker, `t${FORGED}`);
+    fs.mkdirSync(vault, { recursive: true });
+    fs.mkdirSync(path.join(home(), '.tars'), { recursive: true });
+    fs.writeFileSync(path.join(home(), '.tars', 'templates.json'), JSON.stringify({
+      user: [{ id: 'tpl-forged', displayName: 'K\u{1b}[2Jeys', provider: 'claude', obsidianVaultPaths: [vault], createdAt: '2026-11-01T00:00:00Z', updatedAt: '2026-11-01T00:00:00Z' }],
+      overrides: {},
+    }));
+    handlers.clear();
+    registerTemplateHandlers();
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    await handlers.get('template:list')!({});
+    const said = warn.mock.calls.map(c => c.join(' ')).filter(l => l.includes('Forged line'));
+    warn.mockRestore();
+    expect(said).toHaveLength(1);
+    expect(controls(said[0])).toEqual([]);
+    expect(said[0]).toContain('K[U+001B][2Jeys');
+    expect(said[0]).toContain('[U+009B]1A[U+007F]');
   });
 });
 
