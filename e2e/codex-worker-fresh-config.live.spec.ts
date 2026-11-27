@@ -7,14 +7,15 @@ import { launchSandboxed, recordValues, removeHome, stepShot } from './fixture.m
 import { DEV_URL, apiPort, PORT_OFFSET } from './ports.mjs';
 
 /**
- * A codex worker starts, and takes a task, on a codex config that has never held the Telegram server (2.0.7).
+ * A codex worker starts, and takes a task, on a codex config that holds no Telegram server (2.0.7, #608's fix).
  *
  * Tars hands a codex worker `-c mcp_servers.<name>.enabled=false` for the two servers only an orchestrator gets
  * (services/mcp-roles.ts). codex 0.163 refuses to start on such a switch for a server its config.toml does not hold:
- * "Error: invalid transport in `mcp_servers.claude-mgr-telegram`". Telegram is no longer shipped (2.0.5), so on a
- * CODEX_HOME that never ran 2.0.4, a new user's, no codex worker started at all: its terminal showed the error and
- * the shell prompt (seen in the peer-message E2E of #656). A server is now switched off only where that config holds
- * it.
+ * "Error: invalid transport in `mcp_servers.claude-mgr-telegram`". Since 2.0.5 every start of Tars takes its Telegram
+ * entry out of codex's config (retireTelegramMcp), so every codex worker of 2.0.5 and 2.0.6 stopped at launch, its
+ * terminal showing the error and the shell prompt, and its task typed into that shell (seen again in the
+ * peer-message E2E of #656). A server is now switched off only where that config holds it. #608's own spec checks the
+ * worker starts; this one also checks a task reaches its model.
  *
  * Here a codex worker of Tars, in bypass, on the real codex, in a sandbox whose CODEX_HOME holds a model provider
  * (a local stand-in, e2e/live/fake-openai-api.mjs, no account) and its project's trust, and no Telegram server.
@@ -85,7 +86,9 @@ test('a codex worker on a codex config without the Telegram server starts and ta
   const values: Record<string, unknown> = { codex: CODEX, version: execFileSync(CODEX, ['--version']).toString().trim(), nonce, tmpdir: process.env.TMPDIR ?? null };
   try {
     const app = await launchSandboxed(electron, home, {
-      env: { NODE_ENV: 'development', DOROTHY_DEV_URL: DEV_URL, DOROTHY_E2E: '1', DOROTHY_API_PORT: apiPort(31445), TARS_E2E_OPENAI_KEY: KEY },
+      // CODEX_HOME the sandbox's own, whatever one the runner's shell exports: the fixture strips no CODEX_HOME, and the
+      // sandboxed Tars would write its servers and this project's trust into that one (the Audit's L2 on #657).
+      env: { NODE_ENV: 'development', DOROTHY_DEV_URL: DEV_URL, DOROTHY_E2E: '1', DOROTHY_API_PORT: apiPort(31445), TARS_E2E_OPENAI_KEY: KEY, CODEX_HOME: path.join(home, '.codex') },
     });
     let screen: () => Promise<string[]> = async () => [];
     try {
