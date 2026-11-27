@@ -154,6 +154,10 @@ export async function checkForUpdates() {
  * message: electron-updater's HttpError carries the request and the response's
  * headers on the lines after it. A disk error quotes the updater's cache, under
  * the owner's home: said `~`.
+ *
+ * The window is told on app:update-error, whose listeners had no sender: the
+ * banner goes back to "available" and Settings, System shows the sentence (the
+ * Audit's L3 on #660).
  */
 export async function downloadUpdate(): Promise<{ success: true } | { success: false; error: string }> {
   try {
@@ -161,7 +165,9 @@ export async function downloadUpdate(): Promise<{ success: true } | { success: f
     return { success: true };
   } catch (err) {
     const first = withoutHome((err instanceof Error ? err.message : String(err)).split('\n')[0].trim()).slice(0, 200);
-    return { success: false, error: `Tars could not download the update: ${first}` };
+    const error = `Tars could not download the update: ${first}`;
+    _getMainWindow?.()?.webContents.send('app:update-error', error);
+    return { success: false, error };
   }
 }
 
