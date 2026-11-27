@@ -21,6 +21,17 @@
 // M1. Its up gives the requests from before it a mark: `false` would pass a side request off as a
 //     main one. They must read back `null`, every other value as it was.
 // M2. Its down loses a request, or a value of one, along with the marks it is meant to drop.
+//
+// One session deleted on its install's word (DELETE /v1/sessions/{sessionId}, 27/11: a session Tars sent and then
+// deleted, by its user or by its own retention, is deleted here too). The ways it can fail, written before the code:
+// D1. The session stays readable, or its turns, its requests, or a blob only it used stay.
+// D2. A blob another session still uses goes with it: one of the same install, or one another install sent too.
+// D3. Readers are not told: no tombstone, one without the session's id, or one under a reason they do not know.
+// D4. Asked again (a retry after a lost answer), it fails, or tells readers twice.
+// D5. An install deletes a session of another install that has the same id, or an id it never sent answers anything
+//     but 200 with nothing deleted, which would tell it what others hold.
+// D6. Without the install's token (none, a reader's) something is deleted.
+// D7. The operator's deletion log has no receipt for it, or the install's stored bytes still count what went.
 import { describe, it, before, after } from 'node:test';
 import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
@@ -412,6 +423,68 @@ describe('trace back-office, end to end', () => {
     assert.deepEqual(note('retention.deletions', del.json.deletions.map((d: any) => [d.install, d.sessionId, d.reason])), [[installB.id, 'old-1', 'retention']]);
     const gone = await call('GET', `/v1/read/sessions/${installB.id}/old-1`, { token: reader.token });
     assert.equal(gone.status, 404);
+  });
+
+  it('deletes one session on its install\'s word, with what only it used, tells readers once, and nothing of anyone else\'s', async () => {
+    // B sends two sessions: b-del names a blob only it uses, one it shares with b-del2, and A's system prompt.
+    const only = Buffer.from(JSON.stringify({ role: 'assistant', content: 'Only b-del said this.' }));
+    const twice = Buffer.from(JSON.stringify({ role: 'user', content: 'b-del and b-del2 both asked this.' }));
+    for (const [hash, raw] of [[sha(only), only], [sha(twice), twice], [h.system, msgs.system]] as const) {
+      assert.ok([200, 201].includes((await call('PUT', `/v1/blobs/${hash}`, { token: installB.token, raw })).status));
+    }
+    const req = (sessionId: string, refs: string[]) => ({
+      requestId: `${sessionId}-r`, sessionId, turnId: `${sessionId}-t`, seq: 0, surface: 'openai_chat', startedAt: T0, totalMs: 100,
+      tokensIn: 1, tokensCached: 0, tokensOut: 1, status: 200, finishReason: 'stop', streamed: false, side: false,
+      messages: refs.map((hash, position) => ({ position, hash, direction: position === refs.length - 1 ? 'output' : 'input' })),
+    });
+    const meta = (hash: string, raw: Buffer, role: string) => ({ hash, role, createdAt: T0, size: raw.length });
+    for (const [id, refs] of [['b-del', [h.system, sha(twice), sha(only)]], ['b-del2', [sha(twice)]]] as const) {
+      const put = await call('PUT', `/v1/batches/${id}.1`, { token: installB.token, body: {
+        schema: 1, sessions: [session({ sessionId: id, finalStatus: 'done', endedAt: T0 + 10_000, turnCount: 1, requestCount: 1 })],
+        turns: [{ ...turn, turnId: `${id}-t`, sessionId: id }], requests: [req(id, [...refs])],
+        messages: [meta(h.system, msgs.system, 'system'), meta(sha(twice), twice, 'user'), meta(sha(only), only, 'assistant')].filter((m) => (refs as readonly string[]).includes(m.hash)),
+      } });
+      assert.equal(put.status, 200, String(put.buf));
+    }
+    const storedBefore = (await call('GET', '/v1/installs/me', { token: installB.token })).json.usage.storedBytes;
+    const tombstones = async () => (await call('GET', '/v1/read/deletions', { token: reader.token })).json.deletions
+      .filter((x: any) => x.sessionId === 'b-del' || x.sessionId === 'sess-1').map((x: any) => [x.install, x.sessionId, x.reason]);
+
+    // D6. No token, a reader's: nothing.
+    note('sessionDelete.noToken', (await call('DELETE', '/v1/sessions/b-del')).status);
+    note('sessionDelete.readerToken', (await call('DELETE', '/v1/sessions/b-del', { token: reader.token })).status);
+    assert.equal(asserted['sessionDelete.noToken'], 401);
+    assert.equal(asserted['sessionDelete.readerToken'], 401);
+    // D5. B asks for A's sess-1, an id B never sent: 200, nothing deleted, A's session still there.
+    const foreign = await call('DELETE', '/v1/sessions/sess-1', { token: installB.token });
+    assert.equal(note('sessionDelete.foreign.status', foreign.status), 200, String(foreign.buf));
+    assert.equal(note('sessionDelete.foreign.sessions', foreign.json.deleted.sessions), 0);
+    assert.equal((await call('GET', `/v1/read/sessions/${installA.id}/sess-1`, { token: reader.token })).status, 200);
+
+    // D1, D2, D7. B deletes b-del.
+    const d = await call('DELETE', '/v1/sessions/b-del', { token: installB.token });
+    assert.equal(d.status, 200, String(d.buf));
+    assert.deepEqual(note('sessionDelete.counts', [d.json.deleted.sessions, d.json.deleted.turns, d.json.deleted.requests, d.json.deleted.blobs]), [1, 1, 1, 2]);
+    assert.match(d.json.receipt, /^del_/);
+    assert.equal((await call('GET', `/v1/read/sessions/${installB.id}/b-del`, { token: reader.token })).status, 404);
+    assert.equal(note('sessionDelete.blob.only', (await call('GET', `/v1/read/blobs/${sha(only)}`, { token: reader.token })).status), 404);
+    assert.equal(note('sessionDelete.blob.twice', (await call('GET', `/v1/read/blobs/${sha(twice)}`, { token: reader.token })).status), 200);
+    assert.equal(note('sessionDelete.blob.system', (await call('GET', `/v1/read/blobs/${h.system}`, { token: reader.token })).status), 200);
+    assert.equal((await call('GET', `/v1/read/sessions/${installB.id}/b-del2`, { token: reader.token })).status, 200);
+    const storedAfter = (await call('GET', '/v1/installs/me', { token: installB.token })).json.usage.storedBytes;
+    note('sessionDelete.storedBytes', [storedBefore, storedAfter]);
+    assert.ok(storedAfter < storedBefore, 'the stored bytes count what went');
+    assert.ok((await page('/admin/deletions')).html.includes(d.json.receipt), 'the receipt is in the owner\'s deletion log');
+
+    // D3, D4. Readers are told once, with the id, under a reason they know; a retry deletes nothing and tells no one.
+    const again = await call('DELETE', '/v1/sessions/b-del', { token: installB.token });
+    assert.equal(again.status, 200);
+    assert.equal(note('sessionDelete.again.sessions', again.json.deleted.sessions), 0);
+    assert.deepEqual(note('sessionDelete.tombstones', await tombstones()), [[installB.id, 'b-del', 'install_deleted']]);
+
+    // The last session using `twice` goes, and the blob with it.
+    assert.equal((await call('DELETE', '/v1/sessions/b-del2', { token: installB.token })).status, 200);
+    assert.equal(note('sessionDelete.blob.twiceAfterBoth', (await call('GET', `/v1/read/blobs/${sha(twice)}`, { token: reader.token })).status), 404);
   });
 
   it('deletes everything an install sent in one call, says so, and keeps what another install still holds', async () => {
