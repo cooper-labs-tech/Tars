@@ -1,7 +1,8 @@
 'use client';
 
-import { useEffect } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import type { ReactNode } from 'react';
+import { ChevronDown } from 'lucide-react';
 
 /**
  * Every dialog in the app.
@@ -45,6 +46,24 @@ export function DialogShell({
   children?: ReactNode;
   className?: string;
 }) {
+  // More below: the body overflows and is not scrolled to its end (`Dialog · a body longer than the window`). macOS
+  // hides the scroll bar, so without it a half-cut line was the only sign, and an answer could be given unread.
+  const body = useRef<HTMLDivElement>(null);
+  const [more, setMore] = useState(false);
+  const measure = useCallback(() => {
+    const el = body.current;
+    setMore(!!el && el.scrollHeight - el.scrollTop - el.clientHeight > 1);
+  }, []);
+  useEffect(() => {
+    const el = body.current;
+    if (!open || !el) return;
+    measure();
+    const seen = new ResizeObserver(measure);
+    seen.observe(el);
+    for (const child of Array.from(el.children)) seen.observe(child);
+    return () => seen.disconnect();
+  }, [open, measure, children]);
+
   useEffect(() => {
     if (!open) return;
     const onKeyDown = (e: KeyboardEvent) => {
@@ -79,7 +98,19 @@ export function DialogShell({
             {headerRight && <div className="shrink-0 pt-0.5">{headerRight}</div>}
           </div>
         )}
-        <div className="min-h-0 overflow-y-auto p-4">{children}</div>
+        <div className="relative min-h-0 flex flex-col">
+          <div ref={body} onScroll={measure} className="min-h-0 overflow-y-auto p-4">{children}</div>
+          {more && (
+            <button
+              type="button"
+              onClick={() => body.current?.scrollBy({ top: body.current.clientHeight - 26, behavior: 'smooth' })}
+              className="absolute inset-x-0 bottom-0 h-[26px] flex items-center justify-center gap-1.5 border-t border-border bg-card font-mono text-[10.5px] text-muted-foreground hover:text-foreground"
+            >
+              <ChevronDown className="w-3 h-3" aria-hidden />
+              more below
+            </button>
+          )}
+        </div>
         {(footerLeft || footerRight) && (
           <div className="flex items-center justify-between gap-3 px-4 py-3 border-t border-border shrink-0">
             <div className="flex items-center gap-2">{footerLeft}</div>
