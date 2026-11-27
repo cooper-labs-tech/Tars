@@ -40,7 +40,7 @@ import * as path from 'path';
  * 10. `ip`: IPv4 and IPv6 addresses, an IPv4-mapped one whole; not the loopback, unspecified or broadcast ones, x.0.0.0,
  *     a four-part version written after v, version or build, or a package spec's (@scope/tool@1.0.0.1,
  *     vendor/lib@1.2.3.4), nor a pair of words in hex letters (add::bad). After a user's name it is an address
- *     (deploy@10.0.0.5, git@10.1.2.3:), and so is pkg@1.2.3.4.
+ *     (deploy@10.0.0.5, git@10.1.2.3:, a URL's user part as in https://admin@192.168.1.1/), and so is pkg@1.2.3.4.
  * 11. `phone`: a number as people write one: international (+, 8 to 15 digits), North American ((555) 201-4567,
  *     202-555-0123), national with a trunk 0 and one separator throughout (06 12 34 56 78, 020 7946 0958), or a bare
  *     national 0612345678. Never a timestamp, a port, a version, a build's number, a hash, an id or a count (the false
@@ -266,12 +266,13 @@ const ipFinders: Finder[] = [
     if (/^127\./.test(addr) || addr === '0.0.0.0' || addr === '255.255.255.255') return null;
     // x.0.0.0 is a network or a version (1.0.0.0), never a host (the Audit's L2).
     if (/^\d+\.0\.0\.0$/.test(addr)) return null;
-    // After @, a user's host (deploy@10.0.0.5, git@10.1.2.3:), unless the left side is a package spec: it starts with
-    // @ (@scope/tool@1.0.0.1), or holds a / with no : after the address (vendor/lib@1.2.3.4). A bare name cannot be
-    // told from a user's, so pkg@1.2.3.4 is masked (the Audit's NO-MERGE at 46d1a56dd).
+    // After @, a user's host (deploy@10.0.0.5, git@10.1.2.3:, ssh://git@10.1.2.3/, https://admin@192.168.1.1/),
+    // unless the left side is a package name, @scope/name or owner/name, with no : after the address
+    // (@scope/tool@1.0.0.1, vendor/lib@1.2.3.4). A URL's user part never is one, and a bare name cannot be told from a
+    // user's, so pkg@1.2.3.4 is masked (the Audit's NO-MERGE at 46d1a56dd and at a3084c1cb).
     if (part[m.index! - 1] === '@') {
       const left = /[^\s"'`<>()[\]{},;=]*$/.exec(part.slice(0, m.index! - 1))![0];
-      if (left.startsWith('@') || (left.includes('/') && part[m.index! + addr.length] !== ':')) return null;
+      if (/^@?[\w.-]+\/[\w.-]+$/.test(left) && part[m.index! + addr.length] !== ':') return null;
     }
     return { key: addr };
   }, 'ip', 'IP'),
