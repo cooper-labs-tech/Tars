@@ -37,6 +37,27 @@ import { spawnSync } from 'node:child_process';
  * 15. A character whose lowercase is longer (`\u0130`, a capital I with a dot)
  *     shifts every position after it, so a name after it is missed or
  *     masked one character off.
+ * And for an entry made only of digits (27/11): a short form that is a number
+ * must be listable without flagging every colour that repeats it.
+ * 16. It is found inside other digits or hex: a colour (`#474747`), a
+ *     terminal's OSC colour reply (`rgb:4747/4747/4747`), a longer number
+ *     (`147470`), a hash (`a4747f`). Each is reported, so the entry cannot be
+ *     listed at all.
+ * 17. A number standing alone is missed: in a sentence (`4747's lead`), at a
+ *     line's start and at its end, in an agent's name (`4747-Backend`), and
+ *     inside a URL path (`/p/4747/x`). An entry with a letter in it keeps its
+ *     rules: letters only, word boundaries; anything else, a substring.
+ * And from the Audit's gate of #670 (M1, 27/11):
+ * 18. A real use glued to a word is missed because the letter that touches it
+ *     is a to f: a word starting on it (`4747chart`, `4747Chart`, a handle
+ *     written without its dot), a word ending on it (`fund4747`). A hex letter refuses
+ *     only when the whole run of letters and digits around the number is hex,
+ *     or follows `#`: a word with any other letter is a word.
+ * 19. Over-correction: a hex run (`ff4747`, `deadbeef4747`), a colour behind
+ *     `#` (`#ab4747`), or a code point or hex literal (`0x4747`, `䝇`,
+ *     `U+4747`) is reported.
+ * 20. Over-correction: a group of a UUID that happens to be the number, or
+ *     the digits of a decimal fraction (`0.4747`), is reported.
  */
 
 const SCRIPT = path.join(__dirname, '../../scripts/check-private-names.mjs');
@@ -266,5 +287,68 @@ describe('check:names', () => {
     expect(r.status, r.out).toBe(1);
     expect(r.out).toContain(`${path.join('src', 'a.ts')}:1:6`);
     expect(r.out).toContain('// \u0130 ***** here');
+  });
+
+  it('16. an entry made only of digits is no match inside other digits or hex: a colour, an OSC reply, a longer number, a hash', () => {
+    const t = tree({
+      'src/theme.css': 'body { background: #474747; }\n',
+      'src/osc.ts': "const reply = '\\x1b]11;rgb:4747/4747/4747\\x07';\n",
+      'src/n.ts': 'const big = 147470;\nconst sum = "a4747f";\n',
+    });
+
+    const r = check(t, { TARS_PRIVATE_NAMES: names(t, ['4747']) });
+
+    expect(r.status, r.out).toBe(0);
+  });
+
+  it('17. an entry made only of digits is found where the number stands alone, and the other entries keep their rules', () => {
+    const lines = [
+      "// 4747's lead asked for it",
+      '4747 counted 17 on the night',
+      'the count was 4747',
+      "const name = '4747-Backend';",
+      "const url = 'https://example.com/p/4747/x';",
+    ];
+    const t = tree({ 'src/a.ts': `${lines.join('\n')}\n`, 'src/b.ts': '// atomic and custom\n' });
+
+    const r = check(t, { TARS_PRIVATE_NAMES: names(t, ['4747', 'Tom', 'x@example.com']) });
+
+    expect(r.status, r.out).toBe(1);
+    for (let n = 1; n <= lines.length; n++) expect(r.out, `line ${n}`).toContain(`${path.join('src', 'a.ts')}:${n}:`);
+    expect(r.out).not.toContain(`${path.join('src', 'b.ts')}:1:`);
+    expect(r.out).not.toContain('4747');
+  });
+
+  /** The tests' invented number, built from pieces as the Audit asks of a listed one. */
+  const N = `${47}${47}`;
+
+  it('18. an all-digit entry glued to a word is found, whatever letter touches it', () => {
+    const lines = [`handle: ${N}chart`, `const who = '${N}Chart';`, `// fund${N} said so`, `name = acme${N}x;`];
+    const t = tree({ 'src/a.ts': `${lines.join('\n')}\n` });
+
+    const r = check(t, { TARS_PRIVATE_NAMES: names(t, [N]) });
+
+    expect(r.status, r.out).toBe(1);
+    for (let n = 1; n <= lines.length; n++) expect(r.out, lines[n - 1]).toContain(`${path.join('src', 'a.ts')}:${n}:`);
+  });
+
+  it('19. an all-digit entry inside a hex run, behind #, or in a code point or hex literal is no match', () => {
+    const t = tree({
+      'src/hex.ts': [`const a = 'ff${N}';`, `const b = 'deadbeef${N}';`, `const c = '#ab${N}';`, `const d = 0x${N};`, `const e = '\\u${N}';`, `// U+${N} is a code point`, ''].join('\n'),
+    });
+
+    const r = check(t, { TARS_PRIVATE_NAMES: names(t, [N]) });
+
+    expect(r.status, r.out).toBe(0);
+  });
+
+  it('20. an all-digit entry that is a UUID group or the digits of a decimal fraction is no match', () => {
+    const t = tree({
+      'src/ids.ts': [`const id = '3f2a9c1e-${N}-4abc-9def-0123456789ab';`, `const spec = 'rgbi:0.${N}/0.5/0.5';`, `const ratio = 2.${N};`, ''].join('\n'),
+    });
+
+    const r = check(t, { TARS_PRIVATE_NAMES: names(t, [N]) });
+
+    expect(r.status, r.out).toBe(0);
   });
 });

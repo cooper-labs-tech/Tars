@@ -82,16 +82,60 @@ function endsWord(line, j) {
 }
 
 const escape = text => text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-/** Each entry, found in any case in the line as written, so that every position is the line's own. */
-const patterns = entries.map(entry => ({ rx: new RegExp(escape(entry), 'giu'), word: /^\p{L}+$/u.test(entry) }));
+/**
+ * Each entry, found in any case in the line as written, so that every position is the line's own. One made of letters
+ * only is a word (its boundaries, below). One made of digits only is a number (standsAsNumber): never inside a longer
+ * number, a run of hex digits, a colour behind `#`, a hex literal or code point, or a channel of an `rgb:` colour spec,
+ * so that a colour repeating it never matches; and always where it stands alone or glued to a word (a sentence, an
+ * agent's name, a URL path, a handle written without its dot). Anything else is a substring.
+ */
+const patterns = entries.map(entry => ({
+  rx: new RegExp(escape(entry), 'giu'),
+  word: /^\p{L}+$/u.test(entry),
+  number: /^\d+$/.test(entry),
+}));
+
+/** An X11 colour spec, as a terminal's OSC 10/11 reply writes one: `rgb:` and three hex channels split by `/`. */
+const RGB_SPEC = /rgba?:[0-9a-f]{1,4}\/[0-9a-f]{1,4}\/[0-9a-f]{1,4}(?:\/[0-9a-f]{1,4})?/giu;
+/** A UUID, any of whose groups may happen to be the number. */
+const UUID = /[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/giu;
+const ALNUM = /[0-9A-Za-z]/;
+
+/**
+ * Does the number at [i, j) stand as itself? A digit beside it makes it part of a longer number. Then its whole run of
+ * letters and digits decides (the Audit's M1 on #670): a run of hex digits only (`ff`, `deadbeef` around it) or one
+ * behind `#` is a colour or a hash, and so is a hex literal (`0x`) or a code point (`\u`, `\u{`, `U+`); a run with any
+ * other letter is a word, and the number in it matches (a handle without its dot, a word ending on it). Last, it is no
+ * decimal fraction's digits (`0.` before it), no channel of an `rgb:` colour spec and no group of a UUID.
+ */
+function standsAsNumber(line, i, j) {
+  if (/\d/.test(line[i - 1] ?? '') || /\d/.test(line[j] ?? '')) return false;
+  if (line[i - 1] === '.' && /\d/.test(line[i - 2] ?? '')) return false;
+  let a = i;
+  while (a > 0 && ALNUM.test(line[a - 1])) a--;
+  let b = j;
+  while (b < line.length && ALNUM.test(line[b])) b++;
+  const run = line.slice(a, b);
+  const before = line.slice(Math.max(0, a - 3), a);
+  if (before.endsWith('#')) return false;
+  if (run !== line.slice(i, j) && /^[0-9a-f]+$/i.test(run)) return false;
+  if (/^0x[0-9a-f]+$/i.test(run)) return false;
+  if (/^u[0-9a-f]+$/i.test(run) && before.endsWith('\\')) return false;
+  if (before.endsWith('\\u{') || before.toUpperCase().endsWith('U+')) return false;
+  for (const rx of [RGB_SPEC, UUID]) {
+    for (const m of line.matchAll(rx)) if (i >= m.index && j <= m.index + m[0].length) return false;
+  }
+  return true;
+}
 
 /** Every [start, end) span where an entry stands in the line. */
 function spans(line) {
   const found = [];
-  for (const { rx, word } of patterns) {
+  for (const { rx, word, number } of patterns) {
     for (const m of line.matchAll(rx)) {
       const i = m.index;
       const j = i + m[0].length;
+      if (number && !standsAsNumber(line, i, j)) continue;
       if (word) {
         const plural = (line[j] === 's' || line[j] === 'S') && endsWord(line, j + 1);
         if (!startsWord(line, i) || !(endsWord(line, j) || plural)) continue;
