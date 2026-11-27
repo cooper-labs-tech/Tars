@@ -54,6 +54,16 @@ import * as http from 'node:http';
  *    kanban quotes it ("Hermes did not answer: deadline."), and the board's
  *    classifier reads nothing in it (the Audit's I-b on #660). Its words are
  *    the sentence's: "its answer did not end within N s". Added after 12.
+ * 14. A saved value shaped name:secret parses as a URL (the WHATWG parser reads
+ *    the scheme "user:" and the path "s3cretpw"), so the sentence, which quotes
+ *    no URL that does not parse, quoted it: "Tars could not reach Hermes at
+ *    user://s3cretpw". The same for apikey:sk-SECRET, hermes-token:abc123, and
+ *    any scheme hermesRequest cannot call (ftp://x). Only http: and https: are
+ *    quoted (the Audit's L1 on #663).
+ * 15. Settings, Hermes saves such a value as the gateway's URL: hermes:connection:save
+ *    checks no scheme. It refuses one that is not http(s)://, in words, without
+ *    echoing the value, and saves nothing.
+ *    14 and 15 were added after 13.
  */
 
 const handlers = vi.hoisted(() => new Map<string, (...args: unknown[]) => Promise<unknown>>());
@@ -337,6 +347,43 @@ describe('a gateway that trickles its answer, each byte within the idle timeout 
 
     await expect(hermesRequest(`http://127.0.0.1:${port}`, '/api/cron/jobs', { timeoutMs: 1_000, deadlineMs: 2_000 } as never)).resolves.toMatchObject({ status: 200 });
   }, 10_000);
+});
+
+describe('a saved value that is not an http(s) URL (14, 15)', () => {
+  /** [the value saved, what of it must never show]. */
+  const NOT_HTTP: Array<[string, string]> = [
+    ['user:s3cretpw', 's3cretpw'],
+    ['apikey:sk-SECRET', 'sk-SECRET'],
+    ['hermes-token:abc123', 'abc123'],
+    ['ftp://x', 'ftp:'],
+  ];
+
+  it.each(NOT_HTTP)('%s: the refusal quotes nothing of it (14)', async (saved, secret) => {
+    gatewayAt(saved);
+
+    const result = await call('hermes:crons:list');
+
+    expect(result).toEqual({ success: false, error: 'Tars could not reach Hermes: the gateway URL saved in Settings, Hermes is not one it can call.' });
+    expect(result.error).not.toContain(secret);
+  });
+
+  it.each(NOT_HTTP)('%s: Settings, Hermes does not save it, says why, and quotes nothing of it (15)', async (saved, secret) => {
+    const port = await refusingPort();
+    gatewayAt(`http://127.0.0.1:${port}`);
+
+    const result = await call('hermes:connection:save', { mode: 'remote', url: saved, authMode: 'token' });
+
+    expect(result).toEqual({ success: false, error: 'Tars calls a gateway only at an http:// or https:// address: nothing was saved.' });
+    expect(result.error).not.toContain(secret);
+    // What was saved before is still what is called.
+    expect((await call('hermes:crons:list')).error).toBe(`Tars could not reach Hermes at http://127.0.0.1:${port}: connect ECONNREFUSED 127.0.0.1:${port}`);
+  });
+
+  it('an https address is still saved, and quoted', async () => {
+    await expect(call('hermes:connection:save', { mode: 'remote', url: 'https://127.0.0.1:1/base', authMode: 'token' })).resolves.toEqual({ success: true });
+
+    expect((await call('hermes:crons:list')).error).toMatch(/^Tars could not reach Hermes at https:\/\/127\.0\.0\.1:1\/base: /);
+  });
 });
 
 describe('the Kanban board keeps its contract (9)', () => {
