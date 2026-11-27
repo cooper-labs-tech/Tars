@@ -904868,7 +904868,7 @@
                                   "children": [
                                     {
                                       "type": "frame",
-                                      "id": "ErGXl",
+                                      "id": "j305j",
                                       "name": "column 1",
                                       "width": 338,
                                       "layout": "vertical",
@@ -904876,14 +904876,14 @@
                                       "children": [
                                         {
                                           "type": "frame",
-                                          "id": "s6a0H",
+                                          "id": "XaZrH",
                                           "name": "item",
                                           "width": 338,
                                           "gap": 8,
                                           "children": [
                                             {
                                               "type": "text",
-                                              "id": "AKMWu",
+                                              "id": "WERR7",
                                               "name": "t",
                                               "fill": "$status-waiting",
                                               "content": "·",
@@ -904894,7 +904894,7 @@
                                             },
                                             {
                                               "type": "text",
-                                              "id": "RDZo3",
+                                              "id": "B7UagF",
                                               "name": "t",
                                               "fill": "$text-secondary",
                                               "textGrowth": "fixed-width",
@@ -904909,14 +904909,14 @@
                                         },
                                         {
                                           "type": "frame",
-                                          "id": "rA33X",
+                                          "id": "tSLU4",
                                           "name": "item",
                                           "width": 338,
                                           "gap": 8,
                                           "children": [
                                             {
                                               "type": "text",
-                                              "id": "IEwFE",
+                                              "id": "X3fAUg",
                                               "name": "t",
                                               "fill": "$status-waiting",
                                               "content": "·",
@@ -904927,12 +904927,12 @@
                                             },
                                             {
                                               "type": "text",
-                                              "id": "CMhbr",
+                                              "id": "I305X",
                                               "name": "t",
                                               "fill": "$text-secondary",
                                               "textGrowth": "fixed-width",
                                               "width": 322,
-                                              "content": "their timing, token counts, the harness and its version, the model and the endpoint's name",
+                                              "content": "the sessions' timing, token counts, the harness and its version, the model and the endpoint's name",
                                               "lineHeight": 1.45,
                                               "fontFamily": "$font-ui",
                                               "fontSize": 11.5,
@@ -904942,14 +904942,14 @@
                                         },
                                         {
                                           "type": "frame",
-                                          "id": "hx4js",
+                                          "id": "xR3GT",
                                           "name": "item",
                                           "width": 338,
                                           "gap": 8,
                                           "children": [
                                             {
                                               "type": "text",
-                                              "id": "A2SoTM",
+                                              "id": "F0oKG",
                                               "name": "t",
                                               "fill": "$status-waiting",
                                               "content": "·",
@@ -904960,7 +904960,7 @@
                                             },
                                             {
                                               "type": "text",
-                                              "id": "IIGKT",
+                                              "id": "uduwx",
                                               "name": "t",
                                               "fill": "$text-secondary",
                                               "textGrowth": "fixed-width",
@@ -904975,14 +904975,14 @@
                                         },
                                         {
                                           "type": "frame",
-                                          "id": "cz5kt",
+                                          "id": "DEUn5",
                                           "name": "item",
                                           "width": 338,
                                           "gap": 8,
                                           "children": [
                                             {
                                               "type": "text",
-                                              "id": "NQxaq",
+                                              "id": "fezdT",
                                               "name": "t",
                                               "fill": "$status-waiting",
                                               "content": "·",
@@ -904993,7 +904993,7 @@
                                             },
                                             {
                                               "type": "text",
-                                              "id": "gZbUj",
+                                              "id": "d64ZZf",
                                               "name": "t",
                                               "fill": "$text-secondary",
                                               "textGrowth": "fixed-width",
@@ -905008,14 +905008,14 @@
                                         },
                                         {
                                           "type": "frame",
-                                          "id": "f8I9Y",
+                                          "id": "WBrcJ",
                                           "name": "item",
                                           "width": 338,
                                           "gap": 8,
                                           "children": [
                                             {
                                               "type": "text",
-                                              "id": "aOFJn",
+                                              "id": "HcHE7",
                                               "name": "t",
                                               "fill": "$status-waiting",
                                               "content": "·",
@@ -905026,7 +905026,7 @@
                                             },
                                             {
                                               "type": "text",
-                                              "id": "yJQYh",
+                                              "id": "qNmBX",
                                               "name": "t",
                                               "fill": "$text-secondary",
                                               "textGrowth": "fixed-width",
@@ -905041,14 +905041,14 @@
                                         },
                                         {
                                           "type": "frame",
-                                          "id": "Q3kCeA",
+                                          "id": "MTWRB",
                                           "name": "item",
                                           "width": 338,
                                           "gap": 8,
                                           "children": [
                                             {
                                               "type": "text",
-                                              "id": "rQcQv",
+                                              "id": "M125k8",
                                               "name": "t",
                                               "fill": "$status-waiting",
                                               "content": "·",
@@ -905059,7 +905059,7 @@
                                             },
                                             {
                                               "type": "text",
-                                              "id": "JnrHz",
+                                              "id": "ZCvlq",
                                               "name": "t",
                                               "fill": "$text-secondary",
                                               "textGrowth": "fixed-width",
@@ -905074,14 +905074,14 @@
                                         },
                                         {
                                           "type": "frame",
-                                          "id": "Hg5PX",
+                                          "id": "tozLB",
                                           "name": "item",
                                           "width": 338,
                                           "gap": 8,
                                           "children": [
                                             {
                                               "type": "text",
-                                              "id": "T4VwR",
+                                              "id": "j0OFiu",
                                               "name": "t",
                                               "fill": "$status-waiting",
                                               "content": "·",
@@ -905092,12 +905092,12 @@
                                             },
                                             {
                                               "type": "text",
-                                              "id": "L01KT",
+                                              "id": "M4Gjr",
                                               "name": "t",
                                               "fill": "$text-secondary",
                                               "textGrowth": "fixed-width",
                                               "width": 322,
-                                              "content": "its kernel's version",
+                                              "content": "your system's kernel version",
                                               "lineHeight": 1.45,
                                               "fontFamily": "$font-ui",
                                               "fontSize": 11.5,
@@ -905107,14 +905107,14 @@
                                         },
                                         {
                                           "type": "frame",
-                                          "id": "ywyPt",
+                                          "id": "qGnMP",
                                           "name": "item",
                                           "width": 338,
                                           "gap": 8,
                                           "children": [
                                             {
                                               "type": "text",
-                                              "id": "phq3b",
+                                              "id": "lxfe8",
                                               "name": "t",
                                               "fill": "$status-waiting",
                                               "content": "·",
@@ -905125,7 +905125,7 @@
                                             },
                                             {
                                               "type": "text",
-                                              "id": "t3WgRW",
+                                              "id": "D8See",
                                               "name": "t",
                                               "fill": "$text-secondary",
                                               "textGrowth": "fixed-width",
@@ -905140,14 +905140,14 @@
                                         },
                                         {
                                           "type": "frame",
-                                          "id": "vsDB3",
+                                          "id": "iK84V",
                                           "name": "item",
                                           "width": 338,
                                           "gap": 8,
                                           "children": [
                                             {
                                               "type": "text",
-                                              "id": "Z4X8i",
+                                              "id": "snhTV",
                                               "name": "t",
                                               "fill": "$status-waiting",
                                               "content": "·",
@@ -905158,7 +905158,7 @@
                                             },
                                             {
                                               "type": "text",
-                                              "id": "D8NIn",
+                                              "id": "DTaho",
                                               "name": "t",
                                               "fill": "$text-secondary",
                                               "textGrowth": "fixed-width",
@@ -905173,14 +905173,14 @@
                                         },
                                         {
                                           "type": "frame",
-                                          "id": "lvbhX",
+                                          "id": "veeSU",
                                           "name": "item",
                                           "width": 338,
                                           "gap": 8,
                                           "children": [
                                             {
                                               "type": "text",
-                                              "id": "j8dNQ",
+                                              "id": "v7kYo",
                                               "name": "t",
                                               "fill": "$status-waiting",
                                               "content": "·",
@@ -905191,55 +905191,12 @@
                                             },
                                             {
                                               "type": "text",
-                                              "id": "Cw585",
+                                              "id": "v1rsn",
                                               "name": "t",
                                               "fill": "$text-secondary",
                                               "textGrowth": "fixed-width",
                                               "width": 322,
-                                              "content": "its processor's name (Apple M3, say)",
-                                              "lineHeight": 1.45,
-                                              "fontFamily": "$font-ui",
-                                              "fontSize": 11.5,
-                                              "fontWeight": "normal"
-                                            }
-                                          ]
-                                        }
-                                      ]
-                                    },
-                                    {
-                                      "type": "frame",
-                                      "id": "chONF",
-                                      "name": "column 2",
-                                      "width": 338,
-                                      "layout": "vertical",
-                                      "gap": 4,
-                                      "children": [
-                                        {
-                                          "type": "frame",
-                                          "id": "Wro9B",
-                                          "name": "item",
-                                          "width": 338,
-                                          "gap": 8,
-                                          "children": [
-                                            {
-                                              "type": "text",
-                                              "id": "RPPPH",
-                                              "name": "t",
-                                              "fill": "$status-waiting",
-                                              "content": "·",
-                                              "lineHeight": 1.4,
-                                              "fontFamily": "$font-mono",
-                                              "fontSize": 11,
-                                              "fontWeight": "normal"
-                                            },
-                                            {
-                                              "type": "text",
-                                              "id": "LrT5B",
-                                              "name": "t",
-                                              "fill": "$text-secondary",
-                                              "textGrowth": "fixed-width",
-                                              "width": 322,
-                                              "content": "its number of processor cores",
+                                              "content": "your computer's processor name (Apple M3, say)",
                                               "lineHeight": 1.45,
                                               "fontFamily": "$font-ui",
                                               "fontSize": 11.5,
@@ -905249,14 +905206,14 @@
                                         },
                                         {
                                           "type": "frame",
-                                          "id": "pgO3e",
+                                          "id": "Whh7x",
                                           "name": "item",
                                           "width": 338,
                                           "gap": 8,
                                           "children": [
                                             {
                                               "type": "text",
-                                              "id": "FrWCZ",
+                                              "id": "ghJHr",
                                               "name": "t",
                                               "fill": "$status-waiting",
                                               "content": "·",
@@ -905267,12 +905224,12 @@
                                             },
                                             {
                                               "type": "text",
-                                              "id": "mZkzr",
+                                              "id": "d5ilDu",
                                               "name": "t",
                                               "fill": "$text-secondary",
                                               "textGrowth": "fixed-width",
                                               "width": 322,
-                                              "content": "its memory (RAM), to the byte",
+                                              "content": "your computer's number of processor cores",
                                               "lineHeight": 1.45,
                                               "fontFamily": "$font-ui",
                                               "fontSize": 11.5,
@@ -905282,14 +905239,14 @@
                                         },
                                         {
                                           "type": "frame",
-                                          "id": "rwUmP",
+                                          "id": "zGsW8",
                                           "name": "item",
                                           "width": 338,
                                           "gap": 8,
                                           "children": [
                                             {
                                               "type": "text",
-                                              "id": "A8iUH",
+                                              "id": "o5Ni2G",
                                               "name": "t",
                                               "fill": "$status-waiting",
                                               "content": "·",
@@ -905300,7 +905257,40 @@
                                             },
                                             {
                                               "type": "text",
-                                              "id": "y4pDMx",
+                                              "id": "dWjbr",
+                                              "name": "t",
+                                              "fill": "$text-secondary",
+                                              "textGrowth": "fixed-width",
+                                              "width": 322,
+                                              "content": "your computer's memory (RAM), to the byte",
+                                              "lineHeight": 1.45,
+                                              "fontFamily": "$font-ui",
+                                              "fontSize": 11.5,
+                                              "fontWeight": "normal"
+                                            }
+                                          ]
+                                        },
+                                        {
+                                          "type": "frame",
+                                          "id": "m8H4jj",
+                                          "name": "item",
+                                          "width": 338,
+                                          "gap": 8,
+                                          "children": [
+                                            {
+                                              "type": "text",
+                                              "id": "skul0",
+                                              "name": "t",
+                                              "fill": "$status-waiting",
+                                              "content": "·",
+                                              "lineHeight": 1.4,
+                                              "fontFamily": "$font-mono",
+                                              "fontSize": 11,
+                                              "fontWeight": "normal"
+                                            },
+                                            {
+                                              "type": "text",
+                                              "id": "N5oMJl",
                                               "name": "t",
                                               "fill": "$text-secondary",
                                               "textGrowth": "fixed-width",
@@ -905312,17 +905302,27 @@
                                               "fontWeight": "normal"
                                             }
                                           ]
-                                        },
+                                        }
+                                      ]
+                                    },
+                                    {
+                                      "type": "frame",
+                                      "id": "U9dU3t",
+                                      "name": "column 2",
+                                      "width": 338,
+                                      "layout": "vertical",
+                                      "gap": 4,
+                                      "children": [
                                         {
                                           "type": "frame",
-                                          "id": "qA1o6",
+                                          "id": "q76on",
                                           "name": "item",
                                           "width": 338,
                                           "gap": 8,
                                           "children": [
                                             {
                                               "type": "text",
-                                              "id": "oO7D3",
+                                              "id": "KiGqt",
                                               "name": "t",
                                               "fill": "$status-waiting",
                                               "content": "·",
@@ -905333,7 +905333,7 @@
                                             },
                                             {
                                               "type": "text",
-                                              "id": "G31P8E",
+                                              "id": "J3H22O",
                                               "name": "t",
                                               "fill": "$text-secondary",
                                               "textGrowth": "fixed-width",
@@ -905348,14 +905348,14 @@
                                         },
                                         {
                                           "type": "frame",
-                                          "id": "KXYlq",
+                                          "id": "Pt4xO",
                                           "name": "item",
                                           "width": 338,
                                           "gap": 8,
                                           "children": [
                                             {
                                               "type": "text",
-                                              "id": "DwAh1",
+                                              "id": "qX719",
                                               "name": "t",
                                               "fill": "$status-waiting",
                                               "content": "·",
@@ -905366,12 +905366,12 @@
                                             },
                                             {
                                               "type": "text",
-                                              "id": "mZ3Vo",
+                                              "id": "rAoyy",
                                               "name": "t",
                                               "fill": "$text-secondary",
                                               "textGrowth": "fixed-width",
                                               "width": 322,
-                                              "content": "its offset from UTC when the session started",
+                                              "content": "your time zone's offset from UTC when the session started",
                                               "lineHeight": 1.45,
                                               "fontFamily": "$font-ui",
                                               "fontSize": 11.5,
@@ -905381,14 +905381,14 @@
                                         },
                                         {
                                           "type": "frame",
-                                          "id": "dWjT3",
+                                          "id": "AZwIe",
                                           "name": "item",
                                           "width": 338,
                                           "gap": 8,
                                           "children": [
                                             {
                                               "type": "text",
-                                              "id": "ZUpGE",
+                                              "id": "cEl9u",
                                               "name": "t",
                                               "fill": "$status-waiting",
                                               "content": "·",
@@ -905399,7 +905399,7 @@
                                             },
                                             {
                                               "type": "text",
-                                              "id": "E01G9",
+                                              "id": "lELUs",
                                               "name": "t",
                                               "fill": "$text-secondary",
                                               "textGrowth": "fixed-width",
@@ -905414,14 +905414,14 @@
                                         },
                                         {
                                           "type": "frame",
-                                          "id": "fer1h",
+                                          "id": "RnfyZ",
                                           "name": "item",
                                           "width": 338,
                                           "gap": 8,
                                           "children": [
                                             {
                                               "type": "text",
-                                              "id": "i1S1NH",
+                                              "id": "PX1mZ",
                                               "name": "t",
                                               "fill": "$status-waiting",
                                               "content": "·",
@@ -905432,7 +905432,7 @@
                                             },
                                             {
                                               "type": "text",
-                                              "id": "CRsPC",
+                                              "id": "l2srU",
                                               "name": "t",
                                               "fill": "$text-secondary",
                                               "textGrowth": "fixed-width",
@@ -905447,14 +905447,14 @@
                                         },
                                         {
                                           "type": "frame",
-                                          "id": "mX7Og",
+                                          "id": "Dv5JP",
                                           "name": "item",
                                           "width": 338,
                                           "gap": 8,
                                           "children": [
                                             {
                                               "type": "text",
-                                              "id": "C8Jc9",
+                                              "id": "WOd00",
                                               "name": "t",
                                               "fill": "$status-waiting",
                                               "content": "·",
@@ -905465,7 +905465,7 @@
                                             },
                                             {
                                               "type": "text",
-                                              "id": "CaxMo",
+                                              "id": "UuHps",
                                               "name": "t",
                                               "fill": "$text-secondary",
                                               "textGrowth": "fixed-width",
@@ -905480,14 +905480,14 @@
                                         },
                                         {
                                           "type": "frame",
-                                          "id": "P4Z8y",
+                                          "id": "pkezI",
                                           "name": "item",
                                           "width": 338,
                                           "gap": 8,
                                           "children": [
                                             {
                                               "type": "text",
-                                              "id": "r5LJF",
+                                              "id": "IyTtt",
                                               "name": "t",
                                               "fill": "$status-waiting",
                                               "content": "·",
@@ -905498,7 +905498,205 @@
                                             },
                                             {
                                               "type": "text",
-                                              "id": "PE5ws",
+                                              "id": "oVIMN",
+                                              "name": "t",
+                                              "fill": "$text-secondary",
+                                              "textGrowth": "fixed-width",
+                                              "width": 322,
+                                              "content": "each request's round trip to the endpoint, from the times the endpoint says it read the request and began its answer",
+                                              "lineHeight": 1.45,
+                                              "fontFamily": "$font-ui",
+                                              "fontSize": 11.5,
+                                              "fontWeight": "normal"
+                                            }
+                                          ]
+                                        },
+                                        {
+                                          "type": "frame",
+                                          "id": "Xb3yO",
+                                          "name": "item",
+                                          "width": 338,
+                                          "gap": 8,
+                                          "children": [
+                                            {
+                                              "type": "text",
+                                              "id": "lW5Ok",
+                                              "name": "t",
+                                              "fill": "$status-waiting",
+                                              "content": "·",
+                                              "lineHeight": 1.4,
+                                              "fontFamily": "$font-mono",
+                                              "fontSize": 11,
+                                              "fontWeight": "normal"
+                                            },
+                                            {
+                                              "type": "text",
+                                              "id": "wztbD",
+                                              "name": "t",
+                                              "fill": "$text-secondary",
+                                              "textGrowth": "fixed-width",
+                                              "width": 322,
+                                              "content": "for each request, how far this computer's clock was from the endpoint's",
+                                              "lineHeight": 1.45,
+                                              "fontFamily": "$font-ui",
+                                              "fontSize": 11.5,
+                                              "fontWeight": "normal"
+                                            }
+                                          ]
+                                        },
+                                        {
+                                          "type": "frame",
+                                          "id": "A0Vlo",
+                                          "name": "item",
+                                          "width": 338,
+                                          "gap": 8,
+                                          "children": [
+                                            {
+                                              "type": "text",
+                                              "id": "ip8Rw",
+                                              "name": "t",
+                                              "fill": "$status-waiting",
+                                              "content": "·",
+                                              "lineHeight": 1.4,
+                                              "fontFamily": "$font-mono",
+                                              "fontSize": 11,
+                                              "fontWeight": "normal"
+                                            },
+                                            {
+                                              "type": "text",
+                                              "id": "Oe4zD",
+                                              "name": "t",
+                                              "fill": "$text-secondary",
+                                              "textGrowth": "fixed-width",
+                                              "width": 322,
+                                              "content": "how long each request waited at the endpoint for a free slot",
+                                              "lineHeight": 1.45,
+                                              "fontFamily": "$font-ui",
+                                              "fontSize": 11.5,
+                                              "fontWeight": "normal"
+                                            }
+                                          ]
+                                        },
+                                        {
+                                          "type": "frame",
+                                          "id": "y5x7Bq",
+                                          "name": "item",
+                                          "width": 338,
+                                          "gap": 8,
+                                          "children": [
+                                            {
+                                              "type": "text",
+                                              "id": "Y77HXn",
+                                              "name": "t",
+                                              "fill": "$status-waiting",
+                                              "content": "·",
+                                              "lineHeight": 1.4,
+                                              "fontFamily": "$font-mono",
+                                              "fontSize": 11,
+                                              "fontWeight": "normal"
+                                            },
+                                            {
+                                              "type": "text",
+                                              "id": "EaTc0",
+                                              "name": "t",
+                                              "fill": "$text-secondary",
+                                              "textGrowth": "fixed-width",
+                                              "width": 322,
+                                              "content": "how long the endpoint waited for its model server, for each request",
+                                              "lineHeight": 1.45,
+                                              "fontFamily": "$font-ui",
+                                              "fontSize": 11.5,
+                                              "fontWeight": "normal"
+                                            }
+                                          ]
+                                        },
+                                        {
+                                          "type": "frame",
+                                          "id": "NbBg2",
+                                          "name": "item",
+                                          "width": 338,
+                                          "gap": 8,
+                                          "children": [
+                                            {
+                                              "type": "text",
+                                              "id": "jrVeD",
+                                              "name": "t",
+                                              "fill": "$status-waiting",
+                                              "content": "·",
+                                              "lineHeight": 1.4,
+                                              "fontFamily": "$font-mono",
+                                              "fontSize": 11,
+                                              "fontWeight": "normal"
+                                            },
+                                            {
+                                              "type": "text",
+                                              "id": "Ctc7z",
+                                              "name": "t",
+                                              "fill": "$text-secondary",
+                                              "textGrowth": "fixed-width",
+                                              "width": 322,
+                                              "content": "each session's median round trip to the endpoint",
+                                              "lineHeight": 1.45,
+                                              "fontFamily": "$font-ui",
+                                              "fontSize": 11.5,
+                                              "fontWeight": "normal"
+                                            }
+                                          ]
+                                        },
+                                        {
+                                          "type": "frame",
+                                          "id": "h6rXMm",
+                                          "name": "item",
+                                          "width": 338,
+                                          "gap": 8,
+                                          "children": [
+                                            {
+                                              "type": "text",
+                                              "id": "M2jcOl",
+                                              "name": "t",
+                                              "fill": "$status-waiting",
+                                              "content": "·",
+                                              "lineHeight": 1.4,
+                                              "fontFamily": "$font-mono",
+                                              "fontSize": 11,
+                                              "fontWeight": "normal"
+                                            },
+                                            {
+                                              "type": "text",
+                                              "id": "Bqiz7",
+                                              "name": "t",
+                                              "fill": "$text-secondary",
+                                              "textGrowth": "fixed-width",
+                                              "width": 322,
+                                              "content": "for each session, how far this computer's clock was from the endpoint's, at its fastest round trip",
+                                              "lineHeight": 1.45,
+                                              "fontFamily": "$font-ui",
+                                              "fontSize": 11.5,
+                                              "fontWeight": "normal"
+                                            }
+                                          ]
+                                        },
+                                        {
+                                          "type": "frame",
+                                          "id": "yyNp1",
+                                          "name": "item",
+                                          "width": 338,
+                                          "gap": 8,
+                                          "children": [
+                                            {
+                                              "type": "text",
+                                              "id": "hmuL8",
+                                              "name": "t",
+                                              "fill": "$status-waiting",
+                                              "content": "·",
+                                              "lineHeight": 1.4,
+                                              "fontFamily": "$font-mono",
+                                              "fontSize": 11,
+                                              "fontWeight": "normal"
+                                            },
+                                            {
+                                              "type": "text",
+                                              "id": "X9HbP",
                                               "name": "t",
                                               "fill": "$text-secondary",
                                               "textGrowth": "fixed-width",
@@ -910443,7 +910641,7 @@
                                   "children": [
                                     {
                                       "type": "frame",
-                                      "id": "w6Fxop",
+                                      "id": "Dbue7",
                                       "name": "column 1",
                                       "width": 338,
                                       "layout": "vertical",
@@ -910451,14 +910649,14 @@
                                       "children": [
                                         {
                                           "type": "frame",
-                                          "id": "FcUv8",
+                                          "id": "bf3Vm",
                                           "name": "item",
                                           "width": 338,
                                           "gap": 8,
                                           "children": [
                                             {
                                               "type": "text",
-                                              "id": "fA1Oh",
+                                              "id": "Dv785",
                                               "name": "t",
                                               "fill": "$status-waiting",
                                               "content": "·",
@@ -910469,7 +910667,7 @@
                                             },
                                             {
                                               "type": "text",
-                                              "id": "WRYwl",
+                                              "id": "S37ALQ",
                                               "name": "t",
                                               "fill": "$text-secondary",
                                               "textGrowth": "fixed-width",
@@ -910484,14 +910682,14 @@
                                         },
                                         {
                                           "type": "frame",
-                                          "id": "ATtC6",
+                                          "id": "WW5rY",
                                           "name": "item",
                                           "width": 338,
                                           "gap": 8,
                                           "children": [
                                             {
                                               "type": "text",
-                                              "id": "uoOg0",
+                                              "id": "fR56Q",
                                               "name": "t",
                                               "fill": "$status-waiting",
                                               "content": "·",
@@ -910502,12 +910700,12 @@
                                             },
                                             {
                                               "type": "text",
-                                              "id": "ULXDm",
+                                              "id": "E7DbOJ",
                                               "name": "t",
                                               "fill": "$text-secondary",
                                               "textGrowth": "fixed-width",
                                               "width": 322,
-                                              "content": "their timing, token counts, the harness and its version, the model and the endpoint's name",
+                                              "content": "the sessions' timing, token counts, the harness and its version, the model and the endpoint's name",
                                               "lineHeight": 1.45,
                                               "fontFamily": "$font-ui",
                                               "fontSize": 11.5,
@@ -910517,14 +910715,14 @@
                                         },
                                         {
                                           "type": "frame",
-                                          "id": "w69URu",
+                                          "id": "pbm9y",
                                           "name": "item",
                                           "width": 338,
                                           "gap": 8,
                                           "children": [
                                             {
                                               "type": "text",
-                                              "id": "b4pObf",
+                                              "id": "eXmrj",
                                               "name": "t",
                                               "fill": "$status-waiting",
                                               "content": "·",
@@ -910535,7 +910733,7 @@
                                             },
                                             {
                                               "type": "text",
-                                              "id": "dIWee",
+                                              "id": "Mw6rp",
                                               "name": "t",
                                               "fill": "$text-secondary",
                                               "textGrowth": "fixed-width",
@@ -910550,14 +910748,14 @@
                                         },
                                         {
                                           "type": "frame",
-                                          "id": "PN91H",
+                                          "id": "W6CZN",
                                           "name": "item",
                                           "width": 338,
                                           "gap": 8,
                                           "children": [
                                             {
                                               "type": "text",
-                                              "id": "bvsco",
+                                              "id": "lEDfL",
                                               "name": "t",
                                               "fill": "$status-waiting",
                                               "content": "·",
@@ -910568,7 +910766,7 @@
                                             },
                                             {
                                               "type": "text",
-                                              "id": "V6Yd64",
+                                              "id": "kEkty",
                                               "name": "t",
                                               "fill": "$text-secondary",
                                               "textGrowth": "fixed-width",
@@ -910583,14 +910781,14 @@
                                         },
                                         {
                                           "type": "frame",
-                                          "id": "UBaeR",
+                                          "id": "udxKC",
                                           "name": "item",
                                           "width": 338,
                                           "gap": 8,
                                           "children": [
                                             {
                                               "type": "text",
-                                              "id": "G3Nl3",
+                                              "id": "j3G86X",
                                               "name": "t",
                                               "fill": "$status-waiting",
                                               "content": "·",
@@ -910601,7 +910799,7 @@
                                             },
                                             {
                                               "type": "text",
-                                              "id": "e6rErU",
+                                              "id": "tU1Lm",
                                               "name": "t",
                                               "fill": "$text-secondary",
                                               "textGrowth": "fixed-width",
@@ -910616,14 +910814,14 @@
                                         },
                                         {
                                           "type": "frame",
-                                          "id": "ZKb3d",
+                                          "id": "QCZx8",
                                           "name": "item",
                                           "width": 338,
                                           "gap": 8,
                                           "children": [
                                             {
                                               "type": "text",
-                                              "id": "c7Og0",
+                                              "id": "k2Pa4f",
                                               "name": "t",
                                               "fill": "$status-waiting",
                                               "content": "·",
@@ -910634,7 +910832,7 @@
                                             },
                                             {
                                               "type": "text",
-                                              "id": "BBVyC",
+                                              "id": "zSplO",
                                               "name": "t",
                                               "fill": "$text-secondary",
                                               "textGrowth": "fixed-width",
@@ -910649,14 +910847,14 @@
                                         },
                                         {
                                           "type": "frame",
-                                          "id": "VRxLc",
+                                          "id": "C9kk8",
                                           "name": "item",
                                           "width": 338,
                                           "gap": 8,
                                           "children": [
                                             {
                                               "type": "text",
-                                              "id": "EhhHo",
+                                              "id": "ARDr9",
                                               "name": "t",
                                               "fill": "$status-waiting",
                                               "content": "·",
@@ -910667,12 +910865,12 @@
                                             },
                                             {
                                               "type": "text",
-                                              "id": "knQy3",
+                                              "id": "EjzFy",
                                               "name": "t",
                                               "fill": "$text-secondary",
                                               "textGrowth": "fixed-width",
                                               "width": 322,
-                                              "content": "its kernel's version",
+                                              "content": "your system's kernel version",
                                               "lineHeight": 1.45,
                                               "fontFamily": "$font-ui",
                                               "fontSize": 11.5,
@@ -910682,14 +910880,14 @@
                                         },
                                         {
                                           "type": "frame",
-                                          "id": "Tykd7",
+                                          "id": "ymv4J",
                                           "name": "item",
                                           "width": 338,
                                           "gap": 8,
                                           "children": [
                                             {
                                               "type": "text",
-                                              "id": "ljBDT",
+                                              "id": "qfRI2",
                                               "name": "t",
                                               "fill": "$status-waiting",
                                               "content": "·",
@@ -910700,7 +910898,7 @@
                                             },
                                             {
                                               "type": "text",
-                                              "id": "Gsuui",
+                                              "id": "I8jQ8",
                                               "name": "t",
                                               "fill": "$text-secondary",
                                               "textGrowth": "fixed-width",
@@ -910715,14 +910913,14 @@
                                         },
                                         {
                                           "type": "frame",
-                                          "id": "DJJsF",
+                                          "id": "uiOhQ",
                                           "name": "item",
                                           "width": 338,
                                           "gap": 8,
                                           "children": [
                                             {
                                               "type": "text",
-                                              "id": "p4Ef2",
+                                              "id": "WthY1",
                                               "name": "t",
                                               "fill": "$status-waiting",
                                               "content": "·",
@@ -910733,7 +910931,7 @@
                                             },
                                             {
                                               "type": "text",
-                                              "id": "XkUDf",
+                                              "id": "WdEvt",
                                               "name": "t",
                                               "fill": "$text-secondary",
                                               "textGrowth": "fixed-width",
@@ -910748,14 +910946,14 @@
                                         },
                                         {
                                           "type": "frame",
-                                          "id": "rYR4H",
+                                          "id": "S6QWU",
                                           "name": "item",
                                           "width": 338,
                                           "gap": 8,
                                           "children": [
                                             {
                                               "type": "text",
-                                              "id": "i02L3",
+                                              "id": "OOliC",
                                               "name": "t",
                                               "fill": "$status-waiting",
                                               "content": "·",
@@ -910766,55 +910964,12 @@
                                             },
                                             {
                                               "type": "text",
-                                              "id": "rLfQk",
+                                              "id": "up12p",
                                               "name": "t",
                                               "fill": "$text-secondary",
                                               "textGrowth": "fixed-width",
                                               "width": 322,
-                                              "content": "its processor's name (Apple M3, say)",
-                                              "lineHeight": 1.45,
-                                              "fontFamily": "$font-ui",
-                                              "fontSize": 11.5,
-                                              "fontWeight": "normal"
-                                            }
-                                          ]
-                                        }
-                                      ]
-                                    },
-                                    {
-                                      "type": "frame",
-                                      "id": "MmfIT",
-                                      "name": "column 2",
-                                      "width": 338,
-                                      "layout": "vertical",
-                                      "gap": 4,
-                                      "children": [
-                                        {
-                                          "type": "frame",
-                                          "id": "P2exr",
-                                          "name": "item",
-                                          "width": 338,
-                                          "gap": 8,
-                                          "children": [
-                                            {
-                                              "type": "text",
-                                              "id": "atfUv",
-                                              "name": "t",
-                                              "fill": "$status-waiting",
-                                              "content": "·",
-                                              "lineHeight": 1.4,
-                                              "fontFamily": "$font-mono",
-                                              "fontSize": 11,
-                                              "fontWeight": "normal"
-                                            },
-                                            {
-                                              "type": "text",
-                                              "id": "nUtmS",
-                                              "name": "t",
-                                              "fill": "$text-secondary",
-                                              "textGrowth": "fixed-width",
-                                              "width": 322,
-                                              "content": "its number of processor cores",
+                                              "content": "your computer's processor name (Apple M3, say)",
                                               "lineHeight": 1.45,
                                               "fontFamily": "$font-ui",
                                               "fontSize": 11.5,
@@ -910824,14 +910979,14 @@
                                         },
                                         {
                                           "type": "frame",
-                                          "id": "k5caL",
+                                          "id": "YW945",
                                           "name": "item",
                                           "width": 338,
                                           "gap": 8,
                                           "children": [
                                             {
                                               "type": "text",
-                                              "id": "BMOfj",
+                                              "id": "mMzmm",
                                               "name": "t",
                                               "fill": "$status-waiting",
                                               "content": "·",
@@ -910842,12 +910997,12 @@
                                             },
                                             {
                                               "type": "text",
-                                              "id": "QA2rD",
+                                              "id": "ElBc4",
                                               "name": "t",
                                               "fill": "$text-secondary",
                                               "textGrowth": "fixed-width",
                                               "width": 322,
-                                              "content": "its memory (RAM), to the byte",
+                                              "content": "your computer's number of processor cores",
                                               "lineHeight": 1.45,
                                               "fontFamily": "$font-ui",
                                               "fontSize": 11.5,
@@ -910857,14 +911012,14 @@
                                         },
                                         {
                                           "type": "frame",
-                                          "id": "efdW6",
+                                          "id": "uQ7lE",
                                           "name": "item",
                                           "width": 338,
                                           "gap": 8,
                                           "children": [
                                             {
                                               "type": "text",
-                                              "id": "WuC5I",
+                                              "id": "y7n2v",
                                               "name": "t",
                                               "fill": "$status-waiting",
                                               "content": "·",
@@ -910875,7 +911030,40 @@
                                             },
                                             {
                                               "type": "text",
-                                              "id": "x87P5s",
+                                              "id": "nK7F1",
+                                              "name": "t",
+                                              "fill": "$text-secondary",
+                                              "textGrowth": "fixed-width",
+                                              "width": 322,
+                                              "content": "your computer's memory (RAM), to the byte",
+                                              "lineHeight": 1.45,
+                                              "fontFamily": "$font-ui",
+                                              "fontSize": 11.5,
+                                              "fontWeight": "normal"
+                                            }
+                                          ]
+                                        },
+                                        {
+                                          "type": "frame",
+                                          "id": "uKFNy",
+                                          "name": "item",
+                                          "width": 338,
+                                          "gap": 8,
+                                          "children": [
+                                            {
+                                              "type": "text",
+                                              "id": "ct1C0",
+                                              "name": "t",
+                                              "fill": "$status-waiting",
+                                              "content": "·",
+                                              "lineHeight": 1.4,
+                                              "fontFamily": "$font-mono",
+                                              "fontSize": 11,
+                                              "fontWeight": "normal"
+                                            },
+                                            {
+                                              "type": "text",
+                                              "id": "MXPUE",
                                               "name": "t",
                                               "fill": "$text-secondary",
                                               "textGrowth": "fixed-width",
@@ -910887,17 +911075,27 @@
                                               "fontWeight": "normal"
                                             }
                                           ]
-                                        },
+                                        }
+                                      ]
+                                    },
+                                    {
+                                      "type": "frame",
+                                      "id": "iiPYU",
+                                      "name": "column 2",
+                                      "width": 338,
+                                      "layout": "vertical",
+                                      "gap": 4,
+                                      "children": [
                                         {
                                           "type": "frame",
-                                          "id": "aZswq",
+                                          "id": "gcQZg",
                                           "name": "item",
                                           "width": 338,
                                           "gap": 8,
                                           "children": [
                                             {
                                               "type": "text",
-                                              "id": "ufoAY",
+                                              "id": "zXokV",
                                               "name": "t",
                                               "fill": "$status-waiting",
                                               "content": "·",
@@ -910908,7 +911106,7 @@
                                             },
                                             {
                                               "type": "text",
-                                              "id": "NZ5Hm",
+                                              "id": "QnuiY",
                                               "name": "t",
                                               "fill": "$text-secondary",
                                               "textGrowth": "fixed-width",
@@ -910923,14 +911121,14 @@
                                         },
                                         {
                                           "type": "frame",
-                                          "id": "I4AKO",
+                                          "id": "SvWMR",
                                           "name": "item",
                                           "width": 338,
                                           "gap": 8,
                                           "children": [
                                             {
                                               "type": "text",
-                                              "id": "dL9Od",
+                                              "id": "TAV1C",
                                               "name": "t",
                                               "fill": "$status-waiting",
                                               "content": "·",
@@ -910941,12 +911139,12 @@
                                             },
                                             {
                                               "type": "text",
-                                              "id": "pngle",
+                                              "id": "nCbby",
                                               "name": "t",
                                               "fill": "$text-secondary",
                                               "textGrowth": "fixed-width",
                                               "width": 322,
-                                              "content": "its offset from UTC when the session started",
+                                              "content": "your time zone's offset from UTC when the session started",
                                               "lineHeight": 1.45,
                                               "fontFamily": "$font-ui",
                                               "fontSize": 11.5,
@@ -910956,14 +911154,14 @@
                                         },
                                         {
                                           "type": "frame",
-                                          "id": "nFYij",
+                                          "id": "emqPB",
                                           "name": "item",
                                           "width": 338,
                                           "gap": 8,
                                           "children": [
                                             {
                                               "type": "text",
-                                              "id": "iJaSN",
+                                              "id": "uERt2",
                                               "name": "t",
                                               "fill": "$status-waiting",
                                               "content": "·",
@@ -910974,7 +911172,7 @@
                                             },
                                             {
                                               "type": "text",
-                                              "id": "S4oLvq",
+                                              "id": "Kdww7",
                                               "name": "t",
                                               "fill": "$text-secondary",
                                               "textGrowth": "fixed-width",
@@ -910989,14 +911187,14 @@
                                         },
                                         {
                                           "type": "frame",
-                                          "id": "M5wx5N",
+                                          "id": "MtzM0",
                                           "name": "item",
                                           "width": 338,
                                           "gap": 8,
                                           "children": [
                                             {
                                               "type": "text",
-                                              "id": "Xi7nN",
+                                              "id": "GjN47",
                                               "name": "t",
                                               "fill": "$status-waiting",
                                               "content": "·",
@@ -911007,7 +911205,7 @@
                                             },
                                             {
                                               "type": "text",
-                                              "id": "WW2tC",
+                                              "id": "PqnGm",
                                               "name": "t",
                                               "fill": "$text-secondary",
                                               "textGrowth": "fixed-width",
@@ -911022,14 +911220,14 @@
                                         },
                                         {
                                           "type": "frame",
-                                          "id": "k3yQSi",
+                                          "id": "Kf1lg",
                                           "name": "item",
                                           "width": 338,
                                           "gap": 8,
                                           "children": [
                                             {
                                               "type": "text",
-                                              "id": "p9RnIy",
+                                              "id": "ptkzU",
                                               "name": "t",
                                               "fill": "$status-waiting",
                                               "content": "·",
@@ -911040,7 +911238,7 @@
                                             },
                                             {
                                               "type": "text",
-                                              "id": "MZnJk",
+                                              "id": "gbJQO",
                                               "name": "t",
                                               "fill": "$text-secondary",
                                               "textGrowth": "fixed-width",
@@ -911055,14 +911253,14 @@
                                         },
                                         {
                                           "type": "frame",
-                                          "id": "dEYAW",
+                                          "id": "ssIpE",
                                           "name": "item",
                                           "width": 338,
                                           "gap": 8,
                                           "children": [
                                             {
                                               "type": "text",
-                                              "id": "PKsPl",
+                                              "id": "yS4D0",
                                               "name": "t",
                                               "fill": "$status-waiting",
                                               "content": "·",
@@ -911073,7 +911271,205 @@
                                             },
                                             {
                                               "type": "text",
-                                              "id": "drYg6",
+                                              "id": "u1c03N",
+                                              "name": "t",
+                                              "fill": "$text-secondary",
+                                              "textGrowth": "fixed-width",
+                                              "width": 322,
+                                              "content": "each request's round trip to the endpoint, from the times the endpoint says it read the request and began its answer",
+                                              "lineHeight": 1.45,
+                                              "fontFamily": "$font-ui",
+                                              "fontSize": 11.5,
+                                              "fontWeight": "normal"
+                                            }
+                                          ]
+                                        },
+                                        {
+                                          "type": "frame",
+                                          "id": "N3JsM",
+                                          "name": "item",
+                                          "width": 338,
+                                          "gap": 8,
+                                          "children": [
+                                            {
+                                              "type": "text",
+                                              "id": "Enbez",
+                                              "name": "t",
+                                              "fill": "$status-waiting",
+                                              "content": "·",
+                                              "lineHeight": 1.4,
+                                              "fontFamily": "$font-mono",
+                                              "fontSize": 11,
+                                              "fontWeight": "normal"
+                                            },
+                                            {
+                                              "type": "text",
+                                              "id": "cvE7Q",
+                                              "name": "t",
+                                              "fill": "$text-secondary",
+                                              "textGrowth": "fixed-width",
+                                              "width": 322,
+                                              "content": "for each request, how far this computer's clock was from the endpoint's",
+                                              "lineHeight": 1.45,
+                                              "fontFamily": "$font-ui",
+                                              "fontSize": 11.5,
+                                              "fontWeight": "normal"
+                                            }
+                                          ]
+                                        },
+                                        {
+                                          "type": "frame",
+                                          "id": "sIXFK",
+                                          "name": "item",
+                                          "width": 338,
+                                          "gap": 8,
+                                          "children": [
+                                            {
+                                              "type": "text",
+                                              "id": "g2sgx",
+                                              "name": "t",
+                                              "fill": "$status-waiting",
+                                              "content": "·",
+                                              "lineHeight": 1.4,
+                                              "fontFamily": "$font-mono",
+                                              "fontSize": 11,
+                                              "fontWeight": "normal"
+                                            },
+                                            {
+                                              "type": "text",
+                                              "id": "OSAfJ",
+                                              "name": "t",
+                                              "fill": "$text-secondary",
+                                              "textGrowth": "fixed-width",
+                                              "width": 322,
+                                              "content": "how long each request waited at the endpoint for a free slot",
+                                              "lineHeight": 1.45,
+                                              "fontFamily": "$font-ui",
+                                              "fontSize": 11.5,
+                                              "fontWeight": "normal"
+                                            }
+                                          ]
+                                        },
+                                        {
+                                          "type": "frame",
+                                          "id": "EdkDn",
+                                          "name": "item",
+                                          "width": 338,
+                                          "gap": 8,
+                                          "children": [
+                                            {
+                                              "type": "text",
+                                              "id": "tEyLo",
+                                              "name": "t",
+                                              "fill": "$status-waiting",
+                                              "content": "·",
+                                              "lineHeight": 1.4,
+                                              "fontFamily": "$font-mono",
+                                              "fontSize": 11,
+                                              "fontWeight": "normal"
+                                            },
+                                            {
+                                              "type": "text",
+                                              "id": "QC554",
+                                              "name": "t",
+                                              "fill": "$text-secondary",
+                                              "textGrowth": "fixed-width",
+                                              "width": 322,
+                                              "content": "how long the endpoint waited for its model server, for each request",
+                                              "lineHeight": 1.45,
+                                              "fontFamily": "$font-ui",
+                                              "fontSize": 11.5,
+                                              "fontWeight": "normal"
+                                            }
+                                          ]
+                                        },
+                                        {
+                                          "type": "frame",
+                                          "id": "Dq4fV",
+                                          "name": "item",
+                                          "width": 338,
+                                          "gap": 8,
+                                          "children": [
+                                            {
+                                              "type": "text",
+                                              "id": "ZBHIR",
+                                              "name": "t",
+                                              "fill": "$status-waiting",
+                                              "content": "·",
+                                              "lineHeight": 1.4,
+                                              "fontFamily": "$font-mono",
+                                              "fontSize": 11,
+                                              "fontWeight": "normal"
+                                            },
+                                            {
+                                              "type": "text",
+                                              "id": "C0Xoc",
+                                              "name": "t",
+                                              "fill": "$text-secondary",
+                                              "textGrowth": "fixed-width",
+                                              "width": 322,
+                                              "content": "each session's median round trip to the endpoint",
+                                              "lineHeight": 1.45,
+                                              "fontFamily": "$font-ui",
+                                              "fontSize": 11.5,
+                                              "fontWeight": "normal"
+                                            }
+                                          ]
+                                        },
+                                        {
+                                          "type": "frame",
+                                          "id": "b0cH0p",
+                                          "name": "item",
+                                          "width": 338,
+                                          "gap": 8,
+                                          "children": [
+                                            {
+                                              "type": "text",
+                                              "id": "VW6jK",
+                                              "name": "t",
+                                              "fill": "$status-waiting",
+                                              "content": "·",
+                                              "lineHeight": 1.4,
+                                              "fontFamily": "$font-mono",
+                                              "fontSize": 11,
+                                              "fontWeight": "normal"
+                                            },
+                                            {
+                                              "type": "text",
+                                              "id": "iw9Ax",
+                                              "name": "t",
+                                              "fill": "$text-secondary",
+                                              "textGrowth": "fixed-width",
+                                              "width": 322,
+                                              "content": "for each session, how far this computer's clock was from the endpoint's, at its fastest round trip",
+                                              "lineHeight": 1.45,
+                                              "fontFamily": "$font-ui",
+                                              "fontSize": 11.5,
+                                              "fontWeight": "normal"
+                                            }
+                                          ]
+                                        },
+                                        {
+                                          "type": "frame",
+                                          "id": "rhAFQ",
+                                          "name": "item",
+                                          "width": 338,
+                                          "gap": 8,
+                                          "children": [
+                                            {
+                                              "type": "text",
+                                              "id": "d4C3MV",
+                                              "name": "t",
+                                              "fill": "$status-waiting",
+                                              "content": "·",
+                                              "lineHeight": 1.4,
+                                              "fontFamily": "$font-mono",
+                                              "fontSize": 11,
+                                              "fontWeight": "normal"
+                                            },
+                                            {
+                                              "type": "text",
+                                              "id": "ugd7Q",
                                               "name": "t",
                                               "fill": "$text-secondary",
                                               "textGrowth": "fixed-width",
