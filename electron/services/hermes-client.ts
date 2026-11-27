@@ -228,6 +228,16 @@ function noAnswer(err: unknown, baseUrl: string, wait: Omit<Unanswered, 'baseUrl
   return err;
 }
 
+/** A gateway's address as Tars calls it, an http: or https: URL; null for anything else, which Tars never calls. */
+export function gatewayUrl(value: string): URL | null {
+  try {
+    const url = new URL(value.trim());
+    return url.protocol === 'http:' || url.protocol === 'https:' ? url : null;
+  } catch {
+    return null;
+  }
+}
+
 /**
  * What the window shows for a call the gateway gave no answer to: the gateway's
  * address, never its user name, password or query, and the reason. Undefined
@@ -236,14 +246,13 @@ function noAnswer(err: unknown, baseUrl: string, wait: Omit<Unanswered, 'baseUrl
 export function noAnswerSentence(err: unknown): string | undefined {
   const seen = err && typeof err === 'object' ? unanswered.get(err) : undefined;
   if (!seen) return undefined;
-  let where: string;
-  try {
-    const url = new URL(seen.baseUrl);
-    where = `${url.protocol}//${url.host}${url.pathname.replace(/\/+$/, '')}`;
-  } catch {
-    // Not quoted: whatever was saved there may be a token pasted in the wrong field.
-    return 'Tars could not reach Hermes: the gateway URL saved in Settings, Hermes is not one it can call.';
-  }
+  // Quoted only as an http(s) URL, the two schemes hermesRequest calls. Anything
+  // else may be a token pasted in the wrong field, and one shaped name:secret
+  // parses as a URL (scheme "name:", path "secret"): quoted, it printed the
+  // secret (the Audit's L1 on #663).
+  const url = gatewayUrl(seen.baseUrl);
+  if (!url) return 'Tars could not reach Hermes: the gateway URL saved in Settings, Hermes is not one it can call.';
+  const where = `${url.protocol}//${url.host}${url.pathname.replace(/\/+$/, '')}`;
   const { message, code } = err as { message?: unknown; code?: unknown };
   const said = typeof message === 'string' ? message : String(err);
   const reason = seen.waitedMs !== undefined

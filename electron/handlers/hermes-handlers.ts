@@ -63,6 +63,7 @@ import {
   fetchHermesMemoryProviders,
   setHermesMemoryProvider,
   reachingHermes,
+  gatewayUrl,
 } from '../services/hermes-client';
 import {
   HermesConnection,
@@ -371,6 +372,14 @@ export function registerHermesHandlers(): void {
   // did, and one refusal kept the Chat on the slower cron path until Tars
   // restarted.
   ipcMain.handle('hermes:connection:save', async (_event, connection: HermesConnection) => {
+    // A gateway's URL is an http(s) address, the only kind Tars calls: anything
+    // else (a token pasted in the wrong field, user:secret, ftp://) is refused,
+    // never echoed (the Audit's L1 on #663). An empty one is the form's own,
+    // which the connection then says names no gateway URL.
+    const url = typeof connection?.url === 'string' ? connection.url.trim() : '';
+    if ((connection?.mode === 'remote' || connection?.mode === 'cloud') && url && !gatewayUrl(url)) {
+      return { success: false, error: 'Tars calls a gateway only at an http:// or https:// address: nothing was saved.' };
+    }
     try {
       // Read only for the token the form was shown as the mask.
       writeConnection(keepToken(connection, readConnection().token));
