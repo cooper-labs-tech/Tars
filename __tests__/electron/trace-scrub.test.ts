@@ -27,6 +27,10 @@ import { scrubValue, envValuesFrom, projectEnvValues, SCRUB_VERSION, type ScrubC
  * numbered per session, the same value under the same number (trace-scrub-personal.test.ts, U1 and U2); a home path
  * becomes `<HOME_n>`, the account's and anyone else's, each home its own number, so 6 now reads: another home that
  * merely starts alike is another home, never the account's. The counts by kind stay.
+ *
+ * Added before its code (the Audit on #679 at d07407c7e, 27/11):
+ * 10. A URL's password with no user before it (Redis's own form, `redis://:password@host:port`) passes, with any host
+ *     but a dotted one (which the e-mail rule happened to take); or a URL with a port and no credentials is changed.
  */
 
 const HOME = '/Users/someone';
@@ -99,6 +103,24 @@ describe('scrubbing a trace', () => {
     expect(scrub('git clone https://user:s3cr3tpass@host.example.com/r.git').out).toBe('git clone https://user:<SECRET_1>@host.example.com/r.git');
     expect(scrub('Authorization: Bearer abcdefghijklmnop1234').out).toBe('Authorization: Bearer <SECRET_1>');
     expect(scrub('curl -H "Authorization: Basic dXNlcjpwYXNzd29yZA=="').out).toBe('curl -H "Authorization: Basic <SECRET_1>"');
+  });
+
+  it('10: a URL\'s password with no user before it goes too, the host as before; a URL with a port and no credentials stays', () => {
+    const cases: Array<[string, string]> = [
+      ['redis://:hunter2pass@localhost:6379', 'redis://:<SECRET_1>@localhost:6379'],
+      ['redis://:hunter2pass@redis:6379', 'redis://:<SECRET_1>@redis:6379'],
+      ['redis://:hunter2pass@10.0.0.12:6379', 'redis://:<SECRET_1>@<IP_1>:6379'],
+      ['amqp://:hunter2pass@127.0.0.1', 'amqp://:<SECRET_1>@127.0.0.1'],
+      ['redis://:hunter2pass@cache.example.com:6379/0', 'redis://:<SECRET_1>@cache.example.com:6379/0'],
+    ];
+    for (const [given, masked] of cases) {
+      const { out, counts } = scrub(given);
+      expect(out, given).toBe(masked);
+      expect(counts.url_password, given).toBe(1);
+    }
+    for (const kept of ['http://localhost:3000/api', 'https://example.com:9000/path?a=b', 'postgres://db.internal:5432/app', 'ws://[::1]:8080/socket']) {
+      expect(scrub(kept).out, kept).toBe(kept);
+    }
   });
 
   it('6: the home path becomes <HOME_n>, in every spelling; another home is another number', () => {
