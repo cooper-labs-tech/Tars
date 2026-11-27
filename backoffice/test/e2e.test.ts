@@ -58,6 +58,7 @@
 // L5. A malformed one is taken (a key not in the shape, a name where a word belongs, a negative time); the batch
 //     must be refused whole.
 // L6. A deleted session leaves them in any table; migration 004's down loses anything else, its up reads them null.
+// L8. A `start.branch` over 255 bytes refuses the whole batch instead of being cut.
 // L7. A session uploaded again after its end with a changed outcome (its pull request merged) is not updated, or a
 //     reader holding its cursor does not get it again. And `lostDemandOmitted` is refused or not read back.
 //
@@ -495,6 +496,14 @@ describe('trace back-office, end to end', () => {
     assert.deepEqual(after.session.lostDemand, LOST);
     assert.deepEqual(note('start.turnTaskRef', after.turns.map((t: any) => t.taskRef)), [START.taskRef]);
     assert.equal(note('start.lostDemandOmitted', after.session.lostDemandOmitted), 4);
+    // L8. A branch over 255 bytes, which Tars does not bound, is cut, not refused with the whole batch.
+    const longBranch = await call('PUT', '/v1/batches/batch-start-long-branch', { token: installA.token, body: {
+      schema: 1, sessions: [session({ sessionId: 'sess-branch', agentId: 'agent-branch', finalStatus: 'done', endedAt: T0 + 6000, start: { trigger: 'owner', branch: 'x'.repeat(300) } })],
+    } });
+    assert.equal(longBranch.status, 200, String(longBranch.buf));
+    const branch = (await call('GET', `/v1/read/sessions/${installA.id}/sess-branch`, { token: reader.token })).json.session.start.branch;
+    assert.equal(note('start.longBranchLength', branch.length), 255);
+    assert.equal((await call('DELETE', '/v1/sessions/sess-branch', { token: installA.token })).status, 200, 'gone again, so the steps after count as before');
     // L7. The session's pull request is merged after it ended: the client uploads it again, and a reader that kept its
     // cursor gets the session once more, with the outcome as it is now.
     const cursorNow = (await call('GET', '/v1/read/sessions?limit=500', { token: reader.token })).json.nextCursor;

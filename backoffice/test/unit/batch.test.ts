@@ -23,6 +23,8 @@
 //     or a valid list, the empty one included, is refused.
 // 12. A request's `liveSessions` takes a negative, fractional or absurd count, or a valid one is
 //     refused.
+// 13 again (Backend-4's note, 27/11): a `start.branch` over 255 bytes is refused, which costs the whole batch,
+//     instead of being cut to 255 bytes at a character's edge; or one over 4,096 characters is taken.
 // 13. A session's `start` (27/11, what started it) takes a key it does not know, a trigger or a via
 //     outside the client's closed lists, a task ref not of the form t- and 8 hex, a commit that is
 //     not 40 or 64 hex, an id over its bound, a branch over 255 bytes, or a time of the wrong form,
@@ -202,9 +204,15 @@ test('13. start: what started the session', () => {
   }
   assert.ok(!('errors' in validateBatch(withSession({ start: { ...start, commit: 'a'.repeat(64) } }))), 'a sha-256 commit');
   assert.ok(!('errors' in validateBatch(withSession({ start: { ...start, taskId: 'x'.repeat(200), branch: 'é'.repeat(127) } }))), 'at the bounds');
+  // 13 again (Backend-4, 27/11): a branch over 255 bytes is cut there, at a character's edge, never refused for it.
+  const cut = validateBatch(withSession({ start: { ...start, branch: 'é'.repeat(128) } }));
+  assert.ok(!('errors' in cut), JSON.stringify(cut));
+  assert.equal((cut.sessions[0]!.start as { branch: string }).branch, 'é'.repeat(127), '256 bytes of two-byte letters cut to 254, not split');
+  const long = validateBatch(withSession({ start: { ...start, branch: 'b'.repeat(300) } }));
+  assert.ok(!('errors' in long) && (long.sessions[0]!.start as { branch: string }).branch === 'b'.repeat(255));
   const bad: unknown[] = [
     'task', [], {}, { ...start, trigger: undefined }, { ...start, who: 'someone' }, { ...start, trigger: 'Owner Name' }, { ...start, trigger: 'reboot' },
-    { ...start, via: 'fax' }, { ...start, queuedAt: -1 }, { ...start, handedAt: '12' }, { ...start, branch: 'é'.repeat(128) },
+    { ...start, via: 'fax' }, { ...start, queuedAt: -1 }, { ...start, handedAt: '12' }, { ...start, branch: 'b'.repeat(4097) },
     { ...start, taskRef: 7 }, { ...start, taskRef: 'ref-1' }, { ...start, taskRef: 't-0A1B2C3D' }, { ...start, commit: '<SECRET_1>' },
     { ...start, commit: 'abc123' }, { ...start, taskId: 'x'.repeat(201) }, { ...start, requesterAgentId: 'x'.repeat(201) },
     { ...start, redelegatedFrom: 'x'.repeat(65) },
