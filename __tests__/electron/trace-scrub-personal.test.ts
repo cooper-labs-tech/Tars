@@ -276,6 +276,8 @@ describe('masking personal data', () => {
     // A URL's user part is never a package spec, with no port either (the Audit's NO-MERGE at a3084c1cb).
     expect(s.text('git clone ssh://git@10.1.2.3/team/app.git')).toBe('git clone ssh://git@<IP_3>/team/app.git');
     expect(s.text('curl https://admin@192.168.1.1/status and mongodb://app@10.0.0.7/db')).toBe('curl https://admin@<IP_6>/status and mongodb://app@<IP_7>/db');
+    // A package-shaped left side with a : after the address is a host's path, not a version (found by the bench).
+    expect(s.text('rsync build/app@10.9.8.7:/srv')).toBe('rsync build/app@<IP_5>:/srv');
   });
 
   it('R1: the counts are placeholders inserted, by type, every type present, and the version is named', () => {
