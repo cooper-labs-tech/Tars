@@ -10,7 +10,7 @@ import { pendingBackgroundWork } from '../services/agent-truth';
 import { broadcastToAllWindows } from '../utils/broadcast';
 import { scheduleTick } from '../utils/agents-tick';
 import { hasOrchestratorPowers } from './agent-role';
-import { noteSessionStart } from './session-start';
+import { clearSessionStart, noteSessionStart } from './session-start';
 import type { AgentStatus } from '../types';
 
 /**
@@ -412,7 +412,7 @@ async function restartNow(agent: AgentStatus, cause: 'settings' | 'asked'): Prom
 
     // Started again, for its traced session (core/session-start.ts): for a settings change, or asked.
     noteSessionStart(agent.id, { trigger: 'restart', via: cause });
-    const result = await launchAgent(agent.id, '', { resumeSessionId: conversation });
+    const result = await launchAgent(agent.id, '', { resumeSessionId: conversation }).finally(() => clearSessionStart(agent.id));
     if (!result.success) throw new Error(result.error);
     return { success: true };
   } catch (err) {

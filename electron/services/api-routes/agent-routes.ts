@@ -20,7 +20,7 @@ import { agentStatusOnExit, isQuitting } from '../../core/quit-state';
 import { clearStop, noteRestartAfterStop, stopAgent, stopReasonOf } from '../../core/agent-stop';
 import { diskRefusal, freeSpace } from '../../core/disk-space';
 import { noteWaker, wakeFromSleep } from '../../core/agent-asleep';
-import { VIA_OF_CHANNEL, noteSessionStart, type StartNote } from '../../core/session-start';
+import { VIA_OF_CHANNEL, clearSessionStart, noteSessionStart, type StartNote } from '../../core/session-start';
 import type { AgentWakeVia } from '../../types';
 import { sessionStarted, SENDER_WAIT_MS, launchBegins, launchAbandoned, dialogShown, takeSlot } from '../../core/agent-launch';
 import { getAllProviders, getProvider, isValidProvider } from '../../providers';
@@ -498,6 +498,8 @@ async function spawnAgentSessionInSlot(
     });
   } catch (err) {
     launchAbandoned(agent.id, launch);
+    // No terminal opened: its note goes with it (core/session-start.ts).
+    clearSessionStart(agent.id);
     // No terminal left on the machine: the agent says why, as the 503 does (core/no-terminal.ts).
     markNoTerminal(agent, err, saveAgents);
     throw err;

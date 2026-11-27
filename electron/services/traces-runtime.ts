@@ -765,9 +765,9 @@ function linkTask(traceId: string, taskId: string, alsoIn: string): void {
  * branch, started before it was merged or closed. Once per session: one that has it is never asked again. Returns
  * how many sessions took it.
  */
-export function applyPrStates(states: Array<PrState & { projects: string[] }>): number {
+export function applyPrStates(states: Array<PrState & { projects: string[] }>, now: number = Date.now()): number {
   let written = 0;
-  for (const s of traceStore().awaitingPullRequest()) {
+  for (const s of traceStore().awaitingPullRequest(now - PR_WAIT_DAYS * 86_400_000)) {
     const pr = states
       .filter(p => p.projects.includes(s.projectPath) && p.branch === s.branch && p.at >= s.startedAt)
       .sort((a, b) => b.at - a.at)[0];
@@ -777,19 +777,46 @@ export function applyPrStates(states: Array<PrState & { projects: string[] }>): 
   return written;
 }
 
+/**
+ * How long an ended session waits for its branch's pull request: past it, gh is no longer asked for it. A branch never
+ * opened as one would keep gh asked every 5 minutes for the life of the install.
+ */
+export const PR_WAIT_DAYS = 14;
+
+/** The repository's default branch, by origin's HEAD; main and master when origin names none. */
+async function defaultBranchesOf(folder: string): Promise<string[]> {
+  const head = await safeGit(folder, ['symbolic-ref', '--quiet', '--short', 'refs/remotes/origin/HEAD'], { timeout: 5000 })
+    .then(r => r.stdout.trim(), () => '');
+  return head.startsWith('origin/') ? [head.slice('origin/'.length)] : ['main', 'master'];
+}
+
+/**
+ * The ended sessions gh is asked about: ended within PR_WAIT_DAYS, on a branch other than their repository's default,
+ * which never gets a pull request of its own.
+ *
+ * A pull request is read among the 50 its repository closed last (prStatesOf). One that closed while 50 others closed
+ * after it, before a read found it (Tars off for days in a busy repository), is not found: its sessions wait out
+ * PR_WAIT_DAYS and keep no `pr`.
+ */
+export async function sessionsToAskForPr(now: number = Date.now()): Promise<Array<{ traceId: string; projectPath: string; branch: string; startedAt: number }>> {
+  const awaiting = traceStore().awaitingPullRequest(now - PR_WAIT_DAYS * 86_400_000);
+  const defaults = new Map<string, string[]>();
+  const asked: typeof awaiting = [];
+  for (const s of awaiting) {
+    if (!defaults.has(s.projectPath)) defaults.set(s.projectPath, await defaultBranchesOf(s.projectPath));
+    if (!defaults.get(s.projectPath)!.includes(s.branch)) asked.push(s);
+  }
+  return asked;
+}
+
 /** One read of the pull requests of the projects whose ended sessions wait for one (none: no gh is run). */
 function prWatchPass(): void {
   if (!deps || (!store && !fs.existsSync(TRACES_DB_FILE))) return;
-  let projects: string[];
-  try {
-    projects = [...new Set(traceStore().awaitingPullRequest().map(s => s.projectPath))];
-  } catch (err) {
-    console.error(`[traces] the sessions awaiting a pull request not read: ${(err as Error).message}`);
-    return;
-  }
-  if (!projects.length) return;
-  prStatesOfProjects(projects)
-    .then((states) => { applyPrStates(states); })
+  sessionsToAskForPr()
+    .then((sessions) => {
+      const projects = [...new Set(sessions.map(s => s.projectPath))];
+      return projects.length ? prStatesOfProjects(projects).then((states) => { applyPrStates(states); }) : undefined;
+    })
     .catch((err) => { console.error(`[traces] pull requests not read: ${(err as Error).message}`); });
 }
 

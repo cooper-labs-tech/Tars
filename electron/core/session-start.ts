@@ -3,9 +3,10 @@
  * 27/11): the spawn itself (core/agent-pty.ts spawnAgentPty, where a traced session opens) is reached the same way by
  * every start, and cannot tell a delegated task from the owner's window or a restart.
  *
- * One note per agent, read once by the next spawn of its terminal, and only within START_NOTE_MS: a note whose start
- * opened no terminal (the agent's terminal was already open) is never read by a later, unrelated start. An agent
- * asleep at its spawn is woken whatever the note says (services/traces-runtime.ts).
+ * One note per agent, read once by the next spawn of its terminal, and only within START_NOTE_MS. A start that opens
+ * no terminal (its CLI was already running, and the task went in as typed words) clears its note when it ends
+ * (clearSessionStart), so no later, unrelated start of the agent reads it; the window is the backstop for a path that
+ * does not. An agent asleep at its spawn is woken whatever the note says (services/traces-runtime.ts).
  *
  * No `schedule`: Tars has no scheduler of its own. A job the user schedules in Hermes reaches an agent as a relay
  * message, through the same path as one they type there, and reads `channel`.
@@ -55,6 +56,11 @@ const notes = new Map<string, StartNote & { at: number }>();
 /** Why the next terminal of `agentId` opens: said just before the start that opens it. */
 export function noteSessionStart(agentId: string, note: StartNote, now: number = Date.now()): void {
   notes.set(agentId, { ...note, at: now });
+}
+
+/** A start is over: its note goes, read by its spawn or not (a start that opened no terminal). */
+export function clearSessionStart(agentId: string): void {
+  notes.delete(agentId);
 }
 
 /** The note for this spawn, once; none past its window. */
