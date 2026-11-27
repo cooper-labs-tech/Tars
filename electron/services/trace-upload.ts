@@ -400,6 +400,8 @@ export class TraceUploader {
       tokensCached: Number(x.tokens_cached), tokensOut: Number(x.tokens_out), finalStatus: opt(x.final_status as string),
       // Who wrote the turn, by kind only: the detail holds names, which the back-office never gets.
       author: String(x.author),
+      // The ref of the task it served: the link from a turn to its task that survives the outcome's cap.
+      ...(x.task_ref ? { taskRef: String(x.task_ref) } : {}),
     }));
     const links = new Map<string, Array<{ position: number; message_hash: string; direction: string }>>();
     for (const l of doc.request_messages) {

@@ -309,6 +309,7 @@ export function registerTracesHandlers(deps: TracesHandlerDeps): void {
       'an install id, to delete everything this install sent',
       'what started each session: you, a task, a channel, a restart, a wake from sleep or a task handed on again, by its kind and never by who',
       'the tasks each session ran: their ids, where they came from (you, an agent, a channel, Tars), the task they were part of, the agent that asked, and how they ended',
+      'the task each turn served, by its reference',
       'when each task reached Tars, was handed to the agent, and sent its first request to the model',
       'the commit and branch each session started from',
       'whether the pull request of a session\'s branch was merged or closed, and when',
