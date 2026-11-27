@@ -24,7 +24,7 @@ import * as path from 'path';
  * 3. `private_key`: PEM private key blocks.
  * 4. Keys by shape: `openai_key`, `anthropic_key`, `github_token`, `slack_token`, `aws_access_key`, `google_key`,
  *    `stripe_key`, `npm_token`, `huggingface_token`, `jwt`, `tars_token` (the endpoint and reader tokens).
- * 5. `url_password`: the password in `scheme://user:password@host`.
+ * 5. `url_password`: the password in `scheme://user:password@host`, the user part empty too (`redis://:password@host`).
  * 6. `bearer`: the credential after `Bearer` or `Basic`.
  * 7. `named_secret`: a value 6 characters or more after a name that says it is one (key, secret, token, password,
  *    passwd, pwd, credential, private key, access key, auth) and `=` or `:`, quoted or not, the name kept; and an
@@ -413,7 +413,8 @@ export function scrubText(text: string, ctx: ScrubContext, counts: Record<string
   let out = replaceExact(text, ctx.knownSecrets.filter(s => typeof s === 'string' && s.length >= 8), 'known_secret', session, counts);
   out = replaceExact(out, ctx.envValues.filter(s => typeof s === 'string' && s.length >= 8), 'env_value', session, counts);
   for (const [re, kind] of SHAPES) out = replaceShape(out, re, kind, session, counts);
-  out = outside(out, part => part.replace(/\b([a-z][a-z0-9+.-]*:\/\/[^\s:@/]+:)([^\s@/]+)(@)/gi,
+  // The user part may be empty: redis://:password@host is Redis's own form.
+  out = outside(out, part => part.replace(/\b([a-z][a-z0-9+.-]*:\/\/[^\s:@/]*:)([^\s@/]+)(@)/gi,
     (_m, a: string, p: string, b: string) => `${a}${placeholder('SECRET', p, 'url_password', session, counts)}${b}`));
   out = outside(out, part => part.replace(/\b(Bearer|Basic)\s+([A-Za-z0-9._~+/=-]{16,})/g,
     (_m, scheme: string, credential: string) => `${scheme} ${placeholder('SECRET', credential, 'bearer', session, counts)}`));
