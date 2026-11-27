@@ -16,6 +16,7 @@ import { defaultTracePairs, traceDecision } from './trace-gate';
 import { projectEnvValues, type ScrubContext } from './trace-scrub';
 import { TraceUploader } from './trace-upload';
 import { WorkspaceRecorder } from './turn-workspace';
+import { ciVerdicts, recordVerdict, type VerdictCaller, type VerdictInput } from './gate-verdicts';
 import { SECRET_FIELDS, keysKeptAfter, withKeptKeys } from './settings-secrets';
 
 /**
@@ -366,6 +367,19 @@ let workspace: WorkspaceRecorder | null = null;
 export function turnWorkspace(): WorkspaceRecorder {
   if (!workspace) workspace = new WorkspaceRecorder({ store: traceStore() });
   return workspace;
+}
+
+/**
+ * A gate's verdict, recorded by the agent that gates (api-routes/verdict-routes.ts): linked to the traced turns that
+ * made the judged head, then CI's own verdict on the same pull request read from its checks, off the call's path.
+ */
+export async function recordGateVerdict(caller: VerdictCaller, v: VerdictInput): Promise<Awaited<ReturnType<typeof recordVerdict>>> {
+  const r = await recordVerdict({ store: traceStore() }, caller, v);
+  if (r.changed) changed();
+  if (v.gate !== 'ci') {
+    void ciVerdicts({ store: traceStore() }, caller, v.pr).then((ci) => { if (ci) changed(); }, () => undefined);
+  }
+  return r;
 }
 
 /** The folder an agent works in: its worktree, else its project. */

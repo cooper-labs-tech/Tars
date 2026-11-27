@@ -109,7 +109,17 @@ export interface TraceOutcome {
   branch?: string;
   head?: string;
   tests?: { command?: string; passed?: number; failed?: number; at?: number };
-  gates?: Array<{ kind: string; verdict: string; at?: number }>;
+  /**
+   * The gates' verdicts on the pull request heads this session's turns made (gate-verdicts.ts): its kind (qa, audit,
+   * ci), merge or no_merge, when, the pull request and head judged, the session's turns it covers (inclusive ranges of
+   * turn indexes), who recorded it, and the test counts when given. The newest within GATES_BUDGET_BYTES; the others
+   * counted in gatesOmitted.
+   */
+  gates?: Array<{
+    kind: string; verdict: string; at?: number; pr?: number; head?: string; turns?: Array<[number, number]>; by?: string;
+    testCommand?: string; passed?: number; failed?: number; skipped?: number; report?: string;
+  }>;
+  gatesOmitted?: number;
   heldRequests?: number;
   requestErrors?: number;
 }
@@ -217,6 +227,14 @@ CREATE TABLE IF NOT EXISTS workspace_versions (
 CREATE TABLE IF NOT EXISTS workspace_renames (
   trace_id TEXT NOT NULL, idx INTEGER NOT NULL, from_path TEXT NOT NULL, to_path TEXT NOT NULL, PRIMARY KEY (trace_id, idx, from_path)
 );
+CREATE TABLE IF NOT EXISTS verdicts (
+  id INTEGER PRIMARY KEY AUTOINCREMENT, project_path TEXT NOT NULL, gate TEXT NOT NULL, pr INTEGER NOT NULL, head TEXT NOT NULL,
+  verdict TEXT NOT NULL, at INTEGER NOT NULL, by_agent TEXT NOT NULL, test_command TEXT, passed INTEGER, failed INTEGER,
+  skipped INTEGER, report TEXT, UNIQUE (project_path, gate, pr, head)
+);
+CREATE TABLE IF NOT EXISTS verdict_links (
+  verdict_id INTEGER NOT NULL, trace_id TEXT NOT NULL, turn_started_at INTEGER NOT NULL, PRIMARY KEY (verdict_id, trace_id, turn_started_at)
+);
 CREATE TABLE IF NOT EXISTS workspace_final (
   trace_id TEXT PRIMARY KEY, state TEXT NOT NULL, checked_at INTEGER NOT NULL, next_at INTEGER NOT NULL, tries INTEGER NOT NULL DEFAULT 0
 );
@@ -258,6 +276,21 @@ const id = (prefix: string): string => `${prefix}${Date.now().toString(36)}${ran
 
 type Row = Record<string, unknown>;
 const num = (v: unknown): number => (typeof v === 'number' ? v : 0);
+/**
+ * At most this much of a session's outcome, gates included: the back office takes an outcome of 16 KiB at most and
+ * refuses the whole batch past it; the rest of the outcome (branch, head, task, tests) is kept room for.
+ */
+const GATES_BUDGET_BYTES = 12 * 1024;
+/** Sorted turn indexes as inclusive ranges: [0, 1, 2, 5] is [[0, 2], [5, 5]]. */
+function ranges(indexes: number[]): Array<[number, number]> {
+  const out: Array<[number, number]> = [];
+  for (const i of indexes) {
+    const last = out[out.length - 1];
+    if (last && i === last[1] + 1) last[1] = i;
+    else if (!last || i > last[1]) out.push([i, i]);
+  }
+  return out;
+}
 const optNum = (v: unknown): number | undefined => (typeof v === 'number' ? v : undefined);
 const optStr = (v: unknown): string | undefined => (typeof v === 'string' && v !== '' ? v : undefined);
 
@@ -608,6 +641,110 @@ export class TraceStore {
       .run(traceId, state, now, next, tries);
   }
 
+  /**
+   * The turns of a project's sessions that ended on a known head, with their session's branch: what a gate's verdict
+   * may link to (gate-verdicts.ts).
+   */
+  verdictCandidates(projectPath: string): Array<{ traceId: string; startedAt: number; turnIndex: number; endHead: string; branch: string | null }> {
+    return (this.db.prepare(`SELECT w.trace_id, w.started_at, t.turn_index, w.end_head, json_extract(tr.outcome_json, '$.branch') AS branch
+      FROM workspace_turns w JOIN turns t ON t.trace_id = w.trace_id AND t.started_at = w.started_at
+      JOIN traces tr ON tr.trace_id = w.trace_id
+      WHERE tr.project_path = ? AND w.end_head IS NOT NULL ORDER BY w.trace_id, t.turn_index`).all(projectPath) as Row[])
+      .map(r => ({ traceId: String(r.trace_id), startedAt: num(r.started_at), turnIndex: num(r.turn_index), endHead: String(r.end_head), branch: optStr(r.branch) ?? null }));
+  }
+
+  /**
+   * A gate's verdict on a pull request's head, one per project, gate, pull request and head: the latest stands. Not
+   * changed when the same verdict, counts and recorder come again (its first moment kept).
+   */
+  putVerdict(v: { projectPath: string; gate: string; pr: number; head: string; verdict: string; at: number; by: string; testCommand?: string; passed?: number; failed?: number; skipped?: number; report?: string }): { id: number; changed: boolean } {
+    const cur = this.db.prepare('SELECT * FROM verdicts WHERE project_path = ? AND gate = ? AND pr = ? AND head = ?').get(v.projectPath, v.gate, v.pr, v.head) as Row | undefined;
+    const nul = <T>(x: T | undefined) => (x === undefined ? null : x);
+    const same = !!cur && cur.verdict === v.verdict && cur.by_agent === v.by && cur.test_command === nul(v.testCommand)
+      && cur.passed === nul(v.passed) && cur.failed === nul(v.failed) && cur.skipped === nul(v.skipped) && cur.report === nul(v.report);
+    if (cur && same) return { id: num(cur.id), changed: false };
+    this.db.prepare(`INSERT INTO verdicts (project_path, gate, pr, head, verdict, at, by_agent, test_command, passed, failed, skipped, report)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      ON CONFLICT(project_path, gate, pr, head) DO UPDATE SET verdict = excluded.verdict, at = excluded.at, by_agent = excluded.by_agent,
+        test_command = excluded.test_command, passed = excluded.passed, failed = excluded.failed, skipped = excluded.skipped, report = excluded.report`)
+      .run(v.projectPath, v.gate, v.pr, v.head, v.verdict, v.at, v.by, nul(v.testCommand), nul(v.passed), nul(v.failed), nul(v.skipped), nul(v.report));
+    const row = this.db.prepare('SELECT id FROM verdicts WHERE project_path = ? AND gate = ? AND pr = ? AND head = ?').get(v.projectPath, v.gate, v.pr, v.head) as { id: number };
+    return { id: row.id, changed: true };
+  }
+
+  /** The turns a verdict covers, replaced; the sessions whose links moved (before or after). */
+  setVerdictLinks(verdictId: number, links: Array<{ traceId: string; startedAt: number }>): string[] {
+    const before = this.db.prepare('SELECT trace_id, turn_started_at FROM verdict_links WHERE verdict_id = ?').all(verdictId) as Row[];
+    const key = (t: string, s: number) => `${t}\0${s}`;
+    const old = new Set(before.map(r => key(String(r.trace_id), num(r.turn_started_at))));
+    const next = new Set(links.map(l => key(l.traceId, l.startedAt)));
+    const moved = new Set<string>();
+    for (const k of old) if (!next.has(k)) moved.add(k.split('\0')[0]);
+    for (const k of next) if (!old.has(k)) moved.add(k.split('\0')[0]);
+    if (!moved.size) return [];
+    this.db.prepare('DELETE FROM verdict_links WHERE verdict_id = ?').run(verdictId);
+    const add = this.db.prepare('INSERT OR IGNORE INTO verdict_links (verdict_id, trace_id, turn_started_at) VALUES (?, ?, ?)');
+    for (const l of links) add.run(verdictId, l.traceId, l.startedAt);
+    return [...moved];
+  }
+
+  /** The sessions a verdict covers now. */
+  verdictTraces(verdictId: number): string[] {
+    return (this.db.prepare('SELECT DISTINCT trace_id FROM verdict_links WHERE verdict_id = ?').all(verdictId) as Row[]).map(r => String(r.trace_id));
+  }
+
+  verdictLinksOf(traceId: string): Array<{ verdictId: number; startedAt: number }> {
+    return (this.db.prepare('SELECT verdict_id, turn_started_at FROM verdict_links WHERE trace_id = ? ORDER BY verdict_id, turn_started_at').all(traceId) as Row[])
+      .map(r => ({ verdictId: num(r.verdict_id), startedAt: num(r.turn_started_at) }));
+  }
+
+  /**
+   * The session's outcome.gates, rebuilt from the verdicts linked to its turns: written, and its change sequence
+   * moved, only when they changed.
+   */
+  refreshGates(traceId: string): boolean {
+    const trace = this.db.prepare('SELECT outcome_json FROM traces WHERE trace_id = ?').get(traceId) as { outcome_json: string | null } | undefined;
+    if (!trace) return false;
+    const verdicts = this.db.prepare(`SELECT DISTINCT v.* FROM verdicts v JOIN verdict_links l ON l.verdict_id = v.id
+      WHERE l.trace_id = ? ORDER BY v.gate, v.pr, v.at, v.id`).all(traceId) as Row[];
+    const turnsOf = this.db.prepare(`SELECT t.turn_index FROM verdict_links l JOIN turns t ON t.trace_id = l.trace_id AND t.started_at = l.turn_started_at
+      WHERE l.verdict_id = ? AND l.trace_id = ? ORDER BY t.turn_index`);
+    const all = verdicts.map(v => ({
+      kind: String(v.gate), verdict: String(v.verdict), at: num(v.at), pr: num(v.pr), head: String(v.head),
+      turns: ranges((turnsOf.all(v.id, traceId) as Row[]).map(r => num(r.turn_index))), by: String(v.by_agent),
+      ...(optStr(v.test_command) ? { testCommand: String(v.test_command) } : {}),
+      ...(typeof v.passed === 'number' ? { passed: v.passed } : {}), ...(typeof v.failed === 'number' ? { failed: v.failed } : {}),
+      ...(typeof v.skipped === 'number' ? { skipped: v.skipped } : {}), ...(optStr(v.report) ? { report: String(v.report) } : {}),
+    }));
+    const outcome = trace.outcome_json ? JSON.parse(trace.outcome_json) as TraceOutcome : {};
+    const { gates: _was, gatesOmitted: _omitted, ...rest } = outcome;
+    // The newest gates while the outcome stays within the budget (the back office takes 16 KiB), in their order.
+    const build = (kept: typeof all): TraceOutcome => {
+      const omitted = all.length - kept.length;
+      return { ...rest, ...(kept.length ? { gates: kept } : {}), ...(omitted ? { gatesOmitted: omitted } : {}) };
+    };
+    const newestFirst = [...all].sort((a, b) => b.at - a.at);
+    const keptOf = (n: number) => { const set = new Set(newestFirst.slice(0, n)); return all.filter(g => set.has(g)); };
+    let total = Buffer.byteLength(JSON.stringify(build([]))) + '"gates":[],'.length;
+    let count = 0;
+    for (const g of newestFirst) {
+      const size = Buffer.byteLength(JSON.stringify(g)) + 1;
+      if (total + size > GATES_BUDGET_BYTES) break;
+      total += size;
+      count++;
+    }
+    while (count > 0 && Buffer.byteLength(JSON.stringify(build(keptOf(count)))) > GATES_BUDGET_BYTES) count--;
+    const next = build(keptOf(count));
+    if (JSON.stringify(next) === JSON.stringify(outcome)) return false;
+    this.db.prepare('UPDATE traces SET outcome_json = ?, updated_seq = ? WHERE trace_id = ?').run(JSON.stringify(next), this.nextSeq(), traceId);
+    return true;
+  }
+
+  /** Runs `fn` in one transaction of the store. */
+  inTransaction<T>(fn: () => T): T {
+    return this.db.transaction(fn)();
+  }
+
   /** A file renamed whole at a boundary (the same blob under another path): its lines are followed through it. */
   addWorkspaceRename(traceId: string, index: number, from: string, to: string): void {
     this.db.prepare('INSERT OR REPLACE INTO workspace_renames (trace_id, idx, from_path, to_path) VALUES (?, ?, ?, ?)').run(traceId, index, from, to);
@@ -882,6 +1019,7 @@ export class TraceStore {
       this.db.prepare('DELETE FROM turns WHERE trace_id = ?').run(traceId);
       this.db.prepare('DELETE FROM uploads WHERE trace_id = ?').run(traceId);
       for (const table of ['workspace_points', 'workspace_turns', 'workspace_versions', 'workspace_renames', 'workspace_final']) this.db.prepare(`DELETE FROM ${table} WHERE trace_id = ?`).run(traceId);
+      this.db.prepare('DELETE FROM verdict_links WHERE trace_id = ?').run(traceId);
       deleted += this.db.prepare('DELETE FROM traces WHERE trace_id = ?').run(traceId).changes;
     }
     return deleted;

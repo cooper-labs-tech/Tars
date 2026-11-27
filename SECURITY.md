@@ -1201,6 +1201,10 @@ would be sent.
 - Projects and endpoints go as HMAC keys of a secret that never leaves the install, never their paths or addresses.
 - Neither the agent's name nor the endpoint's goes: both are free labels that may name a person or a host (L1).
 - A turn's author goes by kind (user, orchestrator, agent), never a name.
+- A gate's verdict (`POST /api/verdicts`, the tool `record_verdict`) is recorded by an agent with its own token, in
+  its own name and for its own project: the shared token, Tars's pass and a gateway's secret are refused, and so is a
+  body naming another agent. Any agent of a project may record one, and the record keeps who did. It goes up in the
+  outcome's `gates` without its report's path, which stays here.
 - A turn's workspace goes as numbers and hashes only: the commits at its start and end as git names them (as the
   session's outcome already sends its head), two tree hashes that name no file, its files and lines counted, and
   their survival. Never a path or a line of the files.

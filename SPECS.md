@@ -284,10 +284,19 @@ from the window, or from an agent's drop file (`~/.tars/endpoint-keys/<name>.key
   or with no branch, is not looked at again; one still open, or that git could not tell, is looked at again an hour
   on, doubling to a day, for 14 days after its end; a squash or rebase merge counts once the pull request's own end
   in the outcome (`outcome.pr`) says merged. A file renamed whole (the same blob under another path), by a turn or on
-  the default branch, keeps its lines. A file the snapshot cannot read is there and unknown, never deleted. Only reads touch the checkout
-  (safeGit, `--no-optional-locks`: no index refresh, no lock, no object written), each bounded; what failed or timed
-  out is null, never 0. The file versions kept to count survival stay in the store, local, counted against the cap
-  and deleted with the session.
+  the default branch, keeps its lines. A file the snapshot cannot read is there and unknown, never deleted. Only
+  reads touch the checkout (safeGit, `--no-optional-locks`: no index refresh, no lock, no object written), each
+  bounded; what failed or timed out is null, never 0. The file versions kept to count survival stay in the store,
+  local, counted against the cap and deleted with the session;
+- the gates' verdicts (`gate-verdicts.ts`): QA's, the Audit's or CI's merge or no_merge on a pull request's head,
+  recorded by the agent that gates through the MCP tool `record_verdict` (`POST /api/verdicts`, its own token, in its
+  own name, for its own project; the latest per gate, pull request and head stands), and CI's by Tars from
+  `gh pr checks` (all passed: merge; one failed: no_merge; running or none: nothing). Each is linked to the turns of
+  the project whose end head is the judged head, and to those on the pull request's branch whose end head is an
+  ancestor of it (`merge-base --is-ancestor`; the branch from the verdict, else `gh pr view`, bounded; without it, the
+  exact head alone), and carried in those sessions' outcome as `gates`, the change sequence moved on a change. The
+  turns a gate covers are inclusive ranges of turn indexes; the newest gates are kept while the outcome stays within
+  12 KiB (the back office takes 16 KiB), and the others are counted in `gatesOmitted`.
 
 Retention and a size cap come from Settings. The back-office reads it through `window.electronAPI.traces`. An external
 reader reads it through `GET /api/traces/*`, with its own token, as the reader's trace format tables.

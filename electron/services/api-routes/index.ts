@@ -1,4 +1,5 @@
 import { registerEndpointRoutes } from './endpoint-routes';
+import { registerVerdictRoutes } from './verdict-routes';
 import { RouteApp, RouteContext } from './types';
 import { registerHealthRoutes } from './health-routes';
 import { registerHooksRoutes } from './hooks-routes';
@@ -44,6 +45,8 @@ export function registerAllRoutes(app: RouteApp, ctx: RouteContext): void {
   // The owner's words, relayed under Tars's mark (services/owner-words.ts, SECURITY.md §8).
   registerOwnerWordsRoutes(app, ctx);
   registerEndpointRoutes(app, ctx);
+  // A gate's verdict, recorded by the agent that gates, linked to traced turns (services/gate-verdicts.ts).
+  registerVerdictRoutes(app);
 }
 
 export type { RouteApp, RouteContext, RouteRequest, SendJson, RouteHandler, RouteDefinition } from './types';
