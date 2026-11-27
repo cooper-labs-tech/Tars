@@ -40,6 +40,11 @@ import { assertThrowaway } from '../../setup/throwaway-dirs';
  *     not; `abandonedWhileHeld` counts any cancel.
  * 10. What leaves: a turn's interventions are missing from the export and the upload's preview, or carry free text
  *     (a correction's words go as the message they are, scrubbed, never in a field); the notice has no line for them.
+ * 11. (Added before its code, for the back office's enums, 27/11.) A value outside the closed lists leaves: an
+ *     `interrupted.by` other than esc, ctrl_c, cli, stop, remove, quit or sleep, a `restarted.by` other than restart or
+ *     replace, a `during` other than answer or tools (a store an older or edited build wrote), or a `next.by` other
+ *     than user, orchestrator, agent, relay, tars or unknown. Such an event is dropped, and such an author reads
+ *     `unknown`; `delaySec` stays the fraction it is.
  */
 
 assertThrowaway({ DATA_DIR, PRIVATE_DIR });
@@ -59,6 +64,7 @@ import { noteSessionStart } from '../../../electron/core/session-start';
 import { oneTaskQueue } from '../../../electron/core/one-task';
 import { ESC_WAIT_MS } from '../../../electron/core/interrupt-keys';
 import { sessionDocument } from '../../../electron/services/trace-export';
+import { INTERRUPTED_BY, INTERVENTION_DURING, RESTARTED_BY, TURN_AUTHORS } from '../../../electron/services/trace-store';
 import { rememberTerminalOwner, writeHumanInput, resetTerminalInput } from '../../../electron/core/pty-manager';
 
 const EP = 'ep-b3test';
@@ -351,5 +357,32 @@ describe('redelegated, and what leaves', () => {
     const turns = (preview.document.batches[0].body as { turns: Array<{ interventions?: unknown }> }).turns;
     expect(turns[0].interventions).toEqual(doc.turns[0].interventions);
     expect(JSON.stringify(turns)).not.toContain('PRIVATE-CORRECTION-WORDS');
+  });
+
+  it('11: only the closed lists leave: an event outside them is dropped, an author outside them reads unknown', () => {
+    // Soft, so that a build without them shows every assertion red, not the first alone.
+    const list = (l: readonly string[] | undefined) => (l ? [...l] : l);
+    expect.soft(list(INTERRUPTED_BY), 'interrupted.by').toEqual(['esc', 'ctrl_c', 'cli', 'stop', 'remove', 'quit', 'sleep']);
+    expect.soft(list(RESTARTED_BY), 'restarted.by').toEqual(['restart', 'replace']);
+    expect.soft(list(INTERVENTION_DURING), 'interrupted.during').toEqual(['answer', 'tools']);
+    expect.soft(list(TURN_AUTHORS), 'next.by').toEqual(['user', 'orchestrator', 'agent', 'relay', 'tars', 'unknown']);
+    agent('q');
+    const { traceId } = open('q');
+    vi.useFakeTimers({ toFake: ['Date'] });
+    const t0 = Date.now() - 60_000;
+    request(traceId, 'q', t0);
+    // As a store an older or edited build wrote: values no build of this one produces.
+    traceStore().addIntervention(traceId, { kind: 'interrupted', at: t0 + 5, by: 'typo', during: 'answer' } as never);
+    traceStore().addIntervention(traceId, { kind: 'interrupted', at: t0 + 6, by: 'esc', during: 'sideways' } as never);
+    traceStore().addIntervention(traceId, { kind: 'restarted', at: t0 + 7, by: 'reboot' } as never);
+    vi.setSystemTime(t0 + 10 + 1234);
+    traceStore().noteTypedInput({ agentId: 'q', at: t0 + 10 + 1234, author: 'chat', text: 'from an old author kind', closed: false });
+    request(traceId, 'q', t0 + 2000, { said: 'from an old author kind' });
+    const first = turnsOf(traceId)[0].interventions;
+    expect.soft(first?.interrupted, 'an interruption outside the lists').toBeUndefined();
+    expect.soft(first?.restarted, 'a restart outside the lists').toBeUndefined();
+    expect.soft(first?.next, 'an author outside the list; the delay as the fraction it is').toEqual({ by: 'unknown', delaySec: 1.234 });
+    const sent = (traceUploader().preview(traceId)!.document.batches[0].body as { turns: Array<{ interventions?: unknown }> }).turns;
+    expect.soft(sent[0].interventions, 'what the upload sends').toEqual({ next: { by: 'unknown', delaySec: 1.234 } });
   });
 });
