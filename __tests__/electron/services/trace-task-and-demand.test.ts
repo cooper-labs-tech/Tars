@@ -620,8 +620,10 @@ describe('15. a long session still uploads', () => {
 
     const bo = await sizeCheckingBackOffice();
     try {
-      settings = { ...settings, traces: { ...settings.traces!, uploadUrl: bo.base, uploadAllowPlainHttp: true } } as AppSettings;
-      recordConsent(new Date().toISOString());
+      // The consent stands when the settings and its file say the same moment (traces-runtime.ts consentStands).
+      const at = new Date().toISOString();
+      settings = { ...settings, traces: { ...settings.traces!, uploadUrl: bo.base, uploadAllowPlainHttp: true, uploadConsentAt: at } } as AppSettings;
+      recordConsent(at);
       const pass = await traceUploader().runOnce();
       expect(pass, JSON.stringify(pass)).toMatchObject({ failed: 0 });
       expect(bo.refused).toBe(0);
