@@ -26,6 +26,19 @@
  *   binary and node-pty's build (measured 01/10). A clone at the same lock is
  *   used as is; one at another lock is reconciled by `npm install`, which only
  *   writes what differs; `npm ci` runs only when there is nothing to clone.
+ *   Each sub-package with an install of its own (mcp-*, landing: a folder with
+ *   its package.json and lock) gets the same, from the same folder of another
+ *   worktree; one with nothing to clone is left uninstalled and said, its
+ *   build installing it (27/11: without them every fresh worktree's suite had
+ *   a false red). Linux clones with `--reflink=auto` (shared blocks on btrfs
+ *   or XFS, a full copy elsewhere), Windows copies. A clone is made beside
+ *   its place and renamed in, whole or not at all, and never from a source
+ *   whose install moved in the last 10 s (still being written). What the
+ *   clones would take where they are copied in full is counted against the
+ *   floor before anything is created (the Audit's gate of #662). A clone a
+ *   crash left half made (`node_modules.tars-clone-<pid>-<time>`) is ignored
+ *   by git, counted as a cache, and removed by prune, so by every new, once
+ *   its pid no longer runs.
  * - **remove** loses nothing: a dirty worktree is refused with its files
  *   named, or with --save committed on wip/<name> (its own branch untouched);
  *   a detached HEAD on no branch gets wip/<name> first; a worktree any other
@@ -209,7 +222,7 @@ async function occupants(ctx, at, { exemptCaller = false } = {}) {
  * them, a folder once.
  */
 const CACHES = [
-  /(^|\/)node_modules\/?$/, /^\.next\/?$/, /^out\/?$/, /^electron\/dist\/?$/, /^mcp-[^/]+\/dist\/?$/,
+  /(^|\/)node_modules\/?$/, /(^|\/)node_modules\.tars-clone-[^/]*\/?$/, /(^|\/)\.next\/?$/, /^out\/?$/, /^electron\/dist\/?$/, /^mcp-[^/]+\/dist\/?$/,
   /\.tsbuildinfo$/, /(^|\/)next-env\.d\.ts$/, /(^|\/)\.DS_Store$/, /(^|\/)\.vite(-temp)?\/?$/,
 ];
 
@@ -312,25 +325,10 @@ export async function prepareDeps(repo, target, ctx) {
   const lock = path.join(target, 'package-lock.json');
   if (!fs.existsSync(lock)) return 'none';
   const nm = path.join(target, 'node_modules');
-  const sources = (await listWorktrees(repo, ctx))
-    .map(e => path.join(e.path, 'node_modules'))
-    .filter(p => p !== nm && depsKind(path.dirname(p)) === 'folder');
-  const matching = sources.find(p => installedMatches(p, lock));
-  const recency = p => {
-    try { return fs.statSync(path.join(p, '.package-lock.json')).mtimeMs; } catch { return 0; }
-  };
-  const source = matching ?? sources.sort((a, b) => recency(b) - recency(a))[0];
+  const worktrees = await listWorktrees(repo, ctx);
 
-  let how;
-  if (source) {
-    ctx.log(`cloning ${source}`);
-    await cloneTree(source, nm, ctx);
-    how = `cloned from ${source}`;
-    if (!matching) {
-      await tool(ctx, 'npm', ['install', '--no-audit', '--no-fund'], target);
-      how += ', then npm install for the lock';
-    }
-  } else {
+  let how = await cloneDeps(worktrees, target, '', ctx);
+  if (!how) {
     await tool(ctx, 'npm', ['ci', '--no-audit', '--no-fund'], target);
     how = 'npm ci (nothing to clone)';
   }
@@ -341,7 +339,155 @@ export async function prepareDeps(repo, target, ctx) {
     && !fs.existsSync(path.join(nm, 'node-pty', 'build', 'Release', 'spawn-helper'))) {
     await tool(ctx, 'npx', ['--no-install', 'electron-rebuild', '-f', '-o', 'node-pty'], target);
   }
-  return how;
+  const subs = [];
+  for (const sub of subPackages(target)) {
+    subs.push(`${sub} ${(await cloneDeps(worktrees, target, sub, ctx)) ? 'cloned' : 'not installed: nothing to clone, its build installs it'}`);
+  }
+  return subs.length ? `${how}; sub-packages: ${subs.join(', ')}` : how;
+}
+
+/**
+ * The sub-packages of a checkout with an install of their own: a first-level folder holding its package.json and its
+ * package-lock.json (mcp-*, landing). Their tests and builds read their own node_modules: without one, every fresh
+ * worktree's full suite had one false red (mcp-shared-transport, 27/11). A folder with no lock (mcp-shared) is none.
+ */
+export function subPackages(at) {
+  return fs.readdirSync(at, { withFileTypes: true })
+    .filter(e => e.isDirectory() && !e.name.startsWith('.') && e.name !== 'node_modules')
+    .filter(e => fs.existsSync(path.join(at, e.name, 'package.json')) && fs.existsSync(path.join(at, e.name, 'package-lock.json')))
+    .map(e => e.name)
+    .sort();
+}
+
+/**
+ * `<target>/<sub>/node_modules` (the root's when sub is ''), cloned from the same folder of another worktree of the
+ * repository: one at the same lock if any, else the most recently installed, reconciled by `npm install` in that folder.
+ * Never from a symlinked one, and never a symlink. Answers how, or null when there is nothing to clone.
+ */
+async function cloneDeps(worktrees, target, sub, ctx) {
+  const at = path.join(target, sub);
+  const nm = path.join(at, 'node_modules');
+  const { source, matching } = pickSource(worktrees, path.join(at, 'package-lock.json'), sub, nm, ctx);
+  if (!source) return null;
+  ctx.log(`cloning ${source}`);
+  // Beside it, then renamed in (the Audit's L1 on #662): a reader sees a whole node_modules or none, never one a copy
+  // that failed midway left half made, which the next new would take for an install.
+  const beside = `${nm}${CLONE_MARK}${process.pid}-${Date.now()}`;
+  try {
+    await cloneTree(source, beside, ctx);
+    fs.renameSync(beside, nm);
+  } catch (err) {
+    fs.rmSync(beside, { recursive: true, force: true });
+    throw err;
+  }
+  if (matching) return `cloned from ${source}`;
+  await tool(ctx, 'npm', ['install', '--no-audit', '--no-fund'], at);
+  return `cloned from ${source}, then npm install for the lock`;
+}
+
+/** A clone in the making: `node_modules.tars-clone-<pid>-<time>`, beside the node_modules it becomes. */
+const CLONE_MARK = '.tars-clone-';
+const LEFTOVER = /^node_modules\.tars-clone-(\d+)-\d+$/;
+
+/**
+ * The clones a crash left half made in a checkout, at its root and in its sub-packages, whose clone is gone (its pid
+ * no longer runs): a Ctrl-C, a kill of the agent's tree, a power cut during the copy (the Audit's M1 on #662). One
+ * whose pid still runs is a clone in progress and is left. Each is removed by its own literal path, never a pattern;
+ * `dryRun` only names them.
+ */
+export function sweepLeftoverClones(checkout, dryRun = false) {
+  const alive = pid => {
+    try { process.kill(pid, 0); return true; } catch (err) { return err?.code === 'EPERM'; }
+  };
+  const swept = [];
+  let folders;
+  try { folders = ['', ...subPackages(checkout)]; } catch { return swept; }
+  for (const sub of folders) {
+    let names;
+    try { names = fs.readdirSync(path.join(checkout, sub)); } catch { continue; }
+    for (const name of names) {
+      const m = LEFTOVER.exec(name);
+      if (!m || alive(Number(m[1]))) continue;
+      const leftover = path.join(checkout, sub, name);
+      if (!dryRun) fs.rmSync(leftover, { recursive: true, force: true });
+      swept.push(leftover);
+    }
+  }
+  return swept;
+}
+
+/**
+ * How long a source's install must have been still before it is cloned: a concurrent `new` cloning into it, or an
+ * npm install in it, moves its folder and, at its end, its hidden lock (the Audit's L1 on #662).
+ */
+const SETTLED_MS = 10_000;
+
+/**
+ * The folder to clone `<sub>/node_modules` from, among the repository's worktrees: one at this lock if any, else the
+ * most recently installed; never a symlinked one, never `exclude` (the target's own), and never one whose hidden lock
+ * or folder moved in the last SETTLED_MS.
+ */
+function pickSource(worktrees, lock, sub, exclude, ctx) {
+  // Each read apart (the Audit's I-a on #662): a first install has its folder before its hidden lock, and one try for
+  // both took it for settled.
+  const mtime = f => { try { return fs.statSync(f).mtimeMs; } catch { return 0; } };
+  const moved = p => Math.max(mtime(p), mtime(path.join(p, '.package-lock.json')));
+  const sources = worktrees
+    .map(e => path.join(e.path, sub, 'node_modules'))
+    .filter(p => p !== exclude && depsKind(path.dirname(p)) === 'folder')
+    .filter(p => {
+      const settling = ctx.now() - moved(p) < SETTLED_MS;
+      if (settling) ctx.log(`not cloning ${p}: it moved in the last ${SETTLED_MS / 1000} s, still being written`);
+      return !settling;
+    });
+  const matching = sources.find(p => installedMatches(p, lock));
+  const recency = p => {
+    try { return fs.statSync(path.join(p, '.package-lock.json')).mtimeMs; } catch { return 0; }
+  };
+  return { source: matching ?? sources.sort((a, b) => recency(b) - recency(a))[0], matching };
+}
+
+/**
+ * What the clones of a new worktree would take of the disk (the Audit's I-2 on #662): the root's and each
+ * sub-package's source, as the main checkout's locks pick them, each costed by ctx.copyCost, nothing where blocks are
+ * shared. Read before `git worktree add`, so a refusal creates nothing.
+ */
+async function depsCost(repo, ctx) {
+  if (!fs.existsSync(path.join(repo.root, 'package-lock.json'))) return { bytes: 0, copied: 0 };
+  const worktrees = await listWorktrees(repo, ctx);
+  let bytes = 0;
+  let copied = 0;
+  for (const sub of ['', ...subPackages(repo.root)]) {
+    const { source } = pickSource(worktrees, path.join(repo.root, sub, 'package-lock.json'), sub, null, ctx);
+    if (!source) continue;
+    const cost = await ctx.copyCost(source, repo.worktreesDir);
+    bytes += cost;
+    if (cost > 0) copied += 1;
+  }
+  return { bytes, copied };
+}
+
+/** The bytes of the files under a folder, links not followed: what a full copy of it writes. */
+function folderBytes(dir) {
+  let total = 0;
+  for (const e of fs.readdirSync(dir, { withFileTypes: true, recursive: true })) {
+    if (!e.isFile()) continue;
+    try { total += fs.lstatSync(path.join(e.parentPath ?? e.path, e.name)).size; } catch { /* gone meanwhile */ }
+  }
+  return total;
+}
+
+/**
+ * What a clone of `source` takes of the disk `into` lies on. On macOS, onto the same volume, `cp -c` shares every
+ * block (APFS): nothing worth counting (250 MB for the root and seven sub-packages, measured 27/11). Elsewhere the
+ * folder's size: Linux's `--reflink=auto` shares on btrfs or XFS but copies in full on ext4, and which one it will do
+ * cannot be told beforehand, so the full copy is what is budgeted; Windows copies.
+ */
+function copyCost(source, into) {
+  let at = into;
+  while (!fs.existsSync(at) && path.dirname(at) !== at) at = path.dirname(at);
+  if (process.platform === 'darwin' && fs.statSync(source).dev === fs.statSync(at).dev) return 0;
+  return folderBytes(source);
 }
 
 const NAME = /^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$/;
@@ -431,6 +577,16 @@ async function addWorktree(repo, name, opts, ctx) {
     throw new WorktreeRefusal(
       `${count} worktrees already, the cap is ${ctx.max}: nothing created. Remove the ones you are done with (status, then remove).`,
     );
+  }
+  if (opts.deps !== false) {
+    const cost = await depsCost(repo, ctx);
+    if (free - cost.bytes < ctx.minFreeGb * GB) {
+      throw new WorktreeRefusal(
+        `the dependencies would take ${(cost.bytes / GB).toFixed(1)} GB more (${cost.copied} folders copied in full on this disk), `
+        + `which would leave ${((free - cost.bytes) / GB).toFixed(1)} GB free, under the ${ctx.minFreeGb} GB floor: nothing created. `
+        + 'Remove the worktrees you are done with (status, then remove), or tell the orchestrator.',
+      );
+    }
   }
   const target = path.join(repo.worktreesDir, name);
   if (fs.existsSync(target)) throw new WorktreeRefusal(`${target} already exists`);
@@ -536,12 +692,19 @@ export async function removeWorktree(repo, nameOrPath, { save = false, reason } 
 export async function prune(repo, { olderThanDays = OLDER_THAN_DAYS, dryRun = false, github = true, base } = {}, ctx) {
   const removed = [];
   const kept = [];
+  const swept = [];
   if (!dryRun) await git(ctx, repo.root, ['worktree', 'prune']);
   const baseRef = base ?? await defaultBase(ctx, repo);
   const registry = readRegistry(repo);
   const now = ctx.now();
 
   for (const entry of await listWorktrees(repo, ctx)) {
+    if (!entry.prunable) {
+      for (const leftover of sweepLeftoverClones(entry.path, dryRun)) {
+        swept.push(leftover);
+        ctx.log(`${dryRun ? 'would remove' : 'removed'} ${leftover}: a clone left half made, its clone gone`);
+      }
+    }
     if (entry.main || entry.prunable) continue;
     const keep = why => kept.push({ name: entry.name, path: entry.path, why });
 
@@ -564,7 +727,7 @@ export async function prune(repo, { olderThanDays = OLDER_THAN_DAYS, dryRun = fa
       keep(`${why}, but ${error.message}`);
     }
   }
-  return { removed, kept };
+  return { removed, kept, swept };
 }
 
 export async function status(repo, ctx) {
@@ -716,6 +879,7 @@ function realContext(repo) {
     now: () => Date.now(),
     prState: githubPrState(repo),
     runTool: (command, args, options) => run(command, args, options),
+    copyCost: async (source, into) => copyCost(source, into),
     minFreeGb: envNumber('TARS_WORKTREE_MIN_FREE_GB', MIN_FREE_GB),
     max: envNumber('TARS_WORKTREE_MAX', MAX_WORKTREES),
     log: message => console.log(message),
