@@ -396,16 +396,6 @@ const OUTPUT_CHUNK_CAP = 600;
 const OUTPUT_RETAIN = 400;
 
 /**
- * Appends a terminal chunk and keeps the buffer bounded.
- *
- * Five PTY handlers pushed into agent.output and none of them capped it, so a
- * chatty CLI grew that array for the life of the app, once per agent.
- *
- * What is trimmed goes on counting for a replay: the modes it left set, the
- * alternate screen and the mouse request first of all, come back as the first
- * chunk. See terminal-modes.ts.
- */
-/**
  * A line of Tars's own in an agent's terminal while no program there writes (a Hermes chat waiting for the gateway
  * its agents share, the Audit's L2): dim, on a line of its own, into the terminal's mirror, the agent's output and the
  * windows, as the terminal's own output goes.
@@ -418,6 +408,16 @@ export function sayInTerminal(agent: AgentStatus, ptyProcess: pty.IPty, text: st
   broadcastToAllWindows('agent:output', { type: 'output', agentId: agent.id, ptyId: agent.ptyId, data: chunk, timestamp: new Date().toISOString() });
 }
 
+/**
+ * Appends a terminal chunk and keeps the buffer bounded.
+ *
+ * Five PTY handlers pushed into agent.output and none of them capped it, so a
+ * chatty CLI grew that array for the life of the app, once per agent.
+ *
+ * What is trimmed goes on counting for a replay: the modes it left set, the
+ * alternate screen and the mouse request first of all, come back as the first
+ * chunk. See terminal-modes.ts.
+ */
 export function appendAgentOutput(agent: AgentStatus, chunk: string): void {
   agent.output.push(chunk);
   if (agent.output.length > OUTPUT_CHUNK_CAP) {

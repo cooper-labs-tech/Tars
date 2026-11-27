@@ -6,7 +6,7 @@ import { createHash, randomBytes } from 'crypto';
 import { execFileSync, spawn, type ChildProcessWithoutNullStreams } from 'child_process';
 import { launchSandboxed, recordValues, removeHome } from './fixture.mjs';
 import { writeFakeClis } from './fake-clis.mjs';
-import { installTree, treeChanges } from './install-tree.mjs';
+import { installTree, treeChanges, folderChanges } from './install-tree.mjs';
 import { startStandIn, MODEL_ID } from './stand-in-openai-endpoint.mjs';
 import { DEV_URL, apiPort } from './ports.mjs';
 
@@ -297,9 +297,15 @@ async function hermesAgents(real: string | undefined): Promise<void> {
       if (outsideHosts) expect.soft(outsideHosts, 'requests outside PyPI, or refused').toEqual([]);
       // Nothing of the account's own Hermes install written during the run (the account's own gateway may write in its
       // home meanwhile, never in these three folders but its own bytecode: a change is listed, to be read).
-      const installChanges = treeChanges(installBefore!, installTree(installDirs));
+      const installAfter = installTree(installDirs);
+      const installChanges = treeChanges(installBefore!, installAfter);
       const tilde = (p: string) => p.replace(os.homedir(), '~');
-      keep({ install: { dirs: installDirs.map(tilde), files: installBefore!.size, fenced: hermesBin !== real }, installChanges: installChanges.slice(0, 100).map(tilde) });
+      // A folder whose time moved says an entry made and removed meanwhile: kept to be read, never a failure by itself.
+      keep({
+        install: { dirs: installDirs.map(tilde), files: installBefore!.files.size, folders: installBefore!.folders.size, fenced: hermesBin !== real },
+        installChanges: installChanges.slice(0, 100).map(tilde),
+        installFolderChanges: folderChanges(installBefore!, installAfter).slice(0, 100).map(tilde),
+      });
       expect.soft(installChanges.map(tilde), 'files of the account\'s own Hermes install written during the run').toEqual([]);
       expect.soft(done[A].text, "A's answer").toContain(`PROBE-OK ${standin.marker}`);
       expect.soft(Object.keys(env[A]).sort(), "A's .env names").toEqual(['CLAUDE_MGR_API_TOKEN', 'OPENAI_API_KEY', 'OPENAI_BASE_URL']);
