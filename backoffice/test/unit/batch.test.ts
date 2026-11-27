@@ -42,6 +42,8 @@
 //     redelegated, one of them in another shape (a `during` other than answer or tools, a name
 //     where a kind belongs, a negative delay, `corrected` other than true, a `to` over 64), or a
 //     valid one is refused: every key alone, all together, and a fractional delay.
+// 19 again (#677's Audit, 27/11): a request's `rttMs` measured negative (clock rates, whole ms) is valid, from
+//     -10^10 to 10^10; the session's `rttMedianMs` stays 0 or more.
 // 19. The timings (27/11, from the endpoint's Server-Timing): a session's `rttMedianMs` and
 //     `clockOffsetMs`, a request's `rttMs`, `clockOffsetMs`, `queueMs` and `upstreamMs`, each in
 //     milliseconds and fractional. A negative round trip, queue or upstream, a value that is not a
@@ -51,6 +53,11 @@
 //     than 40 or 64 lowercase hex; `filesChanged`, `linesAdded`, `linesRemoved`, `changedLines`,
 //     `survivedLines` take a negative or fractional count; `reverted` a non-boolean; `survivalBasis`
 //     a value other than session_end, merged or deleted; or valid ones are refused.
+// 18 again (#680's closed lists, 27/11): `interrupted.by` other than esc, ctrl_c, cli, stop, remove, quit or sleep,
+//     `restarted.by` other than restart or replace, or `next.by` other than user, orchestrator, agent, relay, tars
+//     or unknown, is taken.
+// 22. A session's `lostDemandOmitted` (the lost tasks the client left out of the list) takes a negative or
+//     fractional count, or a valid one is refused.
 // 21. A session's `consent` (27/11, the training consent it was recorded under) takes anything but
 //     {training: boolean}, or a valid one is refused.
 // 10 again (the client's own contract, 27/11): every environment value may be null, the
@@ -273,7 +280,8 @@ test('18. a turn\'s interventions', () => {
     [], 'interrupted', { paused: { at: 1 } }, { interrupted: { ...all.interrupted, during: 'thinking' } }, { interrupted: { ...all.interrupted, by: 'Some One' } },
     { interrupted: { at: 5, by: 'esc' } }, { restarted: { at: -1, by: 'stop' } }, { next: { by: 'user', delaySec: -1 } }, { next: { by: 'user' } },
     { corrected: false }, { corrected: 'yes' }, { redelegated: { to: 'x'.repeat(65), at: 7 } }, { redelegated: { to: 'tr_later' } },
-    { next: { ...all.next, note: 'x' } },
+    { next: { ...all.next, note: 'x' } }, { interrupted: { ...all.interrupted, by: 'teleport' } }, { restarted: { at: 6, by: 'stop' } },
+    { next: { by: 'chat', delaySec: 1 } },
   ];
   for (const b of bad) assert.ok(errs({ ...ok, turns: [{ ...turn, interventions: b }] }).length, JSON.stringify(b).slice(0, 80));
 });
@@ -288,7 +296,8 @@ test('19. the timings', () => {
   for (const [k, v] of [['rttMedianMs', -1], ['rttMedianMs', '41'], ['clockOffsetMs', 1e11], ['clockOffsetMs', -1e11], ['clockOffsetMs', true]] as const) {
     assert.ok(errs({ ...ok, sessions: [{ ...session, [k]: v }] }).length, `session ${k} ${v}`);
   }
-  for (const [k, v] of [['rttMs', -0.5], ['queueMs', -1], ['upstreamMs', 1e11], ['upstreamMs', '812'], ['clockOffsetMs', {}], ['rttMs', []]] as const) {
+  assert.ok(!('errors' in validateBatch({ ...ok, requests: [{ ...request, rttMs: -0.5 }] })), 'a request\'s round trip measured negative is kept as measured');
+  for (const [k, v] of [['rttMs', -1e11], ['queueMs', -1], ['upstreamMs', 1e11], ['upstreamMs', '812'], ['clockOffsetMs', {}], ['rttMs', []]] as const) {
     assert.ok(errs({ ...ok, requests: [{ ...request, [k]: v }] }).length, `request ${k} ${v}`);
   }
 });
@@ -307,6 +316,22 @@ test('20. a turn\'s workspace', () => {
     ['linesRemoved', '7'], ['changedLines', -3], ['survivedLines', true], ['reverted', 'no'], ['survivalBasis', 'rebased'],
   ];
   for (const [k, v] of bad) assert.ok(errs({ ...ok, turns: [{ ...turn, [k]: v }] }).length, `${k} ${String(v)}`);
+});
+
+test('18 again. the interventions\' closed lists', () => {
+  const lists: Array<[string, (by: string) => unknown, string[]]> = [
+    ['interrupted', (by) => ({ interrupted: { at: 1, by, during: 'answer' } }), ['esc', 'ctrl_c', 'cli', 'stop', 'remove', 'quit', 'sleep']],
+    ['restarted', (by) => ({ restarted: { at: 1, by } }), ['restart', 'replace']],
+    ['next', (by) => ({ next: { by, delaySec: 0 } }), ['user', 'orchestrator', 'agent', 'relay', 'tars', 'unknown']],
+  ];
+  for (const [name, make, values] of lists) {
+    for (const by of values) assert.ok(!('errors' in validateBatch({ ...ok, turns: [{ ...turn, interventions: make(by) }] })), `${name} ${by}`);
+  }
+});
+
+test('22. lostDemandOmitted: a count', () => {
+  for (const n of [0, 1, 250]) assert.ok(!('errors' in validateBatch(withSession({ lostDemandOmitted: n }))), String(n));
+  for (const n of [-1, 1.5, '3', true]) assert.ok(errs(withSession({ lostDemandOmitted: n })).length, String(n));
 });
 
 test('21. a session\'s consent', () => {

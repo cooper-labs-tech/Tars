@@ -58,6 +58,8 @@
 // L5. A malformed one is taken (a key not in the shape, a name where a word belongs, a negative time); the batch
 //     must be refused whole.
 // L6. A deleted session leaves them in any table; migration 004's down loses anything else, its up reads them null.
+// L7. A session uploaded again after its end with a changed outcome (its pull request merged) is not updated, or a
+//     reader holding its cursor does not get it again. And `lostDemandOmitted` is refused or not read back.
 //
 // How a session was masked, and what was done to each turn (27/11, the third trace wave): the ways it can fail,
 // written before the code.
@@ -78,7 +80,7 @@
 // T3. Sent without them (an older Tars, or an endpoint without Server-Timing), they read back other than `null`.
 // T4. A session uploaded again after its end (a merge, a deleted branch) does not update a turn's survival; or one
 //     sent again without a value loses the one it had.
-// T5. A malformed one is taken (a negative round trip, a head not 40 or 64 hex, a basis outside its three).
+// T5. A malformed one is taken (a negative queue time, a head not 40 or 64 hex, a basis outside its three).
 // T6. Migration 006's down loses anything else, its up reads them null.
 //
 // The training consent (27/11, A5): the ways it can fail, written before the code.
@@ -484,7 +486,7 @@ describe('trace back-office, end to end', () => {
       [true, null, true, null, [[true, null], [true, null], [true, null]], [[true, null]]]);
     // L1, L2. Sent with them, and the turn's task.
     const sent = await call('PUT', '/v1/batches/batch-start', { token: installA.token, body: {
-      schema: 1, sessions: [session({ finalStatus: 'done', endedAt: T0 + 6000, start: START, lostDemand: LOST })],
+      schema: 1, sessions: [session({ finalStatus: 'done', endedAt: T0 + 6000, start: START, lostDemand: LOST, lostDemandOmitted: 4 })],
       turns: [{ ...turn, taskRef: START.taskRef }], requests: [{ ...requests[1], cancel: CANCEL }],
     } });
     assert.equal(sent.status, 200, String(sent.buf));
@@ -492,6 +494,17 @@ describe('trace back-office, end to end', () => {
     assert.deepEqual(after.session.start, START);
     assert.deepEqual(after.session.lostDemand, LOST);
     assert.deepEqual(note('start.turnTaskRef', after.turns.map((t: any) => t.taskRef)), [START.taskRef]);
+    assert.equal(note('start.lostDemandOmitted', after.session.lostDemandOmitted), 4);
+    // L7. The session's pull request is merged after it ended: the client uploads it again, and a reader that kept its
+    // cursor gets the session once more, with the outcome as it is now.
+    const cursorNow = (await call('GET', '/v1/read/sessions?limit=500', { token: reader.token })).json.nextCursor;
+    const prMerged = { pr: { number: 12, state: 'merged', at: T0 + 20_000 }, tasks: [{ id: 'task-e2e-1', status: 'done', alsoIn: ['tr_before'] }] };
+    const late = await call('PUT', '/v1/batches/batch-start-merged', { token: installA.token, body: {
+      schema: 1, sessions: [session({ finalStatus: 'done', endedAt: T0 + 6000, outcome: prMerged })],
+    } });
+    assert.equal(late.status, 200, String(late.buf));
+    const since = (await call('GET', `/v1/read/sessions?cursor=${cursorNow}`, { token: reader.token })).json.sessions;
+    assert.deepEqual(note('start.outcomeAfterMerge', since.map((s: any) => [s.sessionId, s.outcome?.pr?.state, s.outcome?.tasks?.[0]?.alsoIn])), [['sess-1', 'merged', ['tr_before']]]);
     assert.deepEqual(note('start.cancels', after.requests.map((r: any) => [r.requestId, r.cancel])), [['req-1', null], ['req-2', CANCEL], ['req-t', null]]);
     const listed = (await call('GET', '/v1/read/sessions?agent=agent-1', { token: reader.token })).json.sessions;
     assert.deepEqual(note('start.list', listed.map((s: any) => [s.sessionId, s.start?.trigger, s.lostDemand?.length])), [['sess-1', 'task', 1]]);
@@ -592,6 +605,10 @@ describe('trace back-office, end to end', () => {
     assert.deepEqual(listed.map((s: any) => [s.rttMedianMs, s.clockOffsetMs]), [[41.5, -12.25]]);
     const joined = (await call('GET', '/v1/read/requests?upstreamRequestId=up-111', { token: reader.token })).json.requests;
     assert.deepEqual(joined.map((r: any) => [r.rttMs, r.upstreamMs]), [[40.75, 812.3]]);
+    // A round trip measured negative (the endpoint's span read longer than ours) is kept as measured.
+    const negative = await call('PUT', '/v1/batches/batch-timing-negative', { token: installA.token, body: { schema: 1, requests: [{ ...requests[1], rttMs: -2.5 }] } });
+    assert.equal(negative.status, 200, String(negative.buf));
+    assert.equal(note('timing.negativeRtt', (await detail()).requests[1].rttMs), -2.5);
     // T4. After the branch is merged, the session goes up again: survival updated. Then one without them keeps them.
     const merged = { survivedLines: 100, survivalBasis: 'merged' };
     const again = await call('PUT', '/v1/batches/batch-timing-merged', { token: installA.token, body: {
@@ -607,7 +624,7 @@ describe('trace back-office, end to end', () => {
       [{ ...WORKSPACE, ...merged }, 41.5, 0]);
     // T5. Malformed: refused whole.
     const bad: Array<[string, Record<string, unknown>, Record<string, unknown>, Record<string, unknown>]> = [
-      ['negativeRtt', {}, {}, { rttMs: -1 }],
+      ['negativeQueue', {}, {}, { queueMs: -1 }],
       ['offsetAsText', { clockOffsetMs: '-12' }, {}, {}],
       ['shortHead', {}, { startHead: 'abc123' }, {}],
       ['basisOutside', {}, { survivalBasis: 'rebased' }, {}],
@@ -721,7 +738,7 @@ describe('trace back-office, end to end', () => {
         (await client.query('SELECT request_id, rtt_ms, upstream_ms FROM requests WHERE rtt_ms IS NOT NULL OR upstream_ms IS NOT NULL ORDER BY 1')).rows.map((r) => [r.request_id, r.rtt_ms, r.upstream_ms]),
         (await client.query('SELECT turn_id, survival_basis, survived_lines FROM turns WHERE survival_basis IS NOT NULL ORDER BY 1')).rows.map((r) => [r.turn_id, r.survival_basis, r.survived_lines]),
       ];
-      assert.deepEqual(note('migrate.withData.waveFourBefore', await waveFour()), [[['sess-1', 41.5, -12.25]], [['req-1', 40.75, 812.3]], [['turn-1', 'merged', 100]]]);
+      assert.deepEqual(note('migrate.withData.waveFourBefore', await waveFour()), [[['sess-1', 41.5, -12.25]], [['req-1', 40.75, 812.3], ['req-2', -2.5, null]], [['turn-1', 'merged', 100]]]);
       const waveFive = async () => [
         (await client.query("SELECT session_id, consent->>'training' AS t FROM sessions WHERE consent IS NOT NULL ORDER BY 1")).rows.map((r) => [r.session_id, r.t]),
         (await client.query('SELECT consent_training AS t FROM installs WHERE consent_training IS NOT NULL')).rows.map((r) => r.t),
