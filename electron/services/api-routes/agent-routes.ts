@@ -447,8 +447,8 @@ async function spawnAgentSessionInSlot(
   // conversation to resume is still the one it continues (resume-session.ts).
   agent.forkedFromSessionId = forkSession ? resumeSessionId : undefined;
 
-  // BUG 6: pre-accept Claude Code's workspace trust dialog for this cwd.
-  ensureProjectTrusted(rawWorkingDir);
+  // BUG 6: pre-accept Claude Code's workspace trust dialog for this cwd and the folders the agent is handed.
+  ensureProjectTrusted(rawWorkingDir, agent);
 
   // A session that never starts a turn must stop claiming to work. See
   // TASK_START_GRACE_MS below for what this catches and why it is checked

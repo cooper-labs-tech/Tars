@@ -11,8 +11,7 @@ import type {
   HookConfig,
 } from './cli-provider';
 import { servedPathMatches, orchestratorToolFlags, promptOperand, effortFlag, resumeFlags, shellQuote } from './cli-provider';
-import { DATA_DIR } from '../constants';
-import { handedSecondaryFolder } from '../utils/handed-folder';
+import { claudeAddedFolders } from '../utils/handed-folder';
 import { updateSharedJsonSync } from '../utils/shared-file';
 import { addMcpServerToJson, removeMcpServerFromJson } from '../utils/mcp-json';
 import { isTarsBundleEntry } from '../services/mcp-roles';
@@ -91,25 +90,12 @@ export class ClaudeProvider implements CLIProvider {
       command += ' --chrome';
     }
 
-    // Secondary project, never ~/.tars-private (utils/handed-folder.ts)
-    const secondary = handedSecondaryFolder(params.secondaryProjectPath);
-    if (secondary) {
-      command += ` --add-dir ${shellQuote(secondary)}`;
+    // The secondary project, never ~/.tars-private; the template's folders, with whatever the agent's permission mode
+    // allows there, reading and writing alike; and Tars's CLAUDE.md via ~/.tars (utils/handed-folder.ts). The same
+    // list is trusted before the CLI starts (core/claude-trust.ts).
+    for (const folder of claudeAddedFolders(params)) {
+      command += ` --add-dir ${shellQuote(folder)}`;
     }
-
-    // The template's folders: added to what the CLI may reach, with whatever
-    // the agent's permission mode allows there, reading and writing alike.
-    if (params.obsidianVaultPaths) {
-      for (const vp of params.obsidianVaultPaths) {
-        // Read back from agents.json or templates.json, which any agent can write: never ~/.tars-private.
-        if (handedSecondaryFolder(vp) && fs.existsSync(vp)) {
-          command += ` --add-dir ${shellQuote(vp)}`;
-        }
-      }
-    }
-
-    // Tars's CLAUDE.md via ~/.tars
-    command += ` --add-dir ${shellQuote(DATA_DIR)}`;
 
     // Prompt with skills directive, and no operand at all without a task.
     let finalPrompt = params.prompt?.trim() ? params.prompt : '';
