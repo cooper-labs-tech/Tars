@@ -278,7 +278,8 @@ from the window, or from an agent's drop file (`~/.tars/endpoint-keys/<name>.key
   `owner`, `task`, `channel`, `restart`, `start` (no task), `wake` (an agent asleep at its spawn) or `redelegation`
   (a task's ref another session had), and `unknown` when no start said why, never a guess. It also holds how, by its
   kind only (never who), the task's ref and asker, when it entered the agent's queue and was handed over, the
-  session's first request at the endpoint, and the commit and branch the agent's folder was on;
+  session's first request at the endpoint, and the commit and branch the agent's folder was on (a branch over the
+  back-office's 255 bytes, UTF-8, is left out of the upload whole, never cut);
 - the outcome holds the branch, the head, held requests and errors, the requests given up while held, and the tasks
   of the task ledger the session ran, its own first: each with its id, source, parent, asker, status, queue times,
   first request and end, and `alsoIn` when the same task ran in another session. The list keeps the last 50, fewer
