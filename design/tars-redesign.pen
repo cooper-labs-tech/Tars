@@ -863537,7 +863537,7 @@
                               "fill": "$text-muted",
                               "textGrowth": "fixed-width",
                               "width": "fill_container",
-                              "content": "About 18 arrivals in 90 minutes. An arrival that finds max concurrent, a busy agent or the heavy-run slot full is blocked: recorded and dropped, never queued.",
+                              "content": "About 18 arrivals in 90 minutes. An arrival that finds max concurrent, a busy agent or the heavy-run slot full, or no free load agent with a harness the task accepts, is blocked: recorded and dropped, never queued.",
                               "lineHeight": 1.4,
                               "fontFamily": "$font-ui",
                               "fontSize": 11,
@@ -868516,7 +868516,7 @@
                               "fill": "$text-muted",
                               "textGrowth": "fixed-width",
                               "width": "fill_container",
-                              "content": "About 18 arrivals in 90 minutes. An arrival that finds max concurrent, a busy agent or the heavy-run slot full is blocked: recorded and dropped, never queued.",
+                              "content": "About 18 arrivals in 90 minutes. An arrival that finds max concurrent, a busy agent or the heavy-run slot full, or no free load agent with a harness the task accepts, is blocked: recorded and dropped, never queued.",
                               "lineHeight": 1.4,
                               "fontFamily": "$font-ui",
                               "fontSize": 11,
@@ -872515,7 +872515,7 @@
                             {
                               "type": "frame",
                               "id": "DmAdZ",
-                              "name": "refused tasks/07.yaml",
+                              "name": "refused tasks.jsonl:7",
                               "width": "fill_container",
                               "gap": 10,
                               "alignItems": "center",
@@ -872534,8 +872534,8 @@
                                   "name": "t",
                                   "fill": "$text-primary",
                                   "textGrowth": "fixed-width",
-                                  "width": 140,
-                                  "content": "tasks/07.yaml:4",
+                                  "width": 190,
+                                  "content": "tasks.jsonl:7 · task t-07",
                                   "lineHeight": 1.4,
                                   "fontFamily": "$font-mono",
                                   "fontSize": 11,
@@ -872559,7 +872559,7 @@
                             {
                               "type": "frame",
                               "id": "Cb3Dz",
-                              "name": "refused tasks/11.yaml",
+                              "name": "refused tasks.jsonl:11",
                               "width": "fill_container",
                               "gap": 10,
                               "alignItems": "center",
@@ -872578,8 +872578,8 @@
                                   "name": "t",
                                   "fill": "$text-primary",
                                   "textGrowth": "fixed-width",
-                                  "width": 140,
-                                  "content": "tasks/11.yaml:9",
+                                  "width": 190,
+                                  "content": "tasks.jsonl:11 · task t-11",
                                   "lineHeight": 1.4,
                                   "fontFamily": "$font-mono",
                                   "fontSize": 11,
@@ -872603,7 +872603,7 @@
                             {
                               "type": "frame",
                               "id": "wEGtD",
-                              "name": "refused tasks/12.yaml",
+                              "name": "refused tasks.jsonl:12",
                               "width": "fill_container",
                               "gap": 10,
                               "alignItems": "center",
@@ -872622,8 +872622,8 @@
                                   "name": "t",
                                   "fill": "$text-primary",
                                   "textGrowth": "fixed-width",
-                                  "width": 140,
-                                  "content": "tasks/12.yaml:2",
+                                  "width": 190,
+                                  "content": "tasks.jsonl:12",
                                   "lineHeight": 1.4,
                                   "fontFamily": "$font-mono",
                                   "fontSize": 11,
@@ -873695,7 +873695,7 @@
                               "fill": "$text-muted",
                               "textGrowth": "fixed-width",
                               "width": "fill_container",
-                              "content": "About 18 arrivals in 90 minutes. An arrival that finds max concurrent, a busy agent or the heavy-run slot full is blocked: recorded and dropped, never queued.",
+                              "content": "About 18 arrivals in 90 minutes. An arrival that finds max concurrent, a busy agent or the heavy-run slot full, or no free load agent with a harness the task accepts, is blocked: recorded and dropped, never queued.",
                               "lineHeight": 1.4,
                               "fontFamily": "$font-ui",
                               "fontSize": 11,
@@ -877694,7 +877694,7 @@
                             {
                               "type": "frame",
                               "id": "XAg4z",
-                              "name": "refused tasks/07.yaml",
+                              "name": "refused tasks.jsonl:7",
                               "width": "fill_container",
                               "gap": 10,
                               "alignItems": "center",
@@ -877713,8 +877713,8 @@
                                   "name": "t",
                                   "fill": "$text-primary",
                                   "textGrowth": "fixed-width",
-                                  "width": 140,
-                                  "content": "tasks/07.yaml:4",
+                                  "width": 190,
+                                  "content": "tasks.jsonl:7 · task t-07",
                                   "lineHeight": 1.4,
                                   "fontFamily": "$font-mono",
                                   "fontSize": 11,
@@ -877738,7 +877738,7 @@
                             {
                               "type": "frame",
                               "id": "FahAc",
-                              "name": "refused tasks/11.yaml",
+                              "name": "refused tasks.jsonl:11",
                               "width": "fill_container",
                               "gap": 10,
                               "alignItems": "center",
@@ -877757,8 +877757,8 @@
                                   "name": "t",
                                   "fill": "$text-primary",
                                   "textGrowth": "fixed-width",
-                                  "width": 140,
-                                  "content": "tasks/11.yaml:9",
+                                  "width": 190,
+                                  "content": "tasks.jsonl:11 · task t-11",
                                   "lineHeight": 1.4,
                                   "fontFamily": "$font-mono",
                                   "fontSize": 11,
@@ -877782,7 +877782,7 @@
                             {
                               "type": "frame",
                               "id": "H06ZTp",
-                              "name": "refused tasks/12.yaml",
+                              "name": "refused tasks.jsonl:12",
                               "width": "fill_container",
                               "gap": 10,
                               "alignItems": "center",
@@ -877801,8 +877801,8 @@
                                   "name": "t",
                                   "fill": "$text-primary",
                                   "textGrowth": "fixed-width",
-                                  "width": 140,
-                                  "content": "tasks/12.yaml:2",
+                                  "width": 190,
+                                  "content": "tasks.jsonl:12",
                                   "lineHeight": 1.4,
                                   "fontFamily": "$font-mono",
                                   "fontSize": 11,
@@ -878874,7 +878874,7 @@
                               "fill": "$text-muted",
                               "textGrowth": "fixed-width",
                               "width": "fill_container",
-                              "content": "About 18 arrivals in 90 minutes. An arrival that finds max concurrent, a busy agent or the heavy-run slot full is blocked: recorded and dropped, never queued.",
+                              "content": "About 18 arrivals in 90 minutes. An arrival that finds max concurrent, a busy agent or the heavy-run slot full, or no free load agent with a harness the task accepts, is blocked: recorded and dropped, never queued.",
                               "lineHeight": 1.4,
                               "fontFamily": "$font-ui",
                               "fontSize": 11,
@@ -883969,7 +883969,7 @@
                               "fill": "$text-muted",
                               "textGrowth": "fixed-width",
                               "width": "fill_container",
-                              "content": "About 18 arrivals in 90 minutes. An arrival that finds max concurrent, a busy agent or the heavy-run slot full is blocked: recorded and dropped, never queued.",
+                              "content": "About 18 arrivals in 90 minutes. An arrival that finds max concurrent, a busy agent or the heavy-run slot full, or no free load agent with a harness the task accepts, is blocked: recorded and dropped, never queued.",
                               "lineHeight": 1.4,
                               "fontFamily": "$font-ui",
                               "fontSize": 11,
@@ -889064,7 +889064,7 @@
                               "fill": "$text-muted",
                               "textGrowth": "fixed-width",
                               "width": "fill_container",
-                              "content": "About 18 arrivals in 90 minutes. An arrival that finds max concurrent, a busy agent or the heavy-run slot full is blocked: recorded and dropped, never queued.",
+                              "content": "About 18 arrivals in 90 minutes. An arrival that finds max concurrent, a busy agent or the heavy-run slot full, or no free load agent with a harness the task accepts, is blocked: recorded and dropped, never queued.",
                               "lineHeight": 1.4,
                               "fontFamily": "$font-ui",
                               "fontSize": 11,
@@ -900470,7 +900470,7 @@
                           "id": "c8Xxj7",
                           "name": "t",
                           "fill": "$text-secondary",
-                          "content": "15:03   #11 atlas-api · lint-rules        no_harness: it accepts qwen-code, and Load 2 was at work",
+                          "content": "14:55   #11 atlas-api · lint-rules        no_harness: it accepts qwen-code, and Load 2 was at work",
                           "lineHeight": 1.4,
                           "fontFamily": "$font-mono",
                           "fontSize": 11,
@@ -900918,7 +900918,7 @@
                           "fill": "$text-muted",
                           "textGrowth": "fixed-width",
                           "width": "fill_container",
-                          "content": "About 18 arrivals in 90 minutes. An arrival that finds max concurrent, a busy agent or the heavy-run slot full is blocked: recorded and dropped, never queued.",
+                          "content": "About 18 arrivals in 90 minutes. An arrival that finds max concurrent, a busy agent or the heavy-run slot full, or no free load agent with a harness the task accepts, is blocked: recorded and dropped, never queued.",
                           "lineHeight": 1.4,
                           "fontFamily": "$font-ui",
                           "fontSize": 11,
@@ -905448,7 +905448,7 @@
                           "id": "ow8jn",
                           "name": "t",
                           "fill": "$text-secondary",
-                          "content": "15:03   #11 atlas-api · lint-rules        no_harness: it accepts qwen-code, and Load 2 was at work",
+                          "content": "14:55   #11 atlas-api · lint-rules        no_harness: it accepts qwen-code, and Load 2 was at work",
                           "lineHeight": 1.4,
                           "fontFamily": "$font-mono",
                           "fontSize": 11,
@@ -905896,7 +905896,7 @@
                           "fill": "$text-muted",
                           "textGrowth": "fixed-width",
                           "width": "fill_container",
-                          "content": "About 18 arrivals in 90 minutes. An arrival that finds max concurrent, a busy agent or the heavy-run slot full is blocked: recorded and dropped, never queued.",
+                          "content": "About 18 arrivals in 90 minutes. An arrival that finds max concurrent, a busy agent or the heavy-run slot full, or no free load agent with a harness the task accepts, is blocked: recorded and dropped, never queued.",
                           "lineHeight": 1.4,
                           "fontFamily": "$font-ui",
                           "fontSize": 11,
@@ -909620,7 +909620,7 @@
                         },
                         {
                           "type": "frame",
-                          "id": "ErBtz",
+                          "id": "Evt6q",
                           "name": "by reason",
                           "width": "fill_container",
                           "gap": 6,
@@ -909628,7 +909628,7 @@
                           "children": [
                             {
                               "type": "frame",
-                              "id": "P4KE5d",
+                              "id": "c6FClV",
                               "name": "chip max concurrent full 1",
                               "fill": "$surface-raised",
                               "gap": 5,
@@ -909640,7 +909640,7 @@
                               "children": [
                                 {
                                   "type": "rectangle",
-                                  "id": "qrGkL",
+                                  "id": "uTqWe",
                                   "name": "square",
                                   "fill": "$status-waiting",
                                   "width": 6,
@@ -909648,7 +909648,7 @@
                                 },
                                 {
                                   "type": "text",
-                                  "id": "sdFHt",
+                                  "id": "h6Ogms",
                                   "name": "t",
                                   "fill": "$status-waiting",
                                   "content": "max concurrent full 1",
@@ -909661,8 +909661,33 @@
                             },
                             {
                               "type": "frame",
-                              "id": "y0Bxx",
-                              "name": "chip busy-agent cap full 1",
+                              "id": "T8eTOr",
+                              "name": "chip busy-agent cap full 0",
+                              "fill": "$surface-raised",
+                              "gap": 5,
+                              "padding": [
+                                2,
+                                6
+                              ],
+                              "alignItems": "center",
+                              "children": [
+                                {
+                                  "type": "text",
+                                  "id": "JCiM9",
+                                  "name": "t",
+                                  "fill": "$text-secondary",
+                                  "content": "busy-agent cap full 0",
+                                  "lineHeight": 1.4,
+                                  "fontFamily": "$font-mono",
+                                  "fontSize": 10.5,
+                                  "fontWeight": "normal"
+                                }
+                              ]
+                            },
+                            {
+                              "type": "frame",
+                              "id": "RmE9d",
+                              "name": "chip heavy-run slot taken 1",
                               "fill": "$surface-raised",
                               "gap": 5,
                               "padding": [
@@ -909673,7 +909698,7 @@
                               "children": [
                                 {
                                   "type": "rectangle",
-                                  "id": "IyHXz",
+                                  "id": "GGC9C",
                                   "name": "square",
                                   "fill": "$status-waiting",
                                   "width": 6,
@@ -909681,10 +909706,10 @@
                                 },
                                 {
                                   "type": "text",
-                                  "id": "GCEtY",
+                                  "id": "igEvs",
                                   "name": "t",
                                   "fill": "$status-waiting",
-                                  "content": "busy-agent cap full 1",
+                                  "content": "heavy-run slot taken 1",
                                   "lineHeight": 1.4,
                                   "fontFamily": "$font-mono",
                                   "fontSize": 10.5,
@@ -909694,32 +909719,7 @@
                             },
                             {
                               "type": "frame",
-                              "id": "w2Sn5",
-                              "name": "chip heavy-run slot taken 0",
-                              "fill": "$surface-raised",
-                              "gap": 5,
-                              "padding": [
-                                2,
-                                6
-                              ],
-                              "alignItems": "center",
-                              "children": [
-                                {
-                                  "type": "text",
-                                  "id": "Z6its",
-                                  "name": "t",
-                                  "fill": "$text-secondary",
-                                  "content": "heavy-run slot taken 0",
-                                  "lineHeight": 1.4,
-                                  "fontFamily": "$font-mono",
-                                  "fontSize": 10.5,
-                                  "fontWeight": "normal"
-                                }
-                              ]
-                            },
-                            {
-                              "type": "frame",
-                              "id": "n1b9Z",
+                              "id": "PEyNv",
                               "name": "chip no_harness 1",
                               "fill": "$surface-raised",
                               "gap": 5,
@@ -909731,7 +909731,7 @@
                               "children": [
                                 {
                                   "type": "rectangle",
-                                  "id": "Tz1QG",
+                                  "id": "GDuBe",
                                   "name": "square",
                                   "fill": "$status-waiting",
                                   "width": 6,
@@ -909739,7 +909739,7 @@
                                 },
                                 {
                                   "type": "text",
-                                  "id": "b2IdW",
+                                  "id": "v8NLHH",
                                   "name": "t",
                                   "fill": "$status-waiting",
                                   "content": "no_harness 1",
@@ -910376,7 +910376,7 @@
                           "fill": "$text-muted",
                           "textGrowth": "fixed-width",
                           "width": "fill_container",
-                          "content": "About 18 arrivals in 90 minutes. An arrival that finds max concurrent, a busy agent or the heavy-run slot full is blocked: recorded and dropped, never queued.",
+                          "content": "About 18 arrivals in 90 minutes. An arrival that finds max concurrent, a busy agent or the heavy-run slot full, or no free load agent with a harness the task accepts, is blocked: recorded and dropped, never queued.",
                           "lineHeight": 1.4,
                           "fontFamily": "$font-ui",
                           "fontSize": 11,
@@ -914100,7 +914100,7 @@
                         },
                         {
                           "type": "frame",
-                          "id": "M5T10A",
+                          "id": "Kx2tt",
                           "name": "by reason",
                           "width": "fill_container",
                           "gap": 6,
@@ -914108,7 +914108,7 @@
                           "children": [
                             {
                               "type": "frame",
-                              "id": "ziHag",
+                              "id": "ViVBp",
                               "name": "chip max concurrent full 1",
                               "fill": "$surface-raised",
                               "gap": 5,
@@ -914120,7 +914120,7 @@
                               "children": [
                                 {
                                   "type": "rectangle",
-                                  "id": "PK7xx",
+                                  "id": "olgDH",
                                   "name": "square",
                                   "fill": "$status-waiting",
                                   "width": 6,
@@ -914128,7 +914128,7 @@
                                 },
                                 {
                                   "type": "text",
-                                  "id": "j4IV33",
+                                  "id": "ojWy0",
                                   "name": "t",
                                   "fill": "$status-waiting",
                                   "content": "max concurrent full 1",
@@ -914141,8 +914141,33 @@
                             },
                             {
                               "type": "frame",
-                              "id": "lGl00",
-                              "name": "chip busy-agent cap full 1",
+                              "id": "u2L0x5",
+                              "name": "chip busy-agent cap full 0",
+                              "fill": "$surface-raised",
+                              "gap": 5,
+                              "padding": [
+                                2,
+                                6
+                              ],
+                              "alignItems": "center",
+                              "children": [
+                                {
+                                  "type": "text",
+                                  "id": "A6Vf4",
+                                  "name": "t",
+                                  "fill": "$text-secondary",
+                                  "content": "busy-agent cap full 0",
+                                  "lineHeight": 1.4,
+                                  "fontFamily": "$font-mono",
+                                  "fontSize": 10.5,
+                                  "fontWeight": "normal"
+                                }
+                              ]
+                            },
+                            {
+                              "type": "frame",
+                              "id": "lmeNW",
+                              "name": "chip heavy-run slot taken 1",
                               "fill": "$surface-raised",
                               "gap": 5,
                               "padding": [
@@ -914153,7 +914178,7 @@
                               "children": [
                                 {
                                   "type": "rectangle",
-                                  "id": "tfdih",
+                                  "id": "JUUUe",
                                   "name": "square",
                                   "fill": "$status-waiting",
                                   "width": 6,
@@ -914161,10 +914186,10 @@
                                 },
                                 {
                                   "type": "text",
-                                  "id": "t9enn",
+                                  "id": "BP728",
                                   "name": "t",
                                   "fill": "$status-waiting",
-                                  "content": "busy-agent cap full 1",
+                                  "content": "heavy-run slot taken 1",
                                   "lineHeight": 1.4,
                                   "fontFamily": "$font-mono",
                                   "fontSize": 10.5,
@@ -914174,32 +914199,7 @@
                             },
                             {
                               "type": "frame",
-                              "id": "Ji4II",
-                              "name": "chip heavy-run slot taken 0",
-                              "fill": "$surface-raised",
-                              "gap": 5,
-                              "padding": [
-                                2,
-                                6
-                              ],
-                              "alignItems": "center",
-                              "children": [
-                                {
-                                  "type": "text",
-                                  "id": "COW4k",
-                                  "name": "t",
-                                  "fill": "$text-secondary",
-                                  "content": "heavy-run slot taken 0",
-                                  "lineHeight": 1.4,
-                                  "fontFamily": "$font-mono",
-                                  "fontSize": 10.5,
-                                  "fontWeight": "normal"
-                                }
-                              ]
-                            },
-                            {
-                              "type": "frame",
-                              "id": "TIgi9",
+                              "id": "MeTQn",
                               "name": "chip no_harness 1",
                               "fill": "$surface-raised",
                               "gap": 5,
@@ -914211,7 +914211,7 @@
                               "children": [
                                 {
                                   "type": "rectangle",
-                                  "id": "W1R2h",
+                                  "id": "hV472",
                                   "name": "square",
                                   "fill": "$status-waiting",
                                   "width": 6,
@@ -914219,7 +914219,7 @@
                                 },
                                 {
                                   "type": "text",
-                                  "id": "PPW8c",
+                                  "id": "dsCDJ",
                                   "name": "t",
                                   "fill": "$status-waiting",
                                   "content": "no_harness 1",
@@ -914856,7 +914856,7 @@
                           "fill": "$text-muted",
                           "textGrowth": "fixed-width",
                           "width": "fill_container",
-                          "content": "About 18 arrivals in 90 minutes. An arrival that finds max concurrent, a busy agent or the heavy-run slot full is blocked: recorded and dropped, never queued.",
+                          "content": "About 18 arrivals in 90 minutes. An arrival that finds max concurrent, a busy agent or the heavy-run slot full, or no free load agent with a harness the task accepts, is blocked: recorded and dropped, never queued.",
                           "lineHeight": 1.4,
                           "fontFamily": "$font-ui",
                           "fontSize": 11,
