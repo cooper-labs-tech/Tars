@@ -65,6 +65,66 @@ export interface WireRecord {
   attempts: number;
   heldMs: number;
   error?: string;
+  /** Cut before the endpoint answered: a request the harness gave up while the proxy held it (status 499). */
+  cancel?: RequestCancel;
+}
+
+/** Who cut a request, why and when, and what reached the harness before (nothing, for one given up while held). */
+export interface RequestCancel { by: 'harness'; cause: 'abandoned_while_held'; at: number; deliveredBytes: number }
+
+/**
+ * What started a session, read at its spawn (core/session-start.ts), and what it started from. Every field but the
+ * trigger is absent when it is not known, never guessed: `queuedAt` and `handedAt` come from the agent's queue for a
+ * task that came with a ref, `taskId` once the ledger names that task, `commit` and `branch` from git in the agent's
+ * folder, and `firstRequestAt` is the session's first request at the endpoint.
+ */
+export interface TraceStart {
+  /** owner | task | channel | restart | start | wake | redelegation | unknown */
+  trigger: string;
+  /** How, by its kind: window, key, api, slack, discord, hermes, chat, tars. Never a name. */
+  via?: string;
+  taskRef?: string;
+  taskId?: string;
+  requesterAgentId?: string;
+  queuedAt?: number;
+  handedAt?: number;
+  firstRequestAt?: number;
+  commit?: string;
+  branch?: string;
+  /** The session that had this task's ref before. */
+  redelegatedFrom?: string;
+}
+
+/** A task that left the agent's queue never to start, while this session ran: demand the endpoint never saw. */
+export interface LostDemand {
+  kind: 'queue_drop';
+  ref: string;
+  queuedAt: number;
+  at: number;
+  /** cancelled | taken_back | dropped_with_stop | queue_cleared | agent_removed | not_handed_again */
+  reason: string;
+}
+
+/**
+ * One task the session ran, from the task ledger, with its queue times: queued (when it reached Tars for this agent,
+ * equal to handedAt when it did not wait in the line), handed over, started (its first turn), its first request at
+ * the endpoint after it was handed, and its end. `alsoIn`: the other sessions the same task ran in.
+ */
+export interface TraceTask {
+  id: string;
+  ref?: string;
+  source?: string;
+  parentTaskId?: string;
+  requesterAgentId?: string;
+  status: string;
+  /** Kept from the type's first draft; not written. */
+  from?: string;
+  queuedAt?: number;
+  handedAt?: number;
+  startedAt?: number;
+  firstRequestAt?: number;
+  endedAt?: number;
+  alsoIn?: string[];
 }
 
 export interface TypedInput {
@@ -96,18 +156,23 @@ export interface TraceTotals { count: number; bytes: number; tokensIn: number; t
 
 /**
  * What Tars knows of how a session ended, kept with it at its end. Every field is optional: what is not known is
- * absent, never guessed. Filled today: branch and head (git, in the agent's folder), heldRequests and
- * requestErrors (the proxy). task, tests and gates are filled where Tars knows them (its task ledger, a gate's
- * verdict), later.
+ * absent, never guessed. Filled: branch and head (git, in the agent's folder), heldRequests, requestErrors and
+ * abandonedWhileHeld (the proxy), task and tasks (the task ledger: the session's own task, and every task it ran),
+ * and pr, after the end, once the pull request of its branch is merged or closed (github-watch.ts). tests and gates
+ * are filled where Tars knows them (a gate's verdict), later.
  */
 export interface TraceOutcome {
-  task?: { id: string; status: string; from?: string; endedAt?: number };
+  task?: TraceTask;
+  tasks?: TraceTask[];
   branch?: string;
   head?: string;
   tests?: { command?: string; passed?: number; failed?: number; at?: number };
   gates?: Array<{ kind: string; verdict: string; at?: number }>;
   heldRequests?: number;
   requestErrors?: number;
+  /** Requests the harness gave up while the proxy held them (each a row with its `cancel`). */
+  abandonedWhileHeld?: number;
+  pr?: { number: number; state: 'merged' | 'closed'; at: number };
 }
 
 export interface TraceSessionSummary {
@@ -122,7 +187,7 @@ export interface TraceRequestView {
   requestId: string; upstreamRequestId?: string; seq: number; surface: string; side: boolean;
   startedAt: number; ttftMs?: number; totalMs?: number; status: number; finishReason?: string; error?: string;
   tokensIn?: number; tokensCached?: number; tokensOut?: number; reqBytes: number; respBytes: number;
-  newMessages: number; attempts: number; heldMs: number; bodiesDropped: boolean;
+  newMessages: number; attempts: number; heldMs: number; bodiesDropped: boolean; cancel?: RequestCancel;
 }
 
 export interface TraceTurnView {
@@ -183,6 +248,14 @@ CREATE TABLE IF NOT EXISTS typed_inputs (
 );
 CREATE INDEX IF NOT EXISTS typed_inputs_agent ON typed_inputs(agent_id, at);
 `;
+
+/**
+ * Columns added to a store after its first schema, each added where it is missing (a store an earlier build made):
+ * a session's start and the demand it never received (trace feature A3), and a request's cancel.
+ */
+const ADDED_COLUMNS: ReadonlyArray<readonly [table: string, column: string]> = [
+  ['traces', 'start_json'], ['traces', 'demand_json'], ['requests', 'cancel_json'],
+];
 
 /** Per request, what the cap counts on top of its blobs: the rows themselves. */
 const ROW_BYTES = 512;
@@ -296,6 +369,10 @@ export class TraceStore {
     this.db.pragma('journal_mode = WAL');
     this.db.pragma('foreign_keys = OFF');
     this.db.exec(SCHEMA);
+    for (const [table, column] of ADDED_COLUMNS) {
+      const has = (this.db.prepare(`PRAGMA table_info(${table})`).all() as Array<{ name: string }>).some(c => c.name === column);
+      if (!has) this.db.exec(`ALTER TABLE ${table} ADD COLUMN ${column} TEXT`);
+    }
   }
 
   close(): void {
@@ -331,6 +408,65 @@ export class TraceStore {
     const status = last?.final_status === 'done' ? 'done' : last?.final_status === 'failed' ? 'failed' : last ? 'abandoned' : 'abandoned';
     this.db.prepare(`UPDATE traces SET ended_at = ?, final_status = ?, outcome_json = COALESCE(?, outcome_json), updated_seq = ? WHERE trace_id = ?`)
       .run(endedAt, status, outcome === undefined ? null : JSON.stringify(outcome), this.nextSeq(), traceId);
+  }
+
+  /**
+   * One JSON column of a session, changed by `change`, and its change sequence moved when it changed, so that the
+   * reader's cursor and the upload take it up again. False when nothing changed: the same state written again moves
+   * nothing.
+   */
+  private changeJson<T>(traceId: string, column: 'start_json' | 'demand_json' | 'outcome_json', change: (current: T | undefined) => T): boolean {
+    const row = this.db.prepare(`SELECT ${column} AS v FROM traces WHERE trace_id = ?`).get(traceId) as { v?: string | null } | undefined;
+    if (!row) return false;
+    const before = row.v ?? null;
+    const next = JSON.stringify(change(before ? JSON.parse(before) as T : undefined));
+    if (next === before) return false;
+    this.db.prepare(`UPDATE traces SET ${column} = ?, updated_seq = ? WHERE trace_id = ?`).run(next, this.nextSeq(), traceId);
+    return true;
+  }
+
+  /** What started the session, merged into what it holds: its trigger at the spawn, its commit once git answers, its task once named. */
+  setStart(traceId: string, patch: Partial<TraceStart>): boolean {
+    const defined = Object.fromEntries(Object.entries(patch).filter(([, v]) => v !== undefined));
+    return this.changeJson<TraceStart>(traceId, 'start_json', current => ({ ...(current ?? { trigger: 'unknown' }), ...defined }));
+  }
+
+  /** A task that left the agent's queue never to start, while this session ran. */
+  addLostDemand(traceId: string, demand: LostDemand): boolean {
+    return this.changeJson<LostDemand[]>(traceId, 'demand_json', current => [...(current ?? []), demand]);
+  }
+
+  /** Fields of the outcome, merged into what it holds (a pull request's end, a link to another session). */
+  mergeOutcome(traceId: string, patch: Partial<TraceOutcome>): boolean {
+    return this.changeJson<TraceOutcome>(traceId, 'outcome_json', current => ({ ...(current ?? {}), ...patch }));
+  }
+
+  /** The session's first request at the endpoint at or after `from`. */
+  firstRequestAt(traceId: string, from: number = Number.MIN_SAFE_INTEGER): number | undefined {
+    const r = this.db.prepare('SELECT MIN(started_at) AS m FROM requests WHERE trace_id = ? AND started_at >= ?').get(traceId, from) as { m: number | null };
+    return r.m ?? undefined;
+  }
+
+  /** The other sessions that had this task's ref: started on it, or ran it. Oldest first. */
+  sessionsWithRef(ref: string, except: string): string[] {
+    return (this.db.prepare(`SELECT trace_id FROM traces t WHERE trace_id != ? AND (json_extract(start_json, '$.taskRef') = ?
+      OR EXISTS (SELECT 1 FROM json_each(t.outcome_json, '$.tasks') WHERE json_extract(value, '$.ref') = ?)) ORDER BY started_at`)
+      .all(except, ref, ref) as Array<{ trace_id: string }>).map(r => r.trace_id);
+  }
+
+  /** The other sessions whose outcome lists this task. Oldest first. */
+  sessionsWithTask(taskId: string, except: string): string[] {
+    return (this.db.prepare(`SELECT trace_id FROM traces t WHERE trace_id != ?
+      AND EXISTS (SELECT 1 FROM json_each(t.outcome_json, '$.tasks') WHERE json_extract(value, '$.id') = ?) ORDER BY started_at`)
+      .all(except, taskId) as Array<{ trace_id: string }>).map(r => r.trace_id);
+  }
+
+  /** The ended sessions on a branch whose pull request's end is not known yet. */
+  awaitingPullRequest(): Array<{ traceId: string; projectPath: string; branch: string; startedAt: number }> {
+    return (this.db.prepare(`SELECT trace_id, project_path, started_at, json_extract(outcome_json, '$.branch') AS branch FROM traces
+      WHERE ended_at IS NOT NULL AND outcome_json IS NOT NULL AND json_type(outcome_json, '$.branch') = 'text'
+      AND json_extract(outcome_json, '$.branch') != 'HEAD' AND json_type(outcome_json, '$.pr') IS NULL`).all() as Row[])
+      .map(r => ({ traceId: String(r.trace_id), projectPath: String(r.project_path), branch: String(r.branch), startedAt: num(r.started_at) }));
   }
 
   /** The sessions with something not yet uploaded (new, or grown since), oldest change first. */
@@ -386,10 +522,14 @@ export class TraceStore {
     return { sent: sent.n, pending: pending.n, lastAt: sent.at ?? undefined };
   }
 
-  /** How many of a session's requests were held while the endpoint paused, and how many ended in an error. */
-  requestCounts(traceId: string): { held: number; errors: number } {
+  /**
+   * How many of a session's requests were held while the endpoint paused, how many ended in an error, and how many
+   * the harness gave up while held, which are no error of the endpoint's.
+   */
+  requestCounts(traceId: string): { held: number; errors: number; abandoned: number } {
     const r = this.db.prepare(`SELECT COALESCE(SUM(CASE WHEN attempts > 1 THEN 1 ELSE 0 END), 0) AS held,
-      COALESCE(SUM(CASE WHEN error IS NOT NULL OR status >= 400 THEN 1 ELSE 0 END), 0) AS errors FROM requests WHERE trace_id = ?`).get(traceId) as { held: number; errors: number };
+      COALESCE(SUM(CASE WHEN cancel_json IS NULL AND (error IS NOT NULL OR status >= 400) THEN 1 ELSE 0 END), 0) AS errors,
+      COALESCE(SUM(CASE WHEN cancel_json IS NOT NULL THEN 1 ELSE 0 END), 0) AS abandoned FROM requests WHERE trace_id = ?`).get(traceId) as { held: number; errors: number; abandoned: number };
     return r;
   }
 
@@ -511,17 +651,19 @@ export class TraceStore {
         : rec.firstByteAt !== undefined ? rec.firstByteAt - rec.startedAt : null;
     this.db.prepare(`INSERT INTO requests (request_id, upstream_request_id, trace_id, turn_id, seq, side, surface, model_requested,
       model_served, params_json, system_hash, tools_hash, started_at, ttft_ms, total_ms, tokens_in, tokens_cached, tokens_out, status, error,
-      finish_reason, streamed, req_bytes, resp_bytes, new_messages, attempts, held_ms, bodies_dropped)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`).run(
+      finish_reason, streamed, req_bytes, resp_bytes, new_messages, attempts, held_ms, bodies_dropped, cancel_json)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`).run(
       requestId, rec.upstreamRequestId ?? null, rec.traceId, turnId ?? null, seqRow.n, side ? 1 : 0, rec.surface, req?.model ?? null,
       resp.modelServed ?? null, req ? JSON.stringify(req.params) : null, systemHash ?? null, toolsHash ?? null, rec.startedAt,
       ttft, total, resp.usage.input, resp.usage.cached, resp.usage.output,
-      rec.status, rec.error ?? resp.error ?? null, resp.finishReason ?? null, req?.stream ? 1 : 0, rec.requestBody.length, rec.responseBody.length,
-      newMessages, rec.attempts, rec.heldMs, dropped ? 1 : 0);
+      // A request the harness gave up is no error of the endpoint's: its cancel says what happened.
+      rec.status, rec.cancel ? null : rec.error ?? resp.error ?? null, resp.finishReason ?? null, req?.stream ? 1 : 0, rec.requestBody.length, rec.responseBody.length,
+      newMessages, rec.attempts, rec.heldMs, dropped ? 1 : 0, rec.cancel ? JSON.stringify(rec.cancel) : null);
 
     if (turnId) {
       const failed = !!(rec.error || resp.error);
-      const status = failed ? 'failed' : resp.toolCalls > 0 ? 'open' : 'done';
+      // Given up by the harness while held: the turn ends there, neither done nor failed at the endpoint.
+      const status = rec.cancel ? 'abandoned' : failed ? 'failed' : resp.toolCalls > 0 ? 'open' : 'done';
       if (!side) {
         const toolMs = !opens && lastEnd !== undefined ? Math.max(0, rec.startedAt - lastEnd) : 0;
         this.db.prepare(`UPDATE turns SET ended_at = ?, request_count = request_count + 1, tool_call_count = tool_call_count + ?,
@@ -583,9 +725,13 @@ export class TraceStore {
     return { sessions: rows.map(summaryOf), nextCursor: encodeCursor(last) };
   }
 
-  session(traceId: string): { session: TraceSessionSummary; outcome?: TraceOutcome; turns: TraceTurnView[] } | null {
+  session(traceId: string): { session: TraceSessionSummary; outcome?: TraceOutcome; start?: TraceStart; lostDemand?: LostDemand[]; turns: TraceTurnView[] } | null {
     const trace = this.db.prepare('SELECT * FROM traces WHERE trace_id = ?').get(traceId) as Row | undefined;
     if (!trace) return null;
+    const firstRequestAt = this.firstRequestAt(traceId);
+    const start = trace.start_json
+      ? { ...JSON.parse(String(trace.start_json)) as TraceStart, ...(firstRequestAt !== undefined ? { firstRequestAt } : {}) }
+      : undefined;
     const turns = this.db.prepare('SELECT * FROM turns WHERE trace_id = ? ORDER BY turn_index').all(traceId) as Row[];
     const requests = this.db.prepare('SELECT * FROM requests WHERE trace_id = ? ORDER BY started_at, side, seq').all(traceId) as Row[];
     const view = (r: Row): TraceRequestView => ({
@@ -594,10 +740,13 @@ export class TraceStore {
       finishReason: optStr(r.finish_reason), error: optStr(r.error), tokensIn: optNum(r.tokens_in), tokensCached: optNum(r.tokens_cached),
       tokensOut: optNum(r.tokens_out), reqBytes: num(r.req_bytes), respBytes: num(r.resp_bytes), newMessages: num(r.new_messages),
       attempts: num(r.attempts), heldMs: num(r.held_ms), bodiesDropped: r.bodies_dropped === 1,
+      ...(r.cancel_json ? { cancel: JSON.parse(String(r.cancel_json)) as RequestCancel } : {}),
     });
     return {
       session: summaryOf(trace),
       outcome: trace.outcome_json ? JSON.parse(String(trace.outcome_json)) : undefined,
+      ...(start ? { start } : {}),
+      ...(trace.demand_json ? { lostDemand: JSON.parse(String(trace.demand_json)) as LostDemand[] } : {}),
       turns: turns.map(t => ({
         turnId: String(t.turn_id), index: num(t.turn_index), startedAt: num(t.started_at), endedAt: optNum(t.ended_at),
         gapBeforeMs: optNum(t.gap_before_ms), author: String(t.author), authorDetail: optStr(t.author_detail), finalStatus: optStr(t.final_status),

@@ -67,7 +67,7 @@ export async function stopTask(agentId: string, ref: string): Promise<{ success:
     return { success: true, stopped: 'turn' };
   }
   if (oneTaskQueue.queued(agentId).some((t) => t.ref === ref)) {
-    oneTaskQueue.cancel(ref, 'taken back in the window');
+    oneTaskQueue.cancel(ref, 'taken back in the window', 'taken_back');
     announceTask(agentId);
     return { success: true, stopped: 'queued' };
   }

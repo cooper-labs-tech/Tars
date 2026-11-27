@@ -307,6 +307,13 @@ export function registerTracesHandlers(deps: TracesHandlerDeps): void {
       'their timing, token counts, the harness and its version, the model and the endpoint\'s name',
       'who wrote each turn (you, an orchestrator, an agent, a channel) and how the session ended (branch, commit)',
       'an install id, to delete everything this install sent',
+      'what started each session: you, a task, a channel, a restart, a wake from sleep or a task handed on again, by its kind and never by who',
+      'the tasks each session ran: their ids, where they came from (you, an agent, a channel, Tars), the task they were part of, the agent that asked, and how they ended',
+      'when each task reached Tars, was handed to the agent, and sent its first request to the model',
+      'the commit and branch each session started from',
+      'whether the pull request of a session\'s branch was merged or closed, and when',
+      'the tasks taken out of an agent\'s queue before they started, with when and why, by its kind',
+      'the requests a harness gave up while Tars held them for a paused endpoint',
     ],
     stays: ['your keys and Tars\'s tokens (masked before upload)', 'sessions of projects and agents not opted in', 'the endpoints\' keys and addresses', 'anything outside traced sessions'],
     scrubbing: {

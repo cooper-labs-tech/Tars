@@ -33,6 +33,8 @@ export function sessionDocument(store: TraceStore, traceId: string, seen: Set<st
       endpoint_name: x.endpointName ?? null, model: x.model, started_at: x.startedAt, ended_at: x.endedAt ?? null,
       turn_count: x.turnCount, request_count: x.requestCount, tokens_in: x.tokensIn, tokens_cached: x.tokensCached,
       tokens_out: x.tokensOut, final_status: x.finalStatus, mixed: x.mixed, unknown_turns: x.unknownTurns, outcome: s.outcome ?? null,
+      // What started it and its queue times, and the tasks that left its agent's queue never to start (A3).
+      start: s.start ?? null, lost_demand: s.lostDemand ?? [],
     },
     turns: [], requests: [], request_messages: [], messages: [],
   };
@@ -64,6 +66,7 @@ export function sessionDocument(store: TraceStore, traceId: string, seen: Set<st
         tokens_in: r.tokensIn ?? 0, tokens_cached: r.tokensCached ?? 0, tokens_out: r.tokensOut ?? 0, status: r.status,
         error: r.error ?? null, finish_reason: r.finishReason ?? null, attempts: r.attempts, held_ms: r.heldMs,
         req_bytes: r.reqBytes, resp_bytes: r.respBytes, bodies_dropped: r.bodiesDropped, system_hash: systemHash, tools_hash: toolsHash,
+        cancel: r.cancel ?? null,
       });
       if (!m) continue;
       const inputHashes = m.input.map(v => v.hash);

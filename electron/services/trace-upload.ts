@@ -388,6 +388,10 @@ export class TraceUploader {
       finalStatus: String(t.final_status), turnCount: Number(t.turn_count), requestCount: Number(t.request_count),
       tokensIn: Number(t.tokens_in), tokensCached: Number(t.tokens_cached), tokensOut: Number(t.tokens_out),
       mixed: t.mixed === true, unknownTurns: Number(t.unknown_turns ?? 0), outcome: t.outcome ? scrub(t.outcome) : undefined,
+      // What started it (its trigger by kind, never who), its task's queue times and the commit it started from; and
+      // the tasks that left its agent's queue never to start, by their kind. Each has its line in the notice.
+      start: t.start ? scrub(t.start) : undefined,
+      lostDemand: Array.isArray(t.lost_demand) && t.lost_demand.length ? scrub(t.lost_demand) : undefined,
     };
     const turns = doc.turns.map(x => ({
       turnId: String(x.turn_id), sessionId: traceId, index: Number(x.turn_index), startedAt: Number(x.started_at), endedAt: opt(x.ended_at as number),
@@ -420,6 +424,8 @@ export class TraceUploader {
         totalMs: opt(r.total_ms as number), tokensIn: Number(r.tokens_in), tokensCached: Number(r.tokens_cached), tokensOut: Number(r.tokens_out),
         status: Number(r.status), error: r.error ? String(scrub(String(r.error))).slice(0, 2000) : undefined,
         finishReason: opt(r.finish_reason as string), reqBytes: Number(r.req_bytes), respBytes: Number(r.resp_bytes), messages,
+        // A request the harness gave up while held: who cut it, why, when, and nothing delivered.
+        ...(r.cancel ? { cancel: r.cancel } : {}),
       };
     });
     const messages = [...remote.values()].filter(m => m.role !== 'tools').map(m => ({
