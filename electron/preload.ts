@@ -1094,15 +1094,15 @@ contextBridge.exposeInMainWorld('electronAPI', {
   },
 
   // The load window (trace feature C3, services/load-window.ts): its state (the proposal, the window running, the last
-  // one), the owner's approval, Not now and the Stop switch, and the owner's load grants. Approve, grant, Not now and
+  // one), the owner's approval, Not now and the Stop switch, and the Projects view with its grants. Approve, grant, Not now and
   // stop are taken from this window alone: no API route, tool or message reaches them.
   load: {
     state: () => ipcRenderer.invoke('load:state'),
     approve: (input: { pool: string; sha256: string; proposalId: string; window: Record<string, unknown> }) => ipcRenderer.invoke('load:approve', input),
     notNow: (input: { pool: string; sha256: string }) => ipcRenderer.invoke('load:notNow', input),
     stop: (runId: string) => ipcRenderer.invoke('load:stop', runId),
-    grants: () => ipcRenderer.invoke('load:grants'),
-    grant: (input: { path: string; allowedByName: boolean; endpointId: string; model: string; harnesses: string[] } | { path: string; remove: true }) => ipcRenderer.invoke('load:grant', input),
+    projects: () => ipcRenderer.invoke('load:projects'),
+    grant: (input: { path: string; enabled: boolean; allowedByName: boolean; endpointId: string | null; model: string | null; harnesses: string[] } | { path: string; remove: true }) => ipcRenderer.invoke('load:grant', input),
     onChanged: (callback: (state: unknown) => void) => {
       const listener = (_event: Electron.IpcRendererEvent, state: unknown) => callback(state);
       ipcRenderer.on('load:changed', listener);

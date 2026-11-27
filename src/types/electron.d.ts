@@ -2925,9 +2925,13 @@ export interface ElectronAPI {
     notNow: (input: { pool: string; sha256: string }) => Promise<{ ok: boolean; error?: string }>;
     /** The Stop switch. */
     stop: (runId: string) => Promise<{ ok: true } | { ok: false; error: string }>;
-    grants: () => Promise<LoadGrant[]>;
-    /** Allows a project for load windows, or removes it. */
-    grant: (input: LoadGrant | { path: string; remove: true }) => Promise<{ ok: true; grants: LoadGrant[] } | { ok: false; error: string }>;
+    /** The Projects view: every project with its state, and the endpoints a grant may name. */
+    projects: () => Promise<LoadProjectsView>;
+    /**
+     * A project's settings, kept whether its switch is on or off (the switch holds only when the project can run), or
+     * removed. Answered with the project as the view now shows it.
+     */
+    grant: (input: LoadGrant | { path: string; remove: true }) => Promise<{ ok: true; project: LoadProjectView } | { ok: false; error: string }>;
     onChanged: (cb: (state: LoadWindowState) => void) => () => void;
   };
 
@@ -3086,8 +3090,52 @@ export type LoadSplit = 'train' | 'heldout' | 'eval';
 export type LoadBlockReason = 'max_concurrent' | 'busy_cap' | 'heavy_slot' | 'no_harness';
 export type LoadStopReason = 'window_end' | 'switch' | 'disk_floor' | 'error';
 
-/** A project the owner allows for load windows (~/.tars-private/load-grants.json). */
-export interface LoadGrant { path: string; allowedByName: boolean; endpointId: string; model: string; harnesses: LoadHarness[] }
+/** A project's load window settings (~/.tars-private/load-grants.json): the switch, and what it runs on. */
+export interface LoadGrant {
+  path: string;
+  /** The "load windows" switch, kept on only when the project can run. */
+  enabled: boolean;
+  allowedByName: boolean;
+  /** None until chosen. */
+  endpointId: string | null;
+  model: string | null;
+  harnesses: LoadHarness[];
+}
+
+/**
+ * Where a project stands, in the order it is decided: one of Tars's projects, traced, a git work tree, an endpoint and
+ * a model, a harness, a public repository or allowed by name, the switch on.
+ */
+export type LoadProjectState =
+  | 'allowed' | 'allowed_by_name' | 'off' | 'private' | 'unknown' | 'no_harness' | 'no_endpoint' | 'no_repo' | 'traces_off' | 'unknown_project';
+
+/** As gh says; `not_asked` for a project allowed by name, with traces off or no work tree; `none`: no GitHub remote. */
+export type LoadRepoVisibility = 'public' | 'private' | 'unknown' | 'none' | 'not_asked';
+
+/** A project in the Projects view of #672's frames. */
+export interface LoadProjectView {
+  path: string;
+  name: string;
+  /** `owner/name` of its GitHub remote (origin first), null when none. */
+  repo: string | null;
+  visibility: LoadRepoVisibility;
+  traced: boolean;
+  /** Its settings as kept, null when never set. */
+  grant: LoadGrant | null;
+  /** Whether a load window may run its tasks now. */
+  allowed: boolean;
+  state: LoadProjectState;
+  /** The line under the project. */
+  reason: string;
+  /** Its load agents (the project page's Load agents card). */
+  agents: Array<{ id: string; name: string; harness: string; endpointName?: string; model?: string; inWindow: boolean }>;
+}
+
+export interface LoadProjectsView {
+  projects: LoadProjectView[];
+  /** For the endpoint and model selects: the endpoints you approved, with their models. */
+  endpoints: Array<{ id: string; name: string; models: string[] }>;
+}
 
 export interface LoadWindowParams {
   rate_per_hour: number;
@@ -3114,7 +3162,8 @@ export interface LoadProposal {
   total: number;
   runnable: number;
   counts: { train: number; heldout: number; eval: number; tasks: number };
-  projects: Array<{ path: string; name: string; repo: string | null; visibility: 'public' | 'allowed_by_name' | 'refused'; reason?: string; tasks: number }>;
+  /** Each project of the pool, decided as the Projects view decides it; a refused one with its reason, its tasks left out. */
+  projects: Array<{ path: string; name: string; repo: string | null; visibility: 'public' | 'allowed_by_name' | 'refused'; state: LoadProjectState; reason?: string; tasks: number }>;
   tasks: Array<{ n: number; line: number; taskId: string; project: string; split: LoadSplit; capMin: number; setup: string[]; testCmd: string | null; harnesses: LoadHarness[] | null }>;
   refused: LoadRefusedLine[];
   endpoints: Array<{ id: string; name: string; baseUrl: string }>;
