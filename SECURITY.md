@@ -1246,6 +1246,12 @@ would be sent.
   file names its id. Its pool, sha256, approved task lines, window and stop are read from there. Its tasks and planned
   arrivals are derived from the verified snapshot. A record whose stop an agent removes stays stopped, and a stop an
   agent writes there stops nothing. A record whose tasks or planned arrivals were changed stops its run with an error.
+- **What a load session can and cannot do.** Its load agent runs unattended (bypass), in a worktree of its own at the
+  task's base commit. Untracked files (a `.env`) are not in it. Its terminal blocks every push through its environment
+  (`GIT_CONFIG_*`, an empty `pushInsteadOf` to a helper that does not exist), never a git config or a hook. A session
+  that unsets that environment in its own shell is not stopped by it: the preamble forbids the push, and the
+  worktree's commits stay local. The worktrees Tars removes are only those its private state
+  (`~/.tars-private/load-run-state.json`) names, never one a record or a name pattern points at.
 - **The main window's top frame.** The handlers check the sender's frame as well as its web contents. A subframe
   shares the window's web contents.
 - **What was shown is what is approved.** Approve carries the pool's sha256 and the proposal's id. A pool or a

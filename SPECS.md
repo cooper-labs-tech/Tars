@@ -384,6 +384,25 @@ the approval. The run record, `run.json`, is the run's log, read for what the wi
 the window, the tasks with their split and train_ok, the planned arrivals, each arrival as it went (blocked and why:
 `max_concurrent`, `busy_cap`, `heavy_slot` or `no_harness`), the agents, the worktrees and a copy of the stop.
 
+**The run** (`services/load-engine.ts`). At approval, the proposal's missing load agents are made through the one
+creation of an agent (`core/agent-create.ts`, which the window's form calls too and through which it can never make a
+load agent): Load N, on the grant's endpoint and model, `load: true`, traced, unattended. Then each planned arrival
+comes at its time:
+- one that cannot start is recorded blocked and dropped, never queued: `max_concurrent`, `busy_cap` (a seam that
+  allows every arrival until the busy cap lands), `no_harness` (no load agent of its project free and running a
+  harness the task and the grant accept). An admitted one holds its place and its agent at once;
+- an admitted one gets a worktree at the task's base_commit, on `load/<run>/<task>-<n>` under the project's
+  `.worktrees`, named in `~/.tars-private/load-run-state.json` before git makes it, and a fresh session of its load
+  agent there, on a preamble (no push, no pull request, no deploy, no migration, no production) and the task's prompt.
+  A load agent's terminal blocks every push through its environment (`url.<helper>.pushInsteadOf` given as
+  `GIT_CONFIG_*` variables): no git config is written, no hook installed;
+- it ends when its turn does (`done`, `error`), at its cap (stopped, `at_cap`) or with the run (`stopped`). Its session
+  is stopped, so the next task starts fresh, the agent handed back, and its worktree and branch removed, from the
+  private state only.
+
+After a quit or a crash, the next start removes the worktrees the private state names and ends a run that was running
+in error, "Tars restarted during the window".
+
 ### Alt-provider safety gate
 
 `spawnAgentSession` refuses to start a claude-binary alt provider that produced no `ANTHROPIC_BASE_URL`, which means no API key is configured, and the session would silently bill the user's Anthropic account:
