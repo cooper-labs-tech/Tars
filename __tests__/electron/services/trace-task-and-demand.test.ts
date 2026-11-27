@@ -133,6 +133,8 @@ beforeEach(() => {
     writeSettings: () => {},
     getAgent: (id) => fleet.get(id),
     emit: () => {},
+    // The agents' queue, as main.ts hands it in.
+    queue: oneTaskQueue,
   });
   ledger = createTaskLedger({ file: path.join(home, 'task-ledger.jsonl'), textFile: path.join(home, 'private', 'task-texts.jsonl') });
   setLiveTaskLedger(ledger);

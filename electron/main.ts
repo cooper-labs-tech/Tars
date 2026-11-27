@@ -456,6 +456,7 @@ function initApiServer() {
     getAgent: (id) => agents.get(id),
     clientVersion: app.getVersion(),
     packaged: app.isPackaged,
+    queue: oneTaskQueue,
     emit: (channel, payload) => { const w = getMainWindow(); if (w && !w.isDestroyed()) w.webContents.send(channel, payload); },
   });
   moveLocalKanbanToHermes();

@@ -13,7 +13,7 @@ import { endpointLaunchFor, piModelsWithEndpoint, type EndpointLaunch } from './
 import { ENDPOINT_HARNESSES, endpointTarget, ensureDropFolder, transportOf } from './inference-endpoints';
 import { TraceStore, type TraceStart, type TraceTask } from './trace-store';
 import { takeSessionStart } from '../core/session-start';
-import { oneTaskQueue, type QueueEvent } from '../core/one-task';
+import type { OneTaskQueue, QueueEvent } from '../core/one-task';
 import { liveTaskLedger } from './task-ledger';
 import { chooseGh, prStatesOfProjects, type PrState } from './github-watch';
 import { defaultTracePairs, traceDecision } from './trace-gate';
@@ -54,6 +54,12 @@ export interface TracesDeps {
   clientVersion?: string;
   /** A packaged build (app.isPackaged): an E2E's stand-in gh is never taken there (github-watch.ts testGhOf). */
   packaged?: boolean;
+  /**
+   * The agents' queue (core/one-task.ts oneTaskQueue): a task's queue times, and what the queue tells a traced
+   * session. Handed in rather than imported, so this module stays clear of the provider registry the queue's module
+   * loads: a require cycle (a provider loads this module) that types cannot see and that fails at runtime.
+   */
+  queue?: Pick<OneTaskQueue, 'lookup' | 'busyRun' | 'onEvent'>;
 }
 
 let deps: TracesDeps | null = null;
@@ -454,7 +460,7 @@ export function configureTraces(d: TracesDeps): void {
   deps = d;
   // What the agents' queues tell a traced session: a task named once its turn came, a task dropped never to start.
   queueEvents?.();
-  queueEvents = oneTaskQueue.onEvent(onQueueEvent);
+  queueEvents = d.queue?.onEvent(onQueueEvent) ?? null;
 }
 
 let queueEvents: (() => void) | null = null;
@@ -672,9 +678,9 @@ function startOf(agent: AgentStatus, traceId: string, note: ReturnType<typeof ta
   };
   if (!note?.taskRef) return start;
   start.taskRef = note.taskRef;
-  const queued = oneTaskQueue.lookup(note.taskRef);
+  const queued = deps?.queue?.lookup(note.taskRef);
   if (queued) start.queuedAt = queued.task.queuedAt;
-  const run = oneTaskQueue.busyRun(agent.id);
+  const run = deps?.queue?.busyRun(agent.id);
   if (run?.taskRef === note.taskRef) start.handedAt = run.since;
   const before = traceStore().sessionsWithRef(note.taskRef, traceId);
   if (before.length) {
