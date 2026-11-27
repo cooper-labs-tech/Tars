@@ -1288,6 +1288,10 @@ the agents rather than raising the ceiling.
   metadata is still written and bodies are not (`bodiesDropped`).
 - Export: the back-office writes JSONL in the reader's trace format tables (`traces`, `turns`, `requests`,
   `request_messages`, `messages`), each message once.
+- Each session keeps what started it and its task's queue times, the commit it started from, the ledger's tasks it
+  ran, the tasks taken out of its agent's queue before they started, and the requests its harness gave up while held
+  (status 499). Once it has ended, the end of its branch's pull request comes from `gh pr list --state closed`, every
+  5 minutes while a session waits for one: with gh missing or signed out, none comes, and nothing else is affected.
 
 **Upload to a back-office.**
 - Set its address in the back-office page (any server that speaks the trace back-office's HTTP API v1), and read the
