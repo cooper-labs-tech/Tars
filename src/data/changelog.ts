@@ -34,7 +34,7 @@ export const CHANGELOG: Release[] = [
       'A new setting lets Claude in Chrome act with no question at all, for every agent of every project: off unless you turn it on, it takes away the safety review Claude Code gives each browser action (SECURITY.md says what it opens). Until Settings has a switch: quit Tars, write { "chromeActsWithoutAsking": true } into ~/.tars-private/owner-switches.json, start Tars again.',
       'Ask in terminal on a chat\'s page now opens the orchestrator\'s window on its terminal, where Claude Code\'s own dialog waits for your answer. The chat\'s page shows no terminal, so the question seemed to vanish.',
       'Codex agents work on today\'s codex: a codex worker no longer exits as it starts (codex refused a setting Tars gave it for a Telegram server its config does not have, and the task landed in the bare shell), and stopping, restarting or quitting a codex agent now ends its work. codex ran each turn in a background server of its own that outlived the agent\'s terminal, shell commands included; Tars now starts it without that server. Measured on codex 0.163 and 0.170.',
-      'An agent Tars starts as it opens (one it resumes after an abrupt stop, or one a message from a bot or another agent starts) now waits until Tars has set up its tools, so it starts with the tools of its role. A codex worker resumed that way could stop at launch.',
+      'An agent Tars starts as it opens (one it resumes after an abrupt stop, or one a message from a bot or another agent starts) now waits until Tars has set up its tools, so it starts with the tools of its role, and its card says it is starting meanwhile. A codex worker resumed that way could stop at launch.',
     ],
   },
   {
