@@ -368,7 +368,9 @@ describe('the recorder', () => {
     expect(store.session('tr-1')!.turns[0].workspace).toMatchObject({ changedLines: 400, survivedLines: 400, survivalBasis: 'merged' });
     expect(calls.some(a => a[0] === 'ls-tree'), 'the paths were asked of git').toBe(true);
     expect(Math.max(...calls.map(a => a.join(' ').length))).toBeLessThanOrEqual(32_767);
-  });
+    // 400 files read back one by one, at the session's end and at the merge: past vitest's 5 s, and a test still
+    // running past its time would go on in the next test's repository (`repo` is the file's own).
+  }, 60_000);
 
   it('14: a request opens a turn at its arrival by ingest()\'s own rule', () => {
     const body = (v: unknown) => Buffer.from(JSON.stringify(v));
