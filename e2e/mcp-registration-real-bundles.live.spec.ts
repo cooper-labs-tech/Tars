@@ -24,8 +24,8 @@ import { DEV_URL, apiPort } from './ports.mjs';
  *   the six, each running the tree's bundle on one program, with the variables Tars's servers read.
  * - Qwen Code: Tars's own list of its servers (~/.tars/qwen-code/mcp-servers.json): the six, the tree's bundles.
  * - gemini and grok, not installed here: Tars ran neither CLI and wrote each one's own config file in the sandbox
- *   (settings.json, config.toml), the six in it; opencode and Pi: their config files, the six; Amp, whose settings file
- *   does not exist: nothing written.
+ *   (settings.json, config.toml), the six in it; opencode, Pi and Amp: their config files, the six (Amp's settings.json
+ *   made by Tars where there was none).
  * - Nothing named the tree's bundles in the real home's CLI configs that did not before (read for that, never written).
  * On a build whose registration drops a server, the six are not there: red.
  *
@@ -155,7 +155,8 @@ test('the start-up registration writes the six servers, with the tree\'s bundles
       values.opencode = opencode ? Object.fromEntries(sorted(opencode).map((n) => [n, lastArg(opencode[n]?.command) === bundleOf(n) ? 'tree' : lastArg(opencode[n]?.command)])) : 'not written';
       const pi = ((readJson(file.pi)?.mcpServers ?? null) as Record<string, { args?: string[] }> | null);
       values.pi = pi ? Object.fromEntries(sorted(pi).map((n) => [n, lastArg(pi[n]?.args) === bundleOf(n) ? 'tree' : lastArg(pi[n]?.args)])) : 'not written';
-      values.amp = fs.existsSync(file.amp) ? 'written' : 'not written';
+      const amp = ((readJson(file.amp)?.['amp.mcpServers'] ?? null) as Record<string, { args?: string[] }> | null);
+      values.amp = amp ? Object.fromEntries(sorted(amp).map((n) => [n, lastArg(amp[n]?.args) === bundleOf(n) ? 'tree' : lastArg(amp[n]?.args)])) : 'not written';
       values.realHome = { before, after: namings() };
       recordValues(values);
 
@@ -171,7 +172,7 @@ test('the start-up registration writes the six servers, with the tree\'s bundles
       expect(values.grok, 'grok, not installed: its config.toml written in the sandbox').toEqual(all('tree'));
       expect(values.opencode, 'opencode: its config').toEqual(all('tree'));
       expect(values.pi, 'Pi: its config').toEqual(all('tree'));
-      expect(values.amp, 'Amp: no settings file, nothing written').toBe('not written');
+      expect(values.amp, 'Amp: its settings.json, made where there was none').toEqual(all('tree'));
       expect((values.realHome as { after: unknown }).after, 'the real home\'s CLI configs name no more of the tree\'s bundles than before').toEqual(before);
     } finally {
       recordValues(values);
