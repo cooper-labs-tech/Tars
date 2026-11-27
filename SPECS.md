@@ -286,7 +286,19 @@ from the window, or from an agent's drop file (`~/.tars/endpoint-keys/<name>.key
   while an ended session waits for one, moves its change sequence, so the reader and the upload take it again;
 - a task taken out of the agent's queue before it started is kept with the session by its kind (`cancelled`,
   `taken_back`, `dropped_with_stop`, `queue_cleared`, `agent_removed`, `not_handed_again`), and a request the harness
-  gave up while the proxy held it is a request row with status 499 and a structured `cancel`, its turn `abandoned`.
+  gave up while the proxy held it is a request row with status 499 and a structured `cancel`, its turn `abandoned`;
+- every request cut before its end carries `cancel: { by, cause, at, deliveredBytes }` (`trace-store.ts`
+  CANCEL_CAUSES): by the harness (`esc` or `ctrl_c`, a lone key the window sent during the request;
+  `cli_interrupt`, codex's or pi's own log; `abandoned_while_held`; `unknown`), by Tars ending its terminal (`stop`,
+  `restart`, `sleep`, `remove`, `quit`, `replace`), by the proxy at its hold's ceiling (`hold_ceiling`) or by the
+  endpoint cutting the stream (`stream_cut`). A cut by the harness or Tars ends its turn `abandoned` and is no
+  endpoint error; the proxy's and the endpoint's are;
+- each turn carries its interventions: `interrupted` (a lone Esc or Ctrl-C from the window while the model answered
+  or its tools ran, a stop, a removal or the quit while the turn was open, or the CLI's own log), `restarted`,
+  `next` (who sent the next instruction, by kind, and its delay in seconds from this turn's end), `corrected` (that
+  instruction from the owner or an orchestrator within 10 minutes of a turn that ended done) and `redelegated` (a
+  later session that took the session's task, read from that session's start). The owner's words sent from an agent's pane are
+  theirs, as Tars's own writes are.
 
 Retention and a size cap come from Settings. The back-office reads it through `window.electronAPI.traces`. An external
 reader reads it through `GET /api/traces/*`, with its own token, as the reader's trace format tables.
@@ -301,8 +313,8 @@ consent, opted-in sessions are uploaded:
   request is never counted as a step of its turn. A back-office refuses fields it does not know (422
   `invalid_batch`), so it takes `side` before Tars sends it: the back-office is updated first. A batch it refuses
   stays unsent and is tried again on the backoff, never sent without the mark;
-- a session's `start` and `lostDemand`, and a request's `cancel`, each with its line in the notice. The back-office
-  takes them before a Tars that sends them, as it took `side`;
+- a session's `start` and `lostDemand`, a request's `cancel` and a turn's `interventions`, each with its line in the
+  notice. The back-office takes them before a Tars that sends them, as it took `side`;
 - resumed after a restart, with backoff.
 
 `deleteEverywhere` asks the back-office to delete all of it.
