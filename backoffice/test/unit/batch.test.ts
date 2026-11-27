@@ -42,6 +42,15 @@
 //     redelegated, one of them in another shape (a `during` other than answer or tools, a name
 //     where a kind belongs, a negative delay, `corrected` other than true, a `to` over 64), or a
 //     valid one is refused: every key alone, all together, and a fractional delay.
+// 19. The timings (27/11, from the endpoint's Server-Timing): a session's `rttMedianMs` and
+//     `clockOffsetMs`, a request's `rttMs`, `clockOffsetMs`, `queueMs` and `upstreamMs`, each in
+//     milliseconds and fractional. A negative round trip, queue or upstream, a value that is not a
+//     finite number, or one over 10^10 is taken; or a valid one, a negative clock offset and a
+//     fraction included, is refused.
+// 20. A turn's workspace (27/11): `startHead`, `endHead`, `startTree`, `endTree` take something other
+//     than 40 or 64 lowercase hex; `filesChanged`, `linesAdded`, `linesRemoved`, `changedLines`,
+//     `survivedLines` take a negative or fractional count; `reverted` a non-boolean; `survivalBasis`
+//     a value other than session_end, merged or deleted; or valid ones are refused.
 // 10 again (the client's own contract, 27/11): every environment value may be null, the
 //     architecture Tars runs as included, and a negative UTC offset is valid.
 import { test } from 'node:test';
@@ -265,6 +274,37 @@ test('18. a turn\'s interventions', () => {
     { next: { ...all.next, note: 'x' } },
   ];
   for (const b of bad) assert.ok(errs({ ...ok, turns: [{ ...turn, interventions: b }] }).length, JSON.stringify(b).slice(0, 80));
+});
+
+test('19. the timings', () => {
+  const s = { rttMedianMs: 41.5, clockOffsetMs: -12.25 };
+  const q = { rttMs: 40.75, clockOffsetMs: -3.5, queueMs: 0, upstreamMs: 812.3 };
+  const r = validateBatch({ ...ok, sessions: [{ ...session, ...s }], requests: [{ ...request, ...q }] });
+  assert.ok(!('errors' in r), JSON.stringify(r));
+  assert.deepEqual([r.sessions[0]!.rttMedianMs, r.sessions[0]!.clockOffsetMs], [41.5, -12.25]);
+  assert.deepEqual([r.requests[0]!.rttMs, r.requests[0]!.clockOffsetMs, r.requests[0]!.queueMs, r.requests[0]!.upstreamMs], [40.75, -3.5, 0, 812.3]);
+  for (const [k, v] of [['rttMedianMs', -1], ['rttMedianMs', '41'], ['clockOffsetMs', 1e11], ['clockOffsetMs', -1e11], ['clockOffsetMs', true]] as const) {
+    assert.ok(errs({ ...ok, sessions: [{ ...session, [k]: v }] }).length, `session ${k} ${v}`);
+  }
+  for (const [k, v] of [['rttMs', -0.5], ['queueMs', -1], ['upstreamMs', 1e11], ['upstreamMs', '812'], ['clockOffsetMs', {}], ['rttMs', []]] as const) {
+    assert.ok(errs({ ...ok, requests: [{ ...request, [k]: v }] }).length, `request ${k} ${v}`);
+  }
+});
+
+test('20. a turn\'s workspace', () => {
+  const w = {
+    startHead: 'a'.repeat(40), endHead: 'b'.repeat(40), startTree: 'c'.repeat(64), endTree: 'd'.repeat(64), filesChanged: 3, linesAdded: 120,
+    linesRemoved: 7, changedLines: 127, survivedLines: 100, reverted: false, survivalBasis: 'merged',
+  };
+  const r = validateBatch({ ...ok, turns: [{ ...turn, ...w }] });
+  assert.ok(!('errors' in r), JSON.stringify(r));
+  for (const [k, v] of Object.entries(w)) assert.equal((r.turns[0] as Record<string, unknown>)[k], v, k);
+  for (const basis of ['session_end', 'merged', 'deleted']) assert.ok(!('errors' in validateBatch({ ...ok, turns: [{ ...turn, survivalBasis: basis }] })), basis);
+  const bad: Array<[string, unknown]> = [
+    ['startHead', 'abc'], ['endHead', 'A'.repeat(40)], ['startTree', 'c'.repeat(63)], ['endTree', 7], ['filesChanged', -1], ['linesAdded', 1.5],
+    ['linesRemoved', '7'], ['changedLines', -3], ['survivedLines', true], ['reverted', 'no'], ['survivalBasis', 'rebased'],
+  ];
+  for (const [k, v] of bad) assert.ok(errs({ ...ok, turns: [{ ...turn, [k]: v }] }).length, `${k} ${String(v)}`);
 });
 
 test('16. a turn\'s taskRef', () => {

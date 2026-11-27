@@ -69,6 +69,17 @@
 // K5. A malformed one is taken (a seventh count, a missing one, a name where a kind belongs, `during` outside its
 //     two); the batch must be refused whole.
 // K6. A deleted session leaves them in any table; migration 005's down loses anything else, its up reads them null.
+//
+// The timings and a turn's workspace (27/11, the fourth trace wave): the ways it can fail, written before the code.
+// T1. A session sent with `rttMedianMs` or `clockOffsetMs`, a request with `rttMs`, `clockOffsetMs`, `queueMs` or
+//     `upstreamMs`, or a turn with its workspace (heads, trees, counts, `reverted`, `survivalBasis`), is refused.
+// T2. They are not stored exactly (a fraction rounded, a negative offset lost), or not read back: the session on
+//     the list and in the detail, the request in the detail and on the join, the turn in the detail.
+// T3. Sent without them (an older Tars, or an endpoint without Server-Timing), they read back other than `null`.
+// T4. A session uploaded again after its end (a merge, a deleted branch) does not update a turn's survival; or one
+//     sent again without a value loses the one it had.
+// T5. A malformed one is taken (a negative round trip, a head not 40 or 64 hex, a basis outside its three).
+// T6. Migration 006's down loses anything else, its up reads them null.
 import { describe, it, before, after } from 'node:test';
 import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
@@ -134,6 +145,18 @@ const START = {
 };
 const LOST = [{ kind: 'queue_drop', ref: 't-0e2e0002', queuedAt: T0 - 3000, at: T0 + 500, reason: 'cancelled' }];
 const CANCEL = { by: 'harness', cause: 'abandoned_while_held', at: T0 + 3000, deliveredBytes: 0 };
+// The timings, from the endpoint's Server-Timing, and what a turn changed in the repository.
+const TIMING_SESSION = { rttMedianMs: 41.5, clockOffsetMs: -12.25 };
+const TIMING_REQUEST = { rttMs: 40.75, clockOffsetMs: -3.5, queueMs: 0, upstreamMs: 812.3 };
+const WORKSPACE = {
+  startHead: 'a'.repeat(40), endHead: 'b'.repeat(40), startTree: 'c'.repeat(64), endTree: 'd'.repeat(64), filesChanged: 3, linesAdded: 120,
+  linesRemoved: 7, changedLines: 127, survivedLines: 127, reverted: false, survivalBasis: 'session_end',
+};
+// The columns migration 006 adds, left out where a migration step compares every other value.
+const WAVE_FOUR_COLUMNS = [
+  'rtt_median_ms', 'clock_offset_ms', 'rtt_ms', 'queue_ms', 'upstream_ms', 'start_head', 'end_head', 'start_tree', 'end_tree',
+  'files_changed', 'lines_added', 'lines_removed', 'changed_lines', 'survived_lines', 'reverted', 'survival_basis',
+];
 // How a session was masked, and what was done to a turn.
 const MASK = { maskingVersion: 'tars-scrub-2', maskCounts: { SECRET: 2, EMAIL: 1, IP: 0, PERSON: 3, HOME: 4, PHONE: 0 } };
 const INTERVENTIONS = {
@@ -534,6 +557,60 @@ describe('trace back-office, end to end', () => {
     assert.deepEqual([still.session.maskingVersion, still.turns[0].interventions?.interrupted?.by], [MASK.maskingVersion, 'esc']);
   });
 
+  it('takes the timings and a turn\'s workspace, reads them back exactly, updates survival on a later upload, and refuses them malformed', async () => {
+    const detail = async () => (await call('GET', `/v1/read/sessions/${installA.id}/sess-1`, { token: reader.token })).json;
+    const wsOf = (t: any) => Object.fromEntries(Object.keys(WORKSPACE).map((k) => [k, t[k]]));
+    // T3. Sent without them: null, never absent.
+    const before = await detail();
+    assert.deepEqual(note('timing.before', [before.session.rttMedianMs, before.session.clockOffsetMs, before.requests.map((r: any) => Object.keys(TIMING_REQUEST).map((k) => [k in r, r[k]])),
+      Object.values(wsOf(before.turns[0]))]), [null, null, before.requests.map(() => Object.keys(TIMING_REQUEST).map(() => [true, null])), Object.keys(WORKSPACE).map(() => null)]);
+    // T1, T2. Sent with them.
+    const sent = await call('PUT', '/v1/batches/batch-timing', { token: installA.token, body: {
+      schema: 1, sessions: [session({ finalStatus: 'done', endedAt: T0 + 6000, ...TIMING_SESSION })], turns: [{ ...turn, ...WORKSPACE }],
+      requests: [{ ...requests[0], ...TIMING_REQUEST }],
+    } });
+    assert.equal(sent.status, 200, String(sent.buf));
+    const after = await detail();
+    assert.deepEqual(note('timing.session', [after.session.rttMedianMs, after.session.clockOffsetMs]), [41.5, -12.25]);
+    assert.deepEqual(note('timing.request', Object.keys(TIMING_REQUEST).map((k) => after.requests[0][k])), Object.values(TIMING_REQUEST));
+    assert.deepEqual(note('workspace.turn', wsOf(after.turns[0])), WORKSPACE);
+    const listed = (await call('GET', '/v1/read/sessions?agent=agent-1', { token: reader.token })).json.sessions;
+    assert.deepEqual(listed.map((s: any) => [s.rttMedianMs, s.clockOffsetMs]), [[41.5, -12.25]]);
+    const joined = (await call('GET', '/v1/read/requests?upstreamRequestId=up-111', { token: reader.token })).json.requests;
+    assert.deepEqual(joined.map((r: any) => [r.rttMs, r.upstreamMs]), [[40.75, 812.3]]);
+    // T4. After the branch is merged, the session goes up again: survival updated. Then one without them keeps them.
+    const merged = { survivedLines: 100, survivalBasis: 'merged' };
+    const again = await call('PUT', '/v1/batches/batch-timing-merged', { token: installA.token, body: {
+      schema: 1, sessions: [session({ finalStatus: 'done', endedAt: T0 + 6000, ...TIMING_SESSION })], turns: [{ ...turn, ...WORKSPACE, ...merged }],
+    } });
+    assert.equal(again.status, 200, String(again.buf));
+    const older = await call('PUT', '/v1/batches/batch-timing-older', { token: installA.token, body: {
+      schema: 1, sessions: [session({ finalStatus: 'done', endedAt: T0 + 6000 })], turns: [turn], requests: [requests[0]],
+    } });
+    assert.equal(older.status, 200, String(older.buf));
+    const kept = await detail();
+    assert.deepEqual(note('workspace.afterMergeThenOlder', [wsOf(kept.turns[0]), kept.session.rttMedianMs, kept.requests[0].queueMs]),
+      [{ ...WORKSPACE, ...merged }, 41.5, 0]);
+    // T5. Malformed: refused whole.
+    const bad: Array<[string, Record<string, unknown>, Record<string, unknown>, Record<string, unknown>]> = [
+      ['negativeRtt', {}, {}, { rttMs: -1 }],
+      ['offsetAsText', { clockOffsetMs: '-12' }, {}, {}],
+      ['shortHead', {}, { startHead: 'abc123' }, {}],
+      ['basisOutside', {}, { survivalBasis: 'rebased' }, {}],
+    ];
+    const codes: Array<[string, number, string]> = [];
+    for (const [name, s, t, q] of bad) {
+      const put = await call('PUT', `/v1/batches/batch-bad-timing-${name}`, { token: installA.token, body: {
+        schema: 1, sessions: [session({ finalStatus: 'done', endedAt: T0 + 6000, rttMedianMs: 999, ...s })], turns: [{ ...turn, filesChanged: 999, ...t }],
+        requests: [{ ...requests[0], ...q }],
+      } });
+      codes.push([name, put.status, put.json.error]);
+    }
+    assert.deepEqual(note('timing.malformed', codes), bad.map(([n]) => [n, 422, 'invalid_batch']));
+    const still = await detail();
+    assert.deepEqual([still.session.rttMedianMs, still.turns[0].filesChanged], [41.5, 3]);
+  });
+
   it('migrates a database that holds requests: down keeps every row but the marks, up reads them back unknown', async () => {
     // M1, M2. The server stopped, as an operator migrates; what it logged so far is kept for the artefact.
     const earlier = srv.log.slice();
@@ -546,7 +623,7 @@ describe('trace back-office, end to end', () => {
         const tables = (await client.query("SELECT tablename FROM pg_tables WHERE schemaname = 'public' AND tablename <> 'schema_migrations' ORDER BY 1")).rows.map((r) => r.tablename as string);
         const out: Record<string, string> = {};
         for (const t of tables) {
-          const r = (await client.query(`SELECT count(*)::int AS n, md5(coalesce(string_agg(x, '|' ORDER BY x), '')) AS d FROM (SELECT (to_jsonb(t) - 'side' - 'environment' - 'events' - 'live_sessions' - 'start' - 'lost_demand' - 'cancel' - 'task_ref' - 'masking_version' - 'mask_counts' - 'interventions')::text AS x FROM "${t}" t) s`)).rows[0];
+          const r = (await client.query(`SELECT count(*)::int AS n, md5(coalesce(string_agg(x, '|' ORDER BY x), '')) AS d FROM (SELECT (to_jsonb(t) - 'side' - 'environment' - 'events' - 'live_sessions' - 'start' - 'lost_demand' - 'cancel' - 'task_ref' - 'masking_version' - 'mask_counts' - 'interventions' - ${WAVE_FOUR_COLUMNS.map((c) => `'${c}'`).join(' - ')})::text AS x FROM "${t}" t) s`)).rows[0];
           out[t] = `${r.n}:${r.d}`;
         }
         return out;
@@ -569,7 +646,15 @@ describe('trace back-office, end to end', () => {
         (await client.query("SELECT turn_id, interventions->'interrupted'->>'by' AS b FROM turns WHERE interventions IS NOT NULL ORDER BY 1")).rows.map((r) => [r.turn_id, r.b]),
       ];
       assert.deepEqual(note('migrate.withData.waveThreeBefore', await waveThree()), [[['sess-1', MASK.maskingVersion, '3']], [['turn-1', 'esc']]]);
-      // K6, L6, E8, M2. Down through 005, 004, 003, then 002.
+      const waveFour = async () => [
+        (await client.query('SELECT session_id, rtt_median_ms, clock_offset_ms FROM sessions WHERE rtt_median_ms IS NOT NULL OR clock_offset_ms IS NOT NULL ORDER BY 1')).rows.map((r) => [r.session_id, r.rtt_median_ms, r.clock_offset_ms]),
+        (await client.query('SELECT request_id, rtt_ms, upstream_ms FROM requests WHERE rtt_ms IS NOT NULL OR upstream_ms IS NOT NULL ORDER BY 1')).rows.map((r) => [r.request_id, r.rtt_ms, r.upstream_ms]),
+        (await client.query('SELECT turn_id, survival_basis, survived_lines FROM turns WHERE survival_basis IS NOT NULL ORDER BY 1')).rows.map((r) => [r.turn_id, r.survival_basis, r.survived_lines]),
+      ];
+      assert.deepEqual(note('migrate.withData.waveFourBefore', await waveFour()), [[['sess-1', 41.5, -12.25]], [['req-1', 40.75, 812.3]], [['turn-1', 'merged', 100]]]);
+      // T6, K6, L6, E8, M2. Down through 006, 005, 004, 003, then 002.
+      note('migrate.withData.down006', runCli(['migrate', 'down'], env).trim());
+      assert.deepEqual(note('migrate.withData.afterDown006', await rows()), before, 'the down of 006 kept every row and value but its own');
       note('migrate.withData.down005', runCli(['migrate', 'down'], env).trim());
       assert.deepEqual(note('migrate.withData.afterDown005', await rows()), before, 'the down of 005 kept every row and value but its own');
       note('migrate.withData.down004', runCli(['migrate', 'down'], env).trim());
@@ -584,6 +669,7 @@ describe('trace back-office, end to end', () => {
       assert.deepEqual(note('migrate.withData.waveOneAfterUp', await waveOne()), [[], []]);
       assert.deepEqual(note('migrate.withData.waveTwoAfterUp', await waveTwo()), [[], []]);
       assert.deepEqual(note('migrate.withData.waveThreeAfterUp', await waveThree()), [[], []]);
+      assert.deepEqual(note('migrate.withData.waveFourAfterUp', await waveFour()), [[], [], []]);
     } finally {
       // Up again and serving whatever this step found, so a failure here is this step's alone.
       runCli(['migrate', 'up'], env);
