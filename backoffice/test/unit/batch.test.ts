@@ -23,13 +23,20 @@
 //     or a valid list, the empty one included, is refused.
 // 12. A request's `liveSessions` takes a negative, fractional or absurd count, or a valid one is
 //     refused.
-// 13. A session's `start` (27/11, what started it) takes a key it does not know, a trigger, a via or
-//     a time of the wrong form, or goes without its trigger; or a valid one, the trigger alone
-//     included, is refused. Its words (trigger, via) are lowercase words of at most 40, not names.
+// 13. A session's `start` (27/11, what started it) takes a key it does not know, a trigger or a via
+//     outside the client's closed lists, a task ref not of the form t- and 8 hex, a commit that is
+//     not 40 or 64 hex, an id over its bound, a branch over 255 bytes, or a time of the wrong form,
+//     or goes without its trigger; or a valid one, the trigger alone included, is refused.
 // 14. A session's `lostDemand` takes an item other than {kind: queue_drop, ref, queuedAt, at, reason},
-//     a key besides those, or more than 1,000; or a valid list is refused.
-// 15. A request's `cancel` takes something other than {by, cause, at, deliveredBytes} of their types,
-//     or a valid one is refused.
+//     a reason outside the client's six, a key besides those, or more than 1,000; or a valid list is
+//     refused.
+// 15. A request's `cancel` takes a `by` other than harness, tars, proxy or endpoint, a cause that is
+//     not one of that `by`'s, or anything but {by, cause, at, deliveredBytes} of their types; or a
+//     valid one is refused.
+// 16. A turn's `taskRef` (the task its instruction came from) takes something other than t- and 8
+//     hex, or a valid one is refused.
+// 10 again (the client's own contract, 27/11): every environment value may be null, the
+//     architecture Tars runs as included, and a negative UTC offset is valid.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { validateBatch } from '../../src/batch.ts';
@@ -121,14 +128,15 @@ test('10. environment: the known keys, each of its type', () => {
   const r = validateBatch(withSession({ environment, nativeSessionId: 'n-1' }));
   assert.ok(!('errors' in r), JSON.stringify(r));
   assert.deepEqual(r.sessions[0]!.environment, environment);
-  const nulls = Object.fromEntries(Object.keys(environment).map((k) => [k, k === 'tarsArch' ? 'x64' : null]));
-  assert.ok(!('errors' in validateBatch(withSession({ environment: nulls }))), 'every value unknown is still an environment');
+  const nulls = Object.fromEntries(Object.keys(environment).map((k) => [k, null]));
+  assert.ok(!('errors' in validateBatch(withSession({ environment: nulls }))), 'every value unknown is still an environment, tarsArch included');
   assert.ok(!('errors' in validateBatch(withSession({ environment: {} }))), 'an empty environment');
+  assert.ok(!('errors' in validateBatch(withSession({ environment: { ...environment, utcOffsetMinutes: -300, ramBytes: 2 ** 36 } }))), 'west of UTC, and memory over 2^31');
   const bad: Array<Record<string, unknown> | unknown> = [
     'macOS', [], { ...environment, serialNumber: 'C02XYZ' }, { ...environment, hostName: 'my-mac' }, { ...environment, cpuCores: '8' },
     { ...environment, cpuCores: -1 }, { ...environment, cpuCores: 1.5 }, { ...environment, cpuCores: 100_000 }, { ...environment, ramBytes: -1 },
     { ...environment, utcOffsetMinutes: 1000 }, { ...environment, utcOffsetMinutes: 30.5 }, { ...environment, onBattery: 'no' },
-    { ...environment, chip: 'x'.repeat(201) }, { ...environment, locale: 5 }, { ...environment, tarsArch: null },
+    { ...environment, chip: 'x'.repeat(201) }, { ...environment, locale: 5 }, { ...environment, tarsArch: 64 },
   ];
   for (const e of bad) assert.ok(errs(withSession({ environment: e })).length, JSON.stringify(e).slice(0, 80));
 });
@@ -152,7 +160,7 @@ test('12. liveSessions: a count', () => {
 });
 
 const start = {
-  trigger: 'task', via: 'api', taskRef: 'ref-1', taskId: 'task-1', requesterAgentId: 'agent-0', queuedAt: 10, handedAt: 12,
+  trigger: 'task', via: 'api', taskRef: 't-0a1b2c3d', taskId: 'task-1', requesterAgentId: 'agent-0', queuedAt: 10, handedAt: 12,
   firstRequestAt: 15, commit: '0123456789abcdef0123456789abcdef01234567', branch: 'feat/x', redelegatedFrom: 'tr_old',
 };
 
@@ -161,22 +169,36 @@ test('13. start: what started the session', () => {
   assert.ok(!('errors' in r), JSON.stringify(r));
   assert.deepEqual(r.sessions[0]!.start, start);
   assert.ok(!('errors' in validateBatch(withSession({ start: { trigger: 'unknown' } }))), 'the trigger alone');
-  assert.ok(!('errors' in validateBatch(withSession({ start: { ...start, commit: '<SECRET_1>' } }))), 'a commit the client scrubbed');
+  for (const trigger of ['owner', 'task', 'channel', 'restart', 'start', 'wake', 'redelegation', 'unknown']) {
+    assert.ok(!('errors' in validateBatch(withSession({ start: { trigger } }))), trigger);
+  }
+  for (const via of ['window', 'chat', 'api', 'telegram', 'slack', 'discord', 'hermes', 'relay', 'settings', 'asked', 'tars']) {
+    assert.ok(!('errors' in validateBatch(withSession({ start: { trigger: 'owner', via } }))), via);
+  }
+  assert.ok(!('errors' in validateBatch(withSession({ start: { ...start, commit: 'a'.repeat(64) } }))), 'a sha-256 commit');
+  assert.ok(!('errors' in validateBatch(withSession({ start: { ...start, taskId: 'x'.repeat(200), branch: 'é'.repeat(127) } }))), 'at the bounds');
   const bad: unknown[] = [
-    'task', [], {}, { ...start, trigger: undefined }, { ...start, who: 'someone' }, { ...start, trigger: 'Owner Name' }, { ...start, via: 'x'.repeat(41) },
-    { ...start, queuedAt: -1 }, { ...start, handedAt: '12' }, { ...start, branch: 'b'.repeat(256) }, { ...start, taskRef: 7 },
+    'task', [], {}, { ...start, trigger: undefined }, { ...start, who: 'someone' }, { ...start, trigger: 'Owner Name' }, { ...start, trigger: 'reboot' },
+    { ...start, via: 'fax' }, { ...start, queuedAt: -1 }, { ...start, handedAt: '12' }, { ...start, branch: 'é'.repeat(128) },
+    { ...start, taskRef: 7 }, { ...start, taskRef: 'ref-1' }, { ...start, taskRef: 't-0A1B2C3D' }, { ...start, commit: '<SECRET_1>' },
+    { ...start, commit: 'abc123' }, { ...start, taskId: 'x'.repeat(201) }, { ...start, requesterAgentId: 'x'.repeat(201) },
+    { ...start, redelegatedFrom: 'x'.repeat(65) },
   ];
   for (const s of bad) assert.ok(errs(withSession({ start: s })).length, JSON.stringify(s).slice(0, 80));
 });
 
 test('14. lostDemand: tasks that left the queue unstarted', () => {
-  const lost = [{ kind: 'queue_drop', ref: 'ref-2', queuedAt: 20, at: 30, reason: 'cancelled' }];
+  const lost = [{ kind: 'queue_drop', ref: 't-00000002', queuedAt: 20, at: 30, reason: 'cancelled' }];
   const r = validateBatch(withSession({ lostDemand: lost }));
   assert.ok(!('errors' in r), JSON.stringify(r));
   assert.deepEqual(r.sessions[0]!.lostDemand, lost);
+  for (const reason of ['cancelled', 'taken_back', 'dropped_with_stop', 'queue_cleared', 'agent_removed', 'not_handed_again']) {
+    assert.ok(!('errors' in validateBatch(withSession({ lostDemand: [{ ...lost[0], reason }] }))), reason);
+  }
   const bad: unknown[] = [
-    {}, [{ ...lost[0], kind: 'crash' }], [{ ...lost[0], by: 'x' }], [{ ...lost[0], reason: 'Not A Word' }], [{ ...lost[0], at: -1 }],
-    [{ kind: 'queue_drop', ref: 'r', queuedAt: 1, at: 2 }], Array.from({ length: 1001 }, () => lost[0]),
+    {}, [{ ...lost[0], kind: 'crash' }], [{ ...lost[0], by: 'x' }], [{ ...lost[0], reason: 'Not A Word' }], [{ ...lost[0], reason: 'forgotten' }],
+    [{ ...lost[0], at: -1 }], [{ ...lost[0], ref: 'ref-2' }], [{ kind: 'queue_drop', ref: 't-00000002', queuedAt: 1, at: 2 }],
+    Array.from({ length: 1001 }, () => lost[0]),
   ];
   for (const l of bad) assert.ok(errs(withSession({ lostDemand: l })).length, JSON.stringify(l).slice(0, 80));
 });
@@ -186,11 +208,26 @@ test('15. cancel: who cut a request, why, when, what reached the harness', () =>
   const r = validateBatch({ ...ok, requests: [{ ...request, cancel }] });
   assert.ok(!('errors' in r), JSON.stringify(r));
   assert.deepEqual(r.requests[0]!.cancel, cancel);
-  assert.ok(!('errors' in validateBatch({ ...ok, requests: [{ ...request, cancel: { ...cancel, cause: 'http2_reset' } }] })), 'a word with digits, a letter first');
-  assert.ok(errs({ ...ok, requests: [{ ...request, cancel: { ...cancel, cause: '2fast' } }] }).length, 'a word starts with a letter');
+  const causes: Record<string, string[]> = {
+    harness: ['esc', 'ctrl_c', 'cli_interrupt', 'abandoned_while_held', 'unknown'],
+    tars: ['stop', 'restart', 'sleep', 'remove', 'quit', 'replace'],
+    proxy: ['hold_ceiling'],
+    endpoint: ['stream_cut'],
+  };
+  for (const [by, list] of Object.entries(causes)) {
+    for (const cause of list) assert.ok(!('errors' in validateBatch({ ...ok, requests: [{ ...request, cancel: { ...cancel, by, cause } }] })), `${by} ${cause}`);
+  }
   const bad: unknown[] = [
-    'harness', { ...cancel, by: 'Some One' }, { ...cancel, cause: '' }, { ...cancel, at: 1.5 }, { ...cancel, deliveredBytes: -1 },
-    { ...cancel, note: 'x' }, { by: 'harness', cause: 'abandoned_while_held', at: 40 },
+    'harness', { ...cancel, by: 'Some One' }, { ...cancel, by: 'user' }, { ...cancel, cause: '' }, { ...cancel, cause: 'teleport' },
+    { ...cancel, by: 'tars', cause: 'esc' }, { ...cancel, by: 'endpoint', cause: 'hold_ceiling' }, { ...cancel, at: 1.5 },
+    { ...cancel, deliveredBytes: -1 }, { ...cancel, note: 'x' }, { by: 'harness', cause: 'abandoned_while_held', at: 40 },
   ];
   for (const c of bad) assert.ok(errs({ ...ok, requests: [{ ...request, cancel: c }] }).length, JSON.stringify(c).slice(0, 80));
+});
+
+test('16. a turn\'s taskRef', () => {
+  const r = validateBatch({ ...ok, turns: [{ ...turn, taskRef: 't-0a1b2c3d' }] });
+  assert.ok(!('errors' in r), JSON.stringify(r));
+  assert.equal(r.turns[0]!.taskRef, 't-0a1b2c3d');
+  for (const taskRef of ['ref-1', 't-0a1b2c3', 't-0a1b2c3d4', 7]) assert.ok(errs({ ...ok, turns: [{ ...turn, taskRef }] }).length, String(taskRef));
 });

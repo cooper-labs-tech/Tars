@@ -50,7 +50,7 @@
 //
 // What started a session, the demand it never served, and a request's cancel (27/11, the second trace wave): the
 // ways it can fail, written before the code.
-// L1. A session sent with `start` or `lostDemand`, or a request with `cancel`, is refused as an unknown field.
+// L1. A session sent with `start` or `lostDemand`, a turn with `taskRef`, or a request with `cancel`, is refused as an unknown field.
 // L2. They are not stored, or not read back with the shape they were sent in: the session on the list and in the
 //     detail, the request in the detail and on the join.
 // L3. Sent without them (an older Tars), they read back other than `null`, or without the key.
@@ -118,10 +118,10 @@ const ENV = {
 const EVENTS = [{ at: T0 + 1000, kind: 'sleep' }, { at: T0 + 2000, kind: 'wake' }];
 // What started a session, the tasks it lost, and a request cut while held.
 const START = {
-  trigger: 'task', via: 'api', taskRef: 'ref-e2e-1', taskId: 'task-e2e-1', requesterAgentId: 'agent-0', queuedAt: T0 - 5000, handedAt: T0 - 4000,
+  trigger: 'task', via: 'api', taskRef: 't-0e2e0001', taskId: 'task-e2e-1', requesterAgentId: 'agent-0', queuedAt: T0 - 5000, handedAt: T0 - 4000,
   firstRequestAt: T0, commit: '0123456789abcdef0123456789abcdef01234567', branch: 'feat/e2e', redelegatedFrom: 'tr_before',
 };
-const LOST = [{ kind: 'queue_drop', ref: 'ref-e2e-2', queuedAt: T0 - 3000, at: T0 + 500, reason: 'cancelled' }];
+const LOST = [{ kind: 'queue_drop', ref: 't-0e2e0002', queuedAt: T0 - 3000, at: T0 + 500, reason: 'cancelled' }];
 const CANCEL = { by: 'harness', cause: 'abandoned_while_held', at: T0 + 3000, deliveredBytes: 0 };
 
 function session(over: Record<string, unknown> = {}) {
@@ -426,16 +426,18 @@ describe('trace back-office, end to end', () => {
     // L3. Sent without them: null, never absent.
     const before = await detail();
     assert.deepEqual(note('start.before', [('start' in before.session), before.session.start, ('lostDemand' in before.session), before.session.lostDemand,
-      before.requests.map((r: any) => ['cancel' in r, r.cancel])]), [true, null, true, null, [[true, null], [true, null], [true, null]]]);
-    // L1, L2. Sent with them.
+      before.requests.map((r: any) => ['cancel' in r, r.cancel]), before.turns.map((t: any) => ['taskRef' in t, t.taskRef])]),
+      [true, null, true, null, [[true, null], [true, null], [true, null]], [[true, null]]]);
+    // L1, L2. Sent with them, and the turn's task.
     const sent = await call('PUT', '/v1/batches/batch-start', { token: installA.token, body: {
       schema: 1, sessions: [session({ finalStatus: 'done', endedAt: T0 + 6000, start: START, lostDemand: LOST })],
-      requests: [{ ...requests[1], cancel: CANCEL }],
+      turns: [{ ...turn, taskRef: START.taskRef }], requests: [{ ...requests[1], cancel: CANCEL }],
     } });
     assert.equal(sent.status, 200, String(sent.buf));
     const after = await detail();
     assert.deepEqual(after.session.start, START);
     assert.deepEqual(after.session.lostDemand, LOST);
+    assert.deepEqual(note('start.turnTaskRef', after.turns.map((t: any) => t.taskRef)), [START.taskRef]);
     assert.deepEqual(note('start.cancels', after.requests.map((r: any) => [r.requestId, r.cancel])), [['req-1', null], ['req-2', CANCEL], ['req-t', null]]);
     const listed = (await call('GET', '/v1/read/sessions?agent=agent-1', { token: reader.token })).json.sessions;
     assert.deepEqual(note('start.list', listed.map((s: any) => [s.sessionId, s.start?.trigger, s.lostDemand?.length])), [['sess-1', 'task', 1]]);
@@ -443,16 +445,18 @@ describe('trace back-office, end to end', () => {
     assert.deepEqual(joined.map((r: any) => r.cancel), [CANCEL]);
     // L4. Sent again without them: kept.
     const older = await call('PUT', '/v1/batches/batch-start-older', { token: installA.token, body: {
-      schema: 1, sessions: [session({ finalStatus: 'done', endedAt: T0 + 6000 })], requests: [requests[1]],
+      schema: 1, sessions: [session({ finalStatus: 'done', endedAt: T0 + 6000 })], turns: [turn], requests: [requests[1]],
     } });
     assert.equal(older.status, 200, String(older.buf));
     const kept = await detail();
-    assert.deepEqual(note('start.keptAfterOlder', [kept.session.start?.taskRef, kept.session.lostDemand?.length, kept.requests[1].cancel?.cause]),
-      [START.taskRef, 1, CANCEL.cause]);
+    assert.deepEqual(note('start.keptAfterOlder', [kept.session.start?.taskRef, kept.session.lostDemand?.length, kept.requests[1].cancel?.cause, kept.turns[0].taskRef]),
+      [START.taskRef, 1, CANCEL.cause, START.taskRef]);
     // L5. Malformed: refused whole.
     const bad: Array<[string, Record<string, unknown>, Record<string, unknown>]> = [
       ['startKey', { start: { ...START, requester: 'Someone' } }, {}],
       ['triggerName', { start: { ...START, trigger: 'Some Person' } }, {}],
+      ['triggerOutsideList', { start: { ...START, trigger: 'reboot' } }, {}],
+      ['causeOfAnother', {}, { cancel: { ...CANCEL, by: 'tars', cause: 'esc' } }],
       ['lostKind', { lostDemand: [{ ...LOST[0], kind: 'crash' }] }, {}],
       ['cancelTime', {}, { cancel: { ...CANCEL, at: -1 } }],
     ];
@@ -480,7 +484,7 @@ describe('trace back-office, end to end', () => {
         const tables = (await client.query("SELECT tablename FROM pg_tables WHERE schemaname = 'public' AND tablename <> 'schema_migrations' ORDER BY 1")).rows.map((r) => r.tablename as string);
         const out: Record<string, string> = {};
         for (const t of tables) {
-          const r = (await client.query(`SELECT count(*)::int AS n, md5(coalesce(string_agg(x, '|' ORDER BY x), '')) AS d FROM (SELECT (to_jsonb(t) - 'side' - 'environment' - 'events' - 'live_sessions' - 'start' - 'lost_demand' - 'cancel')::text AS x FROM "${t}" t) s`)).rows[0];
+          const r = (await client.query(`SELECT count(*)::int AS n, md5(coalesce(string_agg(x, '|' ORDER BY x), '')) AS d FROM (SELECT (to_jsonb(t) - 'side' - 'environment' - 'events' - 'live_sessions' - 'start' - 'lost_demand' - 'cancel' - 'task_ref')::text AS x FROM "${t}" t) s`)).rows[0];
           out[t] = `${r.n}:${r.d}`;
         }
         return out;
@@ -594,8 +598,8 @@ describe('trace back-office, end to end', () => {
     for (const [id, refs] of [['b-del', [h.system, sha(twice), sha(only)]], ['b-del2', [sha(twice)]]] as const) {
       const put = await call('PUT', `/v1/batches/${id}.1`, { token: installB.token, body: {
         schema: 1, sessions: [session({ sessionId: id, finalStatus: 'done', endedAt: T0 + 10_000, turnCount: 1, requestCount: 1, environment: { ...ENV, chip: `Chip-${id}-7731` }, events: EVENTS,
-          start: { ...START, taskRef: `Chip-${id}-7731-task` }, lostDemand: [{ ...LOST[0], ref: `Chip-${id}-7731-lost` }] })],
-        turns: [{ ...turn, turnId: `${id}-t`, sessionId: id }], requests: [{ ...req(id, [...refs]), liveSessions: 5, cancel: { ...CANCEL, cause: `chip_${id.replace('-', '_')}_7731` } }],
+          start: { ...START, branch: `Chip-${id}-7731-branch` }, lostDemand: LOST })],
+        turns: [{ ...turn, turnId: `${id}-t`, sessionId: id }], requests: [{ ...req(id, [...refs]), liveSessions: 5, cancel: CANCEL }],
         messages: [meta(h.system, msgs.system, 'system'), meta(sha(twice), twice, 'user'), meta(sha(only), only, 'assistant')].filter((m) => (refs as readonly string[]).includes(m.hash)),
       } });
       assert.equal(put.status, 200, String(put.buf));
@@ -640,7 +644,7 @@ describe('trace back-office, end to end', () => {
       const tables = (await client.query("SELECT tablename FROM pg_tables WHERE schemaname = 'public'")).rows.map((r) => r.tablename as string);
       const holding: string[] = [];
       for (const t of tables) {
-        const n = (await client.query(`SELECT count(*)::int AS n FROM "${t}" x WHERE to_jsonb(x)::text LIKE '%Chip-b-del-7731%' OR to_jsonb(x)::text LIKE '%chip_b_del_7731%'`)).rows[0].n;
+        const n = (await client.query(`SELECT count(*)::int AS n FROM "${t}" x WHERE to_jsonb(x)::text LIKE '%Chip-b-del-7731%'`)).rows[0].n;
         if (n) holding.push(t);
       }
       assert.deepEqual(note('env.afterSessionDelete.tablesHolding', holding), []);
