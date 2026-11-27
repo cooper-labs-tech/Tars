@@ -22,6 +22,10 @@ import * as path from 'node:path';
  * 5. A download that fails writing to the disk quotes the updater's cache by
  *    its absolute path, the owner's home in it (the Audit's I-2 on #658,
  *    for every message of the class): the home is said `~`.
+ * 6. The window is not told: the banner stays on "Downloading". Its way back,
+ *    app:update-error (ClientLayout to "available", Settings, System its
+ *    error), had listeners and no sender (the Audit's L3 on #660). The
+ *    sentence goes on it, once per failed download, and never on a success.
  */
 
 const download = vi.hoisted(() => ({ next: (): Promise<unknown> => Promise.resolve(['/tmp/Tars.zip']) }));
@@ -40,8 +44,13 @@ vi.mock('electron', () => ({
 }));
 
 let downloadUpdate: () => Promise<unknown>;
+/** What the main window was sent, by channel. */
+const sent: Array<[string, unknown]> = [];
 beforeEach(async () => {
-  ({ downloadUpdate } = await import('../../../electron/services/update-checker'));
+  const checker = await import('../../../electron/services/update-checker');
+  ({ downloadUpdate } = checker);
+  sent.length = 0;
+  checker.setMainWindowGetter(() => ({ webContents: { send: (channel: string, payload: unknown) => { sent.push([channel, payload]); } } }) as never);
 });
 
 describe('an update download that fails', () => {
@@ -74,6 +83,24 @@ describe('an update download that fails', () => {
     expect(answer.success).toBe(false);
     expect(answer.error).toBe(`Tars could not download the update: ENOSPC: no space left on device, write '${path.join('~', 'Library', 'Caches', 'tars-updater', 'pending', 'Tars-2.0.7-arm64-mac.zip')}'`);
     expect(answer.error).not.toContain(os.homedir());
+  });
+});
+
+describe('the window, told of a failed download (6)', () => {
+  it('gets the sentence on app:update-error, once', async () => {
+    download.next = () => Promise.reject(new Error('net::ERR_INTERNET_DISCONNECTED'));
+
+    await downloadUpdate();
+
+    expect(sent).toEqual([['app:update-error', 'Tars could not download the update: net::ERR_INTERNET_DISCONNECTED']]);
+  });
+
+  it('gets nothing on a success', async () => {
+    download.next = () => Promise.resolve(['/tmp/Tars-2.0.7-arm64-mac.zip']);
+
+    await downloadUpdate();
+
+    expect(sent).toEqual([]);
   });
 });
 

@@ -38,6 +38,13 @@ import * as http from 'node:http';
  *    and how (describeHermesFailure), so its contract is kept as it is.
  * 10. A failure that is not the network's (a bug reading an answer) is passed
  *    off as "could not reach Hermes".
+ * 11. A gateway that cuts the connection after its answer has begun (200 and
+ *    its headers sent, then the socket destroyed, with a length or chunked)
+ *    never settles: hermesRequest listened to the answer's data and end only,
+ *    and its timeout cannot fire on a socket that is gone. The channel never
+ *    answers, and an overseer question awaiting it holds the turn for good:
+ *    every later question is "busy" until Tars restarts (the Audit's M1 on
+ *    #660, measured on main too). Added after the fix of 1 to 10.
  */
 
 const handlers = vi.hoisted(() => new Map<string, (...args: unknown[]) => Promise<unknown>>());
@@ -221,6 +228,58 @@ describe('a question to the overseer when the gateway stops answering mid-turn (
     expect(result.ok).toBe(false);
     expect(result.reason).toBe('gateway_unreachable');
     expect(result.error).toMatch(new RegExp(`^Tars could not reach Hermes at http://127\\.0\\.0\\.1:${port}: \\S`));
+  }, 30_000);
+});
+
+/** The answer, or 'still waiting' once `ms` have passed without one. */
+function within<T>(answer: Promise<T>, ms: number): Promise<T | 'still waiting'> {
+  return Promise.race([answer, new Promise<'still waiting'>(resolve => setTimeout(() => resolve('still waiting'), ms))]);
+}
+
+/**
+ * A gateway that begins its answer, 200, its headers and 9 bytes, then cuts the
+ * connection: with a Content-Length, or chunked. `status` keeps /api/status
+ * whole, so the overseer's probe passes and its turn goes on.
+ */
+async function cutsMidAnswer(framing: 'length' | 'chunked', status = false): Promise<number> {
+  const server = http.createServer((req, res) => {
+    if (status && req.url === '/api/status') {
+      res.setHeader('Content-Type', 'application/json');
+      res.end(JSON.stringify({ version: '0.23.4', auth_required: false }));
+      return;
+    }
+    res.writeHead(200, framing === 'length' ? { 'Content-Type': 'application/json', 'Content-Length': '100' } : { 'Content-Type': 'application/json' });
+    res.write('{"jobs":[', () => setTimeout(() => req.socket.destroy(), 20));
+  });
+  server.on('upgrade', (_req, socket) => socket.destroy());
+  await new Promise<void>(resolve => server.listen(0, '127.0.0.1', resolve));
+  open.push(() => new Promise<void>(resolve => { server.closeAllConnections(); server.close(() => resolve()); }));
+  return (server.address() as net.AddressInfo).port;
+}
+
+describe('a gateway that cuts its answer off once it has begun (11)', () => {
+  for (const framing of ['length', 'chunked'] as const) {
+    it(`hermes:crons:list refuses, with a ${framing === 'length' ? 'Content-Length' : 'chunked'} answer`, async () => {
+      const port = await cutsMidAnswer(framing);
+      gatewayAt(`http://127.0.0.1:${port}`);
+
+      const answer = await within(call('hermes:crons:list'), 5_000);
+
+      expect(answer).toEqual({ success: false, error: `Tars could not reach Hermes at http://127.0.0.1:${port}: its answer was cut off before the end` });
+    }, 10_000);
+  }
+
+  it('an overseer question answers gateway_unreachable, and the next one is not "busy"', async () => {
+    const port = await cutsMidAnswer('length', true);
+    gatewayAt(`http://127.0.0.1:${port}`);
+
+    const first = await within(call('overseer:send', 'How is the fleet?'), 10_000);
+    const second = await within(call('overseer:send', 'And now?'), 10_000);
+
+    for (const answer of [first, second]) {
+      expect(answer).toMatchObject({ ok: false, reason: 'gateway_unreachable' });
+      expect((answer as Refusal).error).toMatch(new RegExp(`^Tars could not reach Hermes at http://127\\.0\\.0\\.1:${port}: \\S`));
+    }
   }, 30_000);
 });
 

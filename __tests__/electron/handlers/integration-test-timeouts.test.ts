@@ -17,6 +17,11 @@ import * as net from 'node:net';
  * 3. The refusal says nothing a person can act on: not which service, not how
  *    long Tars waited.
  * 4. A host that answers is no longer read: X's user name, SocialData's success.
+ * 5. A host that cuts its answer off once it has begun (200, its headers and
+ *    9 bytes, then the socket destroyed) keeps either test waiting for good:
+ *    they listened to the answer's data and end only, and the timeout cannot
+ *    fire on a socket that is gone (the Audit's M1 on #660, the same gap as
+ *    hermesRequest's). Added after the fix of 1 to 4.
  *
  * Nothing leaves the test: https.request is sent to a loopback stand-in, over
  * plain http, with everything the handler asked for but the address.
@@ -89,6 +94,17 @@ async function answeringHost(body: unknown): Promise<void> {
   target.port = (server.address() as net.AddressInfo).port;
 }
 
+/** A loopback host that begins its answer, 200, its headers and 9 bytes, then cuts the connection. */
+async function cuttingHost(): Promise<void> {
+  const server = http.createServer((req, res) => {
+    res.writeHead(200, { 'Content-Type': 'application/json', 'Content-Length': '100' });
+    res.write('{"data":{', () => setTimeout(() => req.socket.destroy(), 20));
+  });
+  await new Promise<void>(resolve => server.listen(0, '127.0.0.1', resolve));
+  closing.push(() => new Promise<void>(resolve => { server.closeAllConnections(); server.close(() => resolve()); }));
+  target.port = (server.address() as net.AddressInfo).port;
+}
+
 /** The answer, or 'still waiting' once `ms` have passed without one. */
 function within<T>(answer: Promise<T>, ms: number): Promise<T | 'still waiting'> {
   return Promise.race([answer, new Promise<'still waiting'>(resolve => setTimeout(() => resolve('still waiting'), ms))]);
@@ -112,6 +128,20 @@ describe('a host that takes the connection and never answers (1, 2, 3)', () => {
     expect(target.asked).toEqual(['api.socialdata.tools/twitter/user/elonmusk']);
     expect(answer).toEqual({ success: false, error: 'SocialData did not answer within 10 s.' });
   }, 20_000);
+});
+
+describe('a host that cuts its answer off once it has begun (5)', () => {
+  it('xapi:test says X\'s answer was cut off', async () => {
+    await cuttingHost();
+
+    await expect(within(handlers.get('xapi:test')!(null), 5_000)).resolves.toEqual({ success: false, error: 'X\'s answer was cut off before the end.' });
+  }, 10_000);
+
+  it('socialdata:test says SocialData\'s answer was cut off', async () => {
+    await cuttingHost();
+
+    await expect(within(handlers.get('socialdata:test')!(null), 5_000)).resolves.toEqual({ success: false, error: 'SocialData\'s answer was cut off before the end.' });
+  }, 10_000);
 });
 
 describe('a host that answers (4)', () => {

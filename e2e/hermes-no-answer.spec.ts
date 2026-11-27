@@ -51,7 +51,10 @@ test('schedules: a gateway that gives no answer is named, with the reason, never
   test.setTimeout(180_000);
   await page.goto(`${DEV_URL}/crons`, { waitUntil: 'domcontentloaded' });
 
-  await expect(page.getByText(SENTENCE, { exact: true })).toBeVisible({ timeout: 60_000 });
+  // The sentence, inside whatever line the page puts it in: #658 draws it after
+  // the action ("Could not read the schedules: ..."), so the whole line is the
+  // page's, and only this part is this PR's (the Audit's L1 on #660).
+  await expect(page.getByText(SENTENCE)).toBeVisible({ timeout: 60_000 });
   await expect(page.getByText(/Error invoking remote method/)).toHaveCount(0);
   await stepShot(page, '01-schedules-says-why');
   expect(errors, errors.join('\n')).toEqual([]);
