@@ -287,7 +287,22 @@ export class TraceUploader {
   }
 
   /** One pass: the per-session deletes owed, then what is new or grew, for sessions opted in now. Never throws. */
+  /** Owed deletes forgotten: their install is gone, so none can ever go. A store that refuses it is said, not thrown. */
+  private forgetOwedDeletes(why: string): void {
+    try {
+      this.deps.store.forgetOwedDeletes();
+    } catch (err) {
+      console.error(`[traces] ${why}, and its owed deletes stay owed here: ${describeSecretFileError(err)}`);
+    }
+  }
+
   async runOnce(): Promise<{ sent: number; failed: number; skipped?: 'off' | 'waiting' | 'busy' }> {
+    // No install file left (removed, or never put back after a 401): the deletes owed to it can never go.
+    try {
+      if (!this.readInstall() && this.deps.store.owedDeletes(1).length) this.forgetOwedDeletes('this install is gone');
+    } catch (err) {
+      console.error(`[traces] the owed deletes could not be read: ${describeSecretFileError(err)}`);
+    }
     const s = this.deps.settings();
     if (!s.url || this.owed() || this.halts > 0) return { sent: 0, failed: 0, skipped: 'off' };
     if (!s.consentAt && !this.deletesDue(s.url)) return { sent: 0, failed: 0, skipped: 'off' };
@@ -368,6 +383,8 @@ export class TraceUploader {
         // The consent first: an install file that will not go must not leave sharing on.
         this.deps.withdrawConsent();
         this.dropInstall();
+        // Its copies went with it: no delete owed to it can go, or needs to (the Audit's I-2 at 98e921347).
+        this.forgetOwedDeletes('the back-office forgot this install');
         this.notice = 'forgotten';
         this.lastError = 'This back-office no longer knows this Tars. Nothing is sent until you share again.';
         this.nextTryAt = undefined;
@@ -528,6 +545,9 @@ export class TraceUploader {
   }
 
   private async sendSession(install: Install, traceId: string, seq: number): Promise<void> {
+    // Before any call: from here the back-office may hold the session, whole or in part, so a delete made while its
+    // batches land, or after a pass that failed half way, owes it one (the Audit's M1 at 98e921347).
+    this.deps.store.markSending(traceId, this.now());
     const payload = this.buildPayload(install.secret, traceId, seq);
     if (!payload) return;
     const { blobs, batches } = payload;

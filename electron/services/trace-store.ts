@@ -29,6 +29,7 @@ import {
  *   in the same transaction, and nothing else of it, so every copy can follow: a reader of the loopback read API
  *   (deletions(), GET /api/traces/deletions) and the back-office, which the uploader owes a per-session delete for a
  *   session it sent and the user or retention deleted (`owed`; the cap frees this disk and says nothing of the data).
+ *   "Sent" is from the session's first upload call on (markSending): a delete while its batches land is owed too.
  *   A tombstone is kept TOMBSTONE_DAYS, then pruned by the sweep; one still owed stays until it is sent, or until what
  *   was sent is forgotten (resetUploads: a new install, or a whole deletion that went through, covers it).
  *
@@ -372,10 +373,28 @@ export class TraceStore {
       }));
   }
 
-  /** A session uploaded as it was at `seq`. */
+  /**
+   * A session uploaded as it was at `seq`; nothing for one that is gone (deleted while its batches were landing: its
+   * tombstone already owes the back-office its delete).
+   */
   markUploaded(traceId: string, seq: number, at: number): void {
-    this.db.prepare(`INSERT INTO uploads (trace_id, uploaded_seq, uploaded_at) VALUES (?, ?, ?)
-      ON CONFLICT(trace_id) DO UPDATE SET uploaded_seq = MAX(uploaded_seq, excluded.uploaded_seq), uploaded_at = excluded.uploaded_at`).run(traceId, seq, at);
+    this.db.prepare(`INSERT INTO uploads (trace_id, uploaded_seq, uploaded_at) SELECT ?, ?, ? WHERE EXISTS (SELECT 1 FROM traces WHERE trace_id = ?)
+      ON CONFLICT(trace_id) DO UPDATE SET uploaded_seq = MAX(uploaded_seq, excluded.uploaded_seq), uploaded_at = excluded.uploaded_at`).run(traceId, seq, at, traceId);
+  }
+
+  /**
+   * Before a session's first upload call: the back-office may hold it from now on, whole or in part, so a delete at
+   * any moment owes it one (the Audit's M1 at 98e921347). An upload row at sequence 0: the queue still sends the
+   * session, and the sent count leaves it out. Nothing for a session that is gone, or one already marked.
+   */
+  markSending(traceId: string, at: number): void {
+    this.db.prepare(`INSERT INTO uploads (trace_id, uploaded_seq, uploaded_at) SELECT ?, 0, ? WHERE EXISTS (SELECT 1 FROM traces WHERE trace_id = ?)
+      ON CONFLICT(trace_id) DO NOTHING`).run(traceId, at, traceId);
+  }
+
+  /** The install the deletes were owed to is gone (forgotten by the back-office, or its file removed): none can go. */
+  forgetOwedDeletes(): void {
+    this.db.prepare('UPDATE tombstones SET owed = 0 WHERE owed = 1').run();
   }
 
   /** A session's change sequence: what an upload of it now is keyed on. */
@@ -437,7 +456,8 @@ export class TraceStore {
    * change not sent, opted in or not; the uploader counts what it would really send (TraceUploader.state).
    */
   uploadCounts(since?: number): { sent: number; pending: number; lastAt?: number } {
-    const sent = this.db.prepare('SELECT COUNT(*) AS n, MAX(uploaded_at) AS at FROM uploads u JOIN traces t ON t.trace_id = u.trace_id WHERE t.started_at > ?')
+    // A session marked before its first upload call (markSending, sequence 0) is not sent yet.
+    const sent = this.db.prepare('SELECT COUNT(*) AS n, MAX(uploaded_at) AS at FROM uploads u JOIN traces t ON t.trace_id = u.trace_id WHERE t.started_at > ? AND u.uploaded_seq > 0')
       .get(since ?? Number.MIN_SAFE_INTEGER) as { n: number; at: number | null };
     const pending = this.db.prepare('SELECT COUNT(*) AS n FROM traces t LEFT JOIN uploads u ON u.trace_id = t.trace_id WHERE t.updated_seq > COALESCE(u.uploaded_seq, 0)').get() as { n: number };
     return { sent: sent.n, pending: pending.n, lastAt: sent.at ?? undefined };

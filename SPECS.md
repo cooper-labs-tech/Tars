@@ -301,8 +301,11 @@ consent, opted-in sessions are uploaded:
 retention, is owed a `DELETE /v1/sessions/{sessionId}`: sent first in each pass, retried as every other call, with the
 install's token to the install it went to, at the address set. It goes with sharing off too, since it carries only the
 id of a session the back-office already holds, and never while a whole deletion is owed or under way. A session the cap
-removes is not deleted there: the cap is this disk's room, not a decision about the data. A new install, or a whole
-deletion that went through, forgets the deletes owed to the old one.
+removes is not deleted there: the cap is this disk's room, not a decision about the data. A session counts as sent
+from its first upload call (an upload mark at sequence 0, written before it, which the sent count leaves out), so one
+deleted while its batches land, or after a pass that failed half way, is owed its delete too; no mark is written for a
+session that is gone. A new install, a whole deletion that went through, or an install that is gone (forgotten by the
+back-office, or its file removed) forgets the deletes owed to it.
 
 The consent is written before it is given, to its own file in the private folder and then to the settings, and a
 write that fails answers the window with the reason: nothing is given. A withdrawal holds in memory at once. It does

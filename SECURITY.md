@@ -1215,8 +1215,9 @@ would be sent.
   (`DELETE /v1/sessions/{id}`, the install's token), first in each pass and retried as every other call. It goes with
   sharing off as well, since it carries only the id of a session the back-office already holds, and only to the
   install the session went to, at the address set; never while a whole deletion is owed or under way. A session the
-  cap removes stays there: the cap frees this disk and says nothing of the data. A new install, or a whole deletion
-  that went through, forgets the deletes owed to the old one.
+  cap removes stays there: the cap frees this disk and says nothing of the data. "Sent" starts at the session's first
+  upload call, so one deleted while its batches land, or after a pass that failed half way, is owed its delete too. A
+  new install, a whole deletion that went through, or an install that is gone forgets the deletes owed to the old one.
 - When the back-office no longer knows the install (a 401: the user's deletion, or its operator's), Tars never
   registers again on its own. Uploads stop, the local traces stay, the consent is withdrawn, and the window says so.
   Registering again is the user's own act.
