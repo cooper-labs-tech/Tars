@@ -3,6 +3,7 @@ import * as path from 'path';
 import { DATA_DIR, privatePath } from '../constants';
 import { defaultHermesConnection, type HermesConnection } from '../types/hermes';
 import { describeSecretFileError, ensureSecretFileMode, writeSecretFileSync } from '../utils/secret-file';
+import { withoutHome } from '../utils/without-home';
 import { moveOutOfAgentReach } from './settings-secrets';
 
 /**
@@ -106,7 +107,16 @@ export function configuredHermesConnection(): { conn: HermesConnection } | { unu
     return unusable(`cannot be read (${describeSecretFileError(err)})`);
   }
   if (!parsed || typeof parsed !== 'object') return unusable('holds no connection');
-  const file = withoutToken(parsed as Partial<HermesConnection>);
+  let file: Partial<HermesConnection>;
+  try {
+    file = withoutToken(parsed as Partial<HermesConnection>);
+  } catch (err) {
+    // A token a Tars before 1.9.2 left in the file, whose move into hermes-token
+    // cannot be written: it threw Node's file error, the home's path in it,
+    // through every gateway, overseer and memory channel (#660). Said in words,
+    // the home said ~; a write error quotes paths, never what was written.
+    return unusable(`holds a token Tars could not move out of it (${withoutHome(err instanceof Error ? err.message : String(err))})`);
+  }
   const conn: HermesConnection = { ...defaultHermesConnection(), ...file, token: readToken() };
   switch (file.mode) {
     case 'local': {
