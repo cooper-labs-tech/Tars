@@ -325,8 +325,12 @@ from the window, or from an agent's drop file (`~/.tars/endpoint-keys/<name>.key
   read from the harness's own log by the watchers that already follow it (`services/tool-calls.ts`): codex 0.170's
   `CommandExecution` items and output lines (measured), pi 1.3.0's and 1.5.2's `toolResult` lines (read in their
   code). A line read late, after its request or the session's end, still lands on the session it happened in, and
-  moves its change sequence; one outside every session of the agent is dropped. The other harnesses' logs are not
-  read yet: their requests' `toolMs` is null.
+  moves its change sequence; one outside every session of the agent is dropped. Qwen Code's and opencode's (measured:
+  0.25.2, 1.19.6) are read by a follower of their own (`services/harness-tool-logs.ts`), every 2 s while a traced
+  session of theirs runs and 30 s after its end: Qwen Code's chat file of the agent's session (its `qwen-code.tool_call`
+  telemetry and `tool_result` lines), each byte once, at most 1 MiB a pass; opencode's database, opened read-only,
+  the `tool` parts of the sessions begun in the agent's folder since the traced session started, at most 500 rows a
+  pass. A harness not read (none other runs on an endpoint yet) leaves its requests' `toolMs` null.
 
 Retention and a size cap come from Settings. The back-office reads it through `window.electronAPI.traces`. An external
 reader reads it through `GET /api/traces/*`, with its own token, as the reader's trace format tables.
