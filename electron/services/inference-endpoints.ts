@@ -6,6 +6,7 @@ import { isValidOpenAIBaseUrl } from '../providers/cli-provider';
 import type { AgentStatus, AppSettings, InferenceEndpoint } from '../types';
 import { isRefusedExtraHeader, type ProxyTarget } from './endpoint-proxy';
 import { twoZones } from '../utils/two-zones';
+import { limitsError } from './endpoint-harness';
 
 /**
  * Inference endpoints (native traces): OpenAI-compatible endpoints an open harness runs
@@ -105,6 +106,9 @@ export interface EndpointView {
   extraHeaders: Record<string, string>;
   /** What the owner approved, to show beside a change an agent made. */
   approvedExtraHeaders?: Record<string, string>;
+  /** The model's real context window and output cap, in tokens, as the owner set them: given to the harness at launch. */
+  contextWindow?: number;
+  maxOutputTokens?: number;
 }
 
 type Result = { ok: true; settings: AppSettings; endpoint: InferenceEndpoint } | { ok: false; error: string };
@@ -158,6 +162,8 @@ export function saveEndpoint(
   settings: AppSettings,
   input: {
     id?: string; name?: string; baseUrl?: string; allowTraces?: boolean; holdMaxSeconds?: number; sendSessionHeaders?: boolean; allowPlainHttp?: boolean; extraHeaders?: unknown;
+    /** The model's real context window and output cap in tokens (the owner's, in the window); null clears one. */
+    contextWindow?: number | null; maxOutputTokens?: number | null;
     /** The window's save of an endpoint that exists: the address and extra headers its form showed when opened. */
     shown?: { baseUrl?: unknown; extraHeaders?: unknown };
   },
@@ -207,12 +213,22 @@ export function saveEndpoint(
     extraHeaders = clean.headers;
   }
   const headersChanged = !sameExtraHeaders(extraHeaders, current?.extraHeaders);
+  // The model's limits: the owner's, set in the window (they decide when a harness compacts and what it is refused).
+  if ((input.contextWindow !== undefined || input.maxOutputTokens !== undefined) && !owner) {
+    return { ok: false, error: 'Only the owner sets an endpoint\'s context window and output cap, in the window.' };
+  }
+  const contextWindow = input.contextWindow !== undefined ? input.contextWindow : current?.contextWindow;
+  const maxOutputTokens = input.maxOutputTokens !== undefined ? input.maxOutputTokens : current?.maxOutputTokens;
+  const badLimits = limitsError(contextWindow, maxOutputTokens);
+  if (badLimits) return { ok: false, error: badLimits };
   const next: InferenceEndpoint = {
     ...(current ?? { id: newId(list), models: [], approved: false }),
     name, baseUrl: baseUrl!, allowTraces, holdMaxSeconds: hold,
     sendSessionHeaders: input.sendSessionHeaders ?? current?.sendSessionHeaders ?? false,
     allowPlainHttp, extraHeaders,
   } as InferenceEndpoint;
+  if (typeof contextWindow === 'number') next.contextWindow = contextWindow; else delete next.contextWindow;
+  if (typeof maxOutputTokens === 'number') next.maxOutputTokens = maxOutputTokens; else delete next.maxOutputTokens;
   if (owner) {
     // Approval stays apart from saving (found in the window's work on #599, 27/11). What the owner typed in the
     // window (a new address, new extra headers, or the approved values put back) is the owner's own, so approved by
@@ -323,6 +339,8 @@ export function endpointViews(settings: AppSettings, agents: AgentStatus[]): End
     sendSessionHeaders: e.sendSessionHeaders === true, health: e.health,
     plainHttp: transportOf(e.baseUrl) !== 'https', allowPlainHttp: e.allowPlainHttp === true,
     extraHeaders: { ...(e.extraHeaders ?? {}) }, ...(e.approvedExtraHeaders ? { approvedExtraHeaders: { ...e.approvedExtraHeaders } } : {}),
+    ...(typeof e.contextWindow === 'number' ? { contextWindow: e.contextWindow } : {}),
+    ...(typeof e.maxOutputTokens === 'number' ? { maxOutputTokens: e.maxOutputTokens } : {}),
   }));
 }
 

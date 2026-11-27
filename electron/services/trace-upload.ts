@@ -399,6 +399,9 @@ export class TraceUploader {
       nativeSessionId: within(t.native_session_id, MAX_SESSION_ID_CHARS), environment: opt(t.environment as Record<string, unknown>),
       events: Array.isArray(t.events) ? t.events : [],
       rttMedianMs: opt(t.rtt_median_ms as number), clockOffsetMs: opt(t.clock_offset_ms as number),
+      // What the harness was given at launch, and its compactions (trace feature C2): each its own line in the notice.
+      contextWindowGiven: opt(t.context_window_given as number), outputCapGiven: opt(t.output_cap_given as number),
+      autoCompaction: opt(t.auto_compaction as string), compactions: Array.isArray(t.compactions) ? t.compactions : [],
     };
     const turns = doc.turns.map(x => ({
       turnId: String(x.turn_id), sessionId: traceId, index: Number(x.turn_index), startedAt: Number(x.started_at), endedAt: opt(x.ended_at as number),
@@ -432,7 +435,7 @@ export class TraceUploader {
         status: Number(r.status), error: r.error ? String(scrub(String(r.error))).slice(0, 2000) : undefined,
         finishReason: opt(r.finish_reason as string), reqBytes: Number(r.req_bytes), respBytes: Number(r.resp_bytes), messages,
         liveSessions: opt(r.live_sessions as number), rttMs: opt(r.rtt_ms as number), clockOffsetMs: opt(r.clock_offset_ms as number),
-        queueMs: opt(r.queue_ms as number), upstreamMs: opt(r.upstream_ms as number),
+        queueMs: opt(r.queue_ms as number), upstreamMs: opt(r.upstream_ms as number), contextReset: opt(r.context_reset as Record<string, unknown>),
       };
     });
     const messages = [...remote.values()].filter(m => m.role !== 'tools').map(m => ({

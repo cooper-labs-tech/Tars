@@ -108,8 +108,8 @@ export class QwenCodeProvider implements CLIProvider {
       CLAUDE_PROVIDER: this.id,
       // Its API key from Settings, under its model's envKey (services/cli-keys.ts).
       ...keyEnvFor('qwen-code', appSettings, { model: launch.model }),
-      // Its settings file of Tars's: hooks, MCP servers, effort, no updater.
-      QWEN_CODE_SYSTEM_SETTINGS_PATH: writeQwenAgentSettings(agentId, { effort: launch.effort }),
+      // Its settings file of Tars's: hooks, MCP servers, effort, no updater, and on an endpoint its model's limits.
+      QWEN_CODE_SYSTEM_SETTINGS_PATH: writeQwenAgentSettings(agentId, { effort: launch.effort, generation: endpointLaunchForAgent(agentId, 'qwen-code')?.given }),
       // On an inference endpoint: the proxy's address and the model; the token is set at spawn (core/agent-pty.ts).
       ...(endpointLaunchForAgent(agentId, 'qwen-code')?.env ?? {}),
     };

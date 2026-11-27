@@ -368,6 +368,49 @@ export function opensTurn(surface: Surface, input: unknown[]): boolean {
   return lastInstruction(surface, input) !== null;
 }
 
+/** A history item that carries a tool's result: Responses' outputs, a chat `tool` message, Anthropic's tool_result. */
+function isToolResult(surface: Surface, item: unknown): boolean {
+  const o = asObj(item);
+  if (o.type === 'function_call_output' || o.type === 'custom_tool_call_output' || o.role === 'tool') return true;
+  return surface === 'anthropic_messages' && o.role === 'user' && asArr(o.content).some(c => asObj(c).type === 'tool_result');
+}
+
+/** A history item the model said: an assistant message, or one of Responses' output items. */
+function isModelItem(item: unknown): boolean {
+  const o = asObj(item);
+  return o.role === 'assistant' || o.type === 'function_call' || o.type === 'custom_tool_call' || o.type === 'reasoning';
+}
+
+/**
+ * Whether a request's history rewrites the one before (trace feature C2), and how, from what crossed the wire only:
+ * - kept whole at the head and grown as a conversation grows (the tool's result the last answer asked for, or after
+ *   a plain answer the answer itself), or sent again as it was: no rewrite;
+ * - kept at the head but grown with a new instruction instead of the tool's result or the answer (codex 0.163 after a
+ *   compaction, measured 27/11: the old history, then the summary as a user message): `compact`;
+ * - not kept at the head: `truncate` when only older items were dropped (nothing new before the items kept, no new
+ *   instruction after them), else `compact` (a summary in place of what went).
+ * `previous` is the earlier main request's history, by hash, and whether its answer asked for a tool.
+ */
+export function historyRewrite(surface: Surface, previous: { hashes: string[]; askedTool: boolean }, input: unknown[]): 'compact' | 'truncate' | null {
+  const prev = previous.hashes;
+  if (!prev.length) return null;
+  const cur = input.map(hashOf);
+  if (prev.every((h, i) => cur[i] === h)) {
+    const grown = input.slice(prev.length);
+    if (!grown.length) return null;
+    const continues = previous.askedTool ? grown.some(i => isToolResult(surface, i)) : grown.some(isModelItem);
+    if (continues) return null;
+    return grown.some(i => lastInstruction(surface, [i]) !== null) ? 'compact' : null;
+  }
+  const kept = new Set(prev);
+  let lastKept = -1;
+  cur.forEach((h, i) => { if (kept.has(h)) lastKept = i; });
+  if (lastKept < 0) return 'compact';
+  const newBefore = cur.slice(0, lastKept + 1).some(h => !kept.has(h));
+  const newInstruction = input.slice(lastKept + 1).some(i => lastInstruction(surface, [i]) !== null);
+  return newBefore || newInstruction ? 'compact' : 'truncate';
+}
+
 /** The instruction's own words, the harness's reminders left out: what authorship is matched on. */
 export function instructionText(surface: Surface, input: unknown[]): string {
   const last = lastInstruction(surface, input);
