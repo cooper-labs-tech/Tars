@@ -8,7 +8,7 @@ import {
 import { approvedEndpoint, type LoadGrant } from './load-grants';
 import { writeSecretFileSync } from '../utils/secret-file';
 import {
-  createRun, listRuns, newRunId, readSnapshot, updateRun,
+  createRun, newRunId, readRun, readSnapshot, updateRun,
   LOAD_BLOCK_REASONS, type LoadArrival, type LoadBlockReason, type LoadRunRecord, type LoadTestResult,
 } from './load-run-record';
 
@@ -44,6 +44,8 @@ export interface LoadWindowDeps {
    * write, is a record, never an approval.
    */
   approvedFile: string;
+  /** The pools the owner set aside ("not now"), in the private folder (`~/.tars-private/load-set-aside.json`). */
+  setAsideFile: string;
   /** Tars's projects: the Projects view lists them, and a pool's project must be one. */
   projects(): string[];
   grants(): LoadGrant[];
@@ -179,9 +181,9 @@ function regularFile(p: string): fs.Stats | undefined {
 
 export function createLoadWindow(deps: LoadWindowDeps) {
   const ghSeen = new Map<string, { at: number; visibility?: string; error?: string }>();
-  const dismissedFile = path.join(deps.runsDir, 'set-aside.json');
+  // The pools set aside ("not now"), in the private folder: an agent can neither hide a proposal nor show one again.
   const dismissed = new Map<string, string>(Object.entries((() => {
-    try { return JSON.parse(fs.readFileSync(dismissedFile, 'utf8')) as Record<string, string>; } catch { return {}; }
+    try { return JSON.parse(fs.readFileSync(deps.setAsideFile, 'utf8')) as Record<string, string>; } catch { return {}; }
   })()));
 
   /** The pools, newest written first: real folders, each with a tasks.jsonl that is a regular file. */
@@ -287,7 +289,7 @@ export function createLoadWindow(deps: LoadWindowDeps) {
     if (!grant.enabled) return decide('off', `Off: turn load windows on to let a window run its tasks. ${runsOn}`);
     return grant.allowedByName
       ? decide('allowed_by_name', `Allowed by name: you allowed it here. ${runsOn}`)
-      : decide('allowed', `Allowed: its repository is public. ${runsOn}`);
+      : decide('allowed', `Allowed by you; its repository is public. ${runsOn}`);
   }
 
   /** The Projects view: every project of Tars's as checkProject decides it, and the endpoints a grant may name. */
@@ -416,51 +418,107 @@ export function createLoadWindow(deps: LoadWindowDeps) {
     };
   }
 
-  interface Approval { runId: string; pool: string; snapshotSha256: string; window: LoadWindowParams; approvedAt: number }
+  /**
+   * An approval, as kept in the private folder: everything a decision about its run reads (the Audit's M1 at
+   * fdd82ca3d). The run's record under ~/.tars/load-runs is a log of it, which any agent can write: read for what the
+   * window shows of the run as it goes (its arrivals, its agents), never for whether it runs, what it runs or when.
+   */
+  interface Approval {
+    runId: string; pool: string; snapshotSha256: string; window: LoadWindowParams; approvedAt: number;
+    /** The snapshot's lines of the tasks approved: with the window, they give the run's tasks and planned arrivals. */
+    lines: number[];
+    /** The owner's stop, or the window's end or an error, as Tars recorded it. */
+    stop?: LoadRunRecord['stop'];
+  }
   function approvals(): Approval[] {
     try {
       const raw = JSON.parse(fs.readFileSync(deps.approvedFile, 'utf8')) as unknown;
-      return Array.isArray(raw) ? raw.filter((a): a is Approval => !!a && typeof a.runId === 'string' && typeof a.snapshotSha256 === 'string') : [];
+      return Array.isArray(raw) ? raw.filter((a): a is Approval => !!a && typeof a.runId === 'string' && typeof a.snapshotSha256 === 'string' && Array.isArray(a.lines)) : [];
     } catch {
       return [];
     }
   }
 
-  /** The runs the owner approved, newest first, each as its approval says (an edited record changes none of it). */
-  function approvedRuns(): LoadRunRecord[] {
-    const byId = new Map(approvals().map(a => [a.runId, a]));
-    return listRuns(deps.runsDir).filter(r => byId.has(r.runId)).map((r) => {
-      const a = byId.get(r.runId)!;
-      return { ...r, pool: a.pool, snapshotSha256: a.snapshotSha256, window: a.window, approvedAt: a.approvedAt, endsAt: a.approvedAt + a.window.window_min * 60_000 };
+  /** A run's stop, kept with its approval (where it is read) and copied into its record (its log). */
+  function setStop(runId: string, stop: NonNullable<LoadRunRecord['stop']>): void {
+    const all = approvals();
+    const a = all.find(x => x.runId === runId);
+    if (!a || a.stop) return;
+    a.stop = stop;
+    writeSecretFileSync(deps.approvedFile, `${JSON.stringify(all, null, 2)}\n`);
+    try { updateRun(deps.runsDir, runId, r => ({ ...r, stop })); } catch { /* the log may be gone: the stop holds */ }
+  }
+
+  const taskRow = (t: LoadTask): LoadRunRecord['tasks'][number] =>
+    ({ taskId: t.task_id, line: t.line, project: t.project, split: t.split, train_ok: t.train_ok, harnesses: t.harnesses, time_cap_min: t.time_cap_min });
+
+  /** A run's tasks and planned arrivals, from its verified snapshot, its approved lines and its approved window. */
+  const derivedCache = new Map<string, Pick<LoadRunRecord, 'tasks' | 'planned'>>();
+  function derivedOf(a: Approval, snapshot: Buffer): Pick<LoadRunRecord, 'tasks' | 'planned'> {
+    const held = derivedCache.get(a.runId);
+    if (held) return held;
+    const lines = new Set(a.lines);
+    const tasks = parseTasksJsonl(snapshot.toString('utf8')).tasks.filter(t => lines.has(t.line));
+    const derived = { tasks: tasks.map(taskRow), planned: planArrivals(a.window, tasks).map(p => ({ ...p, plannedAt: a.approvedAt + p.offsetMs })) };
+    derivedCache.set(a.runId, derived);
+    return derived;
+  }
+
+  interface ApprovedRun { run: LoadRunRecord; intact: boolean; log?: LoadRunRecord }
+
+  /**
+   * The runs the owner approved, newest first, each as its approval and its snapshot say. Its record adds only what
+   * the window shows of it as it goes; `intact` is false when its snapshot is no longer the bytes approved.
+   */
+  function approvedRuns(): ApprovedRun[] {
+    // Newest first; at the same moment, the one approved later in the file.
+    return approvals().map((a, i) => ({ a, i })).sort((x, y) => y.a.approvedAt - x.a.approvedAt || y.i - x.i).map(({ a }) => {
+      let log: LoadRunRecord | undefined;
+      try { log = readRun(deps.runsDir, a.runId); } catch { log = undefined; }
+      const snapshot = readSnapshot(deps.runsDir, a.runId);
+      const intact = !!snapshot && sha256(snapshot) === a.snapshotSha256;
+      const derived = intact ? derivedOf(a, snapshot!) : { tasks: [], planned: [] };
+      const run: LoadRunRecord = {
+        version: 1, runId: a.runId, pool: a.pool, poolDir: log?.poolDir ?? '', writtenAt: log?.writtenAt ?? a.approvedAt, snapshotSha256: a.snapshotSha256,
+        approvedAt: a.approvedAt, approvedBy: 'owner', window: a.window, endsAt: a.approvedAt + a.window.window_min * 60_000,
+        ...derived, refused: log?.refused ?? [], refusedProjects: log?.refusedProjects ?? [],
+        arrivals: log?.arrivals ?? [], agents: log?.agents ?? [], worktrees: log?.worktrees ?? [],
+        ...(a.stop ? { stop: a.stop } : {}),
+      };
+      return { run, intact, log };
     });
   }
 
   /**
-   * The run under way: one the owner approved, its snapshot still the bytes approved (else it stops, with an error),
-   * its end recorded when its window has run out and nothing of it runs (the engine's sessions keep their caps).
+   * The run under way: one the owner approved and did not stop, its snapshot still the bytes approved, its record
+   * still giving the tasks and planned arrivals they make (else it stops, with an error), until its window's end.
    */
   function current(): LoadRunRecord | undefined {
     const now = deps.now();
-    for (const r of approvedRuns()) {
-      if (r.stop) continue;
-      const snapshot = readSnapshot(deps.runsDir, r.runId);
-      if (!snapshot || sha256(snapshot) !== r.snapshotSha256) {
-        updateRun(deps.runsDir, r.runId, x => ({ ...x, stop: { reason: 'error', at: now, detail: 'the snapshot was changed or removed after the approval: nothing more of it runs' } }));
-        deps.stopRun?.(r.runId);
+    for (const { run, intact, log } of approvedRuns()) {
+      if (run.stop) continue;
+      // The why of "Stopped at <time>: <why>", as the frames word a stop.
+      const error = !intact ? 'its snapshot was changed or removed after your approval'
+        : !log || JSON.stringify(log.tasks) !== JSON.stringify(run.tasks) || JSON.stringify(log.planned) !== JSON.stringify(run.planned)
+          ? 'its run record was changed after your approval'
+          : undefined;
+      if (error) {
+        setStop(run.runId, { reason: 'error', at: now, detail: error });
+        deps.stopRun?.(run.runId);
         continue;
       }
-      if (now >= r.endsAt && !r.arrivals.some(a => a.actualAt !== undefined && !a.blocked && a.endedAt === undefined)) {
-        updateRun(deps.runsDir, r.runId, x => ({ ...x, stop: x.stop ?? { reason: 'window_end', at: x.endsAt } }));
+      if (now >= run.endsAt) {
+        setStop(run.runId, { reason: 'window_end', at: run.endsAt });
         continue;
       }
-      return r;
+      return run;
     }
     return undefined;
   }
 
   async function refresh(): Promise<LoadWindowState> {
     const running = current();
-    const runs = approvedRuns();
+    const runs = approvedRuns().map(x => x.run);
     const lastEnded = runs.find(r => r.stop);
     const last = lastEnded ? runView(lastEnded) : undefined;
     if (running) return { running: runView(running), ...(last ? { last } : {}) };
@@ -490,14 +548,16 @@ export function createLoadWindow(deps: LoadWindowDeps) {
     const record: LoadRunRecord = {
       version: 1, runId: newRunId(now), pool: pool.name, poolDir: pool.dir, writtenAt: pool.writtenAt, snapshotSha256: pool.sha256,
       approvedAt: now, approvedBy: 'owner', window: checked.window, endsAt: now + checked.window.window_min * 60_000,
-      tasks: tasks.map(t => ({ taskId: t.task_id, line: t.line, project: t.project, split: t.split, train_ok: t.train_ok, harnesses: t.harnesses, time_cap_min: t.time_cap_min })),
+      tasks: tasks.map(taskRow),
       refused: proposal.refused,
       refusedProjects: proposal.projects.filter(p => p.visibility === 'refused').map(p => ({ path: p.path, reason: p.reason ?? '', tasks: p.tasks })),
       planned: planArrivals(checked.window, tasks).map(a => ({ ...a, plannedAt: now + a.offsetMs })),
       arrivals: [], agents: [], worktrees: [],
     };
-    // The approval first, where no agent is handed it; then the record and the snapshot.
-    writeSecretFileSync(deps.approvedFile, `${JSON.stringify([...approvals(), { runId: record.runId, pool: record.pool, snapshotSha256: record.snapshotSha256, window: record.window, approvedAt: now }], null, 2)}\n`);
+    // The approval first, where no agent is handed it, with all a decision about the run reads; then the record (its
+    // log) and the snapshot.
+    const approval: Approval = { runId: record.runId, pool: record.pool, snapshotSha256: record.snapshotSha256, window: record.window, approvedAt: now, lines: tasks.map(t => t.line) };
+    writeSecretFileSync(deps.approvedFile, `${JSON.stringify([...approvals(), approval], null, 2)}\n`);
     createRun(deps.runsDir, record, pool.bytes);
     deps.startRun?.(record);
     deps.emit();
@@ -508,8 +568,7 @@ export function createLoadWindow(deps: LoadWindowDeps) {
     if (typeof input.pool !== 'string' || typeof input.sha256 !== 'string') return { ok: false };
     dismissed.set(input.pool, input.sha256);
     try {
-      fs.mkdirSync(deps.runsDir, { recursive: true });
-      fs.writeFileSync(dismissedFile, JSON.stringify(Object.fromEntries(dismissed)));
+      writeSecretFileSync(deps.setAsideFile, `${JSON.stringify(Object.fromEntries(dismissed))}\n`);
     } catch (err) {
       console.error(`[load] the pool set aside is not remembered past this run: ${(err as Error).message}`);
     }
@@ -518,11 +577,11 @@ export function createLoadWindow(deps: LoadWindowDeps) {
   }
 
   async function stop(runId: unknown): Promise<{ ok: true } | { ok: false; error: string }> {
-    const run = typeof runId === 'string' ? approvedRuns().find(r => r.runId === runId) : undefined;
-    if (!run) return { ok: false, error: 'no such window' };
-    if (run.stop) return { ok: false, error: 'this window has stopped already' };
-    updateRun(deps.runsDir, run.runId, r => ({ ...r, stop: r.stop ?? { reason: 'switch', at: deps.now() } }));
-    deps.stopRun?.(run.runId);
+    const a = typeof runId === 'string' ? approvals().find(x => x.runId === runId) : undefined;
+    if (!a) return { ok: false, error: 'no such window' };
+    if (a.stop) return { ok: false, error: 'this window has stopped already' };
+    setStop(a.runId, { reason: 'switch', at: deps.now() });
+    deps.stopRun?.(a.runId);
     deps.emit();
     return { ok: true };
   }

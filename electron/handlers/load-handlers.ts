@@ -25,7 +25,7 @@ export interface LoadHandlerDeps {
   /** Tars's projects (review-handlers.ts knownProjects). */
   projects(): string[];
   /** Tests only: where the pools, runs, grants and approvals live, and the clock. */
-  dirs?: { pools: string; runs: string; grants: string; approved: string };
+  dirs?: { pools: string; runs: string; grants: string; approved: string; setAside: string };
   now?: () => number;
 }
 
@@ -60,6 +60,7 @@ export function startLoadWatch(): () => void {
 export function registerLoadHandlers(deps: LoadHandlerDeps): { window: LoadWindow; dispose(): void } {
   const dirs = deps.dirs ?? {
     pools: path.join(DATA_DIR, 'load-pools'), runs: path.join(DATA_DIR, 'load-runs'), grants: LOAD_GRANTS_FILE, approved: privatePath('load-approved.json'),
+    setAside: privatePath('load-set-aside.json'),
   };
   let lastSent = '';
   const send = (state: unknown) => {
@@ -71,7 +72,7 @@ export function registerLoadHandlers(deps: LoadHandlerDeps): { window: LoadWindo
   };
   const tell = () => { void window.refresh().then(send, err => console.error(`[load] the state not read: ${(err as Error).message}`)); };
   const windowDeps: LoadWindowDeps = {
-    poolsDir: dirs.pools, runsDir: dirs.runs, approvedFile: dirs.approved,
+    poolsDir: dirs.pools, runsDir: dirs.runs, approvedFile: dirs.approved, setAsideFile: dirs.setAside,
     projects: deps.projects,
     grants: () => readGrants(dirs.grants),
     tracedProjects: () => traceSettingsOf(deps.getAppSettings()).projects,
@@ -92,7 +93,8 @@ export function registerLoadHandlers(deps: LoadHandlerDeps): { window: LoadWindo
   /** The owner's click: the main window's own frame, nothing else. */
   const fromWindow = (e: IpcMainInvokeEvent): boolean => {
     const win = deps.getMainWindow();
-    return !!win && !win.isDestroyed() && e.sender === win.webContents;
+    // Its top frame too: a subframe shares the window's web contents (the Audit's I-1 at fdd82ca3d).
+    return !!win && !win.isDestroyed() && e.sender === win.webContents && e.senderFrame === win.webContents.mainFrame;
   };
   const refused = { ok: false as const, error: 'only your click in Tars\'s window does this' };
 
