@@ -274,7 +274,16 @@ from the window, or from an agent's drop file (`~/.tars/endpoint-keys/<name>.key
 - messages, system prompts and tool sets are stored once by content hash, compressed;
 - authorship comes from what Tars typed into the terminal. A closed model's words set `mixed`, and an instruction
   Tars did not type counts in `unknown_turns`;
-- the outcome holds the branch, the head, held requests and errors.
+- the outcome holds the branch, the head, held requests and errors;
+- each turn's workspace (`turn-workspace.ts`): the agent's checkout at the turn's start and end, read when the
+  request that opens the turn reaches the proxy and when the next one does (the terminal's exit for the last), its
+  HEAD and a hash of its working tree, dirty and untracked files included (`workspace-snapshot.ts`); the files the
+  turn changed and the lines it added and removed (`line-diff.ts`, binary files counted in no line); and the share of
+  its added lines still there at the session's end, then again on the default branch once its branch is merged or
+  deleted (the hourly sweep looks), the session's change sequence moved each time. Only reads touch the checkout
+  (safeGit, `--no-optional-locks`: no index refresh, no lock, no object written), each bounded; what failed or timed
+  out is null, never 0. The file versions kept to count survival stay in the store, local, counted against the cap
+  and deleted with the session.
 
 Retention and a size cap come from Settings. The back-office reads it through `window.electronAPI.traces`. An external
 reader reads it through `GET /api/traces/*`, with its own token, as the reader's trace format tables.
