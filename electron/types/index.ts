@@ -359,6 +359,11 @@ export interface AgentStatus {
   endpointId?: string;
   /** The agent's own trace switch (off by default); a session is traced only with its project's on too. */
   traces?: boolean;
+  /**
+   * A load agent (trace feature C3): one of a project's fixed set of endpoint agents that run a load window's tasks,
+   * created by Tars from the owner's grant and kept between windows. services/load-window.ts.
+   */
+  load?: boolean;
 }
 
 /**

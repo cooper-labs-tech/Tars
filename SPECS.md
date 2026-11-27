@@ -320,6 +320,70 @@ only when the user deletes again. The start cannot tell such a revoke from a wit
 it reads the closed way. What it keeps: the local traces stay, and a new consent shares what is recorded after that
 start.
 
+### The load window (`services/load-window.ts`, `load-pool.ts`, `load-grants.ts`, `load-run-record.ts`)
+
+A load window runs a pool of tasks against a project's endpoint agents for a set time, so that their sessions are
+traced under a known load. Agents write the pool; only the owner starts it, with a click.
+
+**The pool.** `~/.tars/load-pools/<pool>/tasks.jsonl`, one task a line, and optionally `window.json`. Agents write
+them; Tars only reads them, never through a link. Every line is checked, and a line that breaks a rule is listed as
+`tasks.jsonl:<line>` with its reason. A file over 4 MiB, or a line over 64 KiB, is refused. Each task carries:
+- task_id, project, repo (`owner/name`, or null), base_commit (40 hex characters) and prompt;
+- language, setup (a list of commands), test_cmd (or null) and time_cap_min (10 to 120);
+- expected_tools, harnesses (null for any), weight and max_runs;
+- split (train, heldout or eval), train_ok, source and licence.
+
+`window.json` gives the window's values, each with its default: rate_per_hour 6, a Poisson distribution, seed 1,
+window_min 60, max_concurrent 3, initial_sessions 0, and a weighted pick without replacement. A bad value is listed as
+`window.json` with its key, and its default is kept.
+
+**The proposal.** Tars shows the newest pool that has not run and was not set aside. It shows:
+- its folder, its time and its sha256;
+- the tasks that can run, by split;
+- every project with its verdict;
+- every task with its setup and test command, as they will run;
+- the refused lines;
+- the endpoint, the harnesses and the load agents;
+- the window.
+
+A project runs only when every one of these holds, checked in this order:
+- it is one of Tars's projects;
+- it is opted into traces;
+- it is a git work tree;
+- the owner chose its endpoint, an approved one, a model it serves, and one harness or more;
+- its repository is public, as gh says, unless the owner allowed it by name;
+- the owner turned load windows on for it.
+
+The owner sets these in the card's Projects view (`load:projects`, `load:grant`), kept in
+`~/.tars-private/load-grants.json`. A project's endpoint, model and harnesses are kept whether its switch is on or off;
+the switch holds only when the project can then run. The view shows each project's repository, its visibility, its
+state and the reason, and its load agents. The proposal decides each project with the same check, so the two never
+disagree.
+
+A private repository, or one gh cannot tell, refuses the project whole. A task runs only when:
+- its repo is one of the project's remotes;
+- its base_commit is already in the project (nothing is fetched);
+- one of its harnesses is granted.
+
+The load agents are the project's own (`load: true`), then one per granted harness, named Load N, at most
+max_concurrent a project. They run codex, pi, qwen-code or opencode on the grant's endpoint, never Claude.
+
+**The approval.** Approve carries the sha256 and the proposal's id the card showed. When the pool changed since, or
+the checks now give another proposal, it is refused as stale, and the card shows the new one. The owner may change
+the window's values before approving. The approved bytes are written as the run's snapshot,
+`~/.tars/load-runs/<run>/tasks.snapshot.jsonl`, and the arrivals are planned from them and the approved seed. Nothing
+reads the live pool after that. The approval itself is kept in `~/.tars-private/load-approved.json`, with everything
+a decision about the run reads: its pool, the snapshot's sha256, the approved task lines, the window, when, and its
+stop. A run counts only when it is there: a run record under `~/.tars` that no approval names is no window. The
+run's tasks and planned arrivals are derived from the verified snapshot, the approved lines and the approved window
+(the seed makes them the same each time). A snapshot changed after the approval, or a run record whose tasks or
+planned arrivals are no longer those, stops its run with an error. One window runs at a time. "Not now" sets a pool
+aside until its file changes, kept in `~/.tars-private/load-set-aside.json`. The Stop switch ends the window
+(`switch`), and so do the window's end (`window_end`), the 15 GB disk floor (`disk_floor`) and an error, each kept with
+the approval. The run record, `run.json`, is the run's log, read for what the window shows of it and for no decision:
+the window, the tasks with their split and train_ok, the planned arrivals, each arrival as it went (blocked and why:
+`max_concurrent`, `busy_cap`, `heavy_slot` or `no_harness`), the agents, the worktrees and a copy of the stop.
+
 ### Alt-provider safety gate
 
 `spawnAgentSession` refuses to start a claude-binary alt provider that produced no `ANTHROPIC_BASE_URL`, which means no API key is configured, and the session would silently bill the user's Anthropic account:

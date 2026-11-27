@@ -2912,6 +2912,29 @@ export interface ElectronAPI {
     onWaiting: (cb: (waits: EndpointWait[]) => void) => () => void;
   };
 
+  /**
+   * The load window (trace feature C3, electron/services/load-window.ts, the frames of PR 672). Approve, grant, notNow and
+   * stop are the owner's alone: main takes them from this window only.
+   */
+  load?: {
+    /** What the card shows: the window running, else the proposal; and the last window that ended. */
+    state: () => Promise<LoadWindowState>;
+    /** Carries what the card showed: a changed pool or proposal answers `stale` with the state to show again. */
+    approve: (input: { pool: string; sha256: string; proposalId: string; window: Partial<LoadWindowParams> }) => Promise<LoadApproveAnswer>;
+    /** Sets the proposed pool aside until its file changes. */
+    notNow: (input: { pool: string; sha256: string }) => Promise<{ ok: boolean; error?: string }>;
+    /** The Stop switch. */
+    stop: (runId: string) => Promise<{ ok: true } | { ok: false; error: string }>;
+    /** The Projects view: every project with its state, and the endpoints a grant may name. */
+    projects: () => Promise<LoadProjectsView>;
+    /**
+     * A project's settings, kept whether its switch is on or off (the switch holds only when the project can run), or
+     * removed. Answered with the project as the view now shows it.
+     */
+    grant: (input: LoadGrant | { path: string; remove: true }) => Promise<{ ok: true; project: LoadProjectView } | { ok: false; error: string }>;
+    onChanged: (cb: (state: LoadWindowState) => void) => () => void;
+  };
+
   /** Native traces (services/trace-store.ts), the back-office page. */
   traces?: {
     settings: () => Promise<TraceSettingsView>;
@@ -3060,6 +3083,125 @@ export interface TraceSettingsView {
    *  Tars could not write down and took it for a deletion. */
   uploadDeletionBy?: 'you' | 'start';
 }
+
+/** The load window's harnesses: the endpoint harnesses. */
+export type LoadHarness = 'codex' | 'pi' | 'qwen-code' | 'opencode';
+export type LoadSplit = 'train' | 'heldout' | 'eval';
+export type LoadBlockReason = 'max_concurrent' | 'busy_cap' | 'heavy_slot' | 'no_harness';
+export type LoadStopReason = 'window_end' | 'switch' | 'disk_floor' | 'error';
+
+/** A project's load window settings (~/.tars-private/load-grants.json): the switch, and what it runs on. */
+export interface LoadGrant {
+  path: string;
+  /** The "load windows" switch, kept on only when the project can run. */
+  enabled: boolean;
+  allowedByName: boolean;
+  /** None until chosen. */
+  endpointId: string | null;
+  model: string | null;
+  harnesses: LoadHarness[];
+}
+
+/**
+ * Where a project stands, in the order it is decided: one of Tars's projects, traced, a git work tree, an endpoint and
+ * a model, a harness, a public repository or allowed by name, the switch on.
+ */
+export type LoadProjectState =
+  | 'allowed' | 'allowed_by_name' | 'off' | 'private' | 'unknown' | 'no_harness' | 'no_endpoint' | 'no_repo' | 'traces_off' | 'unknown_project';
+
+/** As gh says; `not_asked` for a project allowed by name, with traces off or no work tree; `none`: no GitHub remote. */
+export type LoadRepoVisibility = 'public' | 'private' | 'unknown' | 'none' | 'not_asked';
+
+/** A project in the Projects view of PR 672's frames. */
+export interface LoadProjectView {
+  path: string;
+  name: string;
+  /** `owner/name` of its GitHub remote (origin first), null when none. */
+  repo: string | null;
+  visibility: LoadRepoVisibility;
+  traced: boolean;
+  /** Its settings as kept, null when never set. */
+  grant: LoadGrant | null;
+  /** Whether a load window may run its tasks now. */
+  allowed: boolean;
+  state: LoadProjectState;
+  /** The line under the project. */
+  reason: string;
+  /** Its load agents (the project page's Load agents card). */
+  agents: Array<{ id: string; name: string; harness: string; endpointName?: string; model?: string; inWindow: boolean }>;
+}
+
+export interface LoadProjectsView {
+  projects: LoadProjectView[];
+  /** For the endpoint and model selects: the endpoints you approved, with their models. */
+  endpoints: Array<{ id: string; name: string; models: string[] }>;
+}
+
+export interface LoadWindowParams {
+  rate_per_hour: number;
+  distribution: 'poisson';
+  seed: number;
+  window_min: number;
+  max_concurrent: number;
+  initial_sessions: number;
+  pick: 'weighted_without_replacement';
+}
+
+/** A line or value of the pool refused: `tasks.jsonl:<line>` (line 0: the file whole) or `window.json` and its key. */
+export interface LoadRefusedLine { file: 'tasks.jsonl' | 'window.json'; line: number; key?: string; reason: string }
+
+export interface LoadProposal {
+  /** Carried back by approve. */
+  id: string;
+  pool: string;
+  /** The pool's folder and when its tasks.jsonl was written: "Proposed by Tars from the pool <dir>, written at <time>". */
+  dir: string;
+  writtenAt: number;
+  /** The snapshot's sha256 (the card shows its first 7). */
+  sha256: string;
+  total: number;
+  runnable: number;
+  counts: { train: number; heldout: number; eval: number; tasks: number };
+  /** Each project of the pool, decided as the Projects view decides it; a refused one with its reason, its tasks left out. */
+  projects: Array<{ path: string; name: string; repo: string | null; visibility: 'public' | 'allowed_by_name' | 'refused'; state: LoadProjectState; reason?: string; tasks: number }>;
+  tasks: Array<{ n: number; line: number; taskId: string; project: string; split: LoadSplit; capMin: number; setup: string[]; testCmd: string | null; harnesses: LoadHarness[] | null }>;
+  refused: LoadRefusedLine[];
+  endpoints: Array<{ id: string; name: string; baseUrl: string }>;
+  harnesses: LoadHarness[];
+  agents: Array<{ name: string; project: string; harness: LoadHarness; existing: boolean; agentId?: string }>;
+  /** window.json's values, the defaults for what it lacks: the owner's to change until Approve. */
+  window: LoadWindowParams;
+  plannedArrivals: number;
+  expectedArrivals: number;
+}
+
+export interface LoadTestResult { result: 'passed' | 'failed' | 'not_run'; reason?: string; exitCode?: number; passed?: number; failed?: number; slotWaitMs?: number }
+
+export interface LoadRunView {
+  runId: string;
+  pool: string;
+  snapshotSha256: string;
+  approvedAt: number;
+  endsAt: number;
+  window: LoadWindowParams;
+  tasks: number;
+  planned: number;
+  started: number;
+  runningNow: number;
+  finishedCount: number;
+  blocked: Record<LoadBlockReason, number>;
+  blockedArrivals: Array<{ n: number; at: number; taskId: string; project: string; reason: LoadBlockReason; detail?: string }>;
+  agents: Array<{ agentId: string; name: string; project: string; harness: LoadHarness; taskId?: string; split?: LoadSplit; capMin?: number; startedAt?: number }>;
+  finished: Array<{ n: number; taskId: string; project: string; split: LoadSplit; end?: 'done' | 'at_cap' | 'stopped' | 'error'; startedAt?: number; endedAt?: number; test?: LoadTestResult }>;
+  stop?: { reason: LoadStopReason; at: number; detail?: string };
+}
+
+export interface LoadWindowState { running?: LoadRunView; proposal?: LoadProposal; last?: LoadRunView }
+
+export type LoadApproveAnswer =
+  | { ok: true; runId: string }
+  | { ok: false; reason: 'stale'; state: LoadWindowState }
+  | { ok: false; error: string };
 
 export interface UploadNotice {
   /** After a deletion: only sessions started after this moment are sent; say it with the consent. */
