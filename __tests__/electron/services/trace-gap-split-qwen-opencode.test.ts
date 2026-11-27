@@ -48,6 +48,9 @@ import { assertThrowaway } from '../../setup/throwaway-dirs';
  *     folder as Tars names it is never found.
  * 12. (Found by the E2E, 27/11, before its fix.) Qwen's result line gives no time of its own, so it cannot be put on
  *     the session it happened in, and the call's exit code and cut are lost: it carries the time it was written.
+ * 13. (Found reading the code, 27/11, before its fix.) opencode's database, locked by a write (a store not in WAL mode),
+ *     holds a pass on Tars's main thread for the driver's own wait, 5 s: a pass waits a moment at most, reads nothing,
+ *     and the next pass reads what is there.
  */
 
 assertThrowaway({ DATA_DIR, PRIVATE_DIR });
@@ -270,6 +273,23 @@ describe('the follower, opencode', () => {
     logs.tick();
     expect(noted.length).toBe(620);
     expect(new Set(noted.map(n => n.part.callId)).size).toBe(620);
+  });
+
+  it('13: a database locked by a write holds a pass a moment at most, and the next pass reads it', () => {
+    const t = Date.now();
+    const { db } = opencodeDb();
+    db.prepare('INSERT INTO session VALUES (?, ?, ?, ?, ?, ?)').run('ses_mine', 'p', folder, 't', t - 500, t);
+    db.prepare('INSERT INTO part VALUES (?, ?, ?, ?, ?, ?)').run('p1', 'm', 'ses_mine', t, t + 1, JSON.stringify(opencodePart('call_l', { status: 'completed', start: t, end: t + 3, exit: 0 })));
+    db.exec('BEGIN EXCLUSIVE');
+    const { logs, noted } = follower(() => [{ traceId: 'tr2', agentId: 'o', harness: 'opencode', folder, startedAt: t - 1000 }]);
+    const began = Date.now();
+    expect(() => logs.tick()).not.toThrow();
+    expect(Date.now() - began, 'the pass waited on the lock').toBeLessThan(1000);
+    expect(noted).toEqual([]);
+    db.exec('COMMIT');
+    db.close();
+    logs.tick();
+    expect(noted.map(n => n.part.callId)).toEqual(['call_l']);
   });
 
   it('8: no database, or one without these tables, is nothing, and the other sessions are still read', () => {
