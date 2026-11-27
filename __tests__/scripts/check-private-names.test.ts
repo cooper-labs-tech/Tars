@@ -37,6 +37,16 @@ import { spawnSync } from 'node:child_process';
  * 15. A character whose lowercase is longer (`\u0130`, a capital I with a dot)
  *     shifts every position after it, so a name after it is missed or
  *     masked one character off.
+ * And for an entry made only of digits (27/11): a short form that is a number
+ * must be listable without flagging every colour that repeats it.
+ * 16. It is found inside other digits or hex: a colour (`#474747`), a
+ *     terminal's OSC colour reply (`rgb:4747/4747/4747`), a longer number
+ *     (`147470`), a hash (`a4747f`). Each is reported, so the entry cannot be
+ *     listed at all.
+ * 17. A number standing alone is missed: in a sentence (`4747's lead`), at a
+ *     line's start and at its end, in an agent's name (`4747-Backend`), and
+ *     inside a URL path (`/p/4747/x`). An entry with a letter in it keeps its
+ *     rules: letters only, word boundaries; anything else, a substring.
  */
 
 const SCRIPT = path.join(__dirname, '../../scripts/check-private-names.mjs');
@@ -266,5 +276,35 @@ describe('check:names', () => {
     expect(r.status, r.out).toBe(1);
     expect(r.out).toContain(`${path.join('src', 'a.ts')}:1:6`);
     expect(r.out).toContain('// \u0130 ***** here');
+  });
+
+  it('16. an entry made only of digits is no match inside other digits or hex: a colour, an OSC reply, a longer number, a hash', () => {
+    const t = tree({
+      'src/theme.css': 'body { background: #474747; }\n',
+      'src/osc.ts': "const reply = '\\x1b]11;rgb:4747/4747/4747\\x07';\n",
+      'src/n.ts': 'const big = 147470;\nconst sum = "a4747f";\n',
+    });
+
+    const r = check(t, { TARS_PRIVATE_NAMES: names(t, ['4747']) });
+
+    expect(r.status, r.out).toBe(0);
+  });
+
+  it('17. an entry made only of digits is found where the number stands alone, and the other entries keep their rules', () => {
+    const lines = [
+      "// 4747's lead asked for it",
+      '4747 counted 17 on the night',
+      'the count was 4747',
+      "const name = '4747-Backend';",
+      "const url = 'https://example.com/p/4747/x';",
+    ];
+    const t = tree({ 'src/a.ts': `${lines.join('\n')}\n`, 'src/b.ts': '// atomic and custom\n' });
+
+    const r = check(t, { TARS_PRIVATE_NAMES: names(t, ['4747', 'Tom', 'x@example.com']) });
+
+    expect(r.status, r.out).toBe(1);
+    for (let n = 1; n <= lines.length; n++) expect(r.out, `line ${n}`).toContain(`${path.join('src', 'a.ts')}:${n}:`);
+    expect(r.out).not.toContain(`${path.join('src', 'b.ts')}:1:`);
+    expect(r.out).not.toContain('4747');
   });
 });
