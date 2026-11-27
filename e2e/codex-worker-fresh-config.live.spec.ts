@@ -58,6 +58,9 @@ test('a codex worker on a codex config without the Telegram server starts and ta
   fs.writeFileSync(configFile, [
     `model = "${MODEL}"`, 'model_provider = "stand-in"', 'check_for_update_on_startup = false', '',
     '[model_providers.stand-in]', 'name = "Stand-in"', `base_url = "http://127.0.0.1:${STUB}/v1"`, 'env_key = "TARS_E2E_OPENAI_KEY"', 'wire_api = "responses"', '',
+    // No shared daemon: started, it copies about 363 MB of codex into this CODEX_HOME, and it is not what this spec is
+    // about; codex reads the config, and refuses the switch, the same in its TUI with or without it.
+    '[features]', 'daemon_auto_start = false', '',
     ...[project, fs.realpathSync(project)].flatMap((p) => [`[projects."${p}"]`, 'trust_level = "trusted"', '']),
   ].join('\n'));
   fs.writeFileSync(path.join(home, '.tars', 'agents.json'), JSON.stringify({
