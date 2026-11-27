@@ -3,6 +3,7 @@ import type * as pty from 'node-pty';
 import type { AgentStatus } from '../types';
 import { getProvider } from '../providers';
 import { handedFolderProblem } from '../utils/handed-folder';
+import { reveal } from '../utils/reveal';
 import { broadcastToAllWindows } from '../utils/broadcast';
 import { writeTerminalMirror } from './terminal-mirror';
 
@@ -31,18 +32,35 @@ export function handsFolders(provider: AgentStatus['provider']): boolean {
   return HANDS_FOLDERS.has(getProvider(provider).id);
 }
 
+/**
+ * Why `folder` is left out of a start, or null when it is handed, written to be printed: into the agent's
+ * terminal, its kept output (which get_agent_output hands an orchestrator) and the main log. A path edited by hand into
+ * agents.json or templates.json can hold what every save path refuses, control characters among them, and a terminal
+ * acts on those: a cleared screen, the cursor moved over an earlier line, a title, a line end and a forged [Tars] line
+ * (the Audit's L1 on #666). So each character that does not show is written out as Tars writes it in a refusal,
+ * `[U+001B]` (utils/reveal.ts), and the newline and the tab too, so the sentence stays one line.
+ *
+ * Written out, not removed: the folder named is the one saved, and shows what it holds. Not JSON.stringify either: it
+ * escapes the C0 controls only, and the headless xterm a panel's mirror runs acts on the C1 controls too (U+009B as a
+ * CSI clears the screen or moves the cursor, U+009D as an OSC sets a title), measured.
+ */
+export function leftOutWhy(folder: string): string | null {
+  const why = handedFolderProblem(folder);
+  return why && reveal(why).text.replace(/\n/g, '[U+000A]').replace(/\t/g, '[U+0009]');
+}
+
 /** One plain line per folder the line leaves out: the folder, why, and where to change it. Empty when none. */
 export function foldersLeftOut(agent: SavedFolders): string[] {
   if (!handsFolders(agent.provider)) return [];
   const lines: string[] = [];
   if (agent.secondaryProjectPath) {
-    const why = handedFolderProblem(agent.secondaryProjectPath);
+    const why = leftOutWhy(agent.secondaryProjectPath);
     if (why) lines.push(`[Tars] Left out of this start: ${why}. Change the agent's secondary folder in its settings.`);
   }
   // As the line reads them: a template folder that does not exist is left out for that, and is no refusal.
   for (const folder of agent.obsidianVaultPaths ?? []) {
     if (typeof folder !== 'string' || !fs.existsSync(folder)) continue;
-    const why = handedFolderProblem(folder);
+    const why = leftOutWhy(folder);
     if (why) lines.push(`[Tars] Left out of this start: ${why}. Change the folders of the template the agent was made from.`);
   }
   return lines;

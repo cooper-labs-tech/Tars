@@ -7,7 +7,7 @@ import { BUILTIN_TEMPLATES } from '../constants/builtin-templates';
 import { isValidProvider } from '../providers';
 import { skillsProblem } from '../utils/skill-name';
 import { handedFolderProblem } from '../utils/handed-folder';
-import { handsFolders } from '../core/folders-left-out';
+import { handsFolders, leftOutWhy } from '../core/folders-left-out';
 import { quoted } from '../utils/reveal';
 import type {
   AgentTemplate,
@@ -145,11 +145,12 @@ function sayFoldersLeftOutAtLoad(templates: AgentTemplate[]): void {
     if (!handsFolders(t.provider)) continue;
     for (const folder of t.obsidianVaultPaths ?? []) {
       if (typeof folder !== 'string' || !fs.existsSync(folder)) continue;
-      const why = handedFolderProblem(folder);
+      // Written to be printed, as the agent's terminal says it, the template's name too (a hand edit can reach both).
+      const why = leftOutWhy(folder);
       const key = `${t.id}\n${folder}`;
       if (!why || saidAtLoad.has(key)) continue;
       saidAtLoad.add(key);
-      console.warn(`[templates] "${t.displayName}": ${why}. The agents made from it start without it; change the template's folders.`);
+      console.warn(`[templates] ${quoted(t.displayName)}: ${why}. The agents made from it start without it; change the template's folders.`);
     }
   }
 }
