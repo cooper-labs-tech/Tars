@@ -13,6 +13,7 @@ import { resetLiveSession } from '../services/overseer';
 import { relayStatus } from '../services/hermes-relay';
 import { hermesSessionWatch } from '../services/hermes-session-watch';
 import { describeSecretFileError } from '../utils/secret-file';
+import { withoutHome } from '../utils/without-home';
 // The webhook's own secret, not the master token, which over the tailnet would
 // hand out every route. Kept in the private directory: see that module.
 import { provisionWebhookSecret } from '../services/hermes-webhook-secret';
@@ -38,8 +39,13 @@ function refusing<T extends object>(call: () => T): ({ success: true } & T) | { 
   try {
     return { success: true, ...call() };
   } catch (err) {
-    return { success: false, error: err instanceof Error ? err.message : String(err) };
+    return { success: false, error: reasonOf(err) };
   }
+}
+
+/** Why a call failed, for the window: a file error's path with the owner's home said ~ (the Audit's I-2 on #658). */
+function reasonOf(err: unknown): string {
+  return withoutHome(err instanceof Error ? err.message : String(err));
 }
 import {
   fetchHermesCrons,
@@ -376,7 +382,13 @@ export function registerHermesHandlers(): void {
       showGatewaySecret(gateway.label, gatewaySecret(gateway.id));
       return { gateway: gatewayView(gateway), set: true as const };
     }));
-  ipcMain.handle('hermes:gateways:remove', async (_event, params: { id: string }) => ({ success: removeGateway(params?.id) }));
+  ipcMain.handle('hermes:gateways:remove', async (_event, params: { id: string }) => {
+    try {
+      return { success: removeGateway(params?.id) };
+    } catch (err) {
+      return { success: false, error: reasonOf(err) };
+    }
+  });
   ipcMain.handle('hermes:gateways:copySecret', async (_event, params: { id: string }) => refusing(() => ({ copied: copySecret(gatewaySecret(params?.id)) })));
   ipcMain.handle('hermes:gateways:rotate', async (_event, params: { id: string }) =>
     refusing(() => {
@@ -425,14 +437,18 @@ export function registerHermesHandlers(): void {
       resetLiveSession();
       return { success: true };
     } catch (err) {
-      return { success: false, error: err instanceof Error ? err.message : String(err) };
+      return { success: false, error: reasonOf(err) };
     }
   });
 
   ipcMain.handle('hermes:connection:import', async () => {
     const imported = importDesktopConfig();
     if (!imported) return { success: false, error: 'No Hermes Desktop configuration found on this machine.' };
-    writeConnection(imported.conn);
+    try {
+      writeConnection(imported.conn);
+    } catch (err) {
+      return { success: false, error: reasonOf(err) };
+    }
     resetLiveSession();
     return {
       success: true,

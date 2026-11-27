@@ -2,6 +2,7 @@ import { autoUpdater, UpdateInfo } from 'electron-updater';
 import { BrowserWindow, app } from 'electron';
 import { GITHUB_REPO } from '../constants';
 import { installerAssetFor, offersUpdate } from '../platform';
+import { withoutHome } from '../utils/without-home';
 
 // Don't download until user clicks "Download"
 autoUpdater.autoDownload = false;
@@ -151,14 +152,15 @@ export async function checkForUpdates() {
  * without awaiting it, so a rejection was an unhandled error on its console
  * and the banner stayed on "Downloading". Only the first line of the updater's
  * message: electron-updater's HttpError carries the request and the response's
- * headers on the lines after it.
+ * headers on the lines after it. A disk error quotes the updater's cache, under
+ * the owner's home: said `~`.
  */
 export async function downloadUpdate(): Promise<{ success: true } | { success: false; error: string }> {
   try {
     await autoUpdater.downloadUpdate();
     return { success: true };
   } catch (err) {
-    const first = (err instanceof Error ? err.message : String(err)).split('\n')[0].trim().slice(0, 200);
+    const first = withoutHome((err instanceof Error ? err.message : String(err)).split('\n')[0].trim()).slice(0, 200);
     return { success: false, error: `Tars could not download the update: ${first}` };
   }
 }
