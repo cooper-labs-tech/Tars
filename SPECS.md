@@ -346,12 +346,19 @@ window_min 60, max_concurrent 3, initial_sessions 0, and a weighted pick without
 - the endpoint, the harnesses and the load agents;
 - the window.
 
-A project runs only when every one of these holds:
-- the owner allowed it for load windows (a grant, Settings, kept in `~/.tars-private/load-grants.json`: the
-  endpoint, the model and the harnesses);
+A project runs only when every one of these holds, checked in this order:
+- it is one of Tars's projects;
 - it is opted into traces;
 - it is a git work tree;
-- its repository is public, as gh says, unless the owner allowed it by name.
+- the owner chose its endpoint, an approved one, a model it serves, and one harness or more;
+- its repository is public, as gh says, unless the owner allowed it by name;
+- the owner turned load windows on for it.
+
+The owner sets these in the card's Projects view (`load:projects`, `load:grant`), kept in
+`~/.tars-private/load-grants.json`. A project's endpoint, model and harnesses are kept whether its switch is on or off;
+the switch holds only when the project can then run. The view shows each project's repository, its visibility, its
+state and the reason, and its load agents. The proposal decides each project with the same check, so the two never
+disagree.
 
 A private repository, or one gh cannot tell, refuses the project whole. A task runs only when:
 - its repo is one of the project's remotes;
