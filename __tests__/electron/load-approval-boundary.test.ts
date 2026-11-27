@@ -91,14 +91,15 @@ describe('the handlers take the main window\'s calls only', () => {
 
   it('B4: another web contents is refused on every channel that changes anything', async () => {
     const other = { sender: { send: vi.fn() } };
-    const grant = { path: project, allowedByName: false, endpointId: 'ep-1', model: 'm', harnesses: ['codex'] };
+    const grant = { path: project, enabled: true, allowedByName: false, endpointId: 'ep-1', model: 'm', harnesses: ['codex'] };
     for (const [channel, arg] of [['load:approve', { pool: 'p', sha256: 'x', proposalId: 'y', window: {} }], ['load:grant', grant], ['load:notNow', { pool: 'p', sha256: 'x' }], ['load:stop', 'r']] as const) {
       expect(await handlers.get(channel)!(other, arg), channel).toMatchObject({ ok: false, error: expect.stringContaining('click') });
     }
     expect(fs.existsSync(path.join(dir, 'private', 'load-grants.json'))).toBe(false);
-    // The main window's own call reaches them.
-    expect(await handlers.get('load:grant')!({ sender: W }, grant)).toMatchObject({ ok: true });
-    expect(fs.existsSync(path.join(dir, 'private', 'load-grants.json'))).toBe(true);
+    // The main window's own call reaches them: the settings kept, the switch off (/work/atlas is no git work tree),
+    // and the project as the Projects view shows it.
+    expect(await handlers.get('load:grant')!({ sender: W }, grant)).toMatchObject({ ok: true, project: { path: project, allowed: false, state: 'no_repo' } });
+    expect(JSON.parse(fs.readFileSync(path.join(dir, 'private', 'load-grants.json'), 'utf8')).projects).toEqual([{ ...grant, enabled: false }]);
     expect(await handlers.get('load:approve')!({ sender: W }, { pool: 'none', sha256: 'x', proposalId: 'y', window: {} })).toMatchObject({ ok: false, reason: 'stale' });
   });
 

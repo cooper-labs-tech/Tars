@@ -5,7 +5,7 @@ import * as path from 'node:path';
 import { createHash } from 'node:crypto';
 import { checkGrant, readGrants, writeGrant, type LoadGrant } from '../../../electron/services/load-grants';
 import { createLoadWindow, type LoadWindowDeps } from '../../../electron/services/load-window';
-import { readRun } from '../../../electron/services/load-run-record';
+import { readRun, updateRun } from '../../../electron/services/load-run-record';
 import { planArrivals } from '../../../electron/services/load-pool';
 import { hasPosixModes } from '../../setup/platform-limits';
 
@@ -19,6 +19,20 @@ import { hasPosixModes } from '../../setup/platform-limits';
  *      model the endpoint does not serve, a harness outside the endpoint harnesses (claude above all) or none.
  *  G2. The file is written readable by others, or not in the private folder; a removal leaves the grant.
  *  G3. A file edited by hand with a bad entry stops every grant from being read, or throws.
+ *  Added before their code, for the Projects view of #672's frames (94d36a2bb, 27/11):
+ *  G4. A project's settings are lost while its switch is off: the endpoint, model and harnesses chosen for a private
+ *      project before it is allowed by name, or a harness chosen before any endpoint (a grant with no endpoint yet is
+ *      refused); or a model is taken with no endpoint, or a switch that is not true or false.
+ *  G5. The switch is held on for a project that cannot run: traces off, no endpoint or model, no harness, a private
+ *      repository or one gh cannot tell, not allowed by name (withdrawing the name). It must be kept off, its
+ *      settings kept, and the view say why.
+ *  V1. The Projects view leaves out a project of Tars's, or does not give, for each: its repository, its visibility
+ *      as gh says (gh never asked for a project allowed by name or with traces off), whether it is traced, its
+ *      settings as kept, whether it is allowed, its state and the reason line the frames show; the approved endpoints
+ *      with their models (an endpoint not approved offered); its load agents with their harness, endpoint, model and
+ *      whether a window runs them now.
+ *  V2. The view and the proposal decide a project differently: one allows what the other refuses, or they give
+ *      another state or reason.
  *
  * The proposal:
  *  P1. The newest pool is not the one proposed; a pool the owner set aside (Not now) comes back unchanged; one already
@@ -76,28 +90,34 @@ function writePool(name: string, lines: string[], window?: Record<string, unknow
 
 let grants: LoadGrant[];
 let traced: string[];
-let loadAgents: Array<{ id: string; name: string; projectPath: string; provider: string }>;
+let loadAgents: Array<{ id: string; name: string; projectPath: string; provider: string; endpointId?: string; model?: string }>;
 let ghCalls: string[][];
 let now: number;
+/** Each project's git remote (none: not a git work tree), and each repository's visibility as gh says (none: gh fails). */
+let remotes: Record<string, string>;
+let visibilityOf: Record<string, 'PUBLIC' | 'PRIVATE'>;
+
+/** A grant: the switch on, the shared endpoint and its model. */
+const g = (p: string, harnesses: LoadGrant['harnesses'], allowedByName = false): LoadGrant =>
+  ({ path: p, enabled: true, allowedByName, endpointId: 'ep-1', model: 'open-coder-1', harnesses });
 
 function deps(over: Partial<LoadWindowDeps> = {}): LoadWindowDeps {
   return {
     poolsDir: path.join(dir, 'pools'), runsDir: path.join(dir, 'runs'), approvedFile: path.join(dir, 'private', 'load-approved.json'),
-    grants: () => grants, tracedProjects: () => traced, endpoints: () => [ENDPOINT],
+    projects: () => Object.values(projects),
+    grants: () => grants, tracedProjects: () => traced, endpoints: () => [ENDPOINT, { ...ENDPOINT, id: 'ep-2', name: 'Not approved', approved: false }],
     loadAgents: () => loadAgents,
     // A git that knows each project's remote and HEAD only.
     git: async (cwd, args) => {
-      const remote: Record<string, string> = { [projects.pub]: 'https://github.com/example-org/pub.git', [projects.priv]: 'git@github.com:example-org/priv.git', [projects.named]: 'https://github.com/example-org/named.git' };
-      if (args[0] === 'rev-parse') { if (remote[cwd]) return 'true\n'; throw new Error('not a git repository'); }
-      if (args[0] === 'remote') return `origin\t${remote[cwd]} (fetch)\norigin\t${remote[cwd]} (push)\n`;
+      if (args[0] === 'rev-parse') { if (remotes[cwd]) return 'true\n'; throw new Error('not a git repository'); }
+      if (args[0] === 'remote') return `origin\t${remotes[cwd]} (fetch)\norigin\t${remotes[cwd]} (push)\n`;
       if (args[0] === 'cat-file') { if (args[2].startsWith(HEAD)) return ''; throw new Error('missing'); }
       throw new Error(`unexpected git ${args.join(' ')}`);
     },
     gh: async (args) => {
       ghCalls.push(args);
-      const repo = args[2];
-      if (repo === 'example-org/pub') return JSON.stringify({ visibility: 'PUBLIC' });
-      if (repo === 'example-org/priv' || repo === 'example-org/named') return JSON.stringify({ visibility: 'PRIVATE' });
+      const seen = visibilityOf[args[2]];
+      if (seen) return JSON.stringify({ visibility: seen });
       throw new Error('gh: not signed in');
     },
     now: () => now,
@@ -108,11 +128,23 @@ function deps(over: Partial<LoadWindowDeps> = {}): LoadWindowDeps {
 
 beforeEach(() => {
   dir = fs.mkdtempSync(path.join(os.tmpdir(), 'load-window-'));
-  projects = { pub: path.join(dir, 'p', 'pub'), priv: path.join(dir, 'p', 'priv'), named: path.join(dir, 'p', 'named'), untraced: path.join(dir, 'p', 'untraced') };
+  const p = (n: string) => path.join(dir, 'p', n);
+  projects = {
+    pub: p('pub'), priv: p('priv'), named: p('named'), untraced: p('untraced'), fresh: p('fresh'), off: p('off'), ghfail: p('ghfail'), bare: p('bare'),
+  };
+  remotes = {
+    [projects.pub]: 'https://github.com/example-org/pub.git', [projects.priv]: 'git@github.com:example-org/priv.git',
+    [projects.named]: 'https://github.com/example-org/named.git', [projects.fresh]: 'https://github.com/example-org/fresh.git',
+    [projects.off]: 'https://github.com/example-org/off.git', [projects.ghfail]: 'https://github.com/example-org/ghfail.git',
+    [projects.bare]: 'https://github.com/example-org/bare.git',
+  };
+  visibilityOf = {
+    'example-org/pub': 'PUBLIC', 'example-org/priv': 'PRIVATE', 'example-org/named': 'PRIVATE', 'example-org/fresh': 'PUBLIC',
+    'example-org/off': 'PUBLIC', 'example-org/bare': 'PUBLIC',
+  };
   grantsFile = path.join(dir, 'private', 'load-grants.json');
-  const g = (p: string, harnesses: LoadGrant['harnesses'], allowedByName = false): LoadGrant => ({ path: p, allowedByName, endpointId: 'ep-1', model: 'open-coder-1', harnesses });
   grants = [g(projects.pub, ['codex', 'qwen-code']), g(projects.priv, ['codex']), g(projects.named, ['opencode'], true), g(projects.untraced, ['codex'])];
-  traced = [projects.pub, projects.priv, projects.named];
+  traced = [projects.pub, projects.priv, projects.named, projects.fresh, projects.off, projects.ghfail, projects.bare];
   loadAgents = [];
   ghCalls = [];
   now = Date.parse('2026-11-27T14:00:00Z');
@@ -121,17 +153,27 @@ afterEach(() => { fs.rmSync(dir, { recursive: true, force: true }); });
 
 describe('the owner\'s grants', () => {
   const ctx = () => ({ projects: Object.values(projects), endpoints: [ENDPOINT] });
-  const good = (): LoadGrant => ({ path: projects.pub, allowedByName: false, endpointId: 'ep-1', model: 'open-coder-1', harnesses: ['codex'] });
+  const good = (): LoadGrant => g(projects.pub, ['codex']);
 
   it('G1: a grant outside the rules is refused, saying why', () => {
     expect(checkGrant(good(), ctx())).toEqual(good());
     for (const [over, word] of [
       [{ path: '/not/a/project' }, 'project'], [{ endpointId: 'ep-x' }, 'endpoint'], [{ model: 'closed-model' }, 'model'],
-      [{ harnesses: ['claude'] }, 'harness'], [{ harnesses: [] }, 'harness'], [{ allowedByName: 'yes' }, 'allowedByName'],
+      [{ harnesses: ['claude'] }, 'harness'], [{ harnesses: 'codex' }, 'harness'], [{ allowedByName: 'yes' }, 'allowedByName'],
+      [{ enabled: 'yes' }, 'enabled'],
     ] as Array<[Partial<LoadGrant>, string]>) {
       expect(checkGrant({ ...good(), ...over } as LoadGrant, ctx()), word).toEqual(expect.stringContaining(word));
     }
     expect(checkGrant(good(), { projects: ctx().projects, endpoints: [{ ...ENDPOINT, approved: false }] })).toEqual(expect.stringContaining('endpoint'));
+  });
+
+  it('G4: the settings are kept with the switch off: no endpoint yet, no harness yet; a model needs its endpoint', () => {
+    const none = { ...good(), enabled: false, endpointId: null, model: null, harnesses: ['opencode'] } as LoadGrant;
+    expect(checkGrant(none, ctx())).toEqual(none);
+    expect(checkGrant({ ...good(), enabled: false, harnesses: [] }, ctx())).toMatchObject({ harnesses: [] });
+    expect(checkGrant({ ...good(), endpointId: null }, ctx())).toEqual(expect.stringContaining('model'));
+    writeGrant(none, grantsFile);
+    expect(readGrants(grantsFile)).toEqual([none]);
   });
 
   it('G2 and G3: written 0600 in the file given, removed whole, and a bad entry skipped without a throw', () => {
@@ -189,11 +231,11 @@ describe('the proposal', () => {
     expect(p.pool).toBe('mixed');
     expect(p.sha256).toBe(sha(fs.readFileSync(path.join(dir, 'pools', 'mixed', 'tasks.jsonl'))));
     const byName = Object.fromEntries(p.projects.map(x => [x.path, x]));
-    expect(byName[projects.pub]).toMatchObject({ visibility: 'public', tasks: 2 });
-    expect(byName[projects.named]).toMatchObject({ visibility: 'allowed_by_name', tasks: 1 });
-    expect(byName[projects.priv]).toMatchObject({ visibility: 'refused', reason: expect.stringContaining('private') });
-    expect(byName[projects.untraced]).toMatchObject({ visibility: 'refused', reason: expect.stringContaining('traces') });
-    expect(byName[path.join(dir, 'p', 'nogrant')]).toMatchObject({ visibility: 'refused', reason: expect.stringContaining('grant') });
+    expect(byName[projects.pub]).toMatchObject({ visibility: 'public', state: 'allowed', repo: 'example-org/pub', tasks: 2 });
+    expect(byName[projects.named]).toMatchObject({ visibility: 'allowed_by_name', state: 'allowed_by_name', tasks: 1 });
+    expect(byName[projects.priv]).toMatchObject({ visibility: 'refused', state: 'private', reason: expect.stringContaining('private') });
+    expect(byName[projects.untraced]).toMatchObject({ visibility: 'refused', state: 'traces_off', reason: expect.stringContaining('traces') });
+    expect(byName[path.join(dir, 'p', 'nogrant')]).toMatchObject({ visibility: 'refused', state: 'unknown_project', reason: expect.stringContaining('not one of your projects') });
     // A named project is never asked of gh.
     expect(ghCalls.map(a => a[2])).not.toContain('example-org/named');
     const reasons = Object.fromEntries(p.refused.map(r => [`${r.file}:${r.line}`, r.reason]));
@@ -220,6 +262,71 @@ describe('the proposal', () => {
     writePool('one', [line({ task_id: 'pub-1' })], { max_concurrent: 2 });
     const p = (await createLoadWindow(deps()).refresh()).proposal!;
     expect(p.agents.map(a => [a.name, a.harness, a.existing])).toEqual([['Load 7', 'qwen-code', true], ['Load 1', 'codex', false]]);
+  });
+});
+
+describe('the Projects view', () => {
+  it('G5: the switch holds only for a project that can run; its settings are kept either way', async () => {
+    const w = createLoadWindow(deps());
+    expect(await w.settle(g(projects.pub, ['codex']))).toMatchObject({ enabled: true });
+    expect(await w.settle(g(projects.priv, ['codex']))).toEqual({ ...g(projects.priv, ['codex']), enabled: false });
+    expect(await w.settle(g(projects.priv, ['codex'], true))).toMatchObject({ enabled: true, allowedByName: true });
+    expect(await w.settle(g(projects.untraced, ['codex']))).toMatchObject({ enabled: false });
+    expect(await w.settle({ ...g(projects.fresh, ['codex']), endpointId: null, model: null })).toMatchObject({ enabled: false, harnesses: ['codex'] });
+    expect(await w.settle(g(projects.bare, []))).toMatchObject({ enabled: false });
+    expect(await w.settle(g(projects.ghfail, ['codex']))).toMatchObject({ enabled: false });
+  });
+
+  it('V1: every project, with its repository, visibility, settings, state and reason; the endpoints; its load agents', async () => {
+    grants = [
+      g(projects.pub, ['codex', 'qwen-code']), g(projects.named, ['opencode'], true), { ...g(projects.priv, ['codex', 'qwen-code']), enabled: false },
+      g(projects.untraced, ['codex']), { ...g(projects.fresh, ['opencode']), endpointId: null, model: null, enabled: false },
+      { ...g(projects.off, ['codex']), enabled: false }, g(projects.ghfail, ['codex']), g(projects.bare, []),
+    ];
+    loadAgents = [{ id: 'a-1', name: 'Load 1', projectPath: projects.pub, provider: 'codex', endpointId: 'ep-1', model: 'open-coder-1' }];
+    const w = createLoadWindow(deps());
+    const v = await w.projects();
+    expect(v.projects.map(x => x.path).sort()).toEqual(Object.values(projects).sort());
+    expect(v.endpoints).toEqual([{ id: 'ep-1', name: 'Shared host', models: ['open-coder-1'] }]);
+    const by = Object.fromEntries(v.projects.map(x => [x.path, x]));
+    expect(by[projects.pub]).toMatchObject({
+      name: 'pub', repo: 'example-org/pub', visibility: 'public', traced: true, allowed: true, state: 'allowed',
+      reason: expect.stringContaining('Shared host, open-coder-1'), grant: { harnesses: ['codex', 'qwen-code'] },
+      agents: [{ id: 'a-1', name: 'Load 1', harness: 'codex', endpointName: 'Shared host', model: 'open-coder-1', inWindow: false }],
+    });
+    expect(by[projects.named]).toMatchObject({ visibility: 'not_asked', allowed: true, state: 'allowed_by_name', reason: expect.stringContaining('by name') });
+    expect(by[projects.priv]).toMatchObject({ visibility: 'private', allowed: false, state: 'private', reason: expect.stringContaining('Allow it by name'), grant: { endpointId: 'ep-1', harnesses: ['codex', 'qwen-code'] } });
+    expect(by[projects.untraced]).toMatchObject({ traced: false, visibility: 'not_asked', allowed: false, state: 'traces_off', reason: expect.stringContaining('Opt it in') });
+    expect(by[projects.fresh]).toMatchObject({ visibility: 'public', allowed: false, state: 'no_endpoint', grant: { endpointId: null, harnesses: ['opencode'] } });
+    expect(by[projects.off]).toMatchObject({ visibility: 'public', allowed: false, state: 'off' });
+    expect(by[projects.ghfail]).toMatchObject({ visibility: 'unknown', allowed: false, state: 'unknown', reason: expect.stringContaining('not signed in') });
+    expect(by[projects.bare]).toMatchObject({ allowed: false, state: 'no_harness' });
+    // gh is never asked for a project allowed by name, nor one with traces off.
+    expect(ghCalls.map(a => a[2])).not.toContain('example-org/named');
+    // A load agent a window runs now.
+    writePool('p', [line({ task_id: 'pub-1' })]);
+    const shown = (await w.refresh()).proposal!;
+    const r = await w.approve({ pool: 'p', sha256: shown.sha256, proposalId: shown.id, window: {} }) as { runId: string };
+    updateRun(path.join(dir, 'runs'), r.runId, x => ({ ...x, arrivals: [{ n: 1, taskId: 'pub-1', plannedAt: now, actualAt: now, agentId: 'a-1', harness: 'codex' }] }));
+    expect((await w.projects()).projects.find(x => x.path === projects.pub)!.agents[0].inWindow).toBe(true);
+  });
+
+  it('V2: the view and the proposal decide each project alike', async () => {
+    grants = [g(projects.pub, ['codex']), g(projects.priv, ['codex']), { ...g(projects.off, ['codex']), enabled: false }, g(projects.ghfail, ['codex']), g(projects.named, ['opencode'], true)];
+    writePool('all', [
+      line({ task_id: 'pub-1' }), line({ task_id: 'priv-1', project: projects.priv, repo: 'example-org/priv' }),
+      line({ task_id: 'off-1', project: projects.off, repo: 'example-org/off' }), line({ task_id: 'fail-1', project: projects.ghfail, repo: 'example-org/ghfail' }),
+      line({ task_id: 'fresh-1', project: projects.fresh, repo: 'example-org/fresh' }), line({ task_id: 'named-1', project: projects.named, repo: 'example-org/named' }),
+      line({ task_id: 'untraced-1', project: projects.untraced, repo: null }),
+    ]);
+    const w = createLoadWindow(deps());
+    const view = Object.fromEntries((await w.projects()).projects.map(x => [x.path, x]));
+    const proposal = (await w.refresh()).proposal!;
+    for (const p of proposal.projects) {
+      expect({ path: p.path, state: p.state, runs: p.visibility !== 'refused' }, p.path).toEqual({ path: p.path, state: view[p.path].state, runs: view[p.path].allowed });
+      if (p.visibility === 'refused') expect(p.reason, p.path).toBe(view[p.path].reason);
+    }
+    expect(proposal.projects.map(p => p.state).sort()).toEqual(['allowed', 'allowed_by_name', 'no_endpoint', 'off', 'private', 'traces_off', 'unknown']);
   });
 });
 

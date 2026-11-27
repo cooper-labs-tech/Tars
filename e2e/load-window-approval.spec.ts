@@ -12,7 +12,9 @@ import { DEV_URL, apiPort } from './ports.mjs';
  * visibility, nothing leaving the machine. Every call goes through the window's own channel (window.electronAPI.load),
  * the one the card calls.
  *
- * 1. The owner allows both projects for load windows (load:grant, from the window).
+ * 1. The owner turns load windows on for both projects (load:grant, from the window): the public one is allowed; the
+ *    private one's switch does not hold and its settings are kept. The Projects view (load:projects) says so for each,
+ *    with its repository and visibility, and offers the approved endpoint with its models.
  * 2. A pool is written: Tars proposes it, with its sha256; the private project is refused whole, a line whose
  *    base_commit is not in its project and a line breaking a rule are refused with their line numbers; the load
  *    agents are planned, Load N, one per granted harness.
@@ -110,10 +112,18 @@ process.exit(1);
         try { return await ((window as unknown as Api).electronAPI.load[name])(...args); } catch (err) { return { thrown: String(err) }; }
       }, { name, args }) as Promise<T>;
 
-    // 1. The owner's grants, from the window.
-    const granted = await Promise.all([pub.path, priv.path].map(p => load<Row>('grant', { path: p, allowedByName: false, endpointId: EP, model: 'open-coder-1', harnesses: ['codex', 'qwen-code'] })));
+    // 1. The owner's grants, from the window: the private project's switch does not hold, its settings are kept.
+    const granted = await Promise.all([pub.path, priv.path].map(p => load<Row & { project?: Row }>('grant', { path: p, enabled: true, allowedByName: false, endpointId: EP, model: 'open-coder-1', harnesses: ['codex', 'qwen-code'] })));
     keep({ granted });
     expect.soft(granted.map(g => g.ok), 'the grants').toEqual([true, true]);
+    expect.soft(granted.map(g => g.project?.state), 'their states').toEqual(['allowed', 'private']);
+    const view = await load<{ projects?: Array<Row & { grant?: Row }>; endpoints?: Row[] }>('projects');
+    save('projects-view.json', view);
+    const inView = (p: string) => view.projects?.find(x => x.path === p);
+    keep({ view: view.projects?.map(x => ({ path: x.path, state: x.state, visibility: x.visibility, allowed: x.allowed })) ?? null });
+    expect.soft(inView(pub.path), 'the public project in the Projects view').toMatchObject({ repo: 'e2e-owner/e2e-public-app', visibility: 'public', allowed: true, state: 'allowed' });
+    expect.soft(inView(priv.path), 'the private project in the Projects view').toMatchObject({ visibility: 'private', allowed: false, state: 'private', grant: { enabled: false, harnesses: ['codex', 'qwen-code'] } });
+    expect.soft(view.endpoints, 'the endpoints offered').toEqual([{ id: EP, name: 'Remote host', models: ['open-coder-1'] }]);
 
     // 2. A pool, proposed.
     fs.mkdirSync(poolDir, { recursive: true });
@@ -130,8 +140,8 @@ process.exit(1);
     expect.soft(p1?.pool, 'the pool proposed').toBe('e2e-pool');
     expect.soft(p1?.sha256, 'its hash').toBe(sha(fs.readFileSync(tasksFile)));
     expect.soft(p1?.runnable, 'the tasks that can run').toBe(2);
-    expect.soft(p1?.projects.find(x => x.path === priv.path), 'the private project').toMatchObject({ visibility: 'refused', reason: expect.stringContaining('private') });
-    expect.soft(p1?.projects.find(x => x.path === pub.path), 'the public project').toMatchObject({ visibility: 'public', tasks: 2 });
+    expect.soft(p1?.projects.find(x => x.path === priv.path), 'the private project').toMatchObject({ visibility: 'refused', state: 'private', reason: expect.stringContaining('private') });
+    expect.soft(p1?.projects.find(x => x.path === pub.path), 'the public project').toMatchObject({ visibility: 'public', state: 'allowed', tasks: 2 });
     expect.soft(p1?.refused.map(r => `${r.file}:${r.line}`), 'the refused lines').toEqual(['tasks.jsonl:3', 'tasks.jsonl:4']);
     expect.soft(p1?.agents.map(a => `${a.name} ${a.harness}`), 'the load agents planned').toEqual(['Load 1 codex', 'Load 2 qwen-code']);
 
