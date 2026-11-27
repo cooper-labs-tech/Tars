@@ -66,7 +66,7 @@ const ENVIRONMENT_LINES: Record<keyof SessionEnvironment, RegExp> = {
   cpuCores: /your computer's number of processor cores/,
   ramBytes: /your computer's memory/,
   locale: /language and region/,
-  timeZone: /your time zone/,
+  timeZone: /^your time zone \(/,
   utcOffsetMinutes: /offset from UTC/,
   onBattery: /on battery when the session started/,
 };
