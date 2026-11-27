@@ -1273,17 +1273,30 @@ profile of that home, `~/.tars/hermes/profiles/<agent id>` (`services/hermes-hom
 
 **The gateway Tars starts** (`core/hermes-gateway.ts`, the maintainer's decision of 27/11).
 - Tars starts it at the first Hermes terminal, as `hermes gateway run --quiet` (the agent's own binary), and that
-  terminal's chat waits until the gateway's record shows it holds its home: a chat that finds a gateway starting or
-  running attaches to it and never starts another (Hermes's own rule). Measured on the bench with Hermes's own code:
-  the chats attached to it, A's stop left it and B (B answered a second task after it), and each session's detached
-  tools carried their own agent's id, so A's stop ended A's and nothing else.
-- Its environment, exactly (`hermesGatewayEnv`): Tars's PATH, so the MCP servers a session starts and its tools are
-  found; the user's home, name, shell and locale; the user's network proxy when Tars has one, for the first package
-  sync; on Windows, the system variables Python needs (`SYSTEMROOT`, `WINDIR`, `COMSPEC`, `PATHEXT`, `USERPROFILE`,
-  `APPDATA`, `LOCALAPPDATA`, `PROGRAMDATA`, `HOMEDRIVE`, `HOMEPATH`, `USERNAME`); `HERMES_HOME`, Tars's Hermes home; a
-  temporary folder of its own there (`TMPDIR`, or `TEMP` and `TMP` on Windows); `AWS_EC2_METADATA_DISABLED=true`.
+  terminal's chat waits until the gateway's record names the pid Tars started (or, for one a chat started, until the
+  stop's checks find it): a chat that finds a gateway starting or running attaches to it and never starts another
+  (Hermes's own rule). A wait longer than a moment is said in the agent's terminal (a first start syncs Hermes's
+  packages). Measured on the bench with Hermes's own code: the chats attached to it, A's stop left it and B (B
+  answered a second task after it), and each session's detached tools carried their own agent's id, so A's stop
+  ended A's and nothing else.
+- Its environment, exactly (`hermesGatewayEnv`), which every Hermes agent's tools start from (Hermes 0.23.4's
+  `tools/environments/local.py`):
+  - Tars's PATH, so the MCP servers a session starts and its tools are found;
+  - the user's home, name, shell and locale; the user's network proxy when Tars has one, for the first package sync;
+  - the user's session the tools need: the SSH agent's socket (`SSH_AUTH_SOCK`: git over SSH with a key the agent
+    holds; Hermes takes any name holding AUTH for a secret, so the per-session passthrough cannot carry it; measured
+    on the bench, a tool's `ssh-add -l` reached the agent through it), the terminal's type, the display (`DISPLAY`,
+    `WAYLAND_DISPLAY`), and on Linux the D-Bus session and the runtime folder (keyrings);
+  - on Windows, Hermes's own list of the system's essential variables (`SYSTEMROOT`, `WINDIR`, `COMSPEC`, `PATHEXT`,
+    `USERPROFILE`, `APPDATA`, `LOCALAPPDATA`, `PROGRAMDATA`, `HOMEDRIVE`, `HOMEPATH`, `USERNAME`, `SYSTEMDRIVE`,
+    `PROGRAMFILES` and its `(X86)` and `W6432` forms, `PROCESSOR_ARCHITECTURE`, `NUMBER_OF_PROCESSORS`, `OS`,
+    `ALLUSERSPROFILE`, `PUBLIC`, `USERDOMAIN`, `COMPUTERNAME`);
+  - `HERMES_HOME`, Tars's Hermes home; a temporary folder of its own there (`TMPDIR`, or `TEMP` and `TMP` on
+    Windows); `AWS_EC2_METADATA_DISABLED=true`.
   No agent's id, name, project or token, no Tars address or instance, no endpoint token, no provider key (macOS adds
-  `__CF_USER_TEXT_ENCODING` to any process it starts; the E2E reads the names it got).
+  `__CF_USER_TEXT_ENCODING` to any process it starts; the E2E reads the names it got). A cloud region, a cluster's
+  config or a Docker daemon's address (`AWS_REGION`, `KUBECONFIG`, `DOCKER_HOST`) are not passed: the maintainer's to
+  decide.
 - It needs no way into Tars: each session's model calls carry its own profile's proxy token, and the MCP servers it
   starts for a session get that agent's Tars address and token from its profile (the token by `${...}` from the
   `.env`), so they reach Tars as that agent, with that agent's token, and no other.

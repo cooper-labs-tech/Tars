@@ -1,5 +1,6 @@
 import { execFile, spawn, type ChildProcess } from 'child_process';
 import * as fs from 'fs';
+import * as os from 'os';
 import * as path from 'path';
 import { hermesGatewayEnv } from '../services/hermes-home';
 import { envValue, killTree, resolveCliBinary } from '../platform';
@@ -36,6 +37,8 @@ export interface GatewayChild {
 export interface GatewaySupervisorDeps {
   /** The live gateway of Tars's home (its record, by the stop's checks), or null. */
   find: () => Promise<number | null>;
+  /** The pid the home's record names, as it stands (no check), or null: enough for the gateway Tars started. */
+  recorded?: () => number | null;
   /** Starts one with that binary; null when it could not be started at all. */
   start: (binary: string) => GatewayChild | null;
   /** How many Hermes terminals are open. */
@@ -104,12 +107,16 @@ export class HermesGatewaySupervisor {
   }
 
   /**
-   * True once a gateway holds Tars's home (its record names it, by the stop's checks): a chat started then attaches to
-   * it. False at the timeout, or at once when nothing of Tars's is starting (nothing to wait for).
+   * True once a gateway holds Tars's home: its record names the pid Tars started, while that process lives (the
+   * record is written once the gateway holds its home's lock, and Tars knows its own child: no other check needed,
+   * where the stop's checks may never confirm it, the Audit's L2), or the stop's checks find it (one a chat started).
+   * A chat started then attaches to it. False at the timeout, or at once when nothing of Tars's is starting.
    */
   async ready(timeoutMs: number, everyMs = 250): Promise<boolean> {
     const deadline = Date.now() + timeoutMs;
     for (;;) {
+      const own = this.child?.pid;
+      if (own !== undefined && this.deps.recorded?.() === own) return true;
       if (await this.deps.find() !== null) return true;
       if (!this.child && !this.ensuring) {
         this.log('[hermes] no gateway of Tars\'s Hermes home is starting: the chat starts without one to attach to');
@@ -124,11 +131,33 @@ export class HermesGatewaySupervisor {
   }
 }
 
+/** What an agent's terminal says while its chat waits for the gateway longer than a moment (a first start syncs). */
+export const GATEWAY_WAIT_LINE =
+  'Tars is starting the Hermes gateway its Hermes agents share. Its first start downloads Hermes\'s packages once, which can take a few minutes.';
+
+/**
+ * The wait for the gateway, said in the agent's terminal when it lasts longer than `quietMs` (the Audit's L2: a
+ * terminal blank for minutes reads as a hang), once; a short one says nothing. Resolves with the wait's own answer.
+ */
+export async function awaitGatewayTelling(ready: Promise<boolean>, say: (line: string) => void, quietMs = 1_500): Promise<boolean> {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const slow = new Promise<'slow'>((resolve) => { timer = setTimeout(() => resolve('slow'), quietMs); });
+  const first = await Promise.race([ready, slow]);
+  clearTimeout(timer);
+  if (first !== 'slow') return first;
+  say(GATEWAY_WAIT_LINE);
+  return ready;
+}
+
 /**
  * `<binary> gateway run --quiet`, detached, in Tars's Hermes home, with the gateway's environment (hermesGatewayEnv),
  * its output to `<home>/logs/tars-gateway.log`. Null when the binary cannot be started (said).
  */
 export function startHermesGatewayProcess(binary: string, o: { root: string; path: string; source?: NodeJS.ProcessEnv; platform?: NodeJS.Platform }): ChildProcess | null {
+  if (process.env.VITEST && !insideTestTemp(binary)) {
+    console.error('[hermes] under vitest, a gateway is started only from a binary inside the test\'s own temporary folder');
+    return null;
+  }
   const platform = o.platform ?? process.platform;
   const env = hermesGatewayEnv(o.source ?? process.env, o.root, o.path, platform);
   const bin = resolveCliBinary(binary, env, platform);
@@ -153,6 +182,21 @@ export function startHermesGatewayProcess(binary: string, o: { root: string; pat
     return null;
   } finally {
     if (log !== undefined) fs.closeSync(log);
+  }
+}
+
+/**
+ * Under vitest, the one place a binary may be started from: the test's own temporary folder (the suite's PATH finds
+ * the account's installed `hermes`, which a unit test started on 27/11, twice). An absolute path whose real target lies
+ * there; a bare name never.
+ */
+function insideTestTemp(binary: string): boolean {
+  if (!path.isAbsolute(binary)) return false;
+  try {
+    const tmp = fs.realpathSync(os.tmpdir());
+    return fs.realpathSync(binary).startsWith(tmp + path.sep);
+  } catch {
+    return false;
   }
 }
 

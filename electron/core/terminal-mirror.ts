@@ -176,6 +176,21 @@ function forget(pty: IPty, mirror: Mirror): void {
  * program repaints for the size it is told, and a mirror at another size
  * would lay that repaint out differently from the panel.
  */
+/**
+ * Text of Tars's own into a terminal's mirror, as if its program had written it (a line said while a Hermes chat waits
+ * for its gateway, core/agent-manager.ts sayInTerminal): the panels that read the screen from the mirror show it.
+ */
+export function writeIntoMirror(pty: IPty | undefined, data: string): void {
+  const mirror = pty ? mirrors.get(pty) : undefined;
+  if (!mirror) return;
+  try {
+    mirror.snapshot = undefined;
+    mirror.core.writeSync(data);
+  } catch (err) {
+    console.error('[terminal-mirror] a line of Tars\'s was not written', err);
+  }
+}
+
 export function resizeTerminalMirror(pty: IPty | undefined, cols: number, rows: number): void {
   const mirror = pty && mirrors.get(pty);
   if (!mirror || !isTerminalSize(cols, rows)) return;

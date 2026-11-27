@@ -63,7 +63,12 @@ import {
  *    user's OpenAI variables (any of which Tars's own process may hold when it was started from an agent's terminal),
  *    or an agent's temporary folder; or it lacks what the gateway needs: Tars's PATH (its sessions' MCP servers run
  *    `node`), the user's home and locale, the user's network proxy for its first sync, Windows' system variables, its
- *    home (the root), a temporary folder of its own, and the cloud metadata lookup off.
+ *    home (the root), a temporary folder of its own, and the cloud metadata lookup off. And (the Audit's M1 at
+ *    88abd927f, read in Hermes 0.23.4's local.py: every agent's tools start from the gateway's own environment) what
+ *    the tools need of the user's session: the SSH agent's socket (git over SSH with a key the agent holds; Hermes takes
+ *    any name holding AUTH for a secret, so no passthrough can carry it), the terminal's type, the display (X11,
+ *    Wayland), the D-Bus session and the runtime folder (Linux keyrings); on Windows, the rest of Hermes's own list of
+ *    essential system variables.
  * 17. A gateway is believed on its record alone when Tars looks for one to reuse, or waits for one to hold its home:
  *    the same checks as the stop (its command line, and its own HERMES_HOME on macOS and Linux, its start on Windows).
  * 18. (The real binary, 27/11.) The gateway Tars starts through the `hermes` launcher runs as the launcher relaunches
@@ -267,14 +272,22 @@ describe('the gateway\'s environment', () => {
     CLAUDE_MGR_API_URL: 'http://127.0.0.1:31415', CLAUDE_MGR_API_TOKEN: 'tok-a', TARS_INSTANCE_ID: 'inst', TARS_ENDPOINT_TOKEN: 'tep_a',
     OPENAI_API_KEY: 'sk-user', OPENAI_BASE_URL: 'https://api.openai.com/v1', OPENROUTER_API_KEY: 'sk-or-user', ANTHROPIC_API_KEY: 'sk-ant',
     AWS_PROFILE: 'work', CLAUDE_CODE_TMPDIR: '/Users/u/.tars/tmp/ab12cd34ef/c', PATH: '/usr/bin',
+    // The user's session, which the agents' tools need (the Audit's M1).
+    SSH_AUTH_SOCK: '/private/tmp/com.apple.launchd.x/Listeners', DISPLAY: ':0', WAYLAND_DISPLAY: 'wayland-0',
+    DBUS_SESSION_BUS_ADDRESS: 'unix:path=/run/user/501/bus', XDG_RUNTIME_DIR: '/run/user/501',
+    // Left out until the owner chooses (the orchestrator's note): a cloud region, a cluster, a Docker daemon.
+    AWS_REGION: 'eu-west-3', KUBECONFIG: '/Users/u/.kube/config', DOCKER_HOST: 'unix:///var/run/docker.sock',
   };
   const FULL_PATH = '/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin';
 
-  it('16: on macOS and Linux, exactly the home, the locale, its own temporary folder, Tars\'s PATH and its root', () => {
+  it('16: on macOS and Linux, exactly the home, the locale, the session the tools need, its temporary folder, PATH, root', () => {
     for (const platform of ['darwin', 'linux'] as const) {
       const env = hermesGatewayEnv(tarsEnv, root, FULL_PATH, platform);
-      expect(Object.keys(env).sort(), platform).toEqual(['AWS_EC2_METADATA_DISABLED', 'HERMES_HOME', 'HOME', 'LANG', 'LC_ALL', 'LOGNAME', 'PATH', 'SHELL', 'TMPDIR', 'USER']);
-      expect(env).toMatchObject({ HERMES_HOME: root, TMPDIR: path.join(root, 'tmp'), PATH: FULL_PATH, AWS_EC2_METADATA_DISABLED: 'true', HOME: '/Users/u' });
+      expect(Object.keys(env).sort(), platform).toEqual([
+        'AWS_EC2_METADATA_DISABLED', 'DBUS_SESSION_BUS_ADDRESS', 'DISPLAY', 'HERMES_HOME', 'HOME', 'LANG', 'LC_ALL', 'LOGNAME', 'PATH',
+        'SHELL', 'SSH_AUTH_SOCK', 'TERM', 'TMPDIR', 'USER', 'WAYLAND_DISPLAY', 'XDG_RUNTIME_DIR',
+      ]);
+      expect(env).toMatchObject({ HERMES_HOME: root, TMPDIR: path.join(root, 'tmp'), PATH: FULL_PATH, AWS_EC2_METADATA_DISABLED: 'true', HOME: '/Users/u', SSH_AUTH_SOCK: '/private/tmp/com.apple.launchd.x/Listeners' });
     }
   });
 
@@ -286,9 +299,16 @@ describe('the gateway\'s environment', () => {
 
   it('16: on Windows, the system variables Python needs, and its own TEMP and TMP', () => {
     const win = { ...tarsEnv, SYSTEMROOT: 'C:\\Windows', WINDIR: 'C:\\Windows', COMSPEC: 'C:\\Windows\\system32\\cmd.exe', PATHEXT: '.COM;.EXE',
-      USERPROFILE: 'C:\\Users\\u', APPDATA: 'C:\\Users\\u\\AppData\\Roaming', LOCALAPPDATA: 'C:\\Users\\u\\AppData\\Local', TEMP: 'C:\\agent-tmp', TMP: 'C:\\agent-tmp' };
+      USERPROFILE: 'C:\\Users\\u', APPDATA: 'C:\\Users\\u\\AppData\\Roaming', LOCALAPPDATA: 'C:\\Users\\u\\AppData\\Local', TEMP: 'C:\\agent-tmp', TMP: 'C:\\agent-tmp',
+      // The rest of Hermes's own list of essential Windows variables (the Audit's M1).
+      SYSTEMDRIVE: 'C:', PROGRAMFILES: 'C:\\Program Files', 'PROGRAMFILES(X86)': 'C:\\Program Files (x86)', PROGRAMW6432: 'C:\\Program Files',
+      PROCESSOR_ARCHITECTURE: 'AMD64', NUMBER_OF_PROCESSORS: '8', OS: 'Windows_NT', ALLUSERSPROFILE: 'C:\\ProgramData', PUBLIC: 'C:\\Users\\Public',
+      USERDOMAIN: 'HOST', COMPUTERNAME: 'HOST' };
     const env = hermesGatewayEnv(win, root, FULL_PATH, 'win32');
     expect(env).toMatchObject({ SYSTEMROOT: 'C:\\Windows', PATHEXT: '.COM;.EXE', USERPROFILE: 'C:\\Users\\u', TEMP: path.join(root, 'tmp'), TMP: path.join(root, 'tmp'), HERMES_HOME: root });
+    for (const name of ['SYSTEMDRIVE', 'PROGRAMFILES', 'PROGRAMFILES(X86)', 'PROGRAMW6432', 'PROCESSOR_ARCHITECTURE', 'NUMBER_OF_PROCESSORS', 'OS', 'ALLUSERSPROFILE', 'PUBLIC', 'USERDOMAIN', 'COMPUTERNAME']) {
+      expect(env[name], name).toBe((win as Record<string, string>)[name]);
+    }
     expect(env.TMPDIR).toBeUndefined();
   });
 
@@ -296,7 +316,8 @@ describe('the gateway\'s environment', () => {
     for (const platform of ['darwin', 'linux', 'win32'] as const) {
       const env = hermesGatewayEnv(tarsEnv, root, FULL_PATH, platform);
       for (const name of ['CLAUDE_AGENT_ID', 'CLAUDE_AGENT_NAME', 'CLAUDE_PROJECT_PATH', 'CLAUDE_MGR_API_URL', 'CLAUDE_MGR_API_TOKEN', 'TARS_INSTANCE_ID',
-        'TARS_ENDPOINT_TOKEN', 'OPENAI_API_KEY', 'OPENAI_BASE_URL', 'OPENROUTER_API_KEY', 'ANTHROPIC_API_KEY', 'AWS_PROFILE', 'CLAUDE_CODE_TMPDIR', 'TERM']) {
+        'TARS_ENDPOINT_TOKEN', 'OPENAI_API_KEY', 'OPENAI_BASE_URL', 'OPENROUTER_API_KEY', 'ANTHROPIC_API_KEY', 'AWS_PROFILE', 'CLAUDE_CODE_TMPDIR',
+        'AWS_REGION', 'KUBECONFIG', 'DOCKER_HOST']) {
         expect(env[name], `${platform} ${name}`).toBeUndefined();
       }
       expect(Object.values(env).some(v => v.includes('.tars/tmp/')), `${platform}: an agent's temporary folder`).toBe(false);

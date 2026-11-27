@@ -24,9 +24,17 @@ import { EventEmitter } from 'node:events';
  * 5. The process itself (a real one here): not detached (macOS and Linux: a session of its own, which ending a
  *    terminal's tree never reaches), started with Tars's or an agent's environment instead of the gateway's, or not
  *    stopped by the stop's rule at the end.
+ * Written before their code (the Audit's L2 and L3 at 88abd927f):
+ * 6. A gateway Tars started, alive and recorded under its own pid, is never taken as holding its home (its environment
+ *    unreadable, a Python that hides it, the home a symlink), so every Hermes terminal waits out the whole timeout:
+ *    the wait must end once the record names the pid Tars started, while that process lives.
+ * 7. A wait longer than a moment says nothing: the agent's terminal stays blank for minutes (a first start syncs
+ *    Hermes's packages first). And a short one says something for nothing.
+ * 8. Under vitest, a binary outside the test's own temporary folder is started: the account's installed `hermes`,
+ *    which the PATH of the suite finds (it did on 27/11, in a throwaway home).
  */
 
-import { HermesGatewaySupervisor, startHermesGatewayProcess, type GatewayChild } from '../../../electron/core/hermes-gateway';
+import { HermesGatewaySupervisor, startHermesGatewayProcess, awaitGatewayTelling, type GatewayChild } from '../../../electron/core/hermes-gateway';
 import { stopHermesGateway } from '../../../electron/services/hermes-home';
 
 class FakeChild extends EventEmitter implements GatewayChild {
@@ -35,9 +43,10 @@ class FakeChild extends EventEmitter implements GatewayChild {
 }
 
 function supervisor(o: { found?: number | null; terminals?: number } = {}) {
-  const state = { found: o.found ?? null as number | null, terminals: o.terminals ?? 1, started: [] as FakeChild[], logs: [] as string[], now: 1_000_000, startFails: false };
+  const state = { found: o.found ?? null as number | null, recorded: null as number | null, terminals: o.terminals ?? 1, started: [] as FakeChild[], logs: [] as string[], now: 1_000_000, startFails: false };
   const s = new HermesGatewaySupervisor({
     find: async () => state.found,
+    recorded: () => state.recorded,
     start: () => {
       if (state.startFails) return null;
       const c = new FakeChild(5000 + state.started.length);
@@ -156,6 +165,56 @@ describe('waiting for it', () => {
     const t = Date.now();
     expect(await s.ready(5_000, 10)).toBe(false);
     expect(Date.now() - t).toBeLessThan(1_000);
+  });
+});
+
+describe('when its home cannot be read, and while it starts', () => {
+  it('6: the wait ends once the record names the pid Tars started, though the checks never confirm it', async () => {
+    const { s, state } = supervisor();
+    await s.ensure('hermes');
+    const t = Date.now();
+    const ready = s.ready(5_000, 10);
+    await new Promise(r => setTimeout(r, 50));
+    state.recorded = state.started[0].pid;
+    expect(await ready).toBe(true);
+    expect(Date.now() - t).toBeLessThan(2_000);
+  });
+
+  it('6: a record naming another pid, or the pid of a gateway that exited, ends nothing', async () => {
+    const { s, state } = supervisor();
+    await s.ensure('hermes');
+    state.recorded = 4242;
+    expect(await s.ready(80, 10)).toBe(false);
+    state.recorded = state.started[0].pid;
+    state.terminals = 0;
+    state.started[0].exit();
+    expect(await s.ready(80, 10)).toBe(false);
+  });
+
+  it('7: a wait longer than a moment is said once in the terminal; a short one says nothing', async () => {
+    const said: string[] = [];
+    expect(await awaitGatewayTelling(Promise.resolve(true), t => said.push(t), 200)).toBe(true);
+    expect(said).toEqual([]);
+    const slow = new Promise<boolean>(r => setTimeout(() => r(true), 400));
+    expect(await awaitGatewayTelling(slow, t => said.push(t), 100)).toBe(true);
+    expect(said).toHaveLength(1);
+    expect(said[0]).toMatch(/Hermes/);
+    expect(said[0]).not.toMatch(/[–—]/);
+  });
+
+  it.skipIf(process.platform === 'win32')('8: under vitest, a binary outside the test\'s own temporary folder is never started', () => {
+    expect(process.env.VITEST, 'this suite runs under vitest').toBeTruthy();
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), 'hermes-gateway-guard-'));
+    try {
+      // Only binaries that do nothing if this guard is missing (a red run, a mutant): never a real Hermes here. A bare
+      // name the PATH finds, as `hermes` was; an absolute path outside the test's folder.
+      for (const binary of ['true', '/usr/bin/true']) {
+        expect(startHermesGatewayProcess(binary, { root, path: '/usr/bin:/bin' }), binary).toBeNull();
+      }
+      expect(fs.existsSync(path.join(root, 'logs', 'tars-gateway.log')), 'nothing started, nothing logged').toBe(false);
+    } finally {
+      fs.rmSync(root, { recursive: true, force: true });
+    }
   });
 });
 

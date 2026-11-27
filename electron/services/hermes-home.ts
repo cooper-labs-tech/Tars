@@ -393,14 +393,23 @@ async function judgeHermesGateway(root: string, deps: Omit<GatewayStopDeps, 'sto
   return { pid };
 }
 
-/** What the gateway takes from Tars's own environment, when Tars has it: the user's home, locale and network proxy. */
+/**
+ * What the gateway takes from Tars's own environment, when Tars has it: the user's home, locale and network proxy, and
+ * the user's session that every agent's tools need, since they start from the gateway's own environment (Hermes
+ * 0.23.4's tools/environments/local.py, the Audit's M1): the SSH agent's socket (git over SSH with a key the agent
+ * holds; Hermes takes any name holding AUTH for a secret, so no passthrough carries it), the terminal's type, the
+ * display, and on Linux the D-Bus session and the runtime folder (keyrings).
+ */
 const GATEWAY_FROM_TARS = [
   'HOME', 'USER', 'LOGNAME', 'SHELL', 'LANG', 'LC_ALL', 'LC_CTYPE',
   'HTTPS_PROXY', 'HTTP_PROXY', 'ALL_PROXY', 'NO_PROXY', 'https_proxy', 'http_proxy', 'all_proxy', 'no_proxy',
+  'SSH_AUTH_SOCK', 'TERM', 'DISPLAY', 'WAYLAND_DISPLAY', 'DBUS_SESSION_BUS_ADDRESS', 'XDG_RUNTIME_DIR',
 ] as const;
-/** And on Windows, what Python and Hermes need of the system there. */
+/** And on Windows, Hermes's own list of the system's essential variables. */
 const GATEWAY_FROM_TARS_WIN32 = [
   'SYSTEMROOT', 'WINDIR', 'COMSPEC', 'PATHEXT', 'USERPROFILE', 'APPDATA', 'LOCALAPPDATA', 'PROGRAMDATA', 'HOMEDRIVE', 'HOMEPATH', 'USERNAME',
+  'SYSTEMDRIVE', 'PROGRAMFILES', 'PROGRAMFILES(X86)', 'PROGRAMW6432', 'PROCESSOR_ARCHITECTURE', 'NUMBER_OF_PROCESSORS', 'OS',
+  'ALLUSERSPROFILE', 'PUBLIC', 'USERDOMAIN', 'COMPUTERNAME',
 ] as const;
 
 /**
@@ -411,7 +420,9 @@ const GATEWAY_FROM_TARS_WIN32 = [
  * So, exactly:
  * - PATH: Tars's own, as its agents get it, so the MCP servers a session starts (`node`) and its tools are found;
  * - the user's home, name, shell and locale, and the user's network proxy when Tars has one (the first start syncs
- *   Hermes's packages from PyPI); on Windows, the system variables Python needs;
+ *   Hermes's packages from PyPI); the user's session the agents' tools need (GATEWAY_FROM_TARS above: the SSH agent's
+ *   socket, the terminal's type, the display, D-Bus and the runtime folder); on Windows, Hermes's own list of the
+ *   system's essential variables;
  * - HERMES_HOME, Tars's Hermes home (the root); a temporary folder of its own there, never an agent's;
  * - AWS_EC2_METADATA_DISABLED=true (hermes-provider.ts says why).
  * Nothing else: no agent's id, name, project or token, no Tars address or instance, no endpoint token, no provider key.

@@ -12,7 +12,8 @@ import { TARS_MCP_ENV } from '../services/mcp-orchestrator-env';
 import { hermesTurnWatch } from '../services/hermes-agent-turns';
 import { buildFullPath } from '../utils/path-builder';
 import { hasOrchestratorPowers } from './agent-role';
-import { HermesGatewaySupervisor, commandOf, homeOf, startHermesGatewayProcess, startedAt, stopTarsHermesGatewayPid } from './hermes-gateway';
+import { HermesGatewaySupervisor, awaitGatewayTelling, commandOf, homeOf, startHermesGatewayProcess, startedAt, stopTarsHermesGatewayPid } from './hermes-gateway';
+import * as fs from 'fs';
 import type { AppSettings } from '../types';
 
 /**
@@ -35,6 +36,14 @@ const live = new Map<string, string>();
 const gatewayChecks = { commandOf, homeOf, startedAt };
 const gateway = new HermesGatewaySupervisor({
   find: () => findHermesGateway(hermesRoot(), gatewayChecks),
+  recorded: () => {
+    try {
+      const pid = (JSON.parse(fs.readFileSync(path.join(hermesRoot(), 'gateway.pid'), 'utf8')) as { pid?: unknown }).pid;
+      return typeof pid === 'number' ? pid : null;
+    } catch {
+      return null;
+    }
+  },
   start: (binary) => startHermesGatewayProcess(binary, { root: hermesRoot(), path: buildFullPath() }),
   terminals: () => live.size,
 });
@@ -50,10 +59,12 @@ const GATEWAY_READY_MS = 15 * 60_000;
 /**
  * Before a Hermes agent's chat starts (core/agent-manager.ts, launchIntoTerminal): the gateway Tars started holds its
  * home, so the chat attaches to it rather than start one with its terminal's environment. True when it does; false at
- * the timeout, or when nothing of Tars's is starting (the chat then starts its own, as Hermes does).
+ * the timeout, or when nothing of Tars's is starting (the chat then starts its own, as Hermes does). `say` puts a
+ * line in the agent's terminal when the wait lasts longer than a moment.
  */
-export function hermesGatewayReady(timeoutMs: number = GATEWAY_READY_MS): Promise<boolean> {
-  return gateway.ready(timeoutMs);
+export function hermesGatewayReady(say?: (line: string) => void, timeoutMs: number = GATEWAY_READY_MS): Promise<boolean> {
+  const ready = gateway.ready(timeoutMs);
+  return say ? awaitGatewayTelling(ready, say) : ready;
 }
 
 /** The variables of Tars's MCP servers that are not secrets, as the terminal's environment holds them. */
