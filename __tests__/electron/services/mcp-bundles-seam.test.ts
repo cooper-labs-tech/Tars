@@ -153,26 +153,26 @@ describe('the E2E seam naming a tree\'s own bundles', () => {
     // A directory link: a junction on Windows, which needs no privilege; the type is ignored elsewhere.
     const link = (at: string, to: string) => { fs.symlinkSync(to, at, 'junction'); return at; };
     // HOME a link to the account's home, or into it.
-    expect(e2eMcpBundlesDir(env(), false, { home: link(path.join(root, 'home-is-acct'), acct), account: acct }), 'HOME links to it').toBeNull();
-    expect(e2eMcpBundlesDir(env(), false, { home: link(path.join(root, 'home-in-acct'), path.join(acct, 'inside')), account: acct }), 'HOME links into it').toBeNull();
+    expect.soft(e2eMcpBundlesDir(env(), false, { home: link(path.join(root, 'home-is-acct'), acct), account: acct }), 'HOME links to it').toBeNull();
+    expect.soft(e2eMcpBundlesDir(env(), false, { home: link(path.join(root, 'home-in-acct'), path.join(acct, 'inside')), account: acct }), 'HOME links into it').toBeNull();
     // CODEX_HOME in the sandbox, a link to the account's own folder: there already, or not yet.
     const codex = link(path.join(sandbox, '.codex'), path.join(acct, '.codex'));
     const later = link(path.join(sandbox, '.codex-later'), path.join(acct, '.codex-later'));
     const sandboxed = (value: string) => e2eMcpBundlesDir(env({ CODEX_HOME: value }), false, { home: sandbox, account: acct });
-    expect(sandboxed(codex), 'CODEX_HOME links to the real one').toBeNull();
-    expect(sandboxed(later), 'CODEX_HOME links to one not made yet').toBeNull();
-    expect(sandboxed(path.join(codex, 'deeper')), 'a folder not made yet below the link').toBeNull();
-    expect(sandboxed(`${codex}${path.sep}..${path.sep}elsewhere`), '\'..\' climbs from where the link leads').toBeNull();
+    expect.soft(sandboxed(codex), 'CODEX_HOME links to the real one').toBeNull();
+    expect.soft(sandboxed(later), 'CODEX_HOME links to one not made yet').toBeNull();
+    expect.soft(sandboxed(path.join(codex, 'deeper')), 'a folder not made yet below the link').toBeNull();
+    expect.soft(sandboxed(`${codex}${path.sep}..${path.sep}elsewhere`), '\'..\' climbs from where the link leads').toBeNull();
     // The account's home itself a link to its real folder: HOME in that real folder is still the account's.
     const realAcct = path.join(root, 'real-acct');
     fs.mkdirSync(path.join(realAcct, 'sandbox'), { recursive: true });
     const acctLink = link(path.join(root, 'acct-link'), realAcct);
-    expect(e2eMcpBundlesDir(env(), false, { home: path.join(realAcct, 'sandbox'), account: acctLink }), 'the account\'s home is a link').toBeNull();
+    expect.soft(e2eMcpBundlesDir(env(), false, { home: path.join(realAcct, 'sandbox'), account: acctLink }), 'the account\'s home is a link').toBeNull();
     // A sandbox reached through a link is still the sandbox, whichever way each path is written.
     const sandboxLink = link(path.join(root, 'sandbox-link'), sandbox);
     fs.mkdirSync(path.join(sandbox, 'own-codex'));
-    expect(e2eMcpBundlesDir(env({ CODEX_HOME: path.join(sandbox, 'own-codex') }), false, { home: sandboxLink, account: acct }), 'HOME by its link').toBe(tree);
-    expect(e2eMcpBundlesDir(env({ CODEX_HOME: path.join(sandboxLink, 'own-codex') }), false, { home: sandbox, account: acct }), 'CODEX_HOME by the link').toBe(tree);
+    expect.soft(e2eMcpBundlesDir(env({ CODEX_HOME: path.join(sandbox, 'own-codex') }), false, { home: sandboxLink, account: acct }), 'HOME by its link').toBe(tree);
+    expect.soft(e2eMcpBundlesDir(env({ CODEX_HOME: path.join(sandboxLink, 'own-codex') }), false, { home: sandbox, account: acct }), 'CODEX_HOME by the link').toBe(tree);
     warn.mockRestore();
   });
 
@@ -183,7 +183,7 @@ describe('the E2E seam naming a tree\'s own bundles', () => {
     if (otherCase === acct || !fs.existsSync(otherCase)) ctx.skip();
     const { e2eMcpBundlesDir } = await seam();
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
-    expect(e2eMcpBundlesDir(env(), false, { home: otherCase, account: acct })).toBeNull();
+    expect.soft(e2eMcpBundlesDir(env(), false, { home: otherCase, account: acct })).toBeNull();
     warn.mockRestore();
   });
 
