@@ -285,11 +285,16 @@ from the window, or from an agent's drop file (`~/.tars/endpoint-keys/<name>.key
   when they would make the outcome weigh more than 16 KiB less 512 bytes (the back office refuses an outcome over
   16 KiB), and `tasksOmitted` counts the rest. A turn carries the ref of the task it served (the one the words that
   opened it handed over, or for a session's first turn the one it started on), so no task loses its turns. Once the session has ended, the
-  end of its branch's pull request (merged or closed, and when), read with `gh pr list --state closed` every 5 minutes
-  while an ended session waits for one, moves its change sequence, so the reader and the upload take it again;
+  end of its branch's pull request (merged or closed, its number, and when) moves its change sequence, so the reader
+  and the upload take it again. It is read with `gh pr list --state closed` (the repository's last 50) every 5
+  minutes, for 14 days after the session ended, and never for a session on its repository's default branch (origin's
+  HEAD, else main or master). A pull request 50 others closed after before a read found it (Tars off for days in a busy
+  repository) is not found;
 - a task taken out of the agent's queue before it started is kept with the session by its kind (`cancelled`,
-  `taken_back`, `dropped_with_stop`, `queue_cleared`, `agent_removed`, `not_handed_again`), and a request the harness
-  gave up while the proxy held it is a request row with status 499 and a structured `cancel`, its turn `abandoned`.
+  `taken_back`, `dropped_with_stop`, `queue_cleared`, `agent_removed`, `not_handed_again`): the last 50, within 8 KiB
+  less 256 bytes, `lostDemandOmitted` counting the rest. A request the harness gave up while the proxy held it is a
+  request row with status 499 and a structured `cancel`, its turn `abandoned`; it never reached the endpoint, so it
+  counts in no request count, no model time and no first request.
 
 Retention and a size cap come from Settings. The back-office reads it through `window.electronAPI.traces`. An external
 reader reads it through `GET /api/traces/*`, with its own token, as the reader's trace format tables.
