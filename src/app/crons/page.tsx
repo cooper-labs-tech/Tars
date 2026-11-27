@@ -16,11 +16,12 @@ const NO_ANSWER = /\b(ECONNREFUSED|ECONNRESET|ETIMEDOUT|ENOTFOUND|EAI_AGAIN|EHOS
 
 /**
  * A Hermes call that threw, worded by what it is (`Shell · Schedules · Hermes did not answer · notes`): "Tars could
- * not reach Hermes" only when the gateway did not answer, else what failed, plainly.
+ * not reach Hermes" only when the gateway did not answer, else what failed, plainly. The shape of the main process's
+ * own answer since #660 ("Tars could not reach Hermes at <url>: <reason>"), without the address the page does not know.
  */
 const thrownLine = (thrown: unknown) => {
-  const reason = ipcReason(thrown, 'no reason given');
-  return NO_ANSWER.test(reason) ? `Tars could not reach Hermes (${reason}).` : `${reason.replace(/\.$/, '')}.`;
+  const reason = ipcReason(thrown, 'no reason given').replace(/\.$/, '');
+  return NO_ANSWER.test(reason) ? `Tars could not reach Hermes: ${reason}.` : `${reason}.`;
 };
 
 /** A Hermes call that answered `{ success: false, error }`: its reason on one line, through the same ipcReason. */
@@ -130,7 +131,7 @@ export default function CronsPage() {
       const r = await window.electronAPI?.hermes?.crons();
       if (!r) { setError('Electron API unavailable'); return; }
       if (!r.success) {
-        setError(r.error || 'Could not read Hermes schedules');
+        setError(`Could not read the schedules: ${refused(r.error)}`);
         setNeedsSignIn(!!r.needsSignIn);
         return;
       }
