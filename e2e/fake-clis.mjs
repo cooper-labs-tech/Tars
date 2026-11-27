@@ -468,6 +468,7 @@ export async function run() {
     const directive = /\b(DELEGATE|SEND|ECHO|APPROVE) (\S+)(?: (.+))?$/ms.exec(text);
     if (kind === 'qwen-code' && process.env.OPENAI_BASE_URL) answer = await modelTurn(text);
     else if (kind === 'pi' && piEndpoint()) answer = await piModelTurn(text);
+    else if (kind === 'opencode' && opencodeEndpoint()) answer = await opencodeModelTurn(text);
     else if (!directive) answer = 'ok';
     else if (directive[1] === 'ECHO') answer = `echo ${directive[2]}`;
     else if (directive[1] === 'APPROVE') answer = (opts.bypass || await ask(directive[2])) ? `ran echo ${directive[2]}` : `did not run echo ${directive[2]}`;
@@ -631,14 +632,108 @@ export async function run() {
       if (!calls.size) return content || 'no answer';
       const list = [...calls.values()];
       messages.push({ role: 'assistant', content: null, tool_calls: list.map((c) => ({ id: c.id, type: 'function', function: { name: c.name, arguments: c.arguments } })) });
+      // Each command as its words say (e2e/fake-command.mjs, no shell), one after the other as Qwen Code 0.25.2 runs
+      // them, logged in its chat file as it logs them (measured on 27/11, trace feature C1): a `qwen-code.tool_call`
+      // telemetry line as each one ends, then each one's `tool_result` line once the last has ended.
+      const results = [];
       for (const c of list) {
         let command = '';
         try { command = JSON.parse(c.arguments).command ?? ''; } catch { /* nothing */ }
-        const echoed = /^echo (.+)$/.exec(String(command).trim());
-        messages.push({ role: 'tool', tool_call_id: c.id, content: echoed ? `${echoed[1]}\n` : `ran ${command}` });
+        const started = Date.now();
+        const r = await runFakeCommand(command);
+        qwenLine({ type: 'system', subtype: 'ui_telemetry', systemPayload: { uiEvent: { 'event.name': 'qwen-code.tool_call', 'event.timestamp': new Date().toISOString(), call_id: c.id, function_name: c.name, duration_ms: Date.now() - started, started_at_ms: started, status: r.code === 0 ? 'success' : 'error', execution_status: r.code === 0 ? 'success' : 'error', success: r.code === 0, decision: 'auto_accept' } } });
+        results.push({ c, r });
+        messages.push({ role: 'tool', tool_call_id: c.id, content: r.out || `exit ${r.code}` });
+      }
+      for (const { c, r } of results) {
+        qwenLine({ type: 'tool_result', message: { role: 'user', parts: [{ functionResponse: { id: c.id, name: c.name, response: { output: r.out } } }] }, toolCallResult: { callId: c.id, status: r.code === 0 ? 'success' : 'error', executionStatus: r.code === 0 ? 'success' : 'error', resultDisplay: { type: 'shell_result', version: 1, exitCode: r.code, signal: null, pid: null, outcome: r.code === 0 ? 'completed' : 'failed', output: r.out, truncated: false } } });
       }
     }
     return 'too many steps';
+  }
+
+  // opencode on an inference endpoint (trace feature C1): the provider Tars hands it in OPENCODE_CONFIG_CONTENT, named
+  // by the model it is given (`<provider>/<model>`), its key the variable `{env:NAME}` names.
+  function opencodeEndpoint() {
+    const [provider, ...model] = String(opts.model ?? '').split('/');
+    if (!provider || !model.length) return null;
+    let cfg;
+    try { cfg = JSON.parse(process.env.OPENCODE_CONFIG_CONTENT ?? ''); } catch { return null; }
+    const p = cfg?.provider?.[provider]?.options;
+    if (!p?.baseURL) return null;
+    const keyVar = /^\{env:([A-Z0-9_]+)\}$/.exec(String(p.apiKey ?? ''))?.[1];
+    return { base: String(p.baseURL).replace(/\/+$/, ''), key: keyVar ? process.env[keyVar] ?? '' : String(p.apiKey ?? ''), model: model.join('/') };
+  }
+
+  // An opencode turn on the endpoint, through chat completions with opencode's bash tool. The calls one answer asks for
+  // run together, as opencode 1.19.6 runs them, each read by e2e/fake-command.mjs (no shell), and go into its SQLite
+  // store as it keeps them (measured on 27/11, electron/services/tool-calls.ts): a `session` row with the folder it
+  // runs in, and a `part` row per call, `running` with its start, then `completed` with its end, exit code and cut.
+  let opencodeDb = null;
+  let opencodeSession = null;
+  async function opencodeModelTurn(text) {
+    const ep = opencodeEndpoint();
+    if (!opencodeDb) {
+      const { DatabaseSync } = await import('node:sqlite');
+      const file = path.join(process.env.XDG_DATA_HOME || path.join(HOME, '.local', 'share'), 'opencode', 'opencode.db');
+      fs.mkdirSync(path.dirname(file), { recursive: true });
+      opencodeDb = new DatabaseSync(file);
+      opencodeDb.exec(`CREATE TABLE IF NOT EXISTS session (id TEXT PRIMARY KEY, project_id TEXT, directory TEXT, title TEXT, time_created INTEGER, time_updated INTEGER);
+        CREATE TABLE IF NOT EXISTS part (id TEXT PRIMARY KEY, message_id TEXT, session_id TEXT, time_created INTEGER, time_updated INTEGER, data TEXT);`);
+    }
+    if (!opencodeSession) {
+      opencodeSession = `ses_${crypto.randomBytes(9).toString('hex')}`;
+      opencodeDb.prepare('INSERT INTO session VALUES (?, ?, ?, ?, ?, ?)').run(opencodeSession, 'global', cwd, 'stand-in', Date.now(), Date.now());
+    }
+    const put = opencodeDb.prepare('INSERT OR REPLACE INTO part VALUES (?, ?, ?, ?, ?, ?)');
+    const tools = [{ type: 'function', function: { name: 'bash', description: 'Executes a given bash command.', parameters: { type: 'object', properties: { command: { type: 'string' }, description: { type: 'string' } }, required: ['command'] } } }];
+    const messages = [{ role: 'system', content: 'You are a stand-in of opencode.' }, { role: 'user', content: text }];
+    for (let step = 0; step < 6; step++) {
+      const res = await fetch(`${ep.base}/chat/completions`, { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${ep.key}` }, body: JSON.stringify({ model: ep.model, messages, tools, stream: true, stream_options: { include_usage: true } }) });
+      const raw = await res.text();
+      log({ model: true, status: res.status, step, keyHead: ep.key.slice(0, 4) });
+      if (!res.ok) return `the endpoint answered ${res.status}`;
+      let content = '';
+      const calls = new Map();
+      for (const block of raw.split('\n\n')) {
+        const data = block.split('\n').filter((l) => l.startsWith('data:')).map((l) => l.slice(5).trim()).join('');
+        if (!data || data === '[DONE]') continue;
+        let chunk;
+        try { chunk = JSON.parse(data); } catch { continue; }
+        for (const c of chunk.choices ?? []) {
+          content += c.delta?.content ?? '';
+          for (const tc of c.delta?.tool_calls ?? []) {
+            const call = calls.get(tc.index) ?? { id: '', name: '', arguments: '' };
+            if (tc.id) call.id = tc.id;
+            if (tc.function?.name) call.name += tc.function.name;
+            call.arguments += tc.function?.arguments ?? '';
+            calls.set(tc.index, call);
+          }
+        }
+      }
+      if (!calls.size) return content || 'no answer';
+      const list = [...calls.values()].map((c) => { let command = ''; try { command = JSON.parse(c.arguments).command ?? ''; } catch { /* none */ } return { ...c, command }; });
+      messages.push({ role: 'assistant', content: null, tool_calls: list.map((c) => ({ id: c.id, type: 'function', function: { name: c.name, arguments: c.arguments } })) });
+      const message = `msg_${crypto.randomBytes(6).toString('hex')}`;
+      const ran = await Promise.all(list.map(async (c) => {
+        const partId = `prt_${crypto.randomBytes(6).toString('hex')}`;
+        const start = Date.now();
+        put.run(partId, message, opencodeSession, start, start, JSON.stringify({ type: 'tool', tool: 'bash', callID: c.id, state: { status: 'running', input: { command: c.command }, title: c.command, time: { start } } }));
+        const r = await runFakeCommand(c.command);
+        const end = Date.now();
+        put.run(partId, message, opencodeSession, start, end, JSON.stringify({ type: 'tool', tool: 'bash', callID: c.id, state: { status: 'completed', input: { command: c.command }, output: r.out || '(no output)', metadata: { output: r.out || '(no output)', exit: r.code, truncated: false }, title: c.command, time: { start, end } } }));
+        log({ command: true, callId: c.id, ms: end - start, exit: r.code });
+        return { c, r };
+      }));
+      for (const { c, r } of ran) messages.push({ role: 'tool', tool_call_id: c.id, content: r.out || '(no output)' });
+    }
+    return 'too many steps';
+  }
+
+  /** One more line of Qwen Code's chat file, in its own envelope. */
+  function qwenLine(entry) {
+    if (kind !== 'qwen-code' || !transcript) return;
+    fs.appendFileSync(transcript, JSON.stringify({ uuid: crypto.randomUUID(), parentUuid: null, sessionId: sid, timestamp: new Date().toISOString(), cwd, version: spec.version, ...entry }) + '\n');
   }
 
   hook('SessionStart', { source: opts.resume ? 'resume' : 'startup', model: opts.model, permission_mode: permissionMode });
