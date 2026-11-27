@@ -24,6 +24,9 @@
 // - `codex login status` exits 0 "Logged in using ChatGPT" or 1 "Not logged in", as 0.163 does (measured). With
 //   FAKE_CODEX_SIGN_IN=1 it reads its login as codex does by default, from its home's auth.json, and a home with none
 //   shows 0.163's sign-in screen, waits for a key and writes no session (measured on 0.163); without, it is signed in.
+// - `--version` answers `codex-cli 0.163.0`, and logs the HOME, CODEX_HOME and npm prefix it was given;
+// - on an inference endpoint (Tars's `-c model_providers.<id>...`), a turn is a model's over Responses, in the shape
+//   codex 0.170 sends (endpointTurn below).
 // Every launch and turn is logged to FAKE_CODEX_LOG, one JSON line each, with whether the agent's token was in its
 // environment, never the token.
 import fs from 'node:fs';
@@ -56,6 +59,11 @@ if (argv[0] === 'login' && argv[1] === 'status') {
   log({ login: 'status', codexHome: process.env.CODEX_HOME ?? null, signedIn: signedIn() });
   process.stdout.write(signedIn() ? 'Logged in using ChatGPT\n' : 'Not logged in\n');
   process.exit(signedIn() ? 0 : 1);
+}
+if (argv[0] === '--version' || argv[0] === '-V') {
+  log({ version: true, home: process.env.HOME ?? null, codexHome: process.env.CODEX_HOME ?? null, npmPrefix: process.env.npm_config_prefix ?? null });
+  process.stdout.write('codex-cli 0.163.0\n');
+  process.exit(0);
 }
 if (argv[0] === '--help' || argv[0] === '-h') {
   log({ help: true });
@@ -232,6 +240,61 @@ function callTars(tool, args) {
   });
 }
 
+/**
+ * On an inference endpoint (Tars's `-c model_providers.<id>.base_url=...`, `env_key=...` and `model_provider=...`), a
+ * turn is a model's, over Responses, in the shape codex 0.170 sends (the capture of 26/11, ids made here): the
+ * session-id, thread-id and x-codex-turn-metadata headers, and client_metadata in the body, both carrying the
+ * installation id codex keeps in its home (`installation_id`, made on first use). A shell call the endpoint asks for
+ * is answered as its words say (an echo prints its argument) and sent back; at most four requests a turn.
+ */
+const configValue = (key) => opts.configs.find(c => c.startsWith(`${key}=`))?.slice(key.length + 1).replace(/^"|"$/g, '') ?? null;
+const providerId = configValue('model_provider');
+const endpoint = providerId && configValue(`model_providers.${providerId}.base_url`)
+  ? { baseUrl: configValue(`model_providers.${providerId}.base_url`), keyVar: configValue(`model_providers.${providerId}.env_key`) }
+  : null;
+function installationId() {
+  const file = path.join(home, 'installation_id');
+  try { return fs.readFileSync(file, 'utf8').trim(); } catch { /* made below */ }
+  const id = randomUUID();
+  fs.mkdirSync(home, { recursive: true });
+  fs.writeFileSync(file, id);
+  return id;
+}
+async function endpointTurn(text) {
+  const key = (endpoint.keyVar && process.env[endpoint.keyVar]) || '';
+  const install = installationId();
+  const turnId = randomUUID();
+  const turnMetadata = JSON.stringify({ installation_id: install, session_id: sessionId, thread_id: sessionId, turn_id: turnId, window_id: `${sessionId}:0`, request_kind: 'turn', model: opts.model, reasoning_effort: effort ?? 'medium' });
+  const tools = [{ type: 'function', name: 'exec_command', description: 'Runs a command', strict: false, parameters: { type: 'object', properties: { cmd: { type: 'string' } }, required: ['cmd'] } }];
+  const input = [{ type: 'message', role: 'user', content: [{ type: 'input_text', text }] }];
+  for (let step = 0; step < 4; step++) {
+    const res = await fetch(`${endpoint.baseUrl.replace(/\/+$/, '')}/responses`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json', Authorization: `Bearer ${key}`, originator: 'codex_exec', 'user-agent': 'codex_exec/0.163.0 (stand-in)',
+        'session-id': sessionId, 'thread-id': sessionId, 'x-codex-window-id': `${sessionId}:0`, 'x-codex-turn-metadata': turnMetadata,
+      },
+      body: JSON.stringify({
+        model: opts.model, stream: false, instructions: 'You are Codex, a stand-in.', input, tools, tool_choice: 'auto', parallel_tool_calls: false,
+        reasoning: { effort: effort ?? 'medium' }, store: false, include: [], prompt_cache_key: sessionId,
+        client_metadata: { 'x-codex-installation-id': install, thread_id: sessionId, turn_id: turnId, 'x-codex-turn-metadata': turnMetadata, 'x-codex-window-id': `${sessionId}:0`, session_id: sessionId },
+      }),
+    });
+    const body = await res.json().catch(() => ({}));
+    log({ model: true, status: res.status, keyHead: key.slice(0, 4), session: sessionId });
+    if (!res.ok) return `the endpoint answered ${res.status}`;
+    const items = Array.isArray(body.output) ? body.output : [];
+    const call = items.find(i => i.type === 'function_call');
+    if (!call) return items.flatMap(i => i.content ?? []).map(c => c.text ?? '').join('') || 'no answer';
+    let cmd = '';
+    try { cmd = String(JSON.parse(call.arguments).cmd ?? ''); } catch { /* nothing */ }
+    const echoed = /^echo (.+)$/.exec(cmd.trim());
+    input.push({ type: 'function_call', call_id: call.call_id, name: call.name, arguments: call.arguments });
+    input.push({ type: 'function_call_output', call_id: call.call_id, output: echoed ? `${echoed[1]}\n` : `ran ${cmd}` });
+  }
+  return 'no answer in four requests';
+}
+
 async function turn(text) {
   // codex begins a fresh session's rollout with its first turn, and not before (measured on 0.163).
   if (!sessionFile) newSession();
@@ -262,6 +325,12 @@ async function turn(text) {
     out('\n■ Conversation interrupted: tell the model what to do differently.\n\n› ');
     write('event_msg', { type: 'turn_aborted', turn_id: turnId, reason: 'interrupted' });
     log({ aborted: true, tag: hold[1] });
+    return;
+  }
+  if (endpoint) {
+    const answer = await endpointTurn(text);
+    out(`\n• ${answer}\n\n› `);
+    write('event_msg', { type: 'task_complete', turn_id: turnId, last_agent_message: answer });
     return;
   }
   let answer = 'ok';
