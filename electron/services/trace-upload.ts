@@ -290,13 +290,11 @@ export class TraceUploader {
   }
 
   /** One pass: the per-session deletes owed, then what is new or grew, for sessions opted in now. Never throws. */
-  /**
-   * Whether the install file is gone: absent (ENOENT), or emptied, which is how Tars drops one it may not unlink
-   * (dropInstall). One there and unreadable for a moment, or a stat refused, is not gone.
-   */
+  /** Whether the install file is not there at all (ENOENT), as opposed to there and unreadable for a moment. */
   private installFileGone(): boolean {
     try {
-      return fs.statSync(this.deps.installFile).size === 0;
+      fs.statSync(this.deps.installFile);
+      return false;
     } catch (err) {
       return (err as NodeJS.ErrnoException).code === 'ENOENT';
     }

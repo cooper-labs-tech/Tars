@@ -46,7 +46,7 @@ import { TraceUploader, type UploaderDeps } from '../../electron/services/trace-
  * Added before its code after the Audit's pre-existing Low at fff13140c (27/11):
  * 17. The same with a whole deletion the user asked for ("delete everything sent", owed while its DELETE has not gone
  *     through): a moment's bad read forgets it, and sharing may start again with the copy still there. Only a file
- *     truly gone (absent, or emptied as Tars empties one it cannot remove) forgets it.
+ *     truly gone (ENOENT) forgets it.
  */
 
 type Seen = { method: string; url: string; auth?: string };
