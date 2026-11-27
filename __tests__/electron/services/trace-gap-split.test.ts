@@ -59,6 +59,9 @@ import { assertThrowaway } from '../../setup/throwaway-dirs';
  * 10. What leaves: a command or an output leaves (only ids, numbers, exit codes and flags may); the gap and the calls
  *     are missing from the export, the upload or its preview; a request with hundreds of calls is not bounded.
  * 11. A line that is no tool line, or is not JSON, throws or is read as a call.
+ * 12. (Added before its code, 27/11: Qwen Code 0.25.2 and opencode 1.19.6, measured, flag a cut output without its
+ *     size.) A cut output is not flagged when the harness does not say how many bytes it cut: `truncated` is missing,
+ *     or false; or a size is made up for it.
  */
 
 assertThrowaway({ DATA_DIR, PRIVATE_DIR });
@@ -208,7 +211,7 @@ describe('the gap', () => {
     // Codex later ends the process (at its quit, or when it finishes) and logs it as failed, exit -1.
     noteToolCall('q', codexToolPartOf(commandLine(t0 + 9000, 'call_d', { started: t0 + 98, completed: t0 + 9000, exit: -1, status: 'failed', output: '' }))!);
     const r = lastRequest(traceId);
-    expect(r.toolCalls).toEqual([{ toolCallId: 'call_d', exit: null, ms: 302, denied: false, timedOut: false, failed: false }]);
+    expect(r.toolCalls).toEqual([{ toolCallId: 'call_d', exit: null, ms: 302, denied: false, timedOut: false, failed: false, truncated: false }]);
     expect(r.gap).toMatchObject({ ms: 1000, toolMs: 302 });
   });
 });
@@ -268,7 +271,7 @@ describe('tool records', () => {
     // Read after the session ended, the call ran inside it: it lands, and the session is changed.
     noteToolCall('q', { callId: 'a', itemStartedAt: t0 + 100, itemEndedAt: t0 + 900 });
     noteToolCall('q', { callId: 'a', itemStartedAt: t0 + 100, itemEndedAt: t0 + 900 });
-    expect(lastRequest(traceId).toolCalls).toEqual([{ toolCallId: 'a', exit: null, ms: 800, denied: false, timedOut: false, failed: false }]);
+    expect(lastRequest(traceId).toolCalls).toEqual([{ toolCallId: 'a', exit: null, ms: 800, denied: false, timedOut: false, failed: false, truncated: false }]);
     expect(traceStore().changes({ cursor }).sessions.map(s => s.traceId)).toEqual([traceId]);
     // Read a third time, nothing new: no change.
     const after = traceStore().changes({}).nextCursor;
@@ -291,8 +294,8 @@ describe('tool records', () => {
     // A later line contradicting what is known (another exit, another span) adds nothing: a fact said first is kept.
     noteToolCall('q', { callId: 'call_e', itemStartedAt: t0 + 150, itemEndedAt: t0 + 900, exit: 9 });
     const byId = Object.fromEntries(lastRequest(traceId).toolCalls!.map(c => [c.toolCallId, c]));
-    expect(byId.call_c).toEqual({ toolCallId: 'call_c', exit: 0, ms: 2, denied: false, timedOut: false, failed: false, truncatedBytes: 65536 - 911 });
-    expect(byId.call_e).toEqual({ toolCallId: 'call_e', exit: 3, ms: 200, denied: false, timedOut: false, failed: true });
+    expect(byId.call_c).toEqual({ toolCallId: 'call_c', exit: 0, ms: 2, denied: false, timedOut: false, failed: false, truncated: true, truncatedBytes: 65536 - 911 });
+    expect(byId.call_e).toEqual({ toolCallId: 'call_e', exit: 3, ms: 200, denied: false, timedOut: false, failed: true, truncated: false });
   });
 });
 
@@ -332,7 +335,7 @@ describe('codex 0.170 lines', () => {
       .toEqual({ callId: 'call_p', outputAt: t, wallMs: 0, exit: 0, sentBytes: Buffer.byteLength('Success. Updated the following files:\nM notes.txt\n') });
     const running = codexToolPartOf(outputLine(t, 'call_r', 'Chunk ID: 34ce09\nWall time: 0.3018 seconds\nProcess running with session ID 32998\nOriginal token count: 0\nOutput:\n'))!;
     expect(running).toEqual({ callId: 'call_r', outputAt: t, wallMs: 302, running: true, sentBytes: 0 });
-    expect(toolCallRecordOf(running)).toEqual({ toolCallId: 'call_r', exit: null, ms: 302, denied: false, timedOut: false, failed: false });
+    expect(toolCallRecordOf(running)).toEqual({ toolCallId: 'call_r', exit: null, ms: 302, denied: false, timedOut: false, failed: false, truncated: false });
   });
 
   it('11: any other line, or one that is not JSON, is no call', () => {
@@ -361,7 +364,12 @@ describe('pi lines', () => {
     expect(piToolLineOf(piResult(t, { toolCallId: 'tc3', durationMs: 5003, isError: true, content: [{ type: 'text', text: 'partial\n\nCommand timed out after 5 seconds' }] })))
       .toEqual({ part: { callId: 'tc3', wallMs: 5003, timedOut: true, failed: true } });
     expect(piToolLineOf(piResult(t, { toolCallId: 'tc4', durationMs: 12, content: [{ type: 'text', text: 'last lines' }], details: { truncation: { truncated: true, totalBytes: 120_000, outputBytes: 51_200, totalLines: 9000, outputLines: 2000 } } })))
-      .toEqual({ part: { callId: 'tc4', wallMs: 12, exit: 0, truncatedBytes: 120_000 - 51_200 } });
+      .toEqual({ part: { callId: 'tc4', wallMs: 12, exit: 0, truncated: true, truncatedBytes: 120_000 - 51_200 } });
+    // Cut, its sizes not said: the flag alone.
+    const cutBlind = piToolLineOf(piResult(t, { toolCallId: 'tc7', durationMs: 5, content: [{ type: 'text', text: 'tail' }], details: { truncation: { truncated: true } } }));
+    expect(cutBlind).toEqual({ part: { callId: 'tc7', wallMs: 5, exit: 0, truncated: true } });
+    expect(toolCallRecordOf((cutBlind as { part: { callId: string } }).part)).toMatchObject({ truncated: true });
+    expect(toolCallRecordOf((cutBlind as { part: { callId: string } }).part)).not.toHaveProperty('truncatedBytes');
     // A tool that is no shell has no exit code.
     expect(piToolLineOf(piResult(t, { toolName: 'read', toolCallId: 'tc5', durationMs: 3, content: [{ type: 'text', text: 'file text' }] })))
       .toEqual({ part: { callId: 'tc5', wallMs: 3 } });
@@ -371,7 +379,7 @@ describe('pi lines', () => {
     const t = Date.now();
     const blocked = piToolLineOf(piResult(t, { toolCallId: 'tc6', isError: true, content: [{ type: 'text', text: 'Tool execution was blocked' }] }));
     expect(blocked).toEqual({ part: { callId: 'tc6', denied: true, failed: true } });
-    expect(toolCallRecordOf({ ...(blocked as { part: { callId: string } }).part, startedAt: t })).toEqual({ toolCallId: 'tc6', exit: null, ms: 0, denied: true, timedOut: false, failed: true });
+    expect(toolCallRecordOf({ ...(blocked as { part: { callId: string } }).part, startedAt: t })).toEqual({ toolCallId: 'tc6', exit: null, ms: 0, denied: true, timedOut: false, failed: true, truncated: false });
   });
 
   it('11: any other line is no call', () => {
@@ -393,11 +401,11 @@ describe('what leaves', () => {
     const doc = sessionDocument(traceStore(), traceId)!;
     const row = doc.requests.at(-1)!;
     expect(row.gap).toEqual({ ms: 1000, toolMs: 200, inputWaitMs: 0, heldMs: 0, harnessMs: 800 });
-    expect(row.tool_calls).toEqual([{ toolCallId: 'call_e', exit: 3, ms: 200, denied: false, timedOut: false, failed: true }]);
+    expect(row.tool_calls).toEqual([{ toolCallId: 'call_e', exit: 3, ms: 200, denied: false, timedOut: false, failed: true, truncated: false }]);
     const body = traceUploader().preview(traceId)!.document.batches[0].body as { requests: Array<Record<string, unknown>> };
     const sent = body.requests.at(-1)!;
     expect(sent.gap).toEqual({ ms: 1000, toolMs: 200, inputWaitMs: 0, heldMs: 0, harnessMs: 800 });
-    expect(sent.toolCalls).toEqual([{ toolCallId: 'call_e', exit: 3, ms: 200, denied: false, timedOut: false, failed: true }]);
+    expect(sent.toolCalls).toEqual([{ toolCallId: 'call_e', exit: 3, ms: 200, denied: false, timedOut: false, failed: true, truncated: false }]);
     expect(body.requests[0].gap).toBeUndefined();
     expect(JSON.stringify([row.gap, row.tool_calls, sent.gap, sent.toolCalls])).not.toMatch(/B-fail|secret-command|somewhere/);
   });
