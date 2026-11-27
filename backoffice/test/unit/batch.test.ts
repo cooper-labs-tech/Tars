@@ -51,6 +51,8 @@
 //     than 40 or 64 lowercase hex; `filesChanged`, `linesAdded`, `linesRemoved`, `changedLines`,
 //     `survivedLines` take a negative or fractional count; `reverted` a non-boolean; `survivalBasis`
 //     a value other than session_end, merged or deleted; or valid ones are refused.
+// 21. A session's `consent` (27/11, the training consent it was recorded under) takes anything but
+//     {training: boolean}, or a valid one is refused.
 // 10 again (the client's own contract, 27/11): every environment value may be null, the
 //     architecture Tars runs as included, and a negative UTC offset is valid.
 import { test } from 'node:test';
@@ -305,6 +307,17 @@ test('20. a turn\'s workspace', () => {
     ['linesRemoved', '7'], ['changedLines', -3], ['survivedLines', true], ['reverted', 'no'], ['survivalBasis', 'rebased'],
   ];
   for (const [k, v] of bad) assert.ok(errs({ ...ok, turns: [{ ...turn, [k]: v }] }).length, `${k} ${String(v)}`);
+});
+
+test('21. a session\'s consent', () => {
+  for (const training of [true, false]) {
+    const r = validateBatch(withSession({ consent: { training } }));
+    assert.ok(!('errors' in r), JSON.stringify(r));
+    assert.deepEqual(r.sessions[0]!.consent, { training });
+  }
+  for (const c of [true, {}, { training: 'yes' }, { training: 1 }, { training: true, resale: true }, []]) {
+    assert.ok(errs(withSession({ consent: c })).length, JSON.stringify(c));
+  }
 });
 
 test('16. a turn\'s taskRef', () => {

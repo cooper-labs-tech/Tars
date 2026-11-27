@@ -80,6 +80,20 @@
 //     sent again without a value loses the one it had.
 // T5. A malformed one is taken (a negative round trip, a head not 40 or 64 hex, a basis outside its three).
 // T6. Migration 006's down loses anything else, its up reads them null.
+//
+// The training consent (27/11, A5): the ways it can fail, written before the code.
+// C1. A session sent with `consent {training}` is refused, or not read back; one sent without it reads other than null.
+// C2. An install cannot set its current value (PUT /v1/installs/me/consent), or sets it without its token, or with a
+//     reader's, or with a value that is not a boolean.
+// C3. The current value is not on every read of the install's sessions (`installConsent`), or another install's
+//     shows on them.
+// C4. An install that turns training off and then uploads nothing is never seen: the consent feed
+//     (GET /v1/read/install-consent) must show the change. Two changes show both, in order; a cursor gives only
+//     what came after it.
+// C5. An install's token reads the feed, or a reader's token is refused it.
+// C6. The value set at registration is not in the feed.
+// C7. A deleted install's changes stay in the feed (its tombstone is in the deletions feed already).
+// C8. Migration 007's down loses anything else, its up reads them null.
 import { describe, it, before, after } from 'node:test';
 import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
@@ -611,6 +625,62 @@ describe('trace back-office, end to end', () => {
     assert.deepEqual([still.session.rttMedianMs, still.turns[0].filesChanged], [41.5, 3]);
   });
 
+  it('keeps each install\'s training consent, on its sessions and in a feed readers follow, and drops it with the install', async () => {
+    const detail = async () => (await call('GET', `/v1/read/sessions/${installA.id}/sess-1`, { token: reader.token })).json;
+    const feed = async (cursor = '') => (await call('GET', `/v1/read/install-consent${cursor ? `?cursor=${cursor}` : ''}`, { token: reader.token })).json;
+    // C1, C3. Nothing sent yet: null, never absent.
+    const before = await detail();
+    assert.deepEqual(note('consent.before', [('consent' in before.session), before.session.consent, ('installConsent' in before.session), before.session.installConsent]),
+      [true, null, true, null]);
+    const start = await feed();
+    assert.deepEqual(start.changes, []);
+    // C2. Only the install's own token, only a boolean.
+    const refused = [
+      (await call('PUT', '/v1/installs/me/consent', { body: { training: true } })).status,
+      (await call('PUT', '/v1/installs/me/consent', { token: reader.token, body: { training: true } })).status,
+      (await call('PUT', '/v1/installs/me/consent', { token: installA.token, body: { training: 'yes' } })).status,
+      (await call('PUT', '/v1/installs/me/consent', { token: installA.token, body: { training: true, resale: true } })).status,
+    ];
+    assert.deepEqual(note('consent.refused', refused), [401, 401, 400, 400]);
+    const on = await call('PUT', '/v1/installs/me/consent', { token: installA.token, body: { training: true } });
+    assert.equal(on.status, 200, String(on.buf));
+    assert.equal(on.json.training, true);
+    // C1. A session recorded under consent; C3: the install's current value on its reads.
+    const sent = await call('PUT', '/v1/batches/batch-consent', { token: installA.token, body: {
+      schema: 1, sessions: [session({ finalStatus: 'done', endedAt: T0 + 6000, consent: { training: true } })],
+    } });
+    assert.equal(sent.status, 200, String(sent.buf));
+    const after = await detail();
+    assert.deepEqual(note('consent.session', [after.session.consent, after.session.installConsent?.training]), [{ training: true }, true]);
+    const listed = (await call('GET', '/v1/read/sessions?agent=agent-1', { token: reader.token })).json.sessions;
+    assert.deepEqual(listed.map((s: any) => [s.consent?.training, s.installConsent?.training]), [[true, true]]);
+    // C4. Turned off, then nothing uploaded: the feed shows it, both changes in order, and a cursor only what follows.
+    const off = await call('PUT', '/v1/installs/me/consent', { token: installA.token, body: { training: false } });
+    assert.equal(off.status, 200);
+    const changes = await feed();
+    assert.deepEqual(note('consent.feed', changes.changes.map((c: any) => [c.install, c.training, typeof c.at])),
+      [[installA.id, true, 'number'], [installA.id, false, 'number']]);
+    const firstOnly = await call('GET', '/v1/read/install-consent?limit=1', { token: reader.token });
+    const rest = await feed(firstOnly.json.nextCursor);
+    assert.deepEqual(rest.changes.map((c: any) => c.training), [false]);
+    assert.deepEqual((await feed(changes.nextCursor)).changes, []);
+    assert.equal((await detail()).session.installConsent.training, false, 'the session read shows the current value');
+    // A re-send without consent keeps the session's own.
+    await call('PUT', '/v1/batches/batch-consent-older', { token: installA.token, body: { schema: 1, sessions: [session({ finalStatus: 'done', endedAt: T0 + 6000 })] } });
+    assert.deepEqual((await detail()).session.consent, { training: true });
+    // C5. An install's token does not read the feed.
+    assert.equal(note('consent.feedWithInstallToken', (await call('GET', '/v1/read/install-consent', { token: installA.token })).status), 401);
+    // C6, C7. Set at registration, then the install deleted: its changes leave the feed.
+    const c = await call('POST', '/v1/installs', { body: { client: { name: 'tars', version: '2.0.7', platform: 'linux' }, consent: { training: false } } });
+    assert.equal(c.status, 201, String(c.buf));
+    const withC = await feed(changes.nextCursor);
+    assert.deepEqual(note('consent.atRegistration', withC.changes.map((x: any) => [x.install === c.json.installId, x.training])), [[true, false]]);
+    assert.equal((await call('DELETE', '/v1/installs/me', { token: c.json.token })).status, 200);
+    const afterDelete = await feed();
+    assert.ok(!afterDelete.changes.some((x: any) => x.install === c.json.installId), 'a deleted install\'s changes are gone');
+    note('consent.afterDelete', afterDelete.changes.length);
+  });
+
   it('migrates a database that holds requests: down keeps every row but the marks, up reads them back unknown', async () => {
     // M1, M2. The server stopped, as an operator migrates; what it logged so far is kept for the artefact.
     const earlier = srv.log.slice();
@@ -620,10 +690,10 @@ describe('trace back-office, end to end', () => {
     try {
       // Every table's rows, compared without the columns 002 and 003 add: a count and a digest per table.
       const rows = async () => {
-        const tables = (await client.query("SELECT tablename FROM pg_tables WHERE schemaname = 'public' AND tablename <> 'schema_migrations' ORDER BY 1")).rows.map((r) => r.tablename as string);
+        const tables = (await client.query("SELECT tablename FROM pg_tables WHERE schemaname = 'public' AND tablename NOT IN ('schema_migrations', 'install_consent_changes') ORDER BY 1")).rows.map((r) => r.tablename as string);
         const out: Record<string, string> = {};
         for (const t of tables) {
-          const r = (await client.query(`SELECT count(*)::int AS n, md5(coalesce(string_agg(x, '|' ORDER BY x), '')) AS d FROM (SELECT (to_jsonb(t) - 'side' - 'environment' - 'events' - 'live_sessions' - 'start' - 'lost_demand' - 'cancel' - 'task_ref' - 'masking_version' - 'mask_counts' - 'interventions' - ${WAVE_FOUR_COLUMNS.map((c) => `'${c}'`).join(' - ')})::text AS x FROM "${t}" t) s`)).rows[0];
+          const r = (await client.query(`SELECT count(*)::int AS n, md5(coalesce(string_agg(x, '|' ORDER BY x), '')) AS d FROM (SELECT (to_jsonb(t) - 'side' - 'environment' - 'events' - 'live_sessions' - 'start' - 'lost_demand' - 'cancel' - 'task_ref' - 'masking_version' - 'mask_counts' - 'interventions' - ${WAVE_FOUR_COLUMNS.map((c) => `'${c}'`).join(' - ')} - 'consent' - 'consent_training' - 'consent_at')::text AS x FROM "${t}" t) s`)).rows[0];
           out[t] = `${r.n}:${r.d}`;
         }
         return out;
@@ -652,7 +722,14 @@ describe('trace back-office, end to end', () => {
         (await client.query('SELECT turn_id, survival_basis, survived_lines FROM turns WHERE survival_basis IS NOT NULL ORDER BY 1')).rows.map((r) => [r.turn_id, r.survival_basis, r.survived_lines]),
       ];
       assert.deepEqual(note('migrate.withData.waveFourBefore', await waveFour()), [[['sess-1', 41.5, -12.25]], [['req-1', 40.75, 812.3]], [['turn-1', 'merged', 100]]]);
-      // T6, K6, L6, E8, M2. Down through 006, 005, 004, 003, then 002.
+      const waveFive = async () => [
+        (await client.query("SELECT session_id, consent->>'training' AS t FROM sessions WHERE consent IS NOT NULL ORDER BY 1")).rows.map((r) => [r.session_id, r.t]),
+        (await client.query('SELECT consent_training AS t FROM installs WHERE consent_training IS NOT NULL')).rows.map((r) => r.t),
+      ];
+      assert.deepEqual(note('migrate.withData.waveFiveBefore', await waveFive()), [[['sess-1', 'true']], [false]]);
+      // C8, T6, K6, L6, E8, M2. Down through 007, 006, 005, 004, 003, then 002.
+      note('migrate.withData.down007', runCli(['migrate', 'down'], env).trim());
+      assert.deepEqual(note('migrate.withData.afterDown007', await rows()), before, 'the down of 007 kept every row and value but its own');
       note('migrate.withData.down006', runCli(['migrate', 'down'], env).trim());
       assert.deepEqual(note('migrate.withData.afterDown006', await rows()), before, 'the down of 006 kept every row and value but its own');
       note('migrate.withData.down005', runCli(['migrate', 'down'], env).trim());
@@ -670,6 +747,7 @@ describe('trace back-office, end to end', () => {
       assert.deepEqual(note('migrate.withData.waveTwoAfterUp', await waveTwo()), [[], []]);
       assert.deepEqual(note('migrate.withData.waveThreeAfterUp', await waveThree()), [[], []]);
       assert.deepEqual(note('migrate.withData.waveFourAfterUp', await waveFour()), [[], [], []]);
+      assert.deepEqual(note('migrate.withData.waveFiveAfterUp', await waveFive()), [[], []]);
     } finally {
       // Up again and serving whatever this step found, so a failure here is this step's alone.
       runCli(['migrate', 'up'], env);
@@ -733,7 +811,7 @@ describe('trace back-office, end to end', () => {
     const run = await form('/admin/retention/run', { csrf: csrfOf(s.html) });
     assert.equal(run.status, 303);
     const del = await call('GET', '/v1/read/deletions', { token: reader.token });
-    assert.deepEqual(note('retention.deletions', del.json.deletions.map((d: any) => [d.install, d.sessionId, d.reason])), [[installB.id, 'old-1', 'retention']]);
+    assert.deepEqual(note('retention.deletions', del.json.deletions.filter((d: any) => d.reason === 'retention').map((d: any) => [d.install, d.sessionId, d.reason])), [[installB.id, 'old-1', 'retention']]);
     const gone = await call('GET', `/v1/read/sessions/${installB.id}/old-1`, { token: reader.token });
     assert.equal(gone.status, 404);
   });
