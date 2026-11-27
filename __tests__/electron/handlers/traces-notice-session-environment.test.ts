@@ -23,6 +23,10 @@ assertThrowaway({ DATA_DIR, PRIVATE_DIR });
  * Added before their code (27/11, the endpoint's Server-Timing):
  * N4. A request's round trip, its clock offset, its wait for a slot or its wait for the model server, or a session's
  *     median round trip or clock offset, is sent with no line of its own.
+ * Added before the rewording (27/11, the Audit's read of #681, its Info 2):
+ * N5. A line leans on the one before it ("its kernel's version", "their timing"): the window lays the notice out in
+ *     two columns read down then across, so a line may open the second column, and its neighbours change as other
+ *     features add lines. Each line names its own subject.
  */
 
 const handlers = new Map<string, (...args: unknown[]) => unknown>();
@@ -54,13 +58,13 @@ const ENVIRONMENT_LINES: Record<keyof SessionEnvironment, RegExp> = {
   tarsVersion: /Tars's version/,
   osName: /your system's name and version/,
   osVersion: /your system's name and version/,
-  kernel: /its kernel's version/,
+  kernel: /your system's kernel version/,
   arch: /processor architecture/,
   tarsArch: /processor architecture/,
   machineModel: /your computer's model/,
-  chip: /its processor's name/,
-  cpuCores: /its number of processor cores/,
-  ramBytes: /its memory/,
+  chip: /your computer's processor name/,
+  cpuCores: /your computer's number of processor cores/,
+  ramBytes: /your computer's memory/,
   locale: /language and region/,
   timeZone: /your time zone/,
   utcOffsetMinutes: /offset from UTC/,
@@ -89,6 +93,12 @@ describe('the upload notice', () => {
     for (const [field, words] of Object.entries({ ...ENVIRONMENT_LINES, ...OTHER_LINES })) {
       expect(notice.leaves.filter(l => words.test(l)), field).toHaveLength(1);
     }
+  });
+
+  it('N5: no line leans on the one before it', async () => {
+    const notice = await handlers.get('traces:uploadNotice')!({}) as { leaves: string[]; stays: string[] };
+    const leaning = [...notice.leaves, ...notice.stays].filter(l => /^(its|it|their|they|them|this|these|that|those)\b/i.test(l.trim()));
+    expect(leaning).toEqual([]);
   });
 
   it('N3: what is never read is said to stay', async () => {
