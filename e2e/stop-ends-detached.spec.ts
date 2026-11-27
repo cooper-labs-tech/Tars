@@ -9,7 +9,7 @@ import { DEV_URL, apiPort } from './ports.mjs';
 
 /**
  * A stop ends what the agent started outside its terminal (2.0.5, core/born-processes.ts): the owner's lot 2 of
- * 28/10, after 1212-Capital's Playwright run and Next servers outlived stop_agent.
+ * 28/10, after a project's Playwright run and Next servers outlived stop_agent.
  *
  * In the real app, in a sandbox, with a stand-in CLI that starts two children detached the way a dev server or a
  * test runner is left behind (`nohup npm run dev &` from a tool's own shell): each through a launcher that exits

@@ -81,7 +81,7 @@ import { FakeHermes } from '../../fixtures/fake-hermes';
 // ── The board: Hermes as measured (__tests__/fixtures/fake-hermes.ts) ──────
 
 const TARS = '/Users/you/tars';
-const OTHER = '/Users/you/1212-capital';
+const OTHER = '/Users/you/aspen-meadow';
 const dune: KanbanCaller = { agentId: 'aaaa1111-0000-4000-8000-000000000001', name: 'Dune', projectPath: TARS };
 const dove: KanbanCaller = { agentId: 'bbbb2222-0000-4000-8000-000000000002', name: 'Dove', projectPath: TARS };
 const far: KanbanCaller = { agentId: 'cccc3333-0000-4000-8000-000000000003', name: 'Far', projectPath: OTHER };
@@ -137,7 +137,7 @@ describe('1. a task an agent creates arrives parked, and never where Hermes take
       expect(r.ok ? 'ok' : `${r.status} ${r.error}`, asked).toBe('ok');
       expect(h.tasks.get(r.ok ? r.value.id : '')!.tenant).toBe(win.projectPath);
     }
-    for (const asked of ['C:\\Users\\demo\\tars-other', 'C:\\Users\\demo\\tars\\..\\1212-capital', 'D:\\Users\\demo\\tars']) {
+    for (const asked of ['C:\\Users\\demo\\tars-other', 'C:\\Users\\demo\\tars\\..\\aspen-meadow', 'D:\\Users\\demo\\tars']) {
       const r = await createParkedTask(h, win, { title: 'T', description: 'D', projectPath: asked });
       expect(r.ok ? 0 : r.status, asked).toBe(403);
     }

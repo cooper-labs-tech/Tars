@@ -15,7 +15,7 @@ import {
  * holds both, reparented and detached processes included, by PID; Docker containers by their label
  * `tars.agent=<id>`. Never by a pattern.
  *
- * Measured before: after stop_agent, 1212-Capital's Playwright run and Next servers kept running; kotsna's 5 dev
+ * Measured before: after stop_agent, a project's Playwright run and Next servers kept running; another's 5 dev
  * servers (14 processes) ran 10 days with no session; Tars's own e2e left 20 `my-cli` orphans (PPID 1).
  *
  * How it fails, written before the code:

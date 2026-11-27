@@ -31,7 +31,7 @@ const ISO = (daysAgo, hour = 12) => {
 // Relative to the sandbox HOME. Absolute paths outside it are not ours to
 // create - the first attempt used /Users/e2e and died on EACCES.
 const REL_PROJECT = 'projects/tars';
-const REL_SECOND = 'projects/1212-capital';
+const REL_SECOND = 'projects/aspen-meadow';
 let PROJECT = REL_PROJECT;
 let SECOND = REL_SECOND;
 
@@ -305,7 +305,7 @@ function chatJournal(paths) {
     },
   );
 
-  // 1212-capital: the bound reached, ten agent messages and no human since.
+  // aspen-meadow: the bound reached, ten agent messages and no human since.
   const capital = room(paths.capital);
   threads.push({ id: 't-cap', roomId: capital, anchorMessageId: 'm-cap-0', state: 'bounded', round: 5, agentMessageCount: 10, openedAt: ISO(1, 14) });
   messages.push(msg('m-cap-0', capital, 't-cap', 'human', 'human', 'User', 'Why is the migration refusing the connection? Work it out between you.', ISO(1, 14), ['a5', 'a6']));
@@ -841,7 +841,7 @@ function writeFakeTailscale(home) {
 
 /**
  * The statuses the sweep photographs: the four agents of the tars project
- * that the Dashboard starts are running, the two of 1212-capital idle. It is
+ * that the Dashboard starts are running, the two of aspen-meadow idle. It is
  * what the references were recorded with, and loadAgents sets every agent
  * idle on launch, so the suite sets them once their CLIs hold their terminals.
  */

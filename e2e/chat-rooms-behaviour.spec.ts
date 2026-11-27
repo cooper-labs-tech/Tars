@@ -139,9 +139,9 @@ test('an error on a CLI that never reports its turns still says why', async () =
   // a5 runs grok, one of the five CLIs with no end of turn.
   await setAgents({ a5: { status: 'error', error: REASON } });
   await page.goto(DEV_URL + '/chat', { waitUntil: 'domcontentloaded' });
-  await openRoom('1212-capital', 'Nobody was stopped: every agent finished its turn');
+  await openRoom('aspen-meadow', 'Nobody was stopped: every agent finished its turn');
   await page.waitForTimeout(900);
-  await stepShot(page, 'error-1-capital');
+  await stepShot(page, 'error-1-meadow');
 
   const shown = {
     reason: await page.getByText(REASON, { exact: true }).count(),

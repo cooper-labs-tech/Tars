@@ -56,7 +56,7 @@ vi.mock('../../../electron/utils/broadcast', () => ({ broadcastToAllWindows: vi.
 import type { AgentStatus } from '../../../electron/types';
 
 const TARS = '/Users/someone/projects/tars';
-const CAPITAL = '/Users/someone/projects/1212-Capital';
+const CAPITAL = '/Users/someone/projects/Aspen-Meadow';
 const settle = () => new Promise((r) => setTimeout(r, 900));
 const all = (id: string) => (typed[id] ?? []).join('');
 
@@ -73,7 +73,7 @@ describe('the rule', () => {
   const two = () => fleet([['orch-capital', 'Capital-Orchestrator', CAPITAL, 'orchestrator'], ['orch-tars', 'Tars-Orchestrator', TARS, 'orchestrator'], ['worker', 'Tars-Backend', TARS]]);
 
   it('1. no "@project" and several orchestrators: nobody, and the list of projects', () => {
-    expect(routing.orchestratorForMessage(two(), 'hello')).toEqual({ kind: 'ambiguous', name: null, projects: ['1212-Capital', 'tars'] });
+    expect(routing.orchestratorForMessage(two(), 'hello')).toEqual({ kind: 'ambiguous', name: null, projects: ['Aspen-Meadow', 'tars'] });
   });
 
   it('1. no "@project" and one orchestrator in the fleet: that one, the text as it is', () => {
@@ -84,7 +84,7 @@ describe('the rule', () => {
 
   it('2, 4. "@project text": that project\'s orchestrator, the text without the prefix, whatever the case', () => {
     expect(routing.orchestratorForMessage(two(), '@tars fais le point')).toMatchObject({ kind: 'found', orchestrator: { id: 'orch-tars' }, text: 'fais le point' });
-    expect(routing.orchestratorForMessage(two(), '@1212-capital: go')).toMatchObject({ kind: 'found', orchestrator: { id: 'orch-capital' }, text: 'go' });
+    expect(routing.orchestratorForMessage(two(), '@aspen-meadow: go')).toMatchObject({ kind: 'found', orchestrator: { id: 'orch-capital' }, text: 'go' });
   });
 
   it("6. a folder name with a space is offered, and reached, with a dash in its place", () => {
@@ -101,7 +101,7 @@ describe('the rule', () => {
     const shared = fleet([['orch-tars', 'Tars-Orchestrator', TARS, 'orchestrator'], ['orch-other', 'Other', '/Users/someone/elsewhere/tars', 'orchestrator']]);
     const lonely = fleet([['orch-tars', 'Tars-Orchestrator', TARS, 'orchestrator'], ['w', 'Lonely-Worker', '/Users/someone/projects/lonely']]);
 
-    expect(routing.orchestratorForMessage(two(), '@nope hi')).toEqual({ kind: 'unknown', name: 'nope', projects: ['1212-Capital', 'tars'] });
+    expect(routing.orchestratorForMessage(two(), '@nope hi')).toEqual({ kind: 'unknown', name: 'nope', projects: ['Aspen-Meadow', 'tars'] });
     expect(routing.orchestratorForMessage(shared, '@tars hi')).toEqual({ kind: 'ambiguous', name: 'tars', projects: ['tars', 'tars'] });
     expect(routing.orchestratorForMessage(lonely, '@lonely hi')).toEqual({ kind: 'no-orchestrator', projectPath: '/Users/someone/projects/lonely', text: 'hi' });
     expect(routing.orchestratorForMessage(fleet([['w', 'W', TARS]]), 'hi')).toEqual({ kind: 'none', projects: ['tars'] });
@@ -134,7 +134,7 @@ describe('the bots', () => {
     await settle();
 
     expect(all('orch-tars') + all('orch-capital')).toBe('');
-    expect(said.join('\n')).toMatch(/@1212-Capital[\s\S]*@tars|@tars[\s\S]*@1212-Capital/);
+    expect(said.join('\n')).toMatch(/@Aspen-Meadow[\s\S]*@tars|@tars[\s\S]*@Aspen-Meadow/);
   });
 
   it('5. Slack: "@tars text" is typed into the tars orchestrator alone, without the prefix', async () => {
@@ -153,7 +153,7 @@ describe('the bots', () => {
     const said: string[] = [];
 
     await sendToSuperAgentFromDiscord('D1', 'hello', async (m: string) => { said.push(m); }, {} as never);
-    await sendToSuperAgentFromDiscord('D1', '@1212-Capital go', async () => {}, {} as never);
+    await sendToSuperAgentFromDiscord('D1', '@Aspen-Meadow go', async () => {}, {} as never);
     await settle();
 
     expect(said.join('\n')).toMatch(/@tars/);
