@@ -85,8 +85,8 @@ const escape = text => text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 /**
  * Each entry, found in any case in the line as written, so that every position is the line's own. One made of letters
  * only is a word (its boundaries, below). One made of digits only is a number: no digit, hex letter or `#` may touch
- * it on either side, and it is no channel of an `rgb:` colour spec, so a colour that repeats it (`#121212`), a
- * terminal's OSC colour reply (`rgb:1212/1212/1212`), a longer number or a hash never match, and the number standing
+ * it on either side, and it is no channel of an `rgb:` colour spec, so a colour that repeats it (`#474747` for 4747),
+ * a terminal's OSC colour reply (`rgb:4747/4747/4747`), a longer number or a hash never match, and the number standing
  * alone (a sentence, an agent's name, a URL path) always does. Anything else is a substring.
  */
 const patterns = entries.map(entry => ({
