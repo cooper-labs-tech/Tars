@@ -1,6 +1,6 @@
 import { ipcMain } from 'electron';
 import { agents, saveAgents } from '../core/agent-manager';
-import { oneTaskQueue, TAKEN_BACK_IN_THE_WINDOW } from '../core/one-task';
+import { oneTaskQueue, TAKEN_BACK_IN_THE_WINDOW, type QueueDropReason } from '../core/one-task';
 import { requestDropped } from '../core/task-requests';
 import { queueView, type QueueView } from '../services/agent-queues';
 import { announceTask } from '../services/task-banner';
@@ -20,8 +20,8 @@ function answer(agentId: string): Answer {
 }
 
 /** An item taken back by the owner: it never goes in, and whoever sent it is told who took it back. */
-function takeBack(ref: string, why: string): void {
-  const item = oneTaskQueue.cancel(ref, why);
+function takeBack(ref: string, why: string, reason: QueueDropReason): void {
+  const item = oneTaskQueue.cancel(ref, why, reason);
   const worker = item ? agents.get(item.agentId) : undefined;
   if (!item || !worker) return;
   requestDropped(worker, item.ref);
@@ -91,7 +91,7 @@ export function registerAgentQueueHandlers(): void {
   ipcMain.handle('agentQueue:cancel', (_e, ref: unknown) => {
     const item = typeof ref === 'string' ? oneTaskQueue.find(ref) : undefined;
     if (!item) return notWaiting(String(ref));
-    takeBack(item.ref, TAKEN_BACK_IN_THE_WINDOW);
+    takeBack(item.ref, TAKEN_BACK_IN_THE_WINDOW, 'taken_back');
     saveAgents();
     announceTask(item.agentId);
     return answer(item.agentId);
@@ -101,7 +101,7 @@ export function registerAgentQueueHandlers(): void {
   ipcMain.handle('agentQueue:drop', (_e, agentId: unknown) => {
     if (typeof agentId !== 'string' || !agents.has(agentId)) return { success: false, error: 'No agent has this id.' };
     const items = oneTaskQueue.queued(agentId);
-    for (const item of items) takeBack(item.ref, 'it was dropped by you, in the window, with the rest of the queue');
+    for (const item of items) takeBack(item.ref, 'it was dropped by you, in the window, with the rest of the queue', 'queue_cleared');
     saveAgents();
     announceTask(agentId);
     return { ...answer(agentId), dropped: items.length };

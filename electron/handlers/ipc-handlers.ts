@@ -16,6 +16,7 @@ import { janitorApprove, janitorScan, janitorState, setJanitorProjects } from '.
 import { cloneDependencies, logDependencies } from '../services/worktree-deps';
 import { answerPermission, type PermissionDecision } from '../services/permission-asks';
 import { noteWaker, publishedWaking, screenWhileAsleep, wakeAgent, wakesOnKey } from '../core/agent-asleep';
+import { clearSessionStart, noteSessionStart } from '../core/session-start';
 import { publishedWaitingOn } from '../utils/waiting-on';
 import { defaultShell } from '../utils/default-shell';
 import { openTerminal } from '../utils/open-terminal';
@@ -976,6 +977,8 @@ function registerAgentHandlers(deps: IpcHandlerDependencies): void {
   }) => {
     // Started from a window while asleep: woken by you (core/agent-asleep.ts).
     if (agents.get(id)?.status === 'asleep') noteWaker(id, 'you', 'start');
+    // Started by the owner, for its traced session (core/session-start.ts).
+    noteSessionStart(id, { trigger: 'owner', via: agents.get(id)?.kind === 'chat' ? 'chat' : 'window' });
     // Through the slot gate, as every start: a chat's runner takes a slot
     // within the RAM's limit, its settings stay the orchestrator's, and the
     // window's words are a turn, not its brief (the Audit's M1 on #379).
@@ -994,6 +997,9 @@ function registerAgentHandlers(deps: IpcHandlerDependencies): void {
       const answer = noTerminalAnswer(err);
       if (answer) return answer;
       throw err;
+    } finally {
+      // Read by the spawn, or the CLI was running and the words were typed in: either way the note goes.
+      clearSessionStart(id);
     }
   });
 

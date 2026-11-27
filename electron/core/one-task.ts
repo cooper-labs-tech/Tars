@@ -110,6 +110,8 @@ export interface OneTaskQueue {
   restore(snapshot: QueueSnapshot): QueuedTask[];
   /** Told of every change of the lines or the pauses, to keep them (services/agent-queues.ts). */
   onChange(listener: () => void): () => void;
+  /** Told when a queued task's run is named by the ledger, and when a task leaves the line never to start (traces). */
+  onEvent(listener: (event: QueueEvent) => void): () => void;
   /**
    * Its turn: first in line and the agent free (no run, and `turn` undefined).
    * Taken, it leaves the line and its run is on record at once.
@@ -137,9 +139,27 @@ export interface OneTaskQueue {
    */
   delivered(ref: string, how: Delivered['how'], note?: string, now?: number): void;
   queued(agentId: string): QueuedTask[];
-  /** Out of the line, never to start: still known by its ref, as failed with `why`, to whoever follows it. */
-  cancel(ref: string, why?: string): QueuedTask | undefined;
+  /**
+   * Out of the line, never to start: still known by its ref, as failed with `why`, to whoever follows it. `reason`
+   * says why by its kind, the words aside: what a traced session records of the demand it never received.
+   */
+  cancel(ref: string, why?: string, reason?: QueueDropReason, now?: number): QueuedTask | undefined;
 }
+
+/**
+ * Why a task left an agent's line without ever starting, by its kind: cancelled by its asker (task_cancel), taken
+ * back in the window, dropped with a stop, dropped with the rest of the queue, its agent removed, or not handed over
+ * again after a restart of Tars.
+ */
+export type QueueDropReason = 'cancelled' | 'taken_back' | 'dropped_with_stop' | 'queue_cleared' | 'agent_removed' | 'not_handed_again';
+
+/**
+ * What the queue tells its event listeners: a queued task's run named by the ledger (its task id, when it entered the
+ * line and when its turn came), and a task that left the line never to start.
+ */
+export type QueueEvent =
+  | { kind: 'named'; agentId: string; ref: string; taskId: string; queuedAt: number; handedAt: number }
+  | { kind: 'dropped'; agentId: string; ref: string; queuedAt: number; at: number; reason: QueueDropReason };
 
 /** How many tasks that left the line are remembered by their ref, for a caller that follows one late. */
 const STARTED_KEPT = 200;
@@ -153,6 +173,12 @@ export function createOneTaskQueue(since: number = Date.now()): OneTaskQueue {
   const changed = () => {
     for (const listener of listeners) {
       try { listener(); } catch (err) { console.warn('[one-task] a listener of the queue failed:', err); }
+    }
+  };
+  const eventListeners = new Set<(event: QueueEvent) => void>();
+  const tell = (event: QueueEvent) => {
+    for (const listener of eventListeners) {
+      try { listener(event); } catch (err) { console.warn('[one-task] a listener of the queue\'s events failed:', err); }
     }
   };
   const lineOf = (agentId: string) => lines.get(agentId) ?? [];
@@ -183,6 +209,7 @@ export function createOneTaskQueue(since: number = Date.now()): OneTaskQueue {
       run.taskId = taskId;
       const was = run.taskRef ? taken.get(run.taskRef) : undefined;
       if (was) was.taskId = taskId;
+      if (was && run.taskRef) tell({ kind: 'named', agentId, ref: run.taskRef, taskId, queuedAt: was.task.queuedAt, handedAt: run.since });
     },
     runEnded(agentId) {
       runs.delete(agentId);
@@ -248,6 +275,10 @@ export function createOneTaskQueue(since: number = Date.now()): OneTaskQueue {
       listeners.add(listener);
       return () => { listeners.delete(listener); };
     },
+    onEvent(listener) {
+      eventListeners.add(listener);
+      return () => { eventListeners.delete(listener); };
+    },
     takeTurn(agentId, ref, turn, now = Date.now()) {
       const line = lineOf(agentId);
       if (line[0]?.ref !== ref || runs.has(agentId) || turn || pauses.has(agentId)) return false;
@@ -280,12 +311,13 @@ export function createOneTaskQueue(since: number = Date.now()): OneTaskQueue {
     queued(agentId) {
       return [...lineOf(agentId)];
     },
-    cancel(ref, why = 'it was cancelled') {
+    cancel(ref, why = 'it was cancelled', reason = 'cancelled', now = Date.now()) {
       const task = find(ref);
       if (!task) return undefined;
       leave(task);
       remember(ref, { task, error: why });
       changed();
+      tell({ kind: 'dropped', agentId: task.agentId, ref, queuedAt: task.queuedAt, at: now, reason });
       return task;
     },
   };

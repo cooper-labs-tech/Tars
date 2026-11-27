@@ -259,7 +259,14 @@ export function createEndpointProxy(deps: ProxyDeps): http.Server {
       } catch (err) {
         failure = err as NodeJS.ErrnoException;
       }
-      if (controller.signal.aborted) { reply?.res.destroy(); clearHold(); return; }
+      if (controller.signal.aborted) {
+        reply?.res.destroy();
+        // Gone while the try after a hold was in flight: given up while held. Before any hold, another matter.
+        const wasHeld = held;
+        clearHold();
+        if (wasHeld) recordGivenUp();
+        return;
+      }
 
       const code = failure?.code ?? '';
       const status = reply?.res.statusCode ?? 0;
@@ -280,7 +287,7 @@ export function createEndpointProxy(deps: ProxyDeps): http.Server {
           const before = now();
           await sleep(delay, controller.signal);
           heldMs += now() - before;
-          if (controller.signal.aborted) { clearHold(); return; }
+          if (controller.signal.aborted) { clearHold(); recordGivenUp(); return; }
           continue;
         }
       }
@@ -327,12 +334,22 @@ export function createEndpointProxy(deps: ProxyDeps): http.Server {
       return;
     }
 
-    function record(upstream: http.IncomingMessage | null, responseBody: Buffer, firstByteAt: number | undefined, error?: string, upstreamRequestId?: string, marks: number[] = []): void {
+    /**
+     * A request the harness gave up while it was held (the endpoint pausing): demand that never reached the model,
+     * which left no record until A3 (27/11). Recorded after the harness is gone, never on its path: status 499, the
+     * de facto "client closed the request", with a structured cancel rather than free text.
+     */
+    function recordGivenUp(): void {
+      const at = now();
+      record(null, Buffer.alloc(0), undefined, undefined, undefined, [], { by: 'harness', cause: 'abandoned_while_held', at, deliveredBytes: 0 });
+    }
+
+    function record(upstream: http.IncomingMessage | null, responseBody: Buffer, firstByteAt: number | undefined, error?: string, upstreamRequestId?: string, marks: number[] = [], cancel?: WireRecord['cancel']): void {
       if (!session!.traced || !surface || !deps.record) return;
       const rec: WireRecord = {
         traceId: session!.traceId, agentId: session!.agentId, surface, startedAt, firstByteAt, endedAt: now(),
-        status: upstream?.statusCode ?? 502, contentType: upstream?.headers['content-type'], requestBody: body, responseBody,
-        upstreamRequestId, attempts, heldMs, error,
+        status: cancel ? 499 : upstream?.statusCode ?? 502, contentType: upstream?.headers['content-type'], requestBody: body, responseBody,
+        upstreamRequestId, attempts, heldMs, error, ...(cancel ? { cancel } : {}),
       };
       setImmediate(() => {
         try {

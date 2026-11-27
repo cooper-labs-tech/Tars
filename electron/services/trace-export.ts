@@ -33,6 +33,8 @@ export function sessionDocument(store: TraceStore, traceId: string, seen: Set<st
       endpoint_name: x.endpointName ?? null, model: x.model, started_at: x.startedAt, ended_at: x.endedAt ?? null,
       turn_count: x.turnCount, request_count: x.requestCount, tokens_in: x.tokensIn, tokens_cached: x.tokensCached,
       tokens_out: x.tokensOut, final_status: x.finalStatus, mixed: x.mixed, unknown_turns: x.unknownTurns, outcome: s.outcome ?? null,
+      // What started it and its queue times, and the tasks that left its agent's queue never to start (A3).
+      start: s.start ?? null, lost_demand: s.lostDemand ?? [], lost_demand_omitted: s.lostDemandOmitted ?? 0,
     },
     turns: [], requests: [], request_messages: [], messages: [],
   };
@@ -42,15 +44,17 @@ export function sessionDocument(store: TraceStore, traceId: string, seen: Set<st
     doc.messages.push({ message_hash: hash, role, content });
   };
   for (const t of s.turns) {
-    const main = t.requests.filter(r => !r.side);
+    // A request given up while held never reached the endpoint: it is listed with its cancel, and counted in neither.
+    const reached = t.requests.filter(r => !r.cancel);
+    const main = reached.filter(r => !r.side);
     doc.turns.push({
       turn_id: t.turnId, trace_id: x.traceId, turn_index: t.index, started_at: t.startedAt, ended_at: t.endedAt ?? null,
       wall_ms: t.endedAt !== undefined ? t.endedAt - t.startedAt : null, gap_before_ms: t.gapBeforeMs ?? null,
-      request_count: main.length, side_request_count: t.requests.length - main.length, tool_call_count: t.toolCalls,
+      request_count: main.length, side_request_count: reached.length - main.length, tool_call_count: t.toolCalls,
       tool_error_count: t.toolErrors, model_ms: t.modelMs, tool_ms: t.toolMs,
       tokens_in: t.requests.reduce((a, r) => a + (r.tokensIn ?? 0), 0), tokens_cached: t.requests.reduce((a, r) => a + (r.tokensCached ?? 0), 0),
       tokens_out: t.requests.reduce((a, r) => a + (r.tokensOut ?? 0), 0), final_status: t.finalStatus ?? null,
-      author: t.author, author_detail: t.authorDetail ?? null,
+      author: t.author, author_detail: t.authorDetail ?? null, task_ref: t.taskRef ?? null,
     });
     for (const r of t.requests) {
       const m = store.requestMessages(r.requestId);
@@ -64,6 +68,7 @@ export function sessionDocument(store: TraceStore, traceId: string, seen: Set<st
         tokens_in: r.tokensIn ?? 0, tokens_cached: r.tokensCached ?? 0, tokens_out: r.tokensOut ?? 0, status: r.status,
         error: r.error ?? null, finish_reason: r.finishReason ?? null, attempts: r.attempts, held_ms: r.heldMs,
         req_bytes: r.reqBytes, resp_bytes: r.respBytes, bodies_dropped: r.bodiesDropped, system_hash: systemHash, tools_hash: toolsHash,
+        cancel: r.cancel ?? null,
       });
       if (!m) continue;
       const inputHashes = m.input.map(v => v.hash);
