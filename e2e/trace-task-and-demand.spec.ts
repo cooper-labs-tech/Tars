@@ -17,8 +17,9 @@ import { DEV_URL, apiPort } from './ports.mjs';
  * uses, with its own token.
  *
  * 1. Lead's first task starts Q's session: the session reads `task`, with that task's ref, Lead as its asker, when
- *    the task entered Q's line, when its turn came, and the session's first request at the endpoint, in that order;
- *    the ledger's task once its turn opened it; the commit and branch Q's folder was on.
+ *    the task entered Q's line and when its turn came, in that order, and no first request at the endpoint (its one
+ *    request is given up while held, 2); the ledger's task once its turn opened it; the commit and branch Q's folder
+ *    was on.
  * 2. The endpoint pauses (503, Retry-After) and Q's harness gives its model call up while Tars holds it: a request
  *    row with status 499 and a structured cancel, never free text, and no endpoint error counted.
  * 3. Lead's second task, queued behind the first, is taken back by Lead before it starts: the session keeps it as
@@ -206,9 +207,12 @@ process.exit(1);
     // 1. What started it, and when.
     expect.soft(start, 'the start').toMatchObject({ trigger: 'task', via: 'api', taskRef: ref1, requesterAgentId: LEAD, commit: head, branch: 'feat/probe' });
     expect.soft(typeof start.taskId, 'the ledger\'s task, named').toBe('string');
-    const [queuedAt, handedAt, firstRequestAt] = [start.queuedAt, start.handedAt, start.firstRequestAt].map(Number);
-    expect.soft([queuedAt, handedAt, firstRequestAt].every(Number.isFinite), `the queue times ${queuedAt} ${handedAt} ${firstRequestAt}`).toBe(true);
-    expect.soft(queuedAt <= handedAt && handedAt <= firstRequestAt, `queued ${queuedAt}, handed ${handedAt}, first request ${firstRequestAt}`).toBe(true);
+    const [queuedAt, handedAt] = [start.queuedAt, start.handedAt].map(Number);
+    expect.soft([queuedAt, handedAt].every(Number.isFinite), `the queue times ${queuedAt} ${handedAt}`).toBe(true);
+    expect.soft(queuedAt <= handedAt, `queued ${queuedAt}, handed ${handedAt}`).toBe(true);
+    // The session's one request was given up while held: it never reached the endpoint, so the session has no first
+    // request (the Audit's L2 on #675).
+    expect.soft(start.firstRequestAt, 'a first request, from the one that never reached the endpoint').toBeUndefined();
 
     // 2. The request given up while held.
     const givenUp = requests.filter(r => r.cancel);
