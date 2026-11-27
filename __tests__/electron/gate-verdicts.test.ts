@@ -31,6 +31,10 @@ import { registerVerdictRoutes } from '../../electron/services/api-routes/verdic
  * 10. The upload sends a gate's report path (a local path).
  * 11. CI: checks all passed are not a MERGE, one failed not a NO-MERGE; checks still running, none at all, or gh
  *     absent record something.
+ * Added before its code, once the code above was written and the back office's limit read (27/11):
+ * 12. A long session gated on many heads outgrows what the back office takes for an outcome (16 KiB): every verdict
+ *     on a head lists every turn before it, so its upload is refused whole. The turns go as ranges, and the newest
+ *     gates are kept within a budget, the others counted.
  */
 
 let home: string;
@@ -60,14 +64,14 @@ function session(traceId: string, project: string, branch: string, heads: string
 const gatesOf = (traceId: string) => (store.session(traceId)!.outcome?.gates ?? []) as Array<Record<string, unknown>>;
 const noGh: VerdictDeps['gh'] = () => Promise.reject(Object.assign(new Error('spawn gh ENOENT'), { code: 'ENOENT' }));
 
-let c1: string; let c2: string; let c2b: string; let other: string;
+let c0: string; let c1: string; let c2: string; let c2b: string; let other: string;
 
 beforeEach(() => {
   home = fs.mkdtempSync(path.join(os.tmpdir(), 'gate-verdicts-'));
   repo = path.join(home, 'project-a');
   fs.mkdirSync(repo);
   git('init', '-q', '-b', 'main');
-  commit('readme.md', 'base\n', 'c0');
+  c0 = commit('readme.md', 'base\n', 'c0');
   git('checkout', '-q', '-b', 'feat/x');
   c1 = commit('a.txt', 'one\n', 'c1');
   c2 = commit('a.txt', 'one\ntwo\n', 'c2');
@@ -80,6 +84,8 @@ beforeEach(() => {
   session('s1', repo, 'feat/x', [c1, c2, c2]);
   session('s2', repo, 'feat/x', [c2], T + 200_000);
   session('s3', repo, 'feat/other', [other], T + 300_000);
+  // On main, ended on c0: an ancestor of every head here, but not on the pull request's branch.
+  session('s4', repo, 'main', [c0], T + 350_000);
   session('q1', '/elsewhere/project-q', 'feat/x', [c2], T + 400_000);
 });
 afterEach(() => {
@@ -109,9 +115,10 @@ describe('gate verdicts', () => {
     const seq = store.seqOf('s1')!;
     const r = await recordVerdict(deps(), caller(), v());
     expect(r.linked.map(l => `${l.traceId}:${l.turnIndex}`).sort()).toEqual(['s1:0', 's1:1', 's1:2', 's2:0']);
-    expect(gatesOf('s1')).toEqual([{ kind: 'qa', verdict: 'merge', at: T + 1_000_000, pr: 12, head: c2, turns: [0, 1, 2], by: 'qa-agent', testCommand: 'npm test', passed: 40, failed: 0, skipped: 2, report: '/home/someone/reports/qa-12.md' }]);
+    expect(gatesOf('s1')).toEqual([{ kind: 'qa', verdict: 'merge', at: T + 1_000_000, pr: 12, head: c2, turns: [[0, 2]], by: 'qa-agent', testCommand: 'npm test', passed: 40, failed: 0, skipped: 2, report: '/home/someone/reports/qa-12.md' }]);
     expect(store.seqOf('s1')!).toBeGreaterThan(seq);
     expect(gatesOf('s3'), 'another branch').toEqual([]);
+    expect(gatesOf('s4'), 'an ancestor on another branch').toEqual([]);
   });
 
   it('3: after a force push, the old head\'s turns are not linked, the common ancestor\'s are', async () => {
@@ -201,7 +208,7 @@ describe('gate verdicts', () => {
     });
     const doc = u.preview('s1')!;
     const sessionRow = (doc.document.batches[0].body as { sessions: Array<{ outcome?: { gates?: Array<Record<string, unknown>> } }> }).sessions[0];
-    expect(sessionRow.outcome?.gates?.[0]).toMatchObject({ kind: 'qa', verdict: 'merge', pr: 12, turns: [0, 1, 2] });
+    expect(sessionRow.outcome?.gates?.[0]).toMatchObject({ kind: 'qa', verdict: 'merge', pr: 12, turns: [[0, 2]] });
     expect(JSON.stringify(doc.document)).not.toContain('qa-12.md');
   });
 
@@ -214,4 +221,28 @@ describe('gate verdicts', () => {
     expect(await ciVerdicts(deps({ gh: checks([]) }), caller(), 14)).toBeNull();
     expect(await ciVerdicts(deps(), caller(), 15)).toBeNull();
   });
+
+  it('12: a long session gated on many heads keeps an outcome the back office takes: ranges, the newest gates, the rest counted', async () => {
+    const heads = Array.from({ length: 400 }, (_, i) => (i < 200 ? c1 : c2));
+    session('long', repo, 'feat/x', heads, T + 500_000);
+    for (let pr = 1; pr <= 80; pr++) {
+      await recordVerdict(deps({ now: () => T + 2_000_000 + pr }), caller(), v({ pr, head: pr % 2 ? c2 : c1, testCommand: 'npm test -- --reporter=dot', report: `/home/someone/reports/qa-${pr}.md` }));
+    }
+    const outcome = store.session('long')!.outcome as { gates?: Array<Record<string, unknown>>; gatesOmitted?: number };
+    expect(JSON.stringify(outcome).length, 'the stored outcome').toBeLessThanOrEqual(12 * 1024);
+    const kept = outcome.gates ?? [];
+    expect(kept.length).toBeGreaterThan(10);
+    expect(kept.length + (outcome.gatesOmitted ?? 0), 'every gate kept or counted').toBe(80);
+    expect(kept.map(g => g.pr), 'the newest gates kept').toContain(80);
+    expect(kept.map(g => g.pr)).not.toContain(1);
+    expect(kept.find(g => g.pr === 80)!.turns, 'a head on c1 (pr 80): the first 200 turns, one range').toEqual([[0, 199]]);
+    expect(kept.find(g => g.pr === 79)!.turns, 'a head on c2: every turn, c1 an ancestor').toEqual([[0, 399]]);
+    const u = new TraceUploader({
+      store, installFile: path.join(home, 'private', 'traces-install.json'), settings: () => ({ url: '' }), setDeletion: () => {},
+      eligible: () => true, scrubContext: () => ({ homeDirs: [os.homedir()], knownSecrets: [], envValues: [] }), withdrawConsent: () => {},
+      client: { name: 'tars', version: '0', platform: process.platform },
+    });
+    const row = (u.preview('long')!.document.batches[0].body as { sessions: Array<{ outcome?: unknown }> }).sessions[0];
+    expect(Buffer.byteLength(JSON.stringify(row.outcome)), 'the uploaded outcome, under the back office\'s 16 KiB').toBeLessThanOrEqual(16 * 1024);
+  }, 60_000);
 });
