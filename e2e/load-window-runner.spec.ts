@@ -14,7 +14,8 @@ import { startStandIn, MODEL_ID } from './stand-in-openai-endpoint.mjs';
  * real, where its session works.
  *
  * 1. The owner allows the project for qwen-code and writes nothing else: no agent exists.
- * 2. A pool of one task, two runs at the window's start, at most one at a time: the owner approves it.
+ * 2. A pool of one task, two runs, the first at the window's start and the second 1.9 s later, at most one at a time:
+ *    the owner approves it.
  * 3. Tars makes the project's load agent, Load 1, a qwen-code agent on the endpoint, `load: true`.
  * 4. The first arrival starts: a worktree at the task's base commit on `load/<run>/<task>-1`, under the project's
  *    `.worktrees`, a fresh session of Load 1 in it. The second is blocked, `max_concurrent`, and never starts.
@@ -109,7 +110,9 @@ process.exit(1);
     // 2. The pool, approved.
     const poolDir = path.join(dir, 'load-pools', 'runner-pool');
     fs.mkdirSync(poolDir, { recursive: true });
-    fs.writeFileSync(path.join(poolDir, 'window.json'), JSON.stringify({ rate_per_hour: 1, seed: 1, window_min: 60, max_concurrent: 1, initial_sessions: 2 }));
+    // One session at the start, at most one at a time; seed 9 at 3600 an hour plans the second arrival 1905 ms after
+    // the first (planArrivals), while the first runs (initial_sessions may not pass max_concurrent: the pool's rule).
+    fs.writeFileSync(path.join(poolDir, 'window.json'), JSON.stringify({ rate_per_hour: 3600, seed: 9, window_min: 60, max_concurrent: 1, initial_sessions: 1 }));
     fs.writeFileSync(path.join(poolDir, 'tasks.jsonl'), `${JSON.stringify({
       task_id: 'push-it', project, repo: 'e2e-owner/e2e-load-app', base_commit: head, prompt: 'Push your work.', setup: [], test_cmd: null,
       time_cap_min: 10, harnesses: ['qwen-code'], weight: 1, max_runs: 2, split: 'train', train_ok: true,
