@@ -462,6 +462,7 @@ describe('trace back-office, end to end', () => {
     assert.equal((await call('GET', `/v1/read/sessions/${installA.id}/sess-1`, { token: reader.token })).status, 200);
 
     // D1, D2, D7. B deletes b-del.
+    const filesBefore = filesUnder(blobDir).length;
     const d = await call('DELETE', '/v1/sessions/b-del', { token: installB.token });
     assert.equal(d.status, 200, String(d.buf));
     assert.deepEqual(note('sessionDelete.counts', [d.json.deleted.sessions, d.json.deleted.turns, d.json.deleted.requests, d.json.deleted.blobs]), [1, 1, 1, 2]);
@@ -470,6 +471,8 @@ describe('trace back-office, end to end', () => {
     assert.equal(note('sessionDelete.blob.only', (await call('GET', `/v1/read/blobs/${sha(only)}`, { token: reader.token })).status), 404);
     assert.equal(note('sessionDelete.blob.twice', (await call('GET', `/v1/read/blobs/${sha(twice)}`, { token: reader.token })).status), 200);
     assert.equal(note('sessionDelete.blob.system', (await call('GET', `/v1/read/blobs/${h.system}`, { token: reader.token })).status), 200);
+    // The reader's 404 reads the references only: the file of the blob only b-del used is gone from disk too.
+    assert.deepEqual(note('sessionDelete.blobFiles', [filesBefore, filesUnder(blobDir).length]), [filesBefore, filesBefore - 1]);
     assert.equal((await call('GET', `/v1/read/sessions/${installB.id}/b-del2`, { token: reader.token })).status, 200);
     const storedAfter = (await call('GET', '/v1/installs/me', { token: installB.token })).json.usage.storedBytes;
     note('sessionDelete.storedBytes', [storedBefore, storedAfter]);
@@ -485,6 +488,7 @@ describe('trace back-office, end to end', () => {
     // The last session using `twice` goes, and the blob with it.
     assert.equal((await call('DELETE', '/v1/sessions/b-del2', { token: installB.token })).status, 200);
     assert.equal(note('sessionDelete.blob.twiceAfterBoth', (await call('GET', `/v1/read/blobs/${sha(twice)}`, { token: reader.token })).status), 404);
+    assert.equal(filesUnder(blobDir).length, filesBefore - 2);
   });
 
   it('deletes everything an install sent in one call, says so, and keeps what another install still holds', async () => {
