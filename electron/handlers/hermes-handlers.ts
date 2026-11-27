@@ -393,6 +393,11 @@ export function registerHermesHandlers(): void {
   ipcMain.handle('hermes:connection:import', async () => {
     const imported = importDesktopConfig();
     if (!imported) return { success: false, error: 'No Hermes Desktop configuration found on this machine.' };
+    // Desktop's URL is held to the save's rule: an http(s) address or nothing written (the Audit's I-2 on #660).
+    const url = typeof imported.conn.url === 'string' ? imported.conn.url.trim() : '';
+    if ((imported.conn.mode === 'remote' || imported.conn.mode === 'cloud') && url && !gatewayUrl(url)) {
+      return { success: false, error: 'Tars calls a gateway only at an http:// or https:// address: nothing was saved.' };
+    }
     try {
       writeConnection(imported.conn);
     } catch (err) {

@@ -1,6 +1,9 @@
 import { describe, it, expect, vi, beforeAll, afterEach } from 'vitest';
+import * as fs from 'node:fs';
 import * as net from 'node:net';
 import * as http from 'node:http';
+import * as os from 'node:os';
+import * as path from 'node:path';
 
 /**
  * A call to the Hermes gateway that never gets an answer is a refusal with its
@@ -64,6 +67,15 @@ import * as http from 'node:http';
  *    checks no scheme. It refuses one that is not http(s)://, in words, without
  *    echoing the value, and saves nothing.
  *    14 and 15 were added after 13.
+ * 16. Import from Hermes Desktop saves Desktop's URL unchecked: the Import
+ *    button still saves a value that is not http(s)://. It is refused in the
+ *    save's words, and nothing is written (the Audit's I-2 on #660).
+ * 17. The probe of Settings, Hermes (hermes:connection:test, as the page opens)
+ *    and the sign-in try such a value, and answer Node's "Protocol "user:" not
+ *    supported" with the value beside it: the page printed "user:s3cretpw -
+ *    Protocol ...". Each answers in the save's words, without calling and
+ *    without echoing the value (the Audit's I-1 on #660).
+ *    16 and 17 were added after 15.
  */
 
 const handlers = vi.hoisted(() => new Map<string, (...args: unknown[]) => Promise<unknown>>());
@@ -377,6 +389,36 @@ describe('a saved value that is not an http(s) URL (14, 15)', () => {
     expect(result.error).not.toContain(secret);
     // What was saved before is still what is called.
     expect((await call('hermes:crons:list')).error).toBe(`Tars could not reach Hermes at http://127.0.0.1:${port}: connect ECONNREFUSED 127.0.0.1:${port}`);
+  });
+
+  it.each(NOT_HTTP)('%s: Import from Hermes Desktop does not save it, says why, and quotes nothing of it (16)', async (saved, secret) => {
+    const port = await refusingPort();
+    gatewayAt(`http://127.0.0.1:${port}`);
+    const { hermesDesktopConfigPath } = await import('../../../electron/platform');
+    const desktop = hermesDesktopConfigPath({ home: os.homedir() });
+    expect(desktop.startsWith(os.homedir())).toBe(true); // never the account's own Hermes Desktop
+    fs.mkdirSync(path.dirname(desktop), { recursive: true });
+    fs.writeFileSync(desktop, JSON.stringify({ mode: 'remote', remote: { url: saved, authMode: 'token' } }));
+    try {
+      const result = await call('hermes:connection:import');
+
+      expect(result).toEqual({ success: false, error: 'Tars calls a gateway only at an http:// or https:// address: nothing was saved.' });
+      expect(JSON.stringify(result)).not.toContain(secret);
+      expect((await call('hermes:crons:list')).error).toBe(`Tars could not reach Hermes at http://127.0.0.1:${port}: connect ECONNREFUSED 127.0.0.1:${port}`);
+    } finally {
+      fs.rmSync(desktop, { force: true });
+    }
+  });
+
+  it.each(NOT_HTTP)('%s: the probe and the sign-in answer in the save\'s words, quoting nothing of it (17)', async (saved, secret) => {
+    const connection = { mode: 'remote', url: saved, authMode: 'token' };
+
+    const probed = await call('hermes:connection:test', connection);
+    const signedIn = await call('hermes:signIn', { connection, username: 'u', password: 'p' });
+
+    expect(probed).toMatchObject({ success: false, baseUrl: '', error: 'Tars calls a gateway only at an http:// or https:// address.' });
+    expect(signedIn).toEqual({ success: false, error: 'Tars calls a gateway only at an http:// or https:// address.' });
+    for (const answer of [probed, signedIn]) expect(JSON.stringify(answer)).not.toContain(secret);
   });
 
   it('an https address is still saved, and quoted', async () => {
