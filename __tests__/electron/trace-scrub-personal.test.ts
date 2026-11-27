@@ -88,8 +88,10 @@ import { personNamesOf, usablePersonName } from '../../electron/services/trace-p
  *     hex letters (add::bad, dead::beef), a package spec's version (@scope/tool@1.0.0.1, vendor/lib@1.2.3.4).
  * F2. (The Audit's NO-MERGE at 46d1a56dd.) An address after a user's name passes: deploy@10.0.0.5,
  *     deploy@10.20.30.40, git@10.1.2.3:team/app.git (a private network's plan is what the masking is for). After `@`
- *     only a package spec's left side is a version: it starts with `@`, or holds a `/` with no `:` after the address.
- *     So pkg@1.2.3.4 is masked: a bare name cannot be told from a user's, and npm's versions have three parts.
+ *     only a package spec's left side is a version: a package name, `@scope/name` or `owner/name`, never a URL's user
+ *     part (ssh://git@10.1.2.3/, https://admin@192.168.1.1/, mongodb://app@10.0.0.7/, the Audit's NO-MERGE at
+ *     a3084c1cb), with no `:` after the address. So pkg@1.2.3.4 is masked: a bare name cannot be told from a user's,
+ *     and npm's versions have three parts.
  * The numbering kept from one build of a session to the next (M2) is trace-upload.test.ts's 46.
  */
 
@@ -271,6 +273,9 @@ describe('masking personal data', () => {
     expect(s.text('pkg@1.2.3.4 and user@10.0.0.5')).toBe('pkg@<IP_4> and user@<IP_1>');
     // A left side with a / and a : after the address is a user's host, not a package spec.
     expect(s.text('scp ./dist/app@10.9.8.7:/srv')).toBe('scp ./dist/app@<IP_5>:/srv');
+    // A URL's user part is never a package spec, with no port either (the Audit's NO-MERGE at a3084c1cb).
+    expect(s.text('git clone ssh://git@10.1.2.3/team/app.git')).toBe('git clone ssh://git@<IP_3>/team/app.git');
+    expect(s.text('curl https://admin@192.168.1.1/status and mongodb://app@10.0.0.7/db')).toBe('curl https://admin@<IP_6>/status and mongodb://app@<IP_7>/db');
   });
 
   it('R1: the counts are placeholders inserted, by type, every type present, and the version is named', () => {
