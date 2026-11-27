@@ -144,6 +144,14 @@ const SESSION_COLS: Col[] = [
   ['mixed', 'mixed', 'bool'], ['unknownTurns', 'unknown_turns', 'int'], ['outcome', 'outcome', 'jsonb'],
   ['environment', 'environment', 'jsonb'], ['events', 'events', 'jsonb'], ['start', 'start', 'jsonb'], ['lostDemand', 'lost_demand', 'jsonb'],
   ['maskingVersion', 'masking_version', 'text'], ['maskCounts', 'mask_counts', 'jsonb'],
+  ['rttMedianMs', 'rtt_median_ms', 'float8'], ['clockOffsetMs', 'clock_offset_ms', 'float8'],
+];
+// What a turn changed in the repository: the heads and trees, the counts, and the survival of its lines.
+const TURN_WORKSPACE: Col[] = [
+  ['startHead', 'start_head', 'text'], ['endHead', 'end_head', 'text'], ['startTree', 'start_tree', 'text'], ['endTree', 'end_tree', 'text'],
+  ['filesChanged', 'files_changed', 'int'], ['linesAdded', 'lines_added', 'int'], ['linesRemoved', 'lines_removed', 'int'],
+  ['changedLines', 'changed_lines', 'int'], ['survivedLines', 'survived_lines', 'int'], ['reverted', 'reverted', 'bool'],
+  ['survivalBasis', 'survival_basis', 'text'],
 ];
 const TURN_COLS: Col[] = [
   ['sessionId', 'session_id', 'text'], ['index', 'turn_index', 'int'], T('startedAt', 'started_at'), T('endedAt', 'ended_at'),
@@ -152,6 +160,7 @@ const TURN_COLS: Col[] = [
   ['tokensIn', 'tokens_in', 'bigint'], ['tokensCached', 'tokens_cached', 'bigint'], ['tokensOut', 'tokens_out', 'bigint'],
   ['finalStatus', 'final_status', 'text'], ['finalFinishReason', 'final_finish_reason', 'text'], ['author', 'author', 'text'],
   ['authorDetail', 'author_detail', 'text'], ['taskRef', 'task_ref', 'text'], ['interventions', 'interventions', 'jsonb'],
+  ...TURN_WORKSPACE,
 ];
 const REQUEST_COLS: Col[] = [
   ['sessionId', 'session_id', 'text'], ['turnId', 'turn_id', 'text'], ['seq', 'seq', 'int'], ['upstreamRequestId', 'upstream_request_id', 'text'],
@@ -159,7 +168,8 @@ const REQUEST_COLS: Col[] = [
   ['params', 'params', 'jsonb'], ['toolsHash', 'tools_hash', 'text'], T('startedAt', 'started_at'), ['ttftMs', 'ttft_ms', 'bigint'],
   ['totalMs', 'total_ms', 'bigint'], ['tokensIn', 'tokens_in', 'bigint'], ['tokensCached', 'tokens_cached', 'bigint'],
   ['tokensOut', 'tokens_out', 'bigint'], ['status', 'status', 'int'], ['error', 'error', 'text'], ['finishReason', 'finish_reason', 'text'],
-  ['streamed', 'streamed', 'bool'], ['side', 'side', 'bool'], ['liveSessions', 'live_sessions', 'int'], ['cancel', 'cancel', 'jsonb'], ['reqBytes', 'req_bytes', 'bigint'], ['respBytes', 'resp_bytes', 'bigint'],
+  ['streamed', 'streamed', 'bool'], ['side', 'side', 'bool'], ['liveSessions', 'live_sessions', 'int'], ['cancel', 'cancel', 'jsonb'], ['rttMs', 'rtt_ms', 'float8'], ['clockOffsetMs', 'clock_offset_ms', 'float8'],
+  ['queueMs', 'queue_ms', 'float8'], ['upstreamMs', 'upstream_ms', 'float8'], ['reqBytes', 'req_bytes', 'bigint'], ['respBytes', 'resp_bytes', 'bigint'],
 ];
 
 /** One INSERT ... SELECT FROM jsonb_to_recordset ... ON CONFLICT per table: a batch is a few queries, never one per row. */
@@ -187,10 +197,10 @@ function keepWhenAbsent(sql: string, table: string, columns: string[]): string {
 }
 const SQL = {
   sessions: keepWhenAbsent(upsertSql('sessions', 'sessionId', 'session_id', SESSION_COLS, { cols: ['changed_seq'], vals: [`nextval('change_seq')`] }).replace(
-    /DO UPDATE SET /, 'DO UPDATE SET received_at = now(), '), 'sessions', ['environment', 'events', 'start', 'lost_demand', 'masking_version', 'mask_counts']),
-  turns: keepWhenAbsent(upsertSql('turns', 'turnId', 'turn_id', TURN_COLS), 'turns', ['task_ref', 'interventions']),
+    /DO UPDATE SET /, 'DO UPDATE SET received_at = now(), '), 'sessions', ['environment', 'events', 'start', 'lost_demand', 'masking_version', 'mask_counts', 'rtt_median_ms', 'clock_offset_ms']),
+  turns: keepWhenAbsent(upsertSql('turns', 'turnId', 'turn_id', TURN_COLS), 'turns', ['task_ref', 'interventions', ...TURN_WORKSPACE.map(([, c]) => c)]),
   // A request sent again without its side mark keeps the one it had: only true or false replaces it.
-  requests: keepWhenAbsent(upsertSql('requests', 'requestId', 'request_id', REQUEST_COLS), 'requests', ['side', 'live_sessions', 'cancel']),
+  requests: keepWhenAbsent(upsertSql('requests', 'requestId', 'request_id', REQUEST_COLS), 'requests', ['side', 'live_sessions', 'cancel', 'rtt_ms', 'clock_offset_ms', 'queue_ms', 'upstream_ms']),
 };
 
 /** The last row of each id wins, as it would had the rows come in separate batches. */

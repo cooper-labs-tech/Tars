@@ -7,7 +7,7 @@ type Spec =
   | { t: 'msgs' } | { t: 'count'; max: number } | { t: 'env' } | { t: 'events' }
   | { t: 'shape'; shape: Shape } | { t: 'list'; shape: Shape; max: number }
   | { t: 're'; re: RegExp; desc: string } | { t: 'bytes'; max: number } | { t: 'cancel' }
-  | { t: 'num' } | { t: 'true' };
+  | { t: 'num' } | { t: 'true' } | { t: 'ms'; signed: boolean };
 type Shape = { [k: string]: Spec & { req?: boolean } };
 
 // A session's environment (27/11, the machine and the system at its start, exact values): these keys and no other,
@@ -77,6 +77,9 @@ const CANCEL_CAUSES: Record<string, readonly string[]> = {
   endpoint: ['stream_cut'],
 };
 const CANCEL: Shape = { by: r(enumOf(...Object.keys(CANCEL_CAUSES))), cause: r(str(40)), at: r(int), deliveredBytes: r(int) };
+// The timings, from the endpoint's Server-Timing: milliseconds, fractional; a clock offset may be negative.
+const MS = { t: 'ms', signed: false } as const;
+const SIGNED_MS = { t: 'ms', signed: true } as const;
 // How a session's content was masked on the client: the masking's version and its six counts, all required.
 const MASK_COUNTS: Shape = { SECRET: r(int), EMAIL: r(int), IP: r(int), PERSON: r(int), HOME: r(int), PHONE: r(int) };
 // What was done to a turn: its first interruption and restart, the next instruction's author kind and delay, a
@@ -98,12 +101,15 @@ const SESSION: Shape = {
   environment: { t: 'env' }, events: { t: 'events' },
   start: { t: 'shape', shape: START }, lostDemand: { t: 'list', shape: LOST_DEMAND, max: 1000 },
   maskingVersion: str(40), maskCounts: { t: 'shape', shape: MASK_COUNTS },
+  rttMedianMs: MS, clockOffsetMs: SIGNED_MS,
 };
 const TURN: Shape = {
   turnId: r(id), sessionId: r(id), index: r(int), startedAt: r(int), endedAt: int, gapBeforeMs: int, requestCount: r(int),
   toolCallCount: r(int), toolErrorCount: r(int), toolMs: int, modelMs: int, tokensIn: r(int), tokensCached: r(int), tokensOut: r(int),
   finalStatus: str(20), finalFinishReason: str(40), author: str(40), authorDetail: str(128), taskRef: TASK_REF,
   interventions: { t: 'shape', shape: INTERVENTIONS },
+  startHead: COMMIT, endHead: COMMIT, startTree: COMMIT, endTree: COMMIT, filesChanged: int, linesAdded: int, linesRemoved: int,
+  changedLines: int, survivedLines: int, reverted: bool, survivalBasis: enumOf('session_end', 'merged', 'deleted'),
 };
 const REQUEST: Shape = {
   requestId: r(id), sessionId: r(id), turnId: r(id), seq: r(int), upstreamRequestId: str(128),
@@ -112,6 +118,7 @@ const REQUEST: Shape = {
   ttftMs: int, totalMs: int, tokensIn: int, tokensCached: int, tokensOut: int, status: int, error: str(2000), finishReason: str(40),
   streamed: bool, side: bool, reqBytes: int, respBytes: int, messages: r({ t: 'msgs' }),
   liveSessions: { t: 'count', max: 1_000_000 }, cancel: { t: 'cancel' },
+  rttMs: MS, clockOffsetMs: SIGNED_MS, queueMs: MS, upstreamMs: MS,
 };
 const MESSAGE: Shape = {
   hash: r(hash), role: r({ t: 'enum', of: ['system', 'user', 'assistant', 'tool', 'developer'] }), createdAt: r(int), size: r(int),
@@ -147,6 +154,7 @@ function checkValue(s: Spec, v: unknown): string | null {
     case 'events': return checkEvents(v);
     case 're': return typeof v === 'string' && s.re.test(v) ? null : s.desc;
     case 'num': return typeof v === 'number' && Number.isFinite(v) && v >= 0 ? null : 'a number >= 0';
+    case 'ms': return typeof v === 'number' && Number.isFinite(v) && Math.abs(v) <= 1e10 && (s.signed || v >= 0) ? null : `milliseconds, ${s.signed ? '' : '>= 0, '}at most 1e10 in size`;
     case 'true': return v === true ? null : 'true';
     case 'bytes': return typeof v === 'string' && Buffer.byteLength(v) <= s.max ? null : `a string of at most ${s.max} bytes`;
     case 'cancel': {

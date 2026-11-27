@@ -14,7 +14,7 @@ const HASH = /^[0-9a-f]{64}$/;
 
 const SESSION_SELECT = `install_id, session_id, agent_id, project_key, harness, harness_version, native_session_id,
   endpoint_key, endpoint_name, model, started_at, ended_at, final_status, turn_count, request_count, tokens_in, tokens_cached,
-  tokens_out, mixed, unknown_turns, outcome, environment, events, start, lost_demand, masking_version, mask_counts, received_at`;
+  tokens_out, mixed, unknown_turns, outcome, environment, events, start, lost_demand, masking_version, mask_counts, rtt_median_ms, clock_offset_ms, received_at`;
 
 function session(r: QueryResultRow) {
   return {
@@ -27,6 +27,7 @@ function session(r: QueryResultRow) {
     // Always present: null is "the uploading Tars did not send it" (one before the field, or one that could not read it).
     environment: r.environment ?? null, events: r.events ?? null, start: r.start ?? null, lostDemand: r.lost_demand ?? null,
     maskingVersion: r.masking_version ?? null, maskCounts: r.mask_counts ?? null,
+    rttMedianMs: r.rtt_median_ms ?? null, clockOffsetMs: r.clock_offset_ms ?? null,
   };
 }
 
@@ -127,6 +128,10 @@ export async function getSession(ctx: Ctx, req: IncomingMessage, res: ServerResp
       tokensCached: t.tokens_cached, tokensOut: t.tokens_out, finalStatus: t.final_status ?? undefined,
       finalFinishReason: t.final_finish_reason ?? undefined, author: t.author ?? undefined, authorDetail: t.author_detail ?? undefined,
       taskRef: t.task_ref ?? null, interventions: t.interventions ?? null,
+      startHead: t.start_head ?? null, endHead: t.end_head ?? null, startTree: t.start_tree ?? null, endTree: t.end_tree ?? null,
+      filesChanged: t.files_changed ?? null, linesAdded: t.lines_added ?? null, linesRemoved: t.lines_removed ?? null,
+      changedLines: t.changed_lines ?? null, survivedLines: t.survived_lines ?? null, reverted: t.reverted ?? null,
+      survivalBasis: t.survival_basis ?? null,
     })),
     requests: requests.rows.map((r) => ({ ...request(r), messages: byRequest.get(r.request_id) ?? [] })),
     messages: messages.rows.map((m) => ({
@@ -144,6 +149,7 @@ function request(r: QueryResultRow) {
     status: r.status ?? undefined, error: r.error ?? undefined, finishReason: r.finish_reason ?? undefined, streamed: r.streamed ?? undefined,
     side: r.side ?? null, // always present: null is "the uploading Tars did not say", which readers treat as side
     liveSessions: r.live_sessions ?? null, cancel: r.cancel ?? null,
+    rttMs: r.rtt_ms ?? null, clockOffsetMs: r.clock_offset_ms ?? null, queueMs: r.queue_ms ?? null, upstreamMs: r.upstream_ms ?? null,
     reqBytes: r.req_bytes ?? undefined, respBytes: r.resp_bytes ?? undefined,
   };
 }

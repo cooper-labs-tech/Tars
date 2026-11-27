@@ -216,6 +216,8 @@ missing blob, then `PUT` the batch, and send any `missingBlobs` it reports.
 | `lostDemand` | array ≤ 1,000 | no | Tasks that left the agent's queue never to start while the session ran: `{ "kind": "queue_drop", "ref": task ref, "queuedAt": ms, "at": ms, "reason": "cancelled" \| "taken_back" \| "dropped_with_stop" \| "queue_cleared" \| "agent_removed" \| "not_handed_again" }`, all required, no other key. The list as a whole, kept when absent |
 | `maskingVersion` | string ≤ 40 | no | The version of the masking the client applied to the content before upload. Kept when absent |
 | `maskCounts` | object | no | What that masking replaced, by type: exactly `SECRET`, `EMAIL`, `IP`, `PERSON`, `HOME` and `PHONE`, each an int ≥ 0, all required, no other key. Kept when absent |
+| `rttMedianMs` | ms, a number from 0 to 10^10 | no | The median round trip of the session's requests, from the endpoint's Server-Timing. Kept when absent |
+| `clockOffsetMs` | ms, a number from -10^10 to 10^10 | no | The endpoint's clock against the client's, from the lowest round trip. Kept when absent |
 
 A *task ref* is `t-` and 8 lowercase hex characters. Every kind below is one of a closed list, the client's own: anything else refuses the batch.
 
@@ -263,6 +265,11 @@ a host name, a user name) refuses the batch.
 | `authorDetail` | string ≤ 128 | no | An agent or chat id; never a person's name |
 | `taskRef` | task ref | no | The task the turn's instruction came from. Sent again without it, a turn keeps it |
 | `interventions` | object | no | What was done to the turn, each key optional, no other: `interrupted {at, by, during: "answer" \| "tools"}`, `restarted {at, by}`, `next {by, delaySec}` (the next instruction's author kind and its delay in seconds, a number ≥ 0), `corrected: true`, `redelegated {to: a session id ≤ 64, at}`. Every `by` is a lowercase word (a-z, 0-9, `_`, a letter first, ≤ 40): a kind, never a name. Kept when absent |
+| `startHead`, `endHead` | 40 or 64 lowercase hex | no | The commit the turn started from and ended on, as git names them |
+| `startTree`, `endTree` | 40 or 64 lowercase hex | no | The tree hashes at the turn's start and end |
+| `filesChanged`, `linesAdded`, `linesRemoved`, `changedLines`, `survivedLines` | int ≥ 0 | no | What the turn changed, and how many of its changed lines survive |
+| `reverted` | bool | no | |
+| `survivalBasis` | `session_end` \| `merged` \| `deleted` | no | What the survival was measured against. A session uploaded again after a merge or a deleted branch updates these; one sent without them keeps them |
 
 ### Request
 
@@ -286,6 +293,8 @@ a host name, a user name) refuses the batch.
 | `side` | bool | no | `true` for a harness's side request (a title request with no tools, a memory request with another system prompt), `false` for the agent's own loop. Leave it out when the client does not know. A request sent again without it keeps the mark it had |
 | `liveSessions` | int 0 to 1,000,000 | no | How many sessions were live on the install when the request was sent. Sent again without it, a request keeps the count it had |
 | `cancel` | object | no | A request cut before the endpoint answered: `{ "by", "cause", "at": ms, "deliveredBytes": int }`, all required, no other key, the cause one of its `by`'s: `harness`: `esc`, `ctrl_c`, `cli_interrupt`, `abandoned_while_held`, `unknown`; `tars`: `stop`, `restart`, `sleep`, `remove`, `quit`, `replace`; `proxy`: `hold_ceiling`; `endpoint`: `stream_cut`. Kept when absent |
+| `rttMs`, `queueMs`, `upstreamMs` | ms, a number from 0 to 10^10 | no | The round trip, and the endpoint's queue and upstream times from its Server-Timing. Absent when the endpoint sends no such header, never 0. Kept when absent |
+| `clockOffsetMs` | ms, a number from -10^10 to 10^10 | no | |
 | `reqBytes`, `respBytes` | int ≥ 0 | no | |
 | `messages` | array ≤ 10,000 | yes | `{ "position": int, "hash": sha256, "direction": "input" \| "output" }`: what the request sent, in order, then what it produced |
 
@@ -345,9 +354,9 @@ Every request read back, here and in § 6.5, carries `side`, always present:
 The fields added after a client may have been built without them are always present when read, with `null` for
 "the uploading Tars did not send it":
 
-- every session, here and in § 6.1: `environment`, `events`, `start`, `lostDemand`, `maskingVersion` and `maskCounts`, each as sent;
-- every request, here and in § 6.5: `liveSessions` and `cancel`;
-- every turn, here: `taskRef` and `interventions`.
+- every session, here and in § 6.1: `environment`, `events`, `start`, `lostDemand`, `maskingVersion`, `maskCounts`, `rttMedianMs` and `clockOffsetMs`, each as sent;
+- every request, here and in § 6.5: `liveSessions`, `cancel`, `rttMs`, `clockOffsetMs`, `queueMs` and `upstreamMs`;
+- every turn, here: `taskRef`, `interventions`, and its workspace (`startHead` to `survivalBasis`).
 
 ### 6.3 `GET /v1/read/blobs/{hash}`
 
@@ -416,3 +425,4 @@ before the clients.
 | 27/11/2026 | `environment` and `events` on a session (read back in §§ 6.1 and 6.2), `liveSessions` on a request (§§ 6.2 and 6.5), migration `003_session_environment` |
 | 27/11/2026 | `start` and `lostDemand` on a session, `taskRef` on a turn, `cancel` on a request (read back the same way), migration `004_session_start` |
 | 27/11/2026 | `maskingVersion` and `maskCounts` on a session, `interventions` on a turn (read back the same way), migration `005_masking_and_interventions` |
+| 27/11/2026 | the timings (`rttMedianMs`, `clockOffsetMs` on a session; `rttMs`, `clockOffsetMs`, `queueMs`, `upstreamMs` on a request) and a turn's workspace, migration `006_timing_and_workspace` |
