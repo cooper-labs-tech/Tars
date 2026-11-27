@@ -12,7 +12,10 @@ import { pinPlatform } from './win-fake-disk';
  * How it fails, written before the code:
  * 1. win32: execCli or execCliSync starts the CLI without windowsHide.
  * 2. darwin/linux: execFile is not handed the caller's options as given, the
- *    same object, as it was before execCli existed.
+ *    same object, as it was before execCli existed. A synchronous call that
+ *    names no time of its own gets the caller's options plus one
+ *    (cli-probe-gaps.test.ts 5, 27/11): a CLI that hangs no longer freezes
+ *    the main thread for good.
  */
 
 const seen = vi.hoisted(() => [] as Array<{ fn: string; file: string; options: unknown }>);
@@ -55,16 +58,20 @@ describe('the console window of a CLI started outside a terminal', () => {
   it.each(['darwin', 'linux'] as const)('2. %s: the options as given, untouched', async (platform) => {
     unpin = pinPlatform(platform);
     const { execCliSync, execCli } = await import('../../../electron/providers/cli-exec');
-    const sync = { encoding: 'utf-8' as const, stdio: 'pipe' as const };
+    const sync = { encoding: 'utf-8' as const, stdio: 'pipe' as const, timeout: 7000 };
     const async = { encoding: 'utf-8' as const, timeout: 5000 };
+    const untimed = { encoding: 'utf-8' as const, stdio: 'pipe' as const };
 
     execCliSync('claude', ['mcp', 'list'], sync);
     await execCli('claude', ['mcp', 'list'], async);
+    execCliSync('claude', ['mcp', 'list'], untimed);
 
-    expect(seen).toHaveLength(2);
+    expect(seen).toHaveLength(3);
     expect(seen[0]).toMatchObject({ fn: 'execFileSync', file: 'claude' });
     expect(seen[0].options).toBe(sync);
     expect(seen[1]).toMatchObject({ fn: 'execFile', file: 'claude' });
     expect(seen[1].options).toBe(async);
+    expect(seen[2].options).toMatchObject(untimed);
+    expect((seen[2].options as { timeout?: unknown }).timeout).toBeGreaterThan(0);
   });
 });

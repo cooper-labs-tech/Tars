@@ -21,6 +21,10 @@ import { CMD_SHIM_NODE, SH_SHIM, pinPlatform } from '../providers/win-fake-disk'
  * 4. win32: claude.cmd (npm) is not found, or started through cmd.exe.
  * 5. A CLI that cannot be started is not said: the log must carry the
  *    resolver's reason, and the request still becomes a task (the fallback).
+ * Since 27/11 the call is started by probeCli (core/cli-probe.ts), so that its
+ * give-up and the quit end it with what it started (cli-probe-gaps.test.ts):
+ * on darwin/linux `/bin/sh -c` with the provider's line, as `exec` ran it, in
+ * a group of its own; on win32 the same argv as before, hidden.
  */
 
 let root: string;
@@ -31,6 +35,7 @@ let savedLog: string | undefined;
 let unpin: (() => void) | undefined;
 const execCalls: string[] = [];
 const execFileOptions: Array<Record<string, unknown>> = [];
+const spawned: Array<{ file: string; args: string[]; options: Record<string, unknown> }> = [];
 let captureExecFile: ((file: string, args: string[], opts: { env: Record<string, string> }) => string) | null = null;
 let captureExec: ((cmd: string, opts: { env: Record<string, string> }) => string) | null = null;
 
@@ -40,6 +45,10 @@ vi.mock('child_process', async (importOriginal) => {
   const actual = await importOriginal<typeof import('child_process')>();
   return {
     ...actual,
+    spawn: (file: string, args: string[], options: Record<string, unknown>) => {
+      spawned.push({ file, args, options });
+      return actual.spawn(file, args, options);
+    },
     exec: (...args: Parameters<typeof actual.exec>) => {
       execCalls.push(String(args[0]));
       if (captureExec) {
@@ -97,6 +106,7 @@ beforeEach(() => {
   vi.resetModules();
   execCalls.length = 0;
   execFileOptions.length = 0;
+  spawned.length = 0;
   captureExecFile = null;
   captureExec = null;
   root = fs.mkdtempSync(path.join(os.tmpdir(), 'tars-kanban-gen-'));
@@ -131,16 +141,17 @@ describe('generateTaskFromPrompt', () => {
     expect(argv[3]).toContain(`- "${PROJECTS[0].name}" (${PROJECTS[0].path})`);
     expect(task.title).toBe('from the fake');
     expect(task.priority).toBe('high');
-    // darwin/linux: through /bin/sh, as before, which reads the quoted line back to the same argv.
-    expect(execCalls).toHaveLength(process.platform === 'win32' ? 0 : 1);
+    // darwin/linux: through /bin/sh, as before, which reads the quoted line back to the same argv; started by probeCli,
+    // never by exec, so that its group ends with its give-up and the quit.
+    expect(execCalls).toHaveLength(0);
+    expect(spawned).toHaveLength(1);
     // win32: and with no console window, Tars being a GUI program.
-    if (process.platform === 'win32') expect(execFileOptions).toEqual([expect.objectContaining({ windowsHide: true })]);
+    if (process.platform === 'win32') expect(spawned[0].options).toMatchObject({ windowsHide: true });
   });
 
-  it('darwin/linux: the provider\'s command line handed to /bin/sh as before, the env { ...process.env, PATH }', async () => {
+  it.skipIf(process.platform === 'win32')('darwin/linux: the provider\'s command line handed to /bin/sh as before, the env { ...process.env, PATH }, in a group of its own', async () => {
     unpin = pinPlatform('darwin');
-    const seen: Array<{ cmd: string; env: Record<string, string> }> = [];
-    captureExec = (cmd, opts) => { seen.push({ cmd, env: opts.env }); return TASK_JSON; };
+    installFakeClaude();
     const { getProvider } = await import('../../../electron/providers');
     const built = vi.spyOn(getProvider('claude'), 'buildOneShotCommand');
 
@@ -149,7 +160,9 @@ describe('generateTaskFromPrompt', () => {
     expect(built).toHaveBeenCalledTimes(1);
     expect(built.mock.calls[0][0]).toMatchObject({ binaryPath: 'claude', model: 'haiku' });
     expect(built.mock.calls[0][0].prompt).toContain(`User's request:\n${HOSTILE}\n`);
-    expect(seen).toEqual([{ cmd: built.mock.results[0].value, env: { ...process.env, PATH: fakePath } }]);
+    expect(spawned.map(s => ({ file: s.file, args: s.args, env: s.options.env, detached: s.options.detached })))
+      .toEqual([{ file: '/bin/sh', args: ['-c', built.mock.results[0].value], env: { ...process.env, PATH: fakePath }, detached: true }]);
+    expect(execCalls).toEqual([]);
     expect(task.title).toBe('from the fake');
   });
 
