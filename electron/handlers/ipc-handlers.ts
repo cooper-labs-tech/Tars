@@ -70,6 +70,7 @@ import type { TaskQuery } from '../services/task-cost';
 import { oneReadingAtATime } from '../core/one-reading-at-a-time';
 import { consumeResumeSessionId, resolveResumeSessionId, spendResume } from '../utils/resume-session';
 import { registerAgentLauncher, launchAgent, launchBegins, launchAbandoned, sessionStarting, type AgentLauncher } from '../core/agent-launch';
+import { registerAgentCreator, type AgentCreateConfig, type AgentCreator } from '../core/agent-create';
 import { noTerminalAnswer } from '../core/no-terminal';
 import { orchestratorMoved } from '../core/chat-identity';
 import { launchSettings, restartForSettings, noteLaunch, restartAgent, pendingRestarts } from '../core/agent-restart';
@@ -336,29 +337,9 @@ function registerAgentHandlers(deps: IpcHandlerDependencies): void {
   } = deps;
 
   // Create a new agent (now creates a PTY-backed terminal)
-  ipcMain.handle('agent:create', async (_event, config: {
-    projectPath: string;
-    skills: string[];
-    worktree?: WorktreeConfig;
-    character?: AgentCharacter;
-    name?: string;
-    secondaryProjectPath?: string;
-    permissionMode?: AgentPermissionMode;
-    effort?: AgentEffort;
-    provider?: AgentProvider;
-    model?: string;
-    localModel?: string;
-    obsidianVaultPaths?: string[];
-    /** The Orchestrator toggle. See core/agent-role.ts. */
-    role?: AgentRole;
-    /** The toggle's old name, read when `role` is absent. */
-    orchestratorMode?: boolean;
-    cliPath?: string;
-    /** The inference endpoint its harness runs on (services/inference-endpoints.ts), with `model` one of its models. */
-    endpointId?: string;
-    /** Its own trace switch, off by default (services/trace-gate.ts). */
-    traces?: boolean;
-  }) => {
+  // The one creation of an agent, its record and its terminal (core/agent-create.ts): the window's handler below and
+  // the load window's load agents both come through here.
+  const createInTerminal: AgentCreator = async (config) => {
     const id = uuidv4();
     // An endpoint, its harness and its model, before anything is created.
     const endpointWrong = validateEndpointChoice(getAppSettings(), { endpointId: config.endpointId, provider: config.provider, model: config.model });
@@ -502,6 +483,7 @@ function registerAgentHandlers(deps: IpcHandlerDependencies): void {
       cliPath: config.cliPath,
       ...(config.endpointId ? { endpointId: config.endpointId } : {}),
       ...(config.traces === true ? { traces: true } : {}),
+      ...(config.load === true ? { load: true } : {}),
     };
     // A new orchestrator takes the role from its project's current one.
     const demoted = assignRole(status, role, agents.values());
@@ -558,7 +540,10 @@ function registerAgentHandlers(deps: IpcHandlerDependencies): void {
     });
 
     return { ...status, ptyId };
-  });
+  };
+  registerAgentCreator(createInTerminal);
+  // The window's form never makes a load agent: only the load window does (services/load-agents.ts).
+  ipcMain.handle('agent:create', (_event, config: AgentCreateConfig) => createInTerminal({ ...config, load: undefined }));
 
   // Start an agent with a prompt (sends command to PTY). The one launch of an
   // agent's CLI into its terminal: the handler below and the restart that
