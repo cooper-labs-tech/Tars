@@ -7,6 +7,14 @@ import { canonicalJson } from './trace-wire';
 import { sessionDocument } from './trace-export';
 import { partsOf, type TraceStore } from './trace-store';
 import { scrubValue, SCRUB_VERSION, type ScrubContext } from './trace-scrub';
+import { TOOL_CALLS_PER_REQUEST_MAX, type ToolCallRecord } from './tool-calls';
+
+/** A request's tool calls as they leave: the first TOOL_CALLS_PER_REQUEST_MAX, and how many more there were. */
+function toolCallsOf(calls: unknown): { toolCalls?: ToolCallRecord[]; toolCallsOmitted?: number } {
+  if (!Array.isArray(calls) || !calls.length) return {};
+  const sent = calls.slice(0, TOOL_CALLS_PER_REQUEST_MAX) as ToolCallRecord[];
+  return { toolCalls: sent, ...(calls.length > sent.length ? { toolCallsOmitted: calls.length - sent.length } : {}) };
+}
 
 /** The longest branch the back-office takes, in bytes (UTF-8). */
 export const MAX_BRANCH_BYTES = 255;
@@ -446,6 +454,10 @@ export class TraceUploader {
         finishReason: opt(r.finish_reason as string), reqBytes: Number(r.req_bytes), respBytes: Number(r.resp_bytes), messages,
         // A request the harness gave up while held: who cut it, why, when, and nothing delivered.
         ...(r.cancel ? { cancel: r.cancel } : {}),
+        // How the time since the previous reply divides, and its tool calls: ids, numbers, exit codes and flags, never a
+        // command or an output; past TOOL_CALLS_PER_REQUEST_MAX, counted (trace feature C1).
+        ...(r.gap ? { gap: r.gap } : {}),
+        ...toolCallsOf(r.tool_calls),
       };
     });
     const messages = [...remote.values()].filter(m => m.role !== 'tools').map(m => ({

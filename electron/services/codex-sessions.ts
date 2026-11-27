@@ -2,6 +2,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 import { codexHome, codexRolloutOf } from '../providers/codex-cli';
 import { reportOf } from './terminal-answer';
+import { codexToolPartOf, type ToolCallPart } from './tool-calls';
 
 /**
  * Codex's turns, read from its own session log and told to Tars the way Claude Code's hooks tell it (2.0.4).
@@ -112,6 +113,8 @@ export interface CodexSessionWatchDeps {
   dialogTitle: (agentId: string) => string | undefined;
   /** Told a turn was interrupted, before the agent's rest is posted (production: task-watch.ts, turnInterrupted). */
   interrupted?: (agentId: string, sessionId: string) => void;
+  /** Told what a line of the agent's session says of a tool call (production: traces-runtime.ts, noteToolCall). */
+  toolCall?: (agentId: string, part: ToolCallPart) => void;
   /** The session the agent's launch may resume (production: its resumableSessionId, utils/resume-session.ts). */
   resumableSessionOf?: (agentId: string) => string | undefined;
   /** Whether codex runs in the agent's terminal now (production: cliRunningIn). */
@@ -432,6 +435,9 @@ export class CodexSessionWatch {
     }
     // A last line with no end yet is still being written: it waits for the rest (linesOf).
     for (const line of linesOf(b, chunk)) {
+      // A tool call's command end or output line, for the agent's traced session (trace feature C1).
+      const call = this.deps.toolCall ? codexToolPartOf(line) : null;
+      if (call) this.deps.toolCall!(b.agentId, call);
       const event = codexEventOf(line);
       if (!event) continue;
       if (event.kind === 'session') {
@@ -506,7 +512,7 @@ export function noteCodexLaunch(agentId: string, cwd: string): void {
 let timer: ReturnType<typeof setInterval> | undefined;
 
 /** Reads codex's sessions every second while a codex agent is launched or followed. */
-export function startCodexSessionWatch(deps: Pick<CodexSessionWatchDeps, 'post' | 'dialogTitle' | 'interrupted' | 'resumableSessionOf' | 'codexRunning' | 'heldOpenBy' | 'openFilesReadable' | 'signInGapOf' | 'notSignedIn'>): void {
+export function startCodexSessionWatch(deps: Pick<CodexSessionWatchDeps, 'post' | 'dialogTitle' | 'interrupted' | 'toolCall' | 'resumableSessionOf' | 'codexRunning' | 'heldOpenBy' | 'openFilesReadable' | 'signInGapOf' | 'notSignedIn'>): void {
   codexSessionWatch.setDeps(deps);
   if (timer) return;
   let running = false;

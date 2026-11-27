@@ -2,6 +2,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 import type { HookPost } from './codex-sessions';
 import { reportOf } from './terminal-answer';
+import { piToolLineOf, type ToolCallPart } from './tool-calls';
 
 export type { HookPost };
 
@@ -75,6 +76,8 @@ export interface PiSessionWatchDeps {
   post: (agentId: string, post: HookPost) => Promise<void>;
   /** Told a turn was interrupted, before the rest is posted (production: task-watch.ts, turnInterrupted). */
   interrupted?: (agentId: string, sessionId: string) => void;
+  /** Told what a line of the agent's session says of a tool call (production: traces-runtime.ts, noteToolCall). */
+  toolCall?: (agentId: string, part: ToolCallPart) => void;
 }
 
 interface Followed {
@@ -88,6 +91,8 @@ interface Followed {
   pendingError?: { at: number; message: string };
   /** What pi wrote in the open turn, in order: the turn's answer is its report (reportOf), not its last line alone. */
   said?: string[];
+  /** When the assistant line asking for the calls being run was written: where pi starts them, all at once. */
+  batchAt?: number;
 }
 
 interface Launch {
@@ -208,6 +213,10 @@ export class PiSessionWatch {
     const lines = text.split('\n');
     f.partial = lines.pop() ?? '';
     for (const line of lines) {
+      // A batch of tool calls begun, or one call's result, for the agent's traced session (trace feature C1).
+      const call = this.deps.toolCall ? piToolLineOf(line) : null;
+      if (call && 'batchAt' in call) f.batchAt = call.batchAt;
+      else if (call) this.deps.toolCall!(agentId, f.batchAt === undefined ? call.part : { ...call.part, startedAt: f.batchAt });
       const event = piEventOf(line);
       if (!event) continue;
       if (event.kind === 'session') {
@@ -262,7 +271,7 @@ export const piSessionWatch = new PiSessionWatch({
 let timer: ReturnType<typeof setInterval> | undefined;
 
 /** Reads the pi agents' sessions every second while one is launched. */
-export function startPiSessionWatch(deps: Pick<PiSessionWatchDeps, 'dirOf' | 'post' | 'interrupted'>): void {
+export function startPiSessionWatch(deps: Pick<PiSessionWatchDeps, 'dirOf' | 'post' | 'interrupted' | 'toolCall'>): void {
   piSessionWatch.setDeps(deps);
   if (timer) return;
   let busy = false;
