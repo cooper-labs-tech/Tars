@@ -336,7 +336,11 @@ export function hermesRequest(
     }
     req.on('error', err => reject(noAnswer(err, baseUrl)));
     req.on('timeout', () => { req.destroy(); reject(noAnswer(new Error('timeout'), baseUrl, { waitedMs: timeoutMs })); });
-    deadline.timer = setTimeout(() => { reject(noAnswer(new Error('deadline'), baseUrl, { deadlineMs })); req.destroy(); }, deadlineMs);
+    // In words, as the sentence says it: the agents' kanban quotes this message, and the board reads it (I-b on #660).
+    deadline.timer = setTimeout(() => {
+      reject(noAnswer(new Error(`its answer did not end within ${Math.round(deadlineMs / 1000)} s`), baseUrl, { deadlineMs }));
+      req.destroy();
+    }, deadlineMs);
     if (payload) req.write(payload);
     req.end();
   });
