@@ -102,7 +102,7 @@ export function registerLoadHandlers(deps: LoadHandlerDeps): { window: LoadWindo
     gh,
     now: deps.now ?? Date.now,
     emit: tell,
-    startRun: (run, planned) => { void startEngine(run.runId, planned); },
+    startRun: (run, planned) => { startEngine(run.runId, planned).catch(err => console.error(`[load] ${run.runId} not started: ${(err as Error).message}`)); },
     stopRun: (runId) => { void engine.stop(runId); },
   };
   const window = createLoadWindow(windowDeps);

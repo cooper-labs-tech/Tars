@@ -131,12 +131,19 @@ export function createLoadEngine(deps: LoadEngineDeps) {
 
   async function arrive(runId: string, planned: LoadRunPlan['planned'][number]): Promise<void> {
     const plan = deps.plan(runId);
-    if (!plan || !deps.isRunning(runId)) { cancel(runId); return; }
+    if (!plan || !deps.isRunning(runId)) {
+      console.log(`[load] arrival ${planned.n} of ${runId} dropped: the run no longer runs${plan ? '' : ' (no plan)'}`);
+      cancel(runId);
+      return;
+    }
     const task = plan.tasks.find(t => t.task_id === planned.taskId);
     if (!task) return;
     const now = deps.now();
     const arrival: LoadArrival = { n: planned.n, taskId: planned.taskId, plannedAt: planned.plannedAt, actualAt: now };
-    const block = (reason: LoadBlockReason, detail?: string) => deps.logArrival(runId, { ...arrival, blocked: reason, ...(detail ? { blockedDetail: detail } : {}) });
+    const block = (reason: LoadBlockReason, detail?: string) => {
+      console.log(`[load] arrival ${planned.n} of ${runId} blocked: ${reason}${detail ? ` (${detail})` : ''}`);
+      deps.logArrival(runId, { ...arrival, blocked: reason, ...(detail ? { blockedDetail: detail } : {}) });
+    };
     if ([...open.values()].filter(s => s.runId === runId).length >= plan.window.max_concurrent) { block('max_concurrent'); return; }
     const cap = deps.busyCap(task.project);
     if (!cap.ok) { block('busy_cap', cap.reason); return; }
@@ -155,17 +162,21 @@ export function createLoadEngine(deps: LoadEngineDeps) {
     const where = fs.existsSync(task.project) ? resolveWorktreePath(task.project, branch) : undefined;
     if (!where) { fail(`no worktree for ${task.project}: the folder is gone or the guard refused ${branch}`); return; }
     const made: Made = { runId, n: planned.n, project: task.project, path: where, branch, agentId: agent.id };
+    // Its place and its agent held before anything awaits: another arrival due at the same moment is admitted against
+    // it, never past max_concurrent or onto the same agent.
+    const s: Session = { runId, arrival: started, made, capTimer: undefined, sawRunning: false };
+    open.set(agent.id, s);
     // Named before git makes it: a crash in between leaves nothing the next start does not know of.
     writeState([...readState(), made]);
     try {
       await deps.git(task.project, ['worktree', 'add', '-b', branch, where, `${task.base_commit}^{commit}`]);
     } catch (err) {
+      open.delete(agent.id);
       writeState(readState().filter(w => w.path !== where));
       fail(`git worktree add: ${(err as Error).message.split('\n')[0]}`);
       return;
     }
-    const s: Session = { runId, arrival: started, made, capTimer: undefined, sawRunning: false };
-    open.set(agent.id, s);
+    console.log(`[load] arrival ${planned.n} of ${runId} starts: ${agent.id} in ${where}`);
     deps.logArrival(runId, started);
     deps.prepare(agent.id, where);
     const launched = await deps.launch(agent.id, `${loadPreamble(path.basename(task.project))}\n\n${task.prompt}`, null)
@@ -186,7 +197,8 @@ export function createLoadEngine(deps: LoadEngineDeps) {
   /** Arms the run's arrivals, each at its planned time (one already due starts at once). */
   function start(runId: string): void {
     const plan = deps.plan(runId);
-    if (!plan) return;
+    if (!plan) { console.error(`[load] ${runId} not armed: no plan (not approved, or its snapshot changed)`); return; }
+    console.log(`[load] ${runId} armed: ${plan.planned.length} arrivals`);
     cancel(runId);
     const now = deps.now();
     timers.set(runId, plan.planned.map(p => deps.setTimer(() => { void arrive(runId, p); }, p.plannedAt - now)));
