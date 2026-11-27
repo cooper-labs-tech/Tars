@@ -83,9 +83,12 @@ import { assertThrowaway } from '../../setup/throwaway-dirs';
  * 17. (L2) A request given up while held counts as one that reached the endpoint: it adds to its turn's and its
  *     session's request count and to its turn's model time, or it is the session's or a task's first request.
  * 18. (Info) A start that opened no terminal leaves its note for the agent's next spawn to read.
+ * 19. (The Audit of #678, Info) A branch longer than the back office takes (255 bytes) leaves, and the back office
+ *     refuses every batch of its session, holding the upload queue back; or it is cut, and names another branch; or it
+ *     is counted in characters, so a name of wide characters passes under 255 and is still refused.
  *
  * The negative witness is feat/traces-window at 69c8f3f08, which records none of it; for 13 and 14, #675 at
- * 0346e9a65, which lists every task and puts none on a turn; for 15 to 18, #675 at 77463aad7.
+ * 0346e9a65, which lists every task and puts none on a turn; for 15 to 18, #675 at 77463aad7; for 19, 21e3831c5.
  */
 
 assertThrowaway({ DATA_DIR, PRIVATE_DIR });
@@ -704,6 +707,29 @@ describe('18. a start that opens no terminal', () => {
     noteSessionStart('keeps', { trigger: 'task', via: 'api' });
     clearSessionStart('other');
     expect(takeSessionStart('keeps')).toMatchObject({ trigger: 'task' });
+  });
+});
+
+describe('19. a branch over what the back office takes', () => {
+  it('is left out of the upload whole, never cut; one of 255 bytes leaves; bytes are counted, not characters', () => {
+    const cases: Array<[string, boolean]> = [
+      ['a'.repeat(300), false],
+      ['b'.repeat(255), true],
+      // 128 characters of 2 bytes each: 256 bytes.
+      ['é'.repeat(128), false],
+      ['é'.repeat(127) + 'x', true],
+    ];
+    cases.forEach(([branch, kept], i) => {
+      agent(`br${i}`);
+      const { traceId } = open(`br${i}`);
+      request(traceId, `br${i}`, Date.now());
+      traceStore().setStart(traceId, { commit: 'abc1234', branch });
+      const body = traceUploader().preview(traceId)!.document.batches[0].body as { sessions: Array<Record<string, unknown>> };
+      const start = body.sessions[0].start as Record<string, unknown>;
+      expect(start.commit, `case ${i}`).toBe('abc1234');
+      if (kept) expect(start.branch, `case ${i}`).toBe(branch);
+      else expect(start, `case ${i}: ${Buffer.byteLength(branch)} bytes`).not.toHaveProperty('branch');
+    });
   });
 });
 
