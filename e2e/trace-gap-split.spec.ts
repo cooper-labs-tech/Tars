@@ -35,14 +35,14 @@ const P = 'ffff6666-0000-4000-8000-0000000000c1';
 const EP = 'ep-0e2ec1';
 const NEW_NOTICE_LINES = [
   'how the wait before each request divides: its tools\' run, the wait for typed words and whose they were (by kind), the endpoint\'s pause, and the harness\'s own time',
-  'each tool call, by its id: its exit code, how long it ran, whether it was denied, timed out or failed, and how many bytes of its output the harness cut, never its command or its output',
+  'each tool call, by its id: its exit code, how long it ran, whether it was denied, timed out or failed, and whether the harness cut its output (with how many bytes, when it counts them), never its command or its output',
 ];
 /** How long Lead waits before its second task: the input wait the opening request must show. */
 const WAIT_MS = 2500;
 
 type Row = Record<string, unknown>;
 type Gap = { ms: number; toolMs: number | null; inputWaitMs: number | null; inputBy?: string; heldMs: number; harnessMs: number | null };
-type Call = { toolCallId: string; exit: number | null; ms: number | null; denied: boolean; timedOut: boolean; failed: boolean };
+type Call = { toolCallId: string; exit: number | null; ms: number | null; denied: boolean; timedOut: boolean; failed: boolean; truncated: boolean };
 type Req = Row & { side: boolean; gap?: Gap; toolCalls?: Call[] };
 
 test('each traced request\'s gap splits into its tools\' run, read from codex\'s and pi\'s own logs, the wait for typed words and whose, the hold and the rest', async () => {
@@ -148,8 +148,8 @@ test('each traced request\'s gap splits into its tools\' run, read from codex\'s
       expect.soft(calls.length, `${name}: the calls on the request that carries their results`).toBe(2);
       const ok = calls.find(c => c.exit === 0);
       const bad = calls.find(c => c.exit === 3);
-      expect.soft(ok, `${name}: the call that exited 0`).toMatchObject({ denied: false, timedOut: false, failed: false });
-      expect.soft(bad, `${name}: the call that exited 3`).toMatchObject({ denied: false, timedOut: false, failed: true });
+      expect.soft(ok, `${name}: the call that exited 0`).toMatchObject({ denied: false, timedOut: false, failed: false, truncated: false });
+      expect.soft(bad, `${name}: the call that exited 3`).toMatchObject({ denied: false, timedOut: false, failed: true, truncated: false });
       expect.soft(Number(ok?.ms), `${name}: the 0.8 s call's time`).toBeGreaterThanOrEqual(750);
       expect.soft(Number(bad?.ms), `${name}: the 0.4 s call's time`).toBeGreaterThanOrEqual(350);
       const gap = carries?.gap;

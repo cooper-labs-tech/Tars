@@ -320,7 +320,8 @@ from the window, or from an agent's drop file (`~/.tars/endpoint-keys/<name>.key
   the rest is then null too; parts over the gap by more than 25 ms (`GAP_TOLERANCE_MS`) leave the rest null. A
   session's first request has no gap;
 - each request carries `toolCalls`, the calls whose results it newly carries, by id: `{ toolCallId, exit, ms,
-  denied, timedOut, failed, truncatedBytes? }`, ids, numbers and flags only, never a command or an output. They are
+  denied, timedOut, failed, truncated, truncatedBytes? }` (the bytes cut only when the harness counts them), ids,
+  numbers and flags only, never a command or an output. They are
   read from the harness's own log by the watchers that already follow it (`services/tool-calls.ts`): codex 0.170's
   `CommandExecution` items and output lines (measured), pi 1.3.0's and 1.5.2's `toolResult` lines (read in their
   code). A line read late, after its request or the session's end, still lands on the session it happened in, and
