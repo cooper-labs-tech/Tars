@@ -37,7 +37,7 @@ describe('the push block', () => {
     const env = { ...process.env, ...pushBlockEnv(process.env) };
     expect(git(work, ['push', 'origin', 'HEAD:refs/heads/main'], env).status).not.toBe(0);
     expect(git(work, ['push', path.join(dir, 'origin.git'), 'HEAD:refs/heads/other'], env).status).not.toBe(0);
-    expect(execFileSync('git', ['-C', path.join(dir, 'origin.git'), 'branch', '--list'], { encoding: 'utf8' }).trim()).toBe('main');
+    expect(execFileSync('git', ['-C', path.join(dir, 'origin.git'), 'for-each-ref', '--format=%(refname:short)', 'refs/heads'], { encoding: 'utf8' }).trim()).toBe('main');
     expect(execFileSync('git', ['-C', path.join(dir, 'origin.git'), 'log', '--format=%s', 'main'], { encoding: 'utf8' }).trim()).toBe('one');
     expect(git(work, ['fetch', 'origin'], env).status).toBe(0);
     expect(fs.readFileSync(path.join(work, '.git', 'config'), 'utf8')).not.toContain('pushInsteadOf');
