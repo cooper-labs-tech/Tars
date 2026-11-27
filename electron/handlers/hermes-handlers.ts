@@ -5,8 +5,6 @@ import * as fs from 'fs';
 import * as path from 'path';
 import { hermesDesktopConfigPath, tailscaleCandidates } from '../platform';
 import * as os from 'os';
-import * as http from 'http';
-import * as https from 'https';
 import { API_PORT } from '../constants';
 import { configuredHermesConnection, readHermesConnection, writeHermesConnection } from '../services/hermes-config';
 import { resetLiveSession } from '../services/overseer';
@@ -68,7 +66,6 @@ import {
 } from '../services/hermes-client';
 import {
   HermesConnection,
-  defaultHermesConnection,
   resolveHermesBaseUrl,
   HERMES_DEFAULT_PORT,
 } from '../types/hermes';
@@ -234,38 +231,12 @@ function importDesktopConfig(): DesktopImport | null {
   }
 }
 
-/** GET a Hermes endpoint, following the gateway's own auth conventions. */
-function hermesGet(baseUrl: string, pathname: string, token?: string, timeoutMs = 6000): Promise<{ status: number; body: unknown }> {
-  return new Promise((resolve, reject) => {
-    let target: URL;
-    try { target = new URL(baseUrl + pathname); } catch { reject(new Error('Invalid gateway URL')); return; }
-    const mod = target.protocol === 'https:' ? https : http;
-    const req = mod.request(target, {
-      method: 'GET',
-      timeout: timeoutMs,
-      headers: token ? { 'X-Hermes-Session-Token': token } : undefined,
-    }, res => {
-      let raw = '';
-      res.on('data', c => { raw += c; });
-      res.on('end', () => {
-        let body: unknown = raw;
-        try { body = JSON.parse(raw); } catch { /* keep raw */ }
-        resolve({ status: res.statusCode ?? 0, body });
-      });
-    });
-    req.on('error', reject);
-    req.on('timeout', () => { req.destroy(); reject(new Error('timeout')); });
-    req.end();
-  });
-}
-
 /**
  * Hermes integration handlers: everything the Settings → Hermes section
  * needs to wire a remote (VPS) Hermes instance to this Tars:
  * - connection info: the incoming-webhook URL/token to paste into Hermes
  *   cron jobs, plus Tailscale state (DNS name, serve status) so the user
  *   knows exactly how the VPS reaches this machine
- * - a local dry-run test of the webhook (auth + agent resolution, no dispatch)
  * - a reachability check of the Hermes gateway URL itself
  */
 
@@ -318,37 +289,6 @@ async function detectTailscale(): Promise<TailscaleInfo> {
     } catch { /* try next candidate */ }
   }
   return { installed: false, running: false, serveConfigured: false };
-}
-
-/** POST JSON to the local API and resolve with {status, body}. */
-function postLocal(pathname: string, token: string, payload: unknown): Promise<{ status: number; body: unknown }> {
-  return new Promise((resolve, reject) => {
-    const data = JSON.stringify(payload);
-    const req = http.request({
-      host: '127.0.0.1',
-      port: API_PORT,
-      path: pathname,
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Content-Length': Buffer.byteLength(data),
-        'Authorization': `Bearer ${token}`,
-      },
-      timeout: 5000,
-    }, res => {
-      let raw = '';
-      res.on('data', c => { raw += c; });
-      res.on('end', () => {
-        let body: unknown = raw;
-        try { body = JSON.parse(raw); } catch { /* keep raw */ }
-        resolve({ status: res.statusCode ?? 0, body });
-      });
-    });
-    req.on('error', reject);
-    req.on('timeout', () => { req.destroy(); reject(new Error('timeout')); });
-    req.write(data);
-    req.end();
-  });
 }
 
 export function registerHermesHandlers(): void {
