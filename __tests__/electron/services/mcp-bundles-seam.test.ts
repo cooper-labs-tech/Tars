@@ -22,9 +22,20 @@ import * as path from 'path';
  *    (opencode), GEMINI_CLI_HOME, GROK_HOME, PI_CODING_AGENT_DIR pointing at the real ones.
  * 6. Under the seam a getter still points at the app's resources (the registration would mix both), or without it one
  *    points anywhere else; the folder is set once at start, not read from the environment at each call.
+ *
+ * Added after the Audit of #664 (2026-11-27), which measured three setups taken that reach the account's own home:
+ * 7. HOME is above the account's home (HOME=/Users, or /), so the account's home is inside HOME, and a CLI home inside
+ *    HOME is then inside the account's home too: CODEX_HOME=/Users/acct/.codex, XDG_CONFIG_HOME=/Users/acct/.config.
+ *    Every listed CLI home is refused inside the account's home whatever HOME is, and HOME holding it is refused.
+ * 8. A CLI home the registration reaches is left off the list: claude's own CLAUDE_CONFIG_DIR and
+ *    CLAUDE_SECURESTORAGE_CONFIG_DIR, which `claude mcp remove -s user` inherits (execCliSync hands it no env of its own
+ *    on macOS and Linux), pointing at the account's ~/.claude from a sandbox HOME.
  */
 
-type Var = 'DOROTHY_E2E' | 'DOROTHY_E2E_MCP_BUNDLES' | 'CODEX_HOME' | 'XDG_CONFIG_HOME' | 'GEMINI_CLI_HOME' | 'GROK_HOME' | 'PI_CODING_AGENT_DIR';
+type Var = 'DOROTHY_E2E' | 'DOROTHY_E2E_MCP_BUNDLES' | 'CODEX_HOME' | 'XDG_CONFIG_HOME' | 'GEMINI_CLI_HOME' | 'GROK_HOME' | 'PI_CODING_AGENT_DIR'
+  | 'CLAUDE_CONFIG_DIR' | 'CLAUDE_SECURESTORAGE_CONFIG_DIR';
+/** Every CLI home the registration writes into, or hands a CLI it runs. */
+const CLI_HOMES = ['CODEX_HOME', 'XDG_CONFIG_HOME', 'GEMINI_CLI_HOME', 'GROK_HOME', 'PI_CODING_AGENT_DIR', 'CLAUDE_CONFIG_DIR', 'CLAUDE_SECURESTORAGE_CONFIG_DIR'] as const;
 
 vi.mock('electron', () => ({
   app: { getPath: () => os.tmpdir(), getAppPath: () => process.cwd(), getVersion: () => '0.0.0', on: vi.fn(), isPackaged: false },
@@ -91,10 +102,39 @@ describe('the E2E seam naming a tree\'s own bundles', () => {
   it('5. never while a CLI home the registration writes into lies outside the sandbox\'s HOME', async () => {
     const { e2eMcpBundlesDir } = await seam();
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
-    for (const name of ['CODEX_HOME', 'XDG_CONFIG_HOME', 'GEMINI_CLI_HOME', 'GROK_HOME', 'PI_CODING_AGENT_DIR'] as const) {
+    for (const name of CLI_HOMES) {
       expect(e2eMcpBundlesDir(env({ [name]: path.join(account, '.somewhere') }), false, { home: sandbox, account }), name).toBeNull();
       expect(e2eMcpBundlesDir(env({ [name]: path.join(sandbox, '.somewhere') }), false, { home: sandbox, account }), name).toBe(tree);
     }
+    warn.mockRestore();
+  });
+
+  it('7. never while HOME holds the account\'s home, nor while a CLI home lies inside the account\'s home, whatever HOME is', async () => {
+    const { e2eMcpBundlesDir } = await seam();
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const acct = '/Users/acct';
+    // The Audit's first two setups: HOME above the account's home, a CLI home inside both.
+    expect(e2eMcpBundlesDir(env({ CODEX_HOME: '/Users/acct/.codex' }), false, { home: '/Users', account: acct })).toBeNull();
+    expect(e2eMcpBundlesDir(env({ XDG_CONFIG_HOME: '/Users/acct/.config' }), false, { home: '/', account: acct })).toBeNull();
+    // HOME above the account's home with no CLI home set: the registration's defaults are HOME's, which holds the account's.
+    expect(e2eMcpBundlesDir(env(), false, { home: '/Users', account: acct })).toBeNull();
+    expect(e2eMcpBundlesDir(env(), false, { home: '/', account: acct })).toBeNull();
+    // Every listed CLI home inside the account's home is refused, from a sandbox HOME as from any other.
+    for (const name of CLI_HOMES) {
+      expect(e2eMcpBundlesDir(env({ [name]: path.join(acct, '.somewhere') }), false, { home: sandbox, account: acct }), name).toBeNull();
+    }
+    warn.mockRestore();
+  });
+
+  it('8. never while claude\'s own config folders point at the account\'s ~/.claude from a sandbox HOME', async () => {
+    const { e2eMcpBundlesDir } = await seam();
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const acct = '/Users/acct';
+    // The Audit's third setup, and its keychain twin.
+    expect(e2eMcpBundlesDir(env({ CLAUDE_CONFIG_DIR: '/Users/acct/.claude' }), false, { home: sandbox, account: acct })).toBeNull();
+    expect(e2eMcpBundlesDir(env({ CLAUDE_SECURESTORAGE_CONFIG_DIR: '/Users/acct/.claude' }), false, { home: sandbox, account: acct })).toBeNull();
+    // Inside the sandbox they are taken.
+    expect(e2eMcpBundlesDir(env({ CLAUDE_CONFIG_DIR: path.join(sandbox, '.claude') }), false, { home: sandbox, account: acct })).toBe(tree);
     warn.mockRestore();
   });
 
