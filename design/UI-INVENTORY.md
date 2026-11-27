@@ -4,7 +4,7 @@ Every surface the app can render today. A frame must exist for each line here;
 `npm run e2e:guard` checks the routed ones are covered by the visual suite too.
 
 The frames live in two Pencil documents, and the second is a fork of the first
-rather than a companion to it. `design/tars-redesign.pen` holds 382 root frames, 98 of them drawn and not built yet: the 87 listed at the end, and the 11 of the Usage activity grid in their own section. Every frame but the app icon, the launch pictures and the library sheet uses the tokens, so each has its light version.
+rather than a companion to it. `design/tars-redesign.pen` holds 386 root frames, 102 of them drawn and not built yet: the 91 listed at the end, and the 11 of the Usage activity grid in their own section. Every frame but the app icon, the launch pictures and the library sheet uses the tokens, so each has its light version.
 `design/chat-design.pen` holds 72 of those, the other two hundred and eighty-seven being newer than the
 fork; the two panel history frames this document dropped with the history view;
 and the eleven frames of the Chat
@@ -321,3 +321,9 @@ For the load window (C3 of the trace work, 27/11; new interface only, the engine
 - The window at work and after it: Shell · Load window card · running, · ended (each with its light copy).
 - Shell · Load window · notes: where it shows and why, every state, and the four stop reasons (window end, the
   switch, the disk floor, an error), each in its sentence.
+- Where the owner allows a project for load windows, the card's second view (a Window | Projects switch in its head,
+  on every Load window card frame): Shell · Load window card · projects (and its light copy), one project per state:
+  allowed (public), allowed by name (private), not allowed, no endpoint yet, refused because its traces are off. Each
+  sets the endpoint, the model and the harnesses its load agents use. The approval links each refused project there.
+- The load agents in the fleet: Shell · Load window · load agents on the project page (and its light copy), a Load
+  agents card under the team, each marked, with its endpoint and model, and the memory line.
