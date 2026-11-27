@@ -20,7 +20,7 @@ any Tars user can point their Tars at their own instance.
 | **Projects as opaque keys** | The client sends `HMAC(installSecret, projectPath)`, never the path. Paths hold user names and private folder names; a reader only needs to group by project. Endpoints likewise |
 | **Every write is idempotent** | Batches carry a client-chosen id, rows are upserts, blobs are named by their hash. An upload cut anywhere resumes by sending again |
 | **One ordered change sequence, under a lock** | Readers pull by cursor. Changes commit in the order of their numbers (`src/db.ts`), so a reader never misses one that committed late |
-| **Deletions are a feed** | A reader that keeps copies reads `/v1/read/deletions` and deletes what an install withdrew or retention removed |
+| **Deletions are a feed** | A reader that keeps copies reads `/v1/read/deletions` and deletes what an install withdrew (all of it, or one session) or retention removed |
 | **The owner's pages behind two locks** | Cloudflare Access in front (identity, MFA, checked here too through its signed assertion), and the app's own password login. Either holds alone if the other fails |
 
 ## Run it locally

@@ -2978,6 +2978,7 @@ its first line. Take a backup before an update that carries a migration.
 - **Readers:** create a token (shown once), revoke one. `node src/cli.ts reader create <name>`
   does the same from the shell.
 - **Retention:** Settings, in days. It runs hourly, and on demand from the same page.
-- **Deletions:** every deletion with its receipt and counts. An install's own deletion is
-  immediate, and readers learn of it from `/v1/read/deletions`.
+- **Deletions:** every deletion with its receipt and counts. An install's own deletion, of
+  everything it sent or of one session (`DELETE /v1/sessions/{sessionId}`, which Tars sends for a
+  session it sent and then deleted), is immediate, and readers learn of it from `/v1/read/deletions`.
 - **Logs:** `journalctl -u tars-backoffice`. Request bodies are never logged.

@@ -8,7 +8,7 @@ import { validateBatch, type Batch } from './batch.ts';
 import { inTx, type Tx } from './db.ts';
 import { mintToken } from './tokens.ts';
 import { LIMITS } from './config.ts';
-import { deleteInstall } from './purge.ts';
+import { deleteInstall, deleteSession } from './purge.ts';
 
 const HASH = /^[0-9a-f]{64}$/;
 const ID = /^[A-Za-z0-9._:-]{1,128}$/;
@@ -72,6 +72,13 @@ export async function deleteMe(ctx: Ctx, req: IncomingMessage, res: ServerRespon
   const inst = await authInstall(ctx, req);
   const out = await deleteInstall(ctx, inst.id, 'install_deleted');
   json(res, 200, out);
+}
+
+/** One session the install sent, deleted on its word (API.md § 3): 200 whether it held it or not. */
+export async function deleteOneSession(ctx: Ctx, req: IncomingMessage, res: ServerResponse, sessionId: string): Promise<void> {
+  const inst = await authInstall(ctx, req);
+  if (!ID.test(sessionId)) throw new HttpError(400, 'bad_id');
+  json(res, 200, await deleteSession(ctx, inst.id, sessionId));
 }
 
 export async function missingBlobs(ctx: Ctx, req: IncomingMessage, res: ServerResponse): Promise<void> {
