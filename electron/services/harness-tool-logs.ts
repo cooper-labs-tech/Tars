@@ -52,6 +52,8 @@ export const ENDED_GRACE_MS = 30_000;
 export const QWEN_PASS_BYTES_MAX = 1024 * 1024;
 /** The most rows of opencode's database a pass reads, for one session. */
 export const OPENCODE_PASS_ROWS_MAX = 500;
+/** How long a pass waits on opencode's database while a write holds it. */
+const OPENCODE_LOCK_WAIT_MS = 50;
 /** A session of opencode begun this much before the traced session is still its own (clocks, the launch). */
 const OPENCODE_START_SLACK_MS = 1000;
 
@@ -107,7 +109,8 @@ export class HarnessToolLogs {
   private readOpencode(s: FollowedSession): void {
     const file = path.join((this.deps.dataHome ?? defaultDataHome)(), 'opencode', 'opencode.db');
     if (!fs.existsSync(file)) return;
-    const db = new Database(file, { readonly: true, fileMustExist: true });
+    // A moment at most on a lock (a store not in WAL mode, mid-write): never the driver's 5 s on Tars's main thread.
+    const db = new Database(file, { readonly: true, fileMustExist: true, timeout: OPENCODE_LOCK_WAIT_MS });
     try {
       const folders = [...new Set([s.folder, realpathOr(s.folder)])];
       const cursor = this.cursors.get(s.traceId) ?? { at: -1, id: '' };
@@ -123,6 +126,9 @@ export class HarnessToolLogs {
         if (part) this.deps.note(s.agentId, part);
       }
       if (rows.length) this.cursors.set(s.traceId, { at: rows[rows.length - 1].at, id: rows[rows.length - 1].id });
+    } catch (err) {
+      // Locked: read on the next pass, where the cursor left it.
+      if ((err as { code?: string }).code !== 'SQLITE_BUSY') throw err;
     } finally {
       db.close();
     }
