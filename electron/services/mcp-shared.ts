@@ -4,6 +4,7 @@ import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
 import { updateSharedJsonSync, type SharedJsonOutcome } from '../utils/shared-file';
+import { ORCHESTRATOR_ONLY_MCP } from './mcp-roles';
 
 /**
  * Tars's MCP servers shared between agents (2.0.5, lot 3 item G, the second step; reports/lot3-shared-mcp-servers-2810.md).
@@ -32,8 +33,9 @@ export const SHARED_MCP_SERVERS: readonly string[] = [
 /**
  * An orchestrator's only (the owner's decision of 28/10): never in a worker's role file, and refused to one at the door.
  * `claude-mgr-telegram` is no longer shipped; it stays listed so a stale entry a 2.0.4 left never reaches a worker.
+ * mcp-roles.ts's own list, not a copy: what the CLIs are started with and what the API answers read the same one.
  */
-export const ORCHESTRATOR_ONLY_MCP: readonly string[] = ['claude-mgr-telegram', 'dorothy-x'];
+export { ORCHESTRATOR_ONLY_MCP };
 
 /** Each shared server's folder in the app's resources: how Tars's own per-agent copy is told from one the owner added. */
 const BUNDLE_DIR: Record<string, string> = {

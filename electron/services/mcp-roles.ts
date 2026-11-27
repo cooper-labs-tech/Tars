@@ -25,6 +25,21 @@ import { writeAtomicSync } from '../utils/secret-file';
 
 export const ORCHESTRATOR_ONLY_MCP: readonly string[] = ['claude-mgr-telegram', 'dorothy-x'];
 
+/**
+ * Whether an agent of this role gets this server. The same answer decides three things: what its CLI is started with
+ * (below), what the shared door lets it reach (api-routes/mcp-routes.ts), and what an API route doing that server's
+ * work does for it (api-routes/integration-routes.ts, the Audit's P-1 on #657). The list above is the one source:
+ * mcp-shared.ts reads it from here.
+ */
+export function roleGetsServer(orchestrator: boolean, name: string): boolean {
+  return orchestrator || !ORCHESTRATOR_ONLY_MCP.includes(name);
+}
+
+/** What the door and those routes answer, with 403, to an agent whose role does not get the server: its name, no more. */
+export function serverWithheldAnswer(name: string): { error: string } {
+  return { error: `${name} is an orchestrator's server` };
+}
+
 /** Each of Tars's seven servers, and the directory its bundle ships in (`<resources>/mcp-<dir>/dist/bundle.js`). */
 const TARS_BUNDLE_DIRS: Readonly<Record<string, string>> = {
   'claude-mgr-orchestrator': 'mcp-orchestrator',

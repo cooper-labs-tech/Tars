@@ -2,6 +2,9 @@ import * as crypto from 'crypto';
 import * as http from 'http';
 import * as https from 'https';
 import { RouteApp, RouteContext, SendJson } from './types';
+import { agents } from '../../core/agent-manager';
+import { hasOrchestratorPowers } from '../../core/agent-role';
+import { roleGetsServer, serverWithheldAnswer } from '../mcp-roles';
 
 /**
  * The calls Tars makes for mcp-x and mcp-socialdata, with the user's keys
@@ -17,6 +20,8 @@ import { RouteApp, RouteContext, SendJson } from './types';
  */
 
 const X_API_HOST = 'api.x.com';
+/** The MCP server whose work /api/x/request does: what a role does not get there, the route does not do for it. */
+const X_SERVER = 'dorothy-x';
 const SOCIALDATA_HOST = 'api.socialdata.tools';
 /** As long as the servers waited for X or SocialData themselves (mcp-shared/src/http.ts, API_WAIT_MS). */
 const SERVICE_WAIT_MS = 60_000;
@@ -98,6 +103,17 @@ const failure = (err: unknown) => (err instanceof Error ? err.message : String(e
 export function registerIntegrationRoutes(app: RouteApp, ctx: RouteContext): void {
   // POST /api/x/request { method, endpoint, body? }: mcp-x's post, reply and delete.
   app.post('/api/x/request', async (req, sendJson: SendJson) => {
+    // The API follows the role's MCP list (the Audit's P-1 on #657): an agent whose CLI is started without the X server
+    // does not get its work done here either, whatever process of it presents its token. First, so that it learns
+    // nothing else, in the door's words. The shared token, Tars's own pass and a Hermes gateway's secret name no
+    // agent, and keep what they had: the switch decides.
+    if (req.callerAgentId !== undefined) {
+      const caller = agents.get(req.callerAgentId);
+      if (!roleGetsServer(!!caller && hasOrchestratorPowers(caller), X_SERVER)) {
+        sendJson(serverWithheldAnswer(X_SERVER), 403);
+        return;
+      }
+    }
     const { method, endpoint, body } = req.body as { method?: unknown; endpoint?: unknown; body?: unknown };
     const settings = ctx.getAppSettings();
     // Posting is on only for the switch's own true (the audit's lead #12).
