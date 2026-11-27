@@ -882,6 +882,13 @@ describe('the install id an endpoint may be told (trace feature A4)', () => {
     seed('t1', 'first');
     const u = uploader();
     await u.runOnce();
+    // The guard on its own (the Audit's m2 on #682): a deletion owed while the consent still stands, which
+    // deleteEverywhere never leaves (it withdraws both in one write), but a settings file may.
+    expect(settings.consentAt).toBeDefined();
+    deletion = { owed: true };
+    expect(u.currentInstallId(), 'owed, the consent still there').toBeNull();
+    deletion = { owed: false };
+    expect(u.currentInstallId(), 'no longer owed').toBe(INST(1));
     bo.failNext.push({ status: 503, code: 'unavailable' });
     expect((await u.deleteEverywhere()).ok).toBe(false);
     expect(deletion.owed).toBe(true);
