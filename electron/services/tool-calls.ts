@@ -47,6 +47,8 @@ export interface ToolCallPart {
   sentBytes?: number;
   /** pi: the bytes it cut, as it counts them. */
   truncatedBytes?: number;
+  /** The harness says it cut the output, whether or not it says how much. */
+  truncated?: boolean;
 }
 
 /** A call, as it leaves the machine: ids, numbers, exit codes and flags. */
@@ -59,7 +61,9 @@ export interface ToolCallRecord {
   denied: boolean;
   timedOut: boolean;
   failed: boolean;
-  /** Set when the harness cut its output before sending it back: the bytes it cut. */
+  /** Whether the harness cut its output before sending it back. */
+  truncated: boolean;
+  /** The bytes it cut, when the harness counts them (codex, pi); never guessed. */
   truncatedBytes?: number;
 }
 
@@ -161,6 +165,7 @@ export function piToolLineOf(line: string): { batchAt: number } | { part: ToolCa
       denied: !ran && failed,
       timedOut,
       failed,
+      truncated: cut.truncated === true,
       truncatedBytes: cut.truncated === true && total !== undefined && kept !== undefined && total > kept ? total - kept : undefined,
     }),
   };
@@ -192,6 +197,7 @@ export function toolCallRecordOf(p: ToolCallPart): ToolCallRecord {
   return {
     toolCallId: p.callId, exit, ms: ms === undefined ? null : Math.max(0, ms),
     denied: p.denied === true, timedOut: p.timedOut === true, failed: !p.running && p.failed === true,
+    truncated: p.truncated === true || !!cut,
     ...(cut ? { truncatedBytes: cut } : {}),
   };
 }
