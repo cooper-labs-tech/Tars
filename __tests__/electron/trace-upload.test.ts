@@ -262,9 +262,11 @@ describe('the trace uploader', () => {
     expect(session.projectKey).toMatch(/^[0-9a-f]{64}$/);
     expect(session.endpointKey).toMatch(/^[0-9a-f]{64}$/);
     expect(Object.keys(session).sort()).toEqual(expect.arrayContaining(['sessionId', 'harness', 'model', 'startedAt', 'finalStatus', 'turnCount', 'requestCount', 'tokensIn', 'tokensCached', 'tokensOut']));
-    const allowed = { session: ['sessionId', 'agentId', 'agentName', 'projectKey', 'harness', 'harnessVersion', 'nativeSessionId', 'endpointKey', 'endpointName', 'model', 'startedAt', 'endedAt', 'finalStatus', 'turnCount', 'requestCount', 'tokensIn', 'tokensCached', 'tokensOut', 'mixed', 'unknownTurns', 'outcome'],
+    // The back-office's fields. `environment`, `events` and `liveSessions` (each traced session's environment, 27/11)
+    // are new to it: it takes them before Tars sends them, as it took `side` (SPECS.md, Upload).
+    const allowed = { session: ['sessionId', 'agentId', 'agentName', 'projectKey', 'harness', 'harnessVersion', 'nativeSessionId', 'endpointKey', 'endpointName', 'model', 'startedAt', 'endedAt', 'finalStatus', 'turnCount', 'requestCount', 'tokensIn', 'tokensCached', 'tokensOut', 'mixed', 'unknownTurns', 'outcome', 'environment', 'events'],
       turn: ['turnId', 'sessionId', 'index', 'startedAt', 'endedAt', 'gapBeforeMs', 'requestCount', 'toolCallCount', 'toolErrorCount', 'toolMs', 'modelMs', 'tokensIn', 'tokensCached', 'tokensOut', 'finalStatus', 'finalFinishReason', 'author', 'authorDetail'],
-      request: ['requestId', 'sessionId', 'turnId', 'seq', 'side', 'upstreamRequestId', 'surface', 'modelRequested', 'modelServed', 'params', 'toolsHash', 'startedAt', 'ttftMs', 'totalMs', 'tokensIn', 'tokensCached', 'tokensOut', 'status', 'error', 'finishReason', 'streamed', 'reqBytes', 'respBytes', 'messages'],
+      request: ['requestId', 'sessionId', 'turnId', 'seq', 'side', 'upstreamRequestId', 'surface', 'modelRequested', 'modelServed', 'params', 'toolsHash', 'startedAt', 'ttftMs', 'totalMs', 'tokensIn', 'tokensCached', 'tokensOut', 'status', 'error', 'finishReason', 'streamed', 'reqBytes', 'respBytes', 'messages', 'liveSessions'],
       message: ['hash', 'role', 'createdAt', 'size', 'toolCallCount', 'hasThinking'] };
     const batch = bo.rows[0] as { schema: number; sessions: object[]; turns: object[]; requests: Array<{ messages: Array<{ hash: string }>; toolsHash?: string; upstreamRequestId?: string }>; messages: Array<{ hash: string; role: string }> };
     expect(batch.schema).toBe(1);

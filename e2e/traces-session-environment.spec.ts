@@ -123,7 +123,7 @@ test('each traced session keeps its harness version, its environment, its power 
     await api('agent', 'start', { id: Q, prompt: '' });
     await expect.poll(() => lines(fakeLog).some(e => e.launch && e.agent === Q), { timeout: 30_000 }).toBe(true);
     await api('agent', 'start', { id: C, prompt: 'Run the probe and report what it printed.' });
-    await expect.poll(() => lines(codexLog).filter(e => e.model).length, { timeout: 60_000 }).toBeGreaterThanOrEqual(2);
+    await expect.poll(() => lines(codexLog).filter(e => e.model === true).length, { timeout: 60_000 }).toBeGreaterThanOrEqual(2);
 
     // 1 and 2: the version and the environment, read after the start. Soft, as every check of what is new here: a
     // build without it shows each missing part at once.
@@ -158,9 +158,9 @@ test('each traced session keeps its harness version, its environment, its power 
     await expect.poll(async () => (await sessionOf(Q))?.session.endedAt ?? null, { timeout: 30_000 }).not.toBeNull();
     await power(['suspend']);
     // 4. C's next turn, with one traced session open.
-    const before = lines(codexLog).filter(e => e.model).length;
+    const before = lines(codexLog).filter(e => e.model === true).length;
     await api('agent', 'sendInput', { id: C, input: 'Run the probe once more.\r' });
-    await expect.poll(() => lines(codexLog).filter(e => e.model).length, { timeout: 60_000 }).toBeGreaterThanOrEqual(before + 2);
+    await expect.poll(() => lines(codexLog).filter(e => e.model === true).length, { timeout: 60_000 }).toBeGreaterThanOrEqual(before + 2);
     await expect.poll(async () => ((await sessionOf(C))?.turns ?? []).flatMap(t => t.requests).length, { timeout: 15_000 }).toBeGreaterThanOrEqual(4);
     const q2 = await sessionOf(Q);
     const c2 = await sessionOf(C);
@@ -171,7 +171,7 @@ test('each traced session keeps its harness version, its environment, its power 
     expect.soft(cRequests.map(r => r.liveSessions ?? null), "the live count on C's requests").toEqual([2, 2, 1, 1]);
 
     // 5. Codex's own session id, and its installation id.
-    const codexSession = lines(codexLog).find(e => e.model)?.session;
+    const codexSession = lines(codexLog).find(e => e.model === true)?.session;
     const reached = lines(standinLog).filter(e => e.method === 'POST' && String(e.url).endsWith('/responses'));
     const install = String(reached[0]?.body?.client_metadata?.['x-codex-installation-id'] ?? '');
     keep({ codexSession, install, reachedHeaders: reached.map(r => Object.keys(r.headers ?? {}).sort()) });
@@ -183,10 +183,10 @@ test('each traced session keeps its harness version, its environment, its power 
       const req = process.mainModule!.require;
       const runtime = req(`${dist}/services/traces-runtime.js`);
       const zlib = req('zlib');
-      const Database = req('better-sqlite3');
       const exported = [...req(`${dist}/services/trace-export.js`).traceExportLines(runtime.traceStore(), {})] as string[];
       const preview = JSON.stringify(runtime.traceUploader().preview(traceId));
-      const db = new Database(runtime.TRACES_DB_FILE, { readonly: true });
+      // Every table of the store, read through its own connection (its handle is private to TypeScript only).
+      const db = (runtime.traceStore() as unknown as { db: { prepare(sql: string): { all(): unknown[] } } }).db;
       const rows: string[] = [];
       for (const { name } of db.prepare(`SELECT name FROM sqlite_master WHERE type = 'table'`).all() as Array<{ name: string }>) {
         for (const row of db.prepare(`SELECT * FROM "${name}"`).all() as Array<Record<string, unknown>>) {
@@ -196,7 +196,6 @@ test('each traced session keeps its harness version, its environment, its power 
           }
         }
       }
-      db.close();
       return { exported, preview, stored: rows.join('\n'), file: runtime.TRACES_DB_FILE as string };
     }, { dist, traceId: c2!.session.traceId });
     fs.writeFileSync(test.info().outputPath('traces-export.jsonl'), `${held.exported.join('\n')}\n`);
