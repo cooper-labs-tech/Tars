@@ -79,9 +79,9 @@ export interface RequestCancel { by: 'harness'; cause: 'abandoned_while_held'; a
  * folder, and `firstRequestAt` is the session's first request at the endpoint.
  */
 export interface TraceStart {
-  /** owner | task | channel | restart | start | wake | redelegation | unknown */
+  /** owner | task | channel | restart | start | wake | redelegation | unknown (core/session-start.ts SessionTrigger). */
   trigger: string;
-  /** How, by its kind: window, key, api, slack, discord, hermes, chat, tars. Never a name. */
+  /** How, by its kind, never a name: one of core/session-start.ts StartVia. */
   via?: string;
   taskRef?: string;
   taskId?: string;

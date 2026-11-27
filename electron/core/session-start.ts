@@ -12,7 +12,7 @@
  */
 
 export type StartTrigger =
-  /** The owner, from the window (or a key typed into an asleep agent's pane). */
+  /** The owner: from the window, a chat, or their own words on a channel. */
   | 'owner'
   /** A task handed over with a ref (run-task, delegate_task, a queued task's turn). */
   | 'task'
@@ -26,10 +26,21 @@ export type StartTrigger =
 /** What a traced session records: a start's own trigger, or what Tars reads at the spawn. */
 export type SessionTrigger = StartTrigger | 'wake' | 'redelegation' | 'unknown';
 
+/**
+ * How a start came, by its kind only, never a name: a closed list. The window, a chat, the API (an agent or Tars), a
+ * channel by its name, the owner's words relayed by an orchestrator, a restart for a settings change or asked for, and
+ * Tars's recovery after an abrupt stop.
+ */
+export type StartVia = 'window' | 'chat' | 'api' | 'telegram' | 'slack' | 'discord' | 'hermes' | 'relay' | 'settings' | 'asked' | 'tars';
+
+/** A channel's name, as a start's `via`. */
+export const VIA_OF_CHANNEL: Readonly<Record<'Telegram' | 'Slack' | 'Discord' | 'Hermes', StartVia>> = {
+  Telegram: 'telegram', Slack: 'slack', Discord: 'discord', Hermes: 'hermes',
+};
+
 export interface StartNote {
   trigger: StartTrigger;
-  /** How, by kind only, never a name: window, key, api, slack, discord, hermes, chat, tars. */
-  via?: string;
+  via?: StartVia;
   /** The task's ref (`t-` and 8 hex), when it came with one. */
   taskRef?: string;
   /** The agent that handed the task over. */
