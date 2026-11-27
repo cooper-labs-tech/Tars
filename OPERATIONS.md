@@ -1308,7 +1308,10 @@ curl -s -H "Authorization: Bearer $(cat ~/.tars-private/traces-reader-token)" \
 - `/api/traces/sessions` returns the sessions new or grown since the cursor, in the order they changed. Its filters
   are `project`, `harness`, `model`, `endpoint`, `agent`, `from` and `to` (ms).
 - A session's document has its trace, turns, requests (with `upstream_request_id`, the endpoint's `X-Request-Id`),
-  request_messages and messages.
+  request_messages and messages. Each turn has `workspace`: `start_head`, `end_head`, `start_tree`, `end_tree`,
+  `files`, `lines_added`, `lines_removed`, `changed_lines`, `survived_lines`, `reverted` and `survival_basis`
+  (`session_end`, then `merged` or `deleted` once its branch is), null when unknown. A session whose survival is
+  measured again on the default branch comes back in `/api/traces/sessions` from the cursor.
 - No other credential opens these routes.
 
 **Measure a harness again** after an update, against a stand-in endpoint on loopback:

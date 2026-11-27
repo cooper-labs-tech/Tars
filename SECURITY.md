@@ -1162,6 +1162,13 @@ else.
 
 **The stored traces**, `~/.tars/traces/traces.db` (0600, in a 0700 folder).
 - They hold sessions in full: prompts, files read, tool results.
+- They also hold the versions of each file a traced turn changed, compressed, to count how many of its lines last.
+  Those never leave the store: not in the export, not in the read API, not in the upload. They are deleted with
+  their session and count against the cap.
+- Reading the agent's checkout for that never writes into it: every git call goes through safeGit with
+  `--no-optional-locks` (no index refresh, no index.lock) and only reads (`rev-parse`, `ls-files`, `diff-files`,
+  `cat-file`, `ls-tree`, `merge-base`, `show-ref`); a dirty file is read and hashed by Tars, never written as an
+  object. Each call is bounded in time.
 - `~/.tars` is in every agent's `--add-dir`, so any agent can read every traced session, as it can already read every
   transcript under `~/.claude` and `~/.codex`.
 - Nothing is masked on this machine. Masking secrets and pseudonymising is the reader's job, on its side.
@@ -1194,6 +1201,9 @@ would be sent.
 - Projects and endpoints go as HMAC keys of a secret that never leaves the install, never their paths or addresses.
 - Neither the agent's name nor the endpoint's goes: both are free labels that may name a person or a host (L1).
 - A turn's author goes by kind (user, orchestrator, agent), never a name.
+- A turn's workspace goes as numbers and hashes only: the commits at its start and end as git names them (as the
+  session's outcome already sends its head), two tree hashes that name no file, its files and lines counted, and
+  their survival. Never a path or a line of the files.
 - The install's token and that secret are in `~/.tars-private/traces-install.json` (0600).
 - Only sessions whose project and agent are opted in at the moment of sending go.
 - One action in the window asks the back-office to delete everything the install sent, then forgets the install and
