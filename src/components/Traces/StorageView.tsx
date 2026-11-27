@@ -4,7 +4,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { Button, DialogShell, Dropdown, Input, PanelCaption } from '@/components/ui';
 import type { TraceSettingsView } from '@/types/electron';
 import { Box, Notice, Row, Unread } from '@/components/Resources/bits';
-import { dayClockOf, dayOf, projectNameOf, reasonOf, sizeOf } from '@/lib/traces-format';
+import { BACK_OFFICE_COPY_MANY, dayClockOf, dayOf, projectNameOf, reasonOf, sizeOf } from '@/lib/traces-format';
 import { Meter, StateLine } from './bits';
 import { tracesApi, useTraceStats } from './hooks';
 import { ExportDialog } from './ExportDialog';
@@ -274,7 +274,7 @@ export function StorageView() {
       )}
       {dialog === 'delete-all' && stats && (
         <DialogShell onClose={closeDialog} width={560} title={`Delete ${stats.sessions} sessions?`}
-          subtitle={`Every recorded session, ${sizeOf(stats.bytes)}. The reader can no longer read them. This cannot be undone.`}
+          subtitle={`Every recorded session, ${sizeOf(stats.bytes)}. The reader can no longer read them. ${BACK_OFFICE_COPY_MANY} This cannot be undone.`}
           footerRight={<><Button onClick={closeDialog}>Cancel</Button><Button variant="danger" onClick={() => { void deleteAll(); }}>{`Delete ${stats.sessions} sessions`}</Button></>}>
           {removeError && <div data-remove-refused><StateLine word={`not deleted: ${removeError}. Delete ${stats.sessions} sessions tries again.`} tone="error" /></div>}
         </DialogShell>

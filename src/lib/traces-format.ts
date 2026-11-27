@@ -9,6 +9,15 @@ import type { StatusTone } from '@/components/ui';
 
 const pad = (n: number) => String(n).padStart(2, '0');
 
+/**
+ * What a delete does to a copy on the back-office (`Traces · states`, the delete dialogs). A session the user deletes
+ * that had been sent is owed a per-session delete, sent with sharing on or off, to the install it went to, while the
+ * back-office address is still that install's (a new install forgets it; trace-upload.ts). The window does not know
+ * whether a session was sent: the sentences hold that condition, and the address's.
+ */
+export const BACK_OFFICE_COPY_ONE = 'If it was sent to the back-office, Tars asks that back-office to delete its copy too, as long as the back-office address stays the same.';
+export const BACK_OFFICE_COPY_MANY = 'For those sent to the back-office, Tars asks that back-office to delete its copies too, as long as the back-office address stays the same.';
+
 /** 14:02 */
 export function clockOf(ms: number | string | undefined): string {
   if (ms === undefined) return '';

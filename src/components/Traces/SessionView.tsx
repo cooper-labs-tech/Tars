@@ -6,7 +6,7 @@ import type { TraceMessageView, TraceOutcome, TraceRequestView, TraceSessionSumm
 import { sizeOf as bytes } from '@/lib/traces-format';
 import { Unread } from '@/components/Resources/bits';
 import { fmtTokens } from '@/lib/usage-format';
-import { clockOf, clockSecondsOf, dayClockOf, durationOf, outcomeOf, outcomeWordsOf, projectNameOf, reasonOf } from '@/lib/traces-format';
+import { BACK_OFFICE_COPY_ONE, clockOf, clockSecondsOf, dayClockOf, durationOf, outcomeOf, outcomeWordsOf, projectNameOf, reasonOf } from '@/lib/traces-format';
 import { Fact, StateLine } from './bits';
 import { tracesApi } from './hooks';
 import { ExportDialog } from './ExportDialog';
@@ -181,7 +181,7 @@ export function SessionView({ traceId, onBack }: { traceId: string; onBack: () =
           onClose={closeDelete}
           width={560}
           title="Delete this session?"
-          subtitle={`${s.agentName ?? s.agentId}, ${dayClockOf(s.startedAt)}: ${s.turnCount} turns, ${s.requestCount} requests, ${bytes(s.bytes)}. The reader can no longer read it. This cannot be undone.`}
+          subtitle={`${s.agentName ?? s.agentId}, ${dayClockOf(s.startedAt)}: ${s.turnCount} turns, ${s.requestCount} requests, ${bytes(s.bytes)}. The reader can no longer read it. ${BACK_OFFICE_COPY_ONE} This cannot be undone.`}
           footerRight={<>
             <Button onClick={closeDelete}>Cancel</Button>
             <Button variant="danger" onClick={() => { void remove(); }}>Delete</Button>
