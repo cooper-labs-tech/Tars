@@ -25,7 +25,8 @@
 //   DELEGATE <agent id> <prompt>   calls Tars's delegate_task, through Tars's MCP server as this CLI starts it;
 //   SEND <agent id> <message>      calls send_message the same way;
 //   ECHO <word>                    answers "echo <word>";
-//   APPROVE <tag>                  asks for an approval, as this CLI asks, before it answers.
+//   APPROVE <tag>                  asks for an approval, as this CLI asks, before it answers;
+//   VERDICT <base64url JSON>       calls record_verdict with those arguments, as a gating agent does.
 // Every launch, typed line, turn, hook, tool call and answer is one JSON line in FAKE_CLI_LOG, with whether Tars's
 // agent token reached it or the MCP server, never a token or a key.
 import fs from 'node:fs';
@@ -460,7 +461,7 @@ export async function run() {
       hook('StopFailure', { error: 'authentication_failed', error_details: answer });
       return;
     }
-    const directive = /\b(DELEGATE|SEND|ECHO|APPROVE) (\S+)(?: (.+))?$/ms.exec(text);
+    const directive = /\b(DELEGATE|SEND|ECHO|APPROVE|VERDICT) (\S+)(?: (.+))?$/ms.exec(text);
     if (kind === 'qwen-code' && process.env.OPENAI_BASE_URL) answer = await modelTurn(text);
     else if (!directive) answer = 'ok';
     else if (directive[1] === 'ECHO') answer = `echo ${directive[2]}`;
@@ -468,6 +469,9 @@ export async function run() {
     else if (directive[1] === 'SEND') {
       const r = await callTars('send_message', { id: directive[2], message: (directive[3] ?? '').trim() });
       answer = `send_message ${r.isError ? 'refused' : 'sent'}: ${r.text.split('\n')[0]}`;
+    } else if (directive[1] === 'VERDICT') {
+      const r = await callTars('record_verdict', JSON.parse(Buffer.from(directive[2], 'base64url').toString('utf8')));
+      answer = `record_verdict ${r.isError ? 'refused' : 'recorded'}: ${r.text.split('\n')[0]}`;
     } else {
       const r = await callTars('delegate_task', { id: directive[2], prompt: (directive[3] ?? '').trim(), timeoutSeconds: Number(process.env.FAKE_DELEGATE_TIMEOUT_S) || 90 });
       answer = `delegate_task ${r.isError ? 'refused' : 'answered'}: ${r.text}`;
