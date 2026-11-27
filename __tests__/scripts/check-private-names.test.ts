@@ -56,6 +56,8 @@ import { spawnSync } from 'node:child_process';
  * 19. Over-correction: a hex run (`ff4747`, `deadbeef4747`), a colour behind
  *     `#` (`#ab4747`), or a code point or hex literal (`0x4747`, `䝇`,
  *     `U+4747`) is reported.
+ * 20. Over-correction: a group of a UUID that happens to be the number, or
+ *     the digits of a decimal fraction (`0.4747`), is reported.
  */
 
 const SCRIPT = path.join(__dirname, '../../scripts/check-private-names.mjs');
@@ -333,6 +335,16 @@ describe('check:names', () => {
   it('19. an all-digit entry inside a hex run, behind #, or in a code point or hex literal is no match', () => {
     const t = tree({
       'src/hex.ts': [`const a = 'ff${N}';`, `const b = 'deadbeef${N}';`, `const c = '#ab${N}';`, `const d = 0x${N};`, `const e = '\\u${N}';`, `// U+${N} is a code point`, ''].join('\n'),
+    });
+
+    const r = check(t, { TARS_PRIVATE_NAMES: names(t, [N]) });
+
+    expect(r.status, r.out).toBe(0);
+  });
+
+  it('20. an all-digit entry that is a UUID group or the digits of a decimal fraction is no match', () => {
+    const t = tree({
+      'src/ids.ts': [`const id = '3f2a9c1e-${N}-4abc-9def-0123456789ab';`, `const spec = 'rgbi:0.${N}/0.5/0.5';`, `const ratio = 2.${N};`, ''].join('\n'),
     });
 
     const r = check(t, { TARS_PRIVATE_NAMES: names(t, [N]) });
