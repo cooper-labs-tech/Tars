@@ -104,8 +104,11 @@ process.exit(1);
       const req = process.mainModule!.require;
       return new Function('req', 'dist', 'arg', fn)(req, dist, arg);
     }, { fn, arg, dist }) as Promise<T>;
+    // An answer, or what was thrown (on a build without the channel), so each assertion below is witnessed either way.
     const load = <T>(name: string, ...args: unknown[]) =>
-      page.evaluate(({ name, args }) => ((window as unknown as Api).electronAPI.load[name])(...args), { name, args }) as Promise<T>;
+      page.evaluate(async ({ name, args }) => {
+        try { return await ((window as unknown as Api).electronAPI.load[name])(...args); } catch (err) { return { thrown: String(err) }; }
+      }, { name, args }) as Promise<T>;
 
     // 1. The owner's grants, from the window.
     const granted = await Promise.all([pub.path, priv.path].map(p => load<Row>('grant', { path: p, allowedByName: false, endpointId: EP, model: 'open-coder-1', harnesses: ['codex', 'qwen-code'] })));
@@ -160,10 +163,11 @@ process.exit(1);
     expect.soft(stale.state?.proposal?.sha256, 'the card again, with the new hash').toBe(sha(fs.readFileSync(tasksFile)));
 
     // 5. Approved, a value changed: the snapshot is the bytes approved.
-    const p2 = stale.state!.proposal! as Row;
+    const p2 = (stale.state?.proposal ?? {}) as Row;
     const approvedBytes = fs.readFileSync(tasksFile);
     const approved = await load<Row>('approve', { pool: 'e2e-pool', sha256: p2.sha256, proposalId: p2.id, window: { seed: 99 } });
     save('approve-2.json', approved);
+    keep({ approved });
     expect(approved.ok, `the approval: ${JSON.stringify(approved)}`).toBe(true);
     const runId = String(approved.runId);
     fs.writeFileSync(tasksFile, 'edited after the approval\n');
