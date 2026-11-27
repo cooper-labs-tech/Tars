@@ -143,8 +143,24 @@ export async function checkForUpdates() {
   }
 }
 
-export function downloadUpdate() {
-  return autoUpdater.downloadUpdate();
+/**
+ * Download the update the last check found (app:downloadUpdate).
+ *
+ * A download that fails (the network, GitHub refusing the asset, no check
+ * yet) is a refusal with its reason, never a throw: the window calls this
+ * without awaiting it, so a rejection was an unhandled error on its console
+ * and the banner stayed on "Downloading". Only the first line of the updater's
+ * message: electron-updater's HttpError carries the request and the response's
+ * headers on the lines after it.
+ */
+export async function downloadUpdate(): Promise<{ success: true } | { success: false; error: string }> {
+  try {
+    await autoUpdater.downloadUpdate();
+    return { success: true };
+  } catch (err) {
+    const first = (err instanceof Error ? err.message : String(err)).split('\n')[0].trim().slice(0, 200);
+    return { success: false, error: `Tars could not download the update: ${first}` };
+  }
 }
 
 /**

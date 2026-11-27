@@ -2702,7 +2702,8 @@ export interface ElectronAPI {
   // Updates
   updates?: {
     check: () => Promise<{ devMode?: boolean; error?: boolean; fallback?: boolean; currentVersion?: string } | null>;
-    download: () => Promise<unknown>;
+    /** A failed download (the network, GitHub refusing the asset, no check yet) answers why, never a throw. */
+    download: () => Promise<{ success: true } | { success: false; error: string }>;
     quitAndInstall: () => Promise<{ started: boolean; error?: string }>;
     openExternal: (url: string) => Promise<{ success: boolean }>;
     onUpdateAvailable: (callback: (info: {

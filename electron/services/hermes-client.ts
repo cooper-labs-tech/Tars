@@ -212,6 +212,63 @@ export function hasHermesSession(baseUrl: string): boolean {
   return false;
 }
 
+/**
+ * The errors hermesRequest rejected with because the gateway gave no answer
+ * (nothing listening, no answer in time, an answer that is not HTTP, a
+ * connection cut, a URL it cannot call), with the gateway each one concerns,
+ * and the wait for its own timeout. Their messages are left as they are: the
+ * Kanban board (describeHermesFailure), the agents' kanban (kanban-board.ts)
+ * and the probe read the transport's own words.
+ */
+const unanswered = new WeakMap<object, { baseUrl: string; waitedMs?: number }>();
+
+function noAnswer(err: unknown, baseUrl: string, waitedMs?: number): unknown {
+  if (err && typeof err === 'object') unanswered.set(err, { baseUrl, waitedMs });
+  return err;
+}
+
+/**
+ * What the window shows for a call the gateway gave no answer to: the gateway's
+ * address, never its user name, password or query, and the reason. Undefined
+ * for any other error, which is not the network's and is not dressed as such.
+ */
+export function noAnswerSentence(err: unknown): string | undefined {
+  const seen = err && typeof err === 'object' ? unanswered.get(err) : undefined;
+  if (!seen) return undefined;
+  let where: string;
+  try {
+    const url = new URL(seen.baseUrl);
+    where = `${url.protocol}//${url.host}${url.pathname.replace(/\/+$/, '')}`;
+  } catch {
+    // Not quoted: whatever was saved there may be a token pasted in the wrong field.
+    return 'Tars could not reach Hermes: the gateway URL saved in Settings, Hermes is not one it can call.';
+  }
+  const { message, code } = err as { message?: unknown; code?: unknown };
+  const said = typeof message === 'string' ? message : String(err);
+  const reason = seen.waitedMs !== undefined
+    ? `no answer within ${Math.round(seen.waitedMs / 1000)} s`
+    : typeof code === 'string' && code.startsWith('HPE_')
+      ? `its answer is not HTTP (${said})`
+      : said;
+  return `Tars could not reach Hermes at ${where}: ${reason.replace(/\s+/g, ' ').trim().slice(0, 200)}`;
+}
+
+/**
+ * A call to the gateway for a window that reads `{ success: false, error }`: a
+ * call that got no answer is that refusal, never a throw through IPC, which
+ * Electron hands the page as "Error invoking remote method ..." (Schedules,
+ * 27/11). Any other failure still throws.
+ */
+export async function reachingHermes<T>(call: () => Promise<T>): Promise<T | { success: false; error: string }> {
+  try {
+    return await call();
+  } catch (err) {
+    const error = noAnswerSentence(err);
+    if (error === undefined) throw err;
+    return { success: false, error };
+  }
+}
+
 export function hermesRequest(
   baseUrl: string,
   pathname: string,
@@ -220,7 +277,7 @@ export function hermesRequest(
   const { method = 'GET', body, token, timeoutMs = 10000 } = options;
   return new Promise((resolve, reject) => {
     let target: URL;
-    try { target = new URL(baseUrl + pathname); } catch { reject(new Error('Invalid gateway URL')); return; }
+    try { target = new URL(baseUrl + pathname); } catch { reject(noAnswer(new Error('Invalid gateway URL'), baseUrl)); return; }
 
     const payload = body === undefined ? undefined : JSON.stringify(body);
     const headers: Record<string, string> = { Accept: 'application/json' };
@@ -233,19 +290,26 @@ export function hermesRequest(
     if (cookie) headers['Cookie'] = cookie;
 
     const mod = target.protocol === 'https:' ? https : http;
-    const req = mod.request(target, { method, headers, timeout: timeoutMs }, res => {
-      let raw = '';
-      res.on('data', c => { raw += c; });
-      res.on('end', () => {
-        const setCookies = (res.headers['set-cookie'] as string[] | undefined) ?? [];
-        if (setCookies.length) storeCookies(baseUrl, setCookies);
-        let parsed: unknown = raw;
-        try { parsed = JSON.parse(raw); } catch { /* keep raw */ }
-        resolve({ status: res.statusCode ?? 0, body: parsed, setCookies });
+    let req: http.ClientRequest;
+    try {
+      req = mod.request(target, { method, headers, timeout: timeoutMs }, res => {
+        let raw = '';
+        res.on('data', c => { raw += c; });
+        res.on('end', () => {
+          const setCookies = (res.headers['set-cookie'] as string[] | undefined) ?? [];
+          if (setCookies.length) storeCookies(baseUrl, setCookies);
+          let parsed: unknown = raw;
+          try { parsed = JSON.parse(raw); } catch { /* keep raw */ }
+          resolve({ status: res.statusCode ?? 0, body: parsed, setCookies });
+        });
       });
-    });
-    req.on('error', reject);
-    req.on('timeout', () => { req.destroy(); reject(new Error('timeout')); });
+    } catch (err) {
+      // A request Node will not make (a scheme it cannot call, a header it will not send): no answer either.
+      reject(noAnswer(err, baseUrl));
+      return;
+    }
+    req.on('error', err => reject(noAnswer(err, baseUrl)));
+    req.on('timeout', () => { req.destroy(); reject(noAnswer(new Error('timeout'), baseUrl, timeoutMs)); });
     if (payload) req.write(payload);
     req.end();
   });

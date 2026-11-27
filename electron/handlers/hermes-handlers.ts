@@ -58,6 +58,7 @@ import {
   fetchHermesMcpServers,
   fetchHermesMemoryProviders,
   setHermesMemoryProvider,
+  reachingHermes,
 } from '../services/hermes-client';
 import {
   HermesConnection,
@@ -103,12 +104,20 @@ function keepToken(incoming: HermesConnection, kept: string | undefined): Hermes
  * port for a file that is missing or broken (configuredHermesConnection), which
  * on JeanBrasse's machine is the SSH tunnel to his Hermes. The Settings form still
  * shows the default, to be saved (hermes:connection:get).
+ *
+ * A gateway that gives no answer is a refusal with its reason (reachingHermes),
+ * as one not configured or unusable is: it was a throw through IPC, which the Schedules page showed
+ * as Electron's "Error invoking remote method 'hermes:crons:list'" (27/11).
+ * `'rejects'` keeps the throw, for the one page that reads it.
  */
-async function viaGateway<T>(call: (conn: HermesConnection) => Promise<T>): Promise<T | { success: false; error: string }> {
+async function viaGateway<T>(
+  call: (conn: HermesConnection) => Promise<T>,
+  unanswered: 'refused' | 'rejects' = 'refused',
+): Promise<T | { success: false; error: string }> {
   const configured = configuredHermesConnection();
   if (!configured) return { success: false, error: 'Hermes is not configured. Set it up in Settings.' };
   if ('unusable' in configured) return { success: false, error: configured.unusable };
-  return call(configured.conn);
+  return unanswered === 'rejects' ? call(configured.conn) : reachingHermes(() => call(configured.conn));
 }
 
 /**
@@ -488,8 +497,11 @@ export function registerHermesHandlers(): void {
     viaGateway(conn => deleteHermesCron(conn, params.jobId, params.profile)));
 
   // ── Kanban (the board lives in Hermes; Tars is a client) ──
+  // The board alone still rejects when the gateway gives no answer: HermesBoard
+  // reads the rejection, the transport's own words, and says which gateway went
+  // silent and how (describeHermesFailure).
   ipcMain.handle('hermes:kanban:board', async (_event, params: { board?: string } = {}) => {
-    return viaGateway(conn => fetchHermesBoard(conn, params?.board));
+    return viaGateway(conn => fetchHermesBoard(conn, params?.board), 'rejects');
   });
 
   ipcMain.handle('hermes:kanban:createTask', async (_event, task: Record<string, unknown>) => {
