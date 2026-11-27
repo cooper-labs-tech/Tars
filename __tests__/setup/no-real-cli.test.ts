@@ -36,6 +36,10 @@ import { realBinary, programOfLine, startedPrograms, narrowRootsForTest, takeVio
  * G11. (the Audit's I-5 on #616) Any value opts in: TARS_REAL_CLAUDE=0, `false` or an empty one count as asked. Only
  *     `1` or an absolute path to the binary opt in, for TARS_REAL_CLAUDE and for each name of TARS_TEST_REAL_CLIS
  *     (`codex`, `codex=1`, `codex=/path/to/codex`); a path lets that binary through, and no other of its name.
+ * And from the Audit's read of QA's #671 (27/11), after a unit test started the owner's real Hermes twice:
+ * G12. hermes, and cline, the two CLIs Tars runs that the list lacked, go through: refused by neither the judge nor a
+ *     launcher. The case below offers each to execFile as a stand-in of its name, so a red run starts the stand-in
+ *     alone, never a real binary.
  */
 
 const files = (...present: string[]) => (p: string) => present.includes(p);
@@ -69,7 +73,7 @@ describe('which binary is a real one', () => {
     expect(realBinary('claude', '/usr/bin:/bin', ['/tmp/run'], files(), 'linux')).toBeNull();
   });
 
-  it.each(['codex', 'gemini', 'kimi', 'opencode', 'pi', 'kilo', 'qwen', 'grok', 'amp', 'goose'])('G7. %s, in any case and in its Windows forms', (name) => {
+  it.each(['codex', 'gemini', 'kimi', 'opencode', 'pi', 'kilo', 'qwen', 'grok', 'amp', 'goose', 'hermes', 'cline'])('G7, G12. %s, in any case and in its Windows forms', (name) => {
     const roots = ['/tmp/run'];
     const posix = `/home/me/.local/bin/${name}`;
     expect(realBinary(posix, undefined, roots, files(posix), 'linux'), name).toBe(posix);
@@ -152,6 +156,26 @@ describe('in the suite', () => {
       await new Promise(resolve => setTimeout(resolve, 300));
       expect(fs.existsSync(ran), 'the binary ran').toBe(false);
       expect(takeViolations().map(v => v.binary)).toEqual([fs.realpathSync(bin), fs.realpathSync(bin)]);
+    } finally {
+      narrowRootsForTest(null);
+      fs.rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  it.each(['hermes', 'cline'])('G12. %s offered to a launcher is refused, not started', async (name) => {
+    // A "real" one: a stand-in of that name, which only marks that it ran, the test's folders taken off the list.
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'tars-no-real-cli-'));
+    const bin = path.join(dir, process.platform === 'win32' ? `${name}.cmd` : name);
+    const ran = path.join(dir, 'ran');
+    fs.writeFileSync(bin, process.platform === 'win32' ? `@echo off\r\necho x> "${ran}"\r\n` : `#!/bin/sh\n: > '${ran}'\n`, { mode: 0o755 });
+    try {
+      narrowRootsForTest([]);
+      let refused: unknown = null;
+      try { execFile(bin, ['status'], () => {}); } catch (err) { refused = err; }
+      await new Promise(resolve => setTimeout(resolve, 300));
+      expect(String(refused), `${name} was not refused`).toMatch(new RegExp(`real ${name}`));
+      expect(fs.existsSync(ran), 'the stand-in ran').toBe(false);
+      expect(takeViolations().map(v => v.binary)).toEqual([fs.realpathSync(bin)]);
     } finally {
       narrowRootsForTest(null);
       fs.rmSync(dir, { recursive: true, force: true });
