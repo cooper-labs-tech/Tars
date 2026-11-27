@@ -112,6 +112,7 @@ CLAUDE_CODE_TMPDIR    # ~/.tars/tmp/<short id>/c, where Claude Code keeps the ag
 TARS_ENDPOINT_TOKEN   # an agent on an inference endpoint: its terminal's token for the endpoint proxy (API_PORT + 2), minted with the terminal, never the endpoint's key (qwen-code gets it as OPENAI_API_KEY, with OPENAI_BASE_URL and OPENAI_MODEL; opencode its provider in OPENCODE_CONFIG_CONTENT). SECURITY.md § 9
 TARS_CHATS_READ       # '1' for an agent that runs a chat, started while chatsReadEachOther is on: mcp-orchestrator then registers chat_list
 HERMES_HOME           # a Hermes agent: its profile in Tars's own Hermes home, ~/.tars/hermes/profiles/<agent id>, on the line (macOS, Linux) and in the terminal's environment; its two tokens are in that profile's 0600 .env, none in its terminal (SECURITY.md § 10)
+AWS_EC2_METADATA_DISABLED # a Hermes agent: 'true', beside HERMES_HOME: the AWS SDK inside Hermes asks the cloud metadata address for credentials otherwise (SECURITY.md § 10)
 ```
 
 ---

@@ -135,15 +135,52 @@ const GUARDS = {
   // (openrouter.ai). With these two, a chat and a minute of its gateway idling reached no host but the proxy.
   model_catalog: { enabled: false },
   plugins: { auto_update_check_hours: 0 },
+  // The first start still asked two more (27/11, the real binary, then the bench's stack traces): the default plugins
+  // step fetches the plugin catalog (hermes-agent.nousresearch.com) and the plugins' sources (github.com). Lazy
+  // installs off stops it; the first sync of the home still runs (measured on the installed binary).
+  security: { allow_lazy_installs: false },
 };
 
-/** The root's config: the gateway's own settings, which every profile's sessions run under. */
-export function hermesRootConfig(): string {
-  return HEADER + yamlMap({ gateway: { multiplex_profiles: true }, ...GUARDS });
+/**
+ * The origin of Tars's proxy, which a profile's base URL must be: a profile only ever talks to Tars on the loopback,
+ * so neither an endpoint's own address nor a lookup of Hermes's reaches another host through it.
+ */
+function proxyOrigin(baseUrl: string): string {
+  let url: URL;
+  try { url = new URL(baseUrl); } catch { throw new Error('A Hermes profile talks to Tars\'s proxy only, and this base URL is not one.'); }
+  if ((url.protocol !== 'http:' && url.protocol !== 'https:') || !['127.0.0.1', 'localhost', '[::1]'].includes(url.hostname)) {
+    throw new Error('A Hermes profile talks to Tars\'s proxy on the loopback only.');
+  }
+  return url.origin;
+}
+
+/**
+ * What both configs say besides the guards. models.dev's registry is fetched by the model picker's warm-up at every
+ * interactive start, which no setting turns off; its URL is the one thing Hermes lets a config change
+ * (`models_dev.url`), so it goes to the proxy, which answers it 401 without forwarding anything.
+ */
+function lookupsAt(baseUrl: string) {
+  return { models_dev: { url: `${proxyOrigin(baseUrl)}/models-dev` } };
+}
+
+/**
+ * The root's config: the gateway's own settings, which every profile's sessions run under. It names the custom
+ * provider at the proxy, as each profile does: the gateway resolves its own home's provider as it starts, and with
+ * none named it walks the auto chain down to the AWS SDK, which asks the cloud metadata address (measured 27/11). It
+ * names no model and holds no key.
+ */
+export function hermesRootConfig(baseUrl: string): string {
+  return HEADER + yamlMap({
+    gateway: { multiplex_profiles: true },
+    model: { provider: 'custom', base_url: baseUrl },
+    ...GUARDS,
+    ...lookupsAt(baseUrl),
+  });
 }
 
 /** One agent's config: its endpoint, the guards, its approvals and Tars's MCP servers. */
 export function hermesProfileConfig(spec: HermesProfileSpec): string {
+  const lookups = lookupsAt(spec.baseUrl);
   const servers: { [name: string]: Yaml } = {};
   for (const [name, server] of Object.entries(spec.mcpServers)) {
     const env: { [name: string]: string } = {};
@@ -156,6 +193,7 @@ export function hermesProfileConfig(spec: HermesProfileSpec): string {
   return HEADER + yamlMap({
     model: { provider: 'custom', base_url: spec.baseUrl, default: spec.model },
     ...GUARDS,
+    ...lookups,
     approvals: { mode: approvalsModeFor(spec.permissionMode) },
     mcp_servers: servers,
   });
@@ -173,6 +211,7 @@ export function hermesEnvText(secrets: HermesSecrets): string {
     const value = secrets[name];
     if (value === undefined) continue;
     if (!ENV_VALUE.test(value)) throw new Error(`${name} is not a value a Hermes .env can hold as it is`);
+    if (name === 'OPENAI_BASE_URL') proxyOrigin(value);
     out += `${name}=${value}\n`;
   }
   return out;
@@ -184,11 +223,14 @@ export function hermesEnvText(secrets: HermesSecrets): string {
  */
 export function writeHermesProfile(root: string, agentId: string, spec: HermesProfileSpec, secrets: HermesSecrets): void {
   const dir = hermesProfileDir(root, agentId);
+  // Every text checked before anything is written: a refused one writes nothing.
+  const rootText = hermesRootConfig(spec.baseUrl);
+  const profileText = hermesProfileConfig(spec);
   const envText = hermesEnvText(secrets);
   removeHermesSecrets(root, agentId);
   fs.mkdirSync(dir, { recursive: true, mode: 0o700 });
-  writeAtomicSync(path.join(root, 'config.yaml'), hermesRootConfig());
-  writeAtomicSync(path.join(dir, 'config.yaml'), hermesProfileConfig(spec));
+  writeAtomicSync(path.join(root, 'config.yaml'), rootText);
+  writeAtomicSync(path.join(dir, 'config.yaml'), profileText);
   writeSecretFileSync(path.join(dir, '.env'), envText);
 }
 

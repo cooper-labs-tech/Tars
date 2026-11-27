@@ -227,10 +227,33 @@ async function hermesAgents(real: string | undefined): Promise<void> {
       expect.soft(of(B)?.agentVar, "B's tool had A's agent id").not.toBe(A);
       expect.soft(of(B)?.tmp && of(A)?.tmp && of(B)!.tmp === of(A)!.tmp, "B's tool had A's temporary folder").toBeFalsy();
       await page.screenshot({ path: test.info().outputPath('real-hermes-agent.png') });
+      // Its gateway stopped when the last Hermes terminal ends: A stopped, it stays for B; B stopped, it goes.
+      await call('agent', 'stop', A);
+      await sleep(5_000);
+      const afterA = alive(record.pid);
+      await call('agent', 'stop', B);
+      await expect.poll(() => alive(record.pid), { timeout: 30_000 }).toBe(false);
+      // And at quit: A started again starts a gateway again, which the quit stops.
+      await call('agent', 'start', { id: A, prompt: '' });
+      await expect.poll(async () => (((await call('agent', 'get', A)) as { output?: string[] } | null)?.output?.join('') ?? '').includes('❯'), { timeout: 120_000, intervals: [2_000] }).toBe(true);
+      // A new gateway: its record names a live pid other than the first one's.
+      const newGateway = () => { try { const p = JSON.parse(fs.readFileSync(path.join(hermesRoot, 'gateway.pid'), 'utf8')).pid; return typeof p === 'number' && p !== record.pid && alive(p) ? p : 0; } catch { return 0; } };
+      await expect.poll(newGateway, { timeout: 60_000 }).toBeGreaterThan(0);
+      const recordAgain = { pid: newGateway() };
+      const againBefore = alive(recordAgain.pid);
       await app.close();
       app = undefined;
-      await expect.poll(() => alive(record.pid), { timeout: 30_000 }).toBe(false);
-      keep({ real, done, envNames: Object.keys(env[A]).sort(), record, gatewayBefore, leftAtQuit: fs.existsSync(path.join(profile(A), '.env')) });
+      await expect.poll(() => alive(recordAgain.pid), { timeout: 30_000 }).toBe(false);
+      // What reached the logging proxy, when the runner names its log: PyPI only, and nothing refused.
+      const proxyLog = process.env.TARS_HARNESS_HERMES_PROXY_LOG;
+      const outsideHosts = proxyLog && fs.existsSync(proxyLog)
+        ? fs.readFileSync(proxyLog, 'utf8').trim().split('\n').filter(Boolean).map(l => JSON.parse(l) as { host?: string; refused?: string; url?: string })
+          .filter(e => e.refused || !['pypi.org', 'files.pythonhosted.org'].includes(e.host ?? '')).map(e => `${e.refused ?? 'tunnel'} ${e.host ?? e.url ?? ''}`)
+        : null;
+      keep({ real, done, envNames: Object.keys(env[A]).sort(), record, gatewayBefore, afterA, recordAgain, againBefore, outsideHosts, leftAtQuit: fs.existsSync(path.join(profile(A), '.env')) });
+      expect.soft(afterA, 'the gateway with B\'s terminal still open').toBe(true);
+      expect.soft(againBefore, 'a gateway again for A restarted').toBe(true);
+      if (outsideHosts) expect.soft(outsideHosts, 'requests outside PyPI, or refused').toEqual([]);
       expect.soft(done[A].text, "A's answer").toContain(`PROBE-OK ${standin.marker}`);
       expect.soft(Object.keys(env[A]).sort(), "A's .env names").toEqual(['CLAUDE_MGR_API_TOKEN', 'OPENAI_API_KEY', 'OPENAI_BASE_URL']);
       expect.soft(fs.existsSync(path.join(profile(A), 'state.db')), "A's state.db in its profile").toBe(true);
@@ -262,10 +285,12 @@ async function hermesAgents(real: string | undefined): Promise<void> {
       // 1 to 3.
       expect.soft(l, `${name}'s Hermes was started`).toBeTruthy();
       expect.soft(l?.source, `${name}'s sessions are tagged`).toBe('tool');
-      expect.soft(l?.terminal, `${name}'s terminal holds a token or an OpenAI variable`).toEqual({ token: false, endpointToken: false, openaiKey: false, openaiBase: false });
+      expect.soft(l?.terminal, `${name}'s terminal holds a token or an OpenAI variable, or leaves the cloud metadata lookup on`).toEqual({ token: false, endpointToken: false, openaiKey: false, openaiBase: false, awsMetadataOff: true });
       expect.soft(l?.scope, `${name}'s .env names`).toEqual(['CLAUDE_MGR_API_TOKEN', 'OPENAI_API_KEY', 'OPENAI_BASE_URL']);
       expect.soft(l?.envMode, `${name}'s .env mode`).toBe('600');
-      expect.soft(l?.guards, `${name}'s config guards`).toMatchObject({ telemetry: true, adoptLogins: true, updates: true, modelCatalog: true, pluginChecks: true });
+      expect.soft(l?.guards, `${name}'s config guards`).toMatchObject({ telemetry: true, adoptLogins: true, updates: true, modelCatalog: true, pluginChecks: true, lazyInstallsOff: true, modelsDevLocal: true });
+      // The root the gateway resolves its own provider from (the first real start's metadata calls, 27/11).
+      expect.soft((l as { root?: unknown } | undefined)?.root, 'the root\'s provider and lookups').toEqual({ customProvider: true, lazyInstallsOff: true, modelsDevLocal: true });
       expect.soft(startOf(id)?.question ?? null, `a question on ${name}'s screen`).toBeNull();
       // 4.
       const own = env[id].OPENAI_API_KEY;

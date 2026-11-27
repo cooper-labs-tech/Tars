@@ -43,6 +43,15 @@ import {
  *    for another, and Tars's own gateway is left running. And the reverse, once paths are resolved: the home itself
  *    made a symlink to another home (an agent can write in ~/.tars), or a profile made one, lets that home's gateway,
  *    the user's own, pass for Tars's.
+ * 14. (The real binary's first start and the bench's traces, 27/11.) Hermes still asks outside hosts at its start:
+ *    - the gateway resolves its own home's provider, and a root config naming none walks the auto chain down to
+ *      boto3, which asks the cloud metadata address, 169.254.169.254 (auth.py resolve_provider);
+ *    - the model picker's warm-up fetches models.dev's registry at every interactive start, with no switch but the
+ *      `models_dev.url` override (cli_tui_runtime_mixin.py, model_switch_providers.py, models_dev.py);
+ *    - the default plugins step fetches the plugin catalog (hermes-agent.nousresearch.com) and the plugins' sources
+ *      (github.com), unless `security.allow_lazy_installs` is false, which leaves the first sync alone (measured).
+ *    And a profile pointed off the loopback would send its endpoint's address, or models.dev's lookups, elsewhere
+ *    than Tars's proxy.
  */
 
 let tmp: string;
@@ -100,7 +109,7 @@ describe('the .env', () => {
 
 describe('the configs', () => {
   it('5: the root multiplexes its profiles, asks nothing, adopts no login and checks no update', () => {
-    const root = hermesRootConfig();
+    const root = hermesRootConfig(PROXY);
     expect(root).toMatch(/^gateway:\n {2}multiplex_profiles: true$/m);
     expect(root).toMatch(/^auth:\n {2}adopt_external_logins: false$/m);
     expect(root).toMatch(/^updates:\n {2}check: false$/m);
@@ -121,6 +130,31 @@ describe('the configs', () => {
     expect(text).toContain('CLAUDE_AGENT_ID: "agent-a"');
     // A token handed in the values by mistake is not written either.
     expect(hermesProfileConfig(spec({ mcpValues: { CLAUDE_MGR_API_TOKEN: 'tok-leak', CLAUDE_AGENT_ID: 'agent-a' } }))).not.toContain('tok-leak');
+  });
+
+  it('14: the root names the custom provider at the proxy, so the gateway never walks the auto chain to the cloud', () => {
+    expect(hermesRootConfig(PROXY)).toContain(`model:\n  provider: "custom"\n  base_url: "${PROXY}"\n`);
+  });
+
+  it('14: both configs turn lazy installs off and send models.dev\'s lookups to the proxy\'s own origin only', () => {
+    for (const text of [hermesRootConfig(PROXY), hermesProfileConfig(spec())]) {
+      expect(text).toMatch(/^security:\n {2}allow_lazy_installs: false$/m);
+      expect(text).toMatch(/^models_dev:\n {2}url: "http:\/\/127\.0\.0\.1:31417\/models-dev"$/m);
+      expect(text).not.toContain('models.dev/');
+    }
+    for (const base of ['http://localhost:31417/v1', 'http://[::1]:31417/v1']) {
+      expect(hermesProfileConfig(spec({ baseUrl: base }))).toContain(`url: "${new URL(base).origin}/models-dev"`);
+    }
+  });
+
+  it('14: a base URL off the loopback is refused, for the root and for a profile', () => {
+    for (const base of ['https://inference.example.com/v1', 'http://10.0.0.5:8000/v1', 'not a url', 'file:///tmp/x']) {
+      expect(() => hermesRootConfig(base), base).toThrow();
+      expect(() => hermesProfileConfig(spec({ baseUrl: base })), base).toThrow();
+      expect(() => writeHermesProfile(root, 'agent-a', spec({ baseUrl: base }), secretsA), base).toThrow();
+      if (!base.includes(' ')) expect(() => hermesEnvText({ ...secretsA, OPENAI_BASE_URL: base }), `.env ${base}`).toThrow();
+    }
+    expect(fs.existsSync(root)).toBe(false);
   });
 
   it('7: the approvals follow the permission mode', () => {

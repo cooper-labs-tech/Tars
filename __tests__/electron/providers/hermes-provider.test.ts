@@ -21,6 +21,9 @@ import { execFileSync } from 'node:child_process';
  * 7. The sessions are not tagged `tool` (Hermes refuses `--source tars`), so they show in the user's own lists.
  * 8. A resumed session id that is not one of Hermes's reaches the line.
  * 9. Its MCP servers are written into a config of the user's, or registered with a token's value.
+ * 10. (Measured 27/11.) The AWS SDK inside Hermes asks the cloud metadata address, 169.254.169.254, for credentials
+ *    when nothing stops it: AWS_EC2_METADATA_DISABLED=true must reach Hermes, on the line where an rc file exporting
+ *    another value cannot undo it (macOS, Linux), and in the terminal's environment (Windows).
  */
 
 const AGENT = 'agent-hermes-1';
@@ -42,16 +45,16 @@ beforeEach(() => {
   tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'hermes-provider-'));
   // Stands in for the binary: prints its arguments, then what it got of the variables at stake, as JSON.
   printer = path.join(tmp, 'hermes');
-  fs.writeFileSync(printer, `#!${process.execPath}\nconsole.log(JSON.stringify({ argv: process.argv.slice(2), home: process.env.HERMES_HOME ?? null, key: process.env.OPENAI_API_KEY ?? null, base: process.env.OPENAI_BASE_URL ?? null }));\n`, { mode: 0o755 });
+  fs.writeFileSync(printer, `#!${process.execPath}\nconsole.log(JSON.stringify({ argv: process.argv.slice(2), home: process.env.HERMES_HOME ?? null, key: process.env.OPENAI_API_KEY ?? null, base: process.env.OPENAI_BASE_URL ?? null, aws: process.env.AWS_EC2_METADATA_DISABLED ?? null }));\n`, { mode: 0o755 });
 });
 afterEach(() => fs.rmSync(tmp, { recursive: true, force: true }));
 
 const line = (over: Record<string, unknown> = {}) => hermes().buildInteractiveCommand({ agentId: AGENT, binaryPath: printer, prompt: '', ...over } as never);
 
 /** Runs the line as a login shell of the user would, with an rc file that exports its own values first. */
-function reached(command: string): { argv: string[]; home: string | null; key: string | null; base: string | null } {
+function reached(command: string): { argv: string[]; home: string | null; key: string | null; base: string | null; aws: string | null } {
   const rc = path.join(tmp, 'rc.sh');
-  fs.writeFileSync(rc, 'export HERMES_HOME="$HOME/.hermes"\nexport OPENAI_API_KEY=sk-user-own\nexport OPENAI_BASE_URL=https://api.openai.com/v1\n');
+  fs.writeFileSync(rc, 'export HERMES_HOME="$HOME/.hermes"\nexport OPENAI_API_KEY=sk-user-own\nexport OPENAI_BASE_URL=https://api.openai.com/v1\nexport AWS_EC2_METADATA_DISABLED=false\n');
   const out = execFileSync('/bin/bash', ['-c', `. '${rc}'; ${command}`], { encoding: 'utf8', env: { ...process.env, OPENAI_API_KEY: 'sk-env' } });
   return JSON.parse(out.trim().split('\n').pop()!);
 }
@@ -63,6 +66,11 @@ describe.skipIf(process.platform === 'win32')('the line on macOS and Linux', () 
     expect(r.home!.startsWith(path.join(DATA_DIR, 'hermes'))).toBe(true);
     expect(r.key).toBeNull();
     expect(r.base).toBeNull();
+  });
+
+  it('10: the cloud metadata lookup is off on the line, whatever an rc file exports', () => {
+    expect(reached(line()).aws).toBe('true');
+    expect(reached(line({ prompt: 'do it', permissionMode: 'bypass' })).aws).toBe('true');
   });
 
   it('5 and 7: chat, tagged tool, the model, and the task as one argument the shell does not run', () => {
@@ -103,6 +111,7 @@ describe('on every platform', () => {
     const env = hermes().getPtyEnvVars(AGENT, '/p', [], undefined as never);
     expect(env.HERMES_HOME).toBe(hermesProfileDir(hermesRoot(), AGENT));
     expect(env.CLAUDE_AGENT_ID).toBe(AGENT);
+    expect(env.AWS_EC2_METADATA_DISABLED, '10 on Windows').toBe('true');
     expect(hermes().getEnvVarsToDelete()).toEqual(expect.arrayContaining(['OPENAI_API_KEY', 'OPENAI_BASE_URL', 'CLAUDE_MGR_API_TOKEN', 'TARS_ENDPOINT_TOKEN']));
   });
 

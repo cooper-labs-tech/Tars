@@ -1316,10 +1316,23 @@ profile of that home, `~/.tars/hermes/profiles/<agent id>` (`services/hermes-hom
   (its plugin catalog), `raw.githubusercontent.com` (its model catalog) and `openrouter.ai` (a model capability list).
 - With `model_catalog.enabled: false` and `plugins.auto_update_check_hours: 0` as well, a chat and a minute of the
   gateway idling reached no host but the proxy, on the bench.
-- Through the real app (27/11, a logging proxy refusing every host but PyPI), the first start still asked for three:
-  `hermes-agent.nousresearch.com` once, `models.dev` once (the endpoint model's metadata), and the link-local address
-  `169.254.169.254` six times over plain HTTP (the AWS SDK's credential lookup, as Hermes picks its auxiliary model),
-  which answers nothing on a desktop. All three were refused there; no switch Tars sets covers them yet.
+- Through the real app (27/11, a logging proxy refusing every host but PyPI), an interactive first start still asked
+  for three more, each traced to its caller on the bench (Hermes's own code, its packages cloned, no download):
+  - `169.254.169.254`, the cloud metadata address, six times: the gateway resolves its own home's provider as it
+    starts, and Tars's root config named none, so it walked Hermes's auto chain down to the AWS SDK. The root now names
+    the custom provider at the proxy, and `AWS_EC2_METADATA_DISABLED=true` is set for Hermes on the line (and in the
+    terminal's environment on Windows);
+  - `models.dev`: the model picker's warm-up fetches its registry at every interactive start, and no setting turns the
+    warm-up off. Its URL can be changed (`models_dev.url`), so both configs point it at the proxy's own address, which
+    answers 401 and forwards nothing;
+  - `hermes-agent.nousresearch.com`, then `github.com`: the default plugins step fetches the plugin catalog, then the
+    plugins. `security.allow_lazy_installs: false` stops it; the home's first package sync still runs (measured on the
+    installed binary, both ways, with no network).
+- With those, the bench's interactive start, a task with a tool call, and the gateway idling reached no host but the
+  endpoint. A configuration naming any other address than the loopback for the proxy is refused.
+- One case is left: a provider key in the user's own environment (an rc file's `OPENROUTER_API_KEY`, measured with a
+  fake one) makes the picker's warm-up list that provider's models, with that key. Hermes's side tasks do not follow
+  it: once a config names its provider, Hermes refuses to route them to another logged-in one.
 - Its first start downloads its Python packages once, from `pypi.org` and `files.pythonhosted.org` only (about 135 MB,
   measured), into Tars's Hermes home.
 

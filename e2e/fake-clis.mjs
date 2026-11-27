@@ -526,13 +526,18 @@ export async function run() {
   // and which of Tars's guards its config carries.
   if (kind === 'hermes') {
     const has = (re) => re.test(hermesConfig);
+    // The root's config, two folders up (<root>/profiles/<agent id>): what the gateway resolves its own provider from.
+    const rootConfig = (() => { try { return fs.readFileSync(path.join(hermesHome, '..', '..', 'config.yaml'), 'utf8'); } catch { return ''; } })();
+    const loopbackModelsDev = (text) => /^models_dev:\n {2}url: "http:\/\/(127\.0\.0\.1|localhost|\[::1\]):\d+\/[^"]*"$/m.test(text);
     log({
       hermes: true, home: hermesHome, scope: Object.keys(hermesScope).sort(), source: opts.source ?? null,
-      terminal: { token: !!process.env.CLAUDE_MGR_API_TOKEN, endpointToken: !!process.env.TARS_ENDPOINT_TOKEN, openaiKey: !!process.env.OPENAI_API_KEY, openaiBase: !!process.env.OPENAI_BASE_URL },
+      terminal: { token: !!process.env.CLAUDE_MGR_API_TOKEN, endpointToken: !!process.env.TARS_ENDPOINT_TOKEN, openaiKey: !!process.env.OPENAI_API_KEY, openaiBase: !!process.env.OPENAI_BASE_URL, awsMetadataOff: process.env.AWS_EC2_METADATA_DISABLED === 'true' },
+      root: { customProvider: /^model:\n {2}provider: "custom"\n {2}base_url: "http:\/\/(127\.0\.0\.1|localhost|\[::1\]):\d+\/v1"$/m.test(rootConfig), lazyInstallsOff: /^security:\n {2}allow_lazy_installs: false$/m.test(rootConfig), modelsDevLocal: loopbackModelsDev(rootConfig) },
       envMode: (() => { try { return (fs.statSync(path.join(hermesHome, '.env')).mode & 0o777).toString(8); } catch { return null; } })(),
       guards: {
         telemetry: has(/^ {4}offer_version: 2$/m), adoptLogins: has(/^ {2}adopt_external_logins: false$/m), updates: has(/^updates:\n {2}check: false$/m),
         modelCatalog: has(/^model_catalog:\n {2}enabled: false$/m), pluginChecks: has(/^plugins:\n {2}auto_update_check_hours: 0$/m),
+        lazyInstallsOff: has(/^security:\n {2}allow_lazy_installs: false$/m), modelsDevLocal: loopbackModelsDev(hermesConfig),
         approvals: /^approvals:\n {2}mode: "(\w+)"$/m.exec(hermesConfig)?.[1] ?? null,
       },
     });

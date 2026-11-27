@@ -23,7 +23,8 @@ import { updateSharedJsonSync } from '../utils/shared-file';
  *   shared by every Hermes agent.
  * - On macOS and Linux the home is on the line (`env HERMES_HOME=...`), which no rc file of the agent's shell runs
  *   after, with the user's OPENAI_API_KEY and OPENAI_BASE_URL taken out (`env -u`): Hermes would use them before the
- *   profile's. On Windows, where nothing is sourced, both in the terminal's environment.
+ *   profile's, and AWS_EC2_METADATA_DISABLED=true set. On Windows, where nothing is sourced, in the terminal's
+ *   environment.
  * - `chat --source tool`: Hermes's tag for an integration's sessions, which keeps them out of the user's own lists;
  *   it refuses any tag of Tars's own ("Gateway does not support source").
  * - Approvals: normal asks (`approvals.mode: manual`), auto lets Hermes judge (`smart`), bypass adds `--yolo`.
@@ -59,6 +60,13 @@ const HERMES_SESSION_ID = /^local-[0-9a-f]{64}$/;
 /** What Hermes is not to take from the terminal: the profile's `.env` holds them, the terminal none. */
 const NOT_FROM_THE_TERMINAL = ['OPENAI_API_KEY', 'OPENAI_BASE_URL', 'CLAUDE_MGR_API_TOKEN', 'TARS_ENDPOINT_TOKEN'];
 
+/**
+ * Set for Hermes whatever the terminal holds: the AWS SDK inside it asks the cloud metadata address
+ * (169.254.169.254) for credentials when nothing stops it (measured 27/11; the root's config names its provider
+ * too, so the gateway never looks, and this covers any other path to the SDK).
+ */
+const SET_FOR_HERMES: Record<string, string> = { AWS_EC2_METADATA_DISABLED: 'true' };
+
 export class HermesProvider implements CLIProvider {
   readonly id = 'hermes' as const;
   readonly displayName = 'Hermes Agent';
@@ -85,7 +93,7 @@ export class HermesProvider implements CLIProvider {
 
     let command = process.platform === 'win32'
       ? ''
-      : `env ${NOT_FROM_THE_TERMINAL.slice(0, 2).map(v => `-u ${v}`).join(' ')} HERMES_HOME=${shellQuote(home)} `;
+      : `env ${NOT_FROM_THE_TERMINAL.slice(0, 2).map(v => `-u ${v}`).join(' ')} ${Object.entries(SET_FOR_HERMES).map(([k, v]) => `${k}=${v}`).join(' ')} HERMES_HOME=${shellQuote(home)} `;
     command += `${shellQuote(params.binaryPath)} chat --source tool -m ${shellQuote(endpoint.model)}`;
     if (params.permissionMode === 'bypass') command += ' --yolo';
     if (params.resumeSessionId && HERMES_SESSION_ID.test(params.resumeSessionId)) command += ` --resume ${params.resumeSessionId}`;
@@ -105,8 +113,9 @@ export class HermesProvider implements CLIProvider {
       CLAUDE_AGENT_ID: agentId,
       CLAUDE_PROJECT_PATH: projectPath,
       CLAUDE_PROVIDER: this.id,
-      // Windows' only way in (nothing is sourced there); macOS and Linux have it on the line as well.
+      // Windows' only way in (nothing is sourced there); macOS and Linux have them on the line as well.
       HERMES_HOME: hermesProfileDir(hermesRoot(), agentId),
+      ...SET_FOR_HERMES,
     };
   }
 
