@@ -84,9 +84,12 @@ import { personNamesOf, usablePersonName } from '../../electron/services/trace-p
  * H1. (L1.) A home path in a JSON string written with escaped slashes (`\/Users\/name\/`) passes, or takes another
  *     number than the same home written plainly.
  * I1. (L1.) An IPv4-mapped IPv6 address (::ffff:192.0.2.128) is masked in two pieces, its IPv4 tail left or cut.
- * F1. (L2.) A version or a word taken for an address or a phone number: 1.0.0.0, pkg@1.2.3.4, "build 0612345678",
- *     a word pair in hex letters (add::bad, dead::beef). An address after a user's name (root@203.0.113.5) still goes;
- *     after `@`, a four-part number of parts all under 100 reads as a version (so user@10.0.0.5 stays: said).
+ * F1. (L2.) A version or a word taken for an address or a phone number: 1.0.0.0, "build 0612345678", a word pair in
+ *     hex letters (add::bad, dead::beef), a package spec's version (@scope/tool@1.0.0.1, vendor/lib@1.2.3.4).
+ * F2. (The Audit's NO-MERGE at 46d1a56dd.) An address after a user's name passes: deploy@10.0.0.5,
+ *     deploy@10.20.30.40, git@10.1.2.3:team/app.git (a private network's plan is what the masking is for). After `@`
+ *     only a package spec's left side is a version: it starts with `@`, or holds a `/` with no `:` after the address.
+ *     So pkg@1.2.3.4 is masked: a bare name cannot be told from a user's, and npm's versions have three parts.
  * The numbering kept from one build of a session to the next (M2) is trace-upload.test.ts's 46.
  */
 
@@ -253,12 +256,21 @@ describe('masking personal data', () => {
     expect(s.text('from ::ffff:192.0.2.128 and ::FFFF:192.0.2.128, then 192.0.2.128')).toBe('from <IP_1> and <IP_1>, then <IP_2>');
   });
 
-  it('F1: versions and words read as addresses or phone numbers stay; an address after a user\'s name goes', () => {
-    for (const t of ['release 1.0.0.0 and 2.0.0.0', 'pkg@1.2.3.4 and @scope/lib@10.20.30.40', 'build 0612345678, Build 0612345678, version 0612345678',
-      'add::bad and dead::beef', 'user@10.0.0.5']) {
+  it('F1: versions and words read as addresses or phone numbers stay', () => {
+    for (const t of ['release 1.0.0.0 and 2.0.0.0', '@scope/tool@1.0.0.1 and @scope/lib@10.20.30.40, vendor/lib@1.2.3.4',
+      'build 0612345678, Build 0612345678, version 0612345678', 'add::bad and dead::beef']) {
       expect(one(t), t).toBe(t);
     }
     expect(one('ssh root@203.0.113.5, then 10.1.0.0 and 172.16.0.1; call 0612345678')).toBe('ssh root@<IP_1>, then <IP_2> and <IP_3>; call <PHONE_1>');
+  });
+
+  it('F2: an address after a user\'s name goes, on a private network too; only a package spec\'s version stays', () => {
+    const s = session();
+    expect(s.text('ssh deploy@10.0.0.5 and ssh deploy@10.20.30.40')).toBe('ssh deploy@<IP_1> and ssh deploy@<IP_2>');
+    expect(s.text('git clone git@10.1.2.3:team/app.git')).toBe('git clone git@<IP_3>:team/app.git');
+    expect(s.text('pkg@1.2.3.4 and user@10.0.0.5')).toBe('pkg@<IP_4> and user@<IP_1>');
+    // A left side with a / and a : after the address is a user's host, not a package spec.
+    expect(s.text('scp ./dist/app@10.9.8.7:/srv')).toBe('scp ./dist/app@<IP_5>:/srv');
   });
 
   it('R1: the counts are placeholders inserted, by type, every type present, and the version is named', () => {
