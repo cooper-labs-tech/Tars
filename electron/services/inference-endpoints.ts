@@ -111,7 +111,8 @@ type Result = { ok: true; settings: AppSettings; endpoint: InferenceEndpoint } |
 
 const fromWindow = (actor: EndpointActor): actor is { window: true } => 'window' in actor && actor.window === true;
 
-function endpointsOf(settings: Partial<AppSettings>): InferenceEndpoint[] {
+/** The endpoints Tars knows: those of the settings with an id of its shape (the load window reads them so too). */
+export function endpointsOf(settings: Partial<AppSettings>): InferenceEndpoint[] {
   return Array.isArray(settings.inferenceEndpoints) ? settings.inferenceEndpoints.filter(e => e && ENDPOINT_ID.test(e.id)) : [];
 }
 

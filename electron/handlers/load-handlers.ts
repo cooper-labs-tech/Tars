@@ -9,6 +9,7 @@ import { launchAgent } from '../core/agent-launch';
 import { stopAgent } from '../core/agent-stop';
 import { agentStatusEmitter, emitAgentStatus } from '../services/agent-events';
 import { createLoadEngine } from '../services/load-engine';
+import { endpointsOf } from '../services/inference-endpoints';
 import { updateRun } from '../services/load-run-record';
 import { safeGit } from '../utils/safe-git';
 import { buildFullPath } from '../utils/path-builder';
@@ -89,7 +90,8 @@ export function registerLoadHandlers(deps: LoadHandlerDeps): { window: LoadWindo
     projects: deps.projects,
     grants: () => readGrants(dirs.grants),
     tracedProjects: () => traceSettingsOf(deps.getAppSettings()).projects,
-    endpoints: () => (deps.getAppSettings().inferenceEndpoints ?? []).map(e => ({
+    // The endpoints Tars knows, as the rest of Tars reads them (an id of their shape): a grant names one an agent can run on.
+    endpoints: () => endpointsOf(deps.getAppSettings()).map(e => ({
       id: e.id, name: e.name, baseUrl: e.baseUrl, approved: e.approved === true, models: e.models ?? [], ...(e.approvedBaseUrl ? { approvedBaseUrl: e.approvedBaseUrl } : {}),
     })),
     loadAgents: () => [...deps.agents.values()].filter(a => a.load === true).map(a => ({

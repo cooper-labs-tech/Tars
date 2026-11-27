@@ -66,7 +66,8 @@ process.exit(1);
   const fakeLog = path.join(home, 'fake-cli.jsonl');
   const standinLog = test.info().outputPath('endpoint-requests.jsonl');
   const standin = await startStandIn({ log: standinLog, command: 'git push origin HEAD:refs/heads/main' });
-  const EP = 'ep-0e2e10ad';
+  // An id of the shape Tars knows (inference-endpoints.ts): another is no endpoint to it.
+  const EP = 'ep-0e2e1a';
   fs.writeFileSync(path.join(dir, 'agents.json'), '[]');
   fs.writeFileSync(path.join(dir, 'projects.json'), JSON.stringify([project]));
   fs.writeFileSync(path.join(dir, 'hermes-connection.json'), JSON.stringify({ mode: 'local', localPort: 9, authMode: 'token' }));
