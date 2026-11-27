@@ -1,4 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
+import * as os from 'node:os';
+import * as path from 'node:path';
 
 /**
  * Downloading an update that fails is a refusal with its reason, never a throw
@@ -17,6 +19,9 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
  *    HttpError carries the request and the response's headers on the lines
  *    after its first.
  * 4. A download that succeeds stops answering success.
+ * 5. A download that fails writing to the disk quotes the updater's cache by
+ *    its absolute path, the owner's home in it (the Audit's I-2 on #658,
+ *    for every message of the class): the home is said `~`.
  */
 
 const download = vi.hoisted(() => ({ next: (): Promise<unknown> => Promise.resolve(['/tmp/Tars.zip']) }));
@@ -58,6 +63,17 @@ describe('an update download that fails', () => {
     ), { statusCode: 404 }));
 
     await expect(downloadUpdate()).resolves.toEqual({ success: false, error: 'Tars could not download the update: 404 Not Found' });
+  });
+
+  it('5. the owner\'s home is said ~', async () => {
+    const cache = path.join(os.homedir(), 'Library', 'Caches', 'tars-updater', 'pending', 'Tars-2.0.7-arm64-mac.zip');
+    download.next = () => Promise.reject(new Error(`ENOSPC: no space left on device, write '${cache}'`));
+
+    const answer = await downloadUpdate() as { success: boolean; error: string };
+
+    expect(answer.success).toBe(false);
+    expect(answer.error).toBe(`Tars could not download the update: ENOSPC: no space left on device, write '${path.join('~', 'Library', 'Caches', 'tars-updater', 'pending', 'Tars-2.0.7-arm64-mac.zip')}'`);
+    expect(answer.error).not.toContain(os.homedir());
   });
 });
 
