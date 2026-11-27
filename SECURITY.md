@@ -1345,7 +1345,9 @@ profile of that home, `~/.tars/hermes/profiles/<agent id>` (`services/hermes-hom
 **What Hermes reaches besides the endpoint, and what Tars turns off.**
 - The profile's config answers the telemetry question (no), turns off `auth.adopt_external_logins` and update checks.
   `adopt_external_logins` would borrow, and refresh, the Codex CLI's and Claude Code's logins; their refresh tokens are
-  single use.
+  single use. It also answers the question Hermes asks at a start once the disk is low, whether to prune its session
+  history (`sessions.auto_prune: false`, its own default): nobody answers in an agent's terminal, and a restarted agent
+  waited on it (measured on the real binary).
 - Measured through a logging proxy: with update checks off, a chat still reached for `hermes-agent.nousresearch.com`
   (its plugin catalog), `raw.githubusercontent.com` (its model catalog) and `openrouter.ai` (a model capability list).
 - With `model_catalog.enabled: false` and `plugins.auto_update_check_hours: 0` as well, a chat and a minute of the
@@ -1376,8 +1378,11 @@ profile of that home, `~/.tars/hermes/profiles/<agent id>` (`services/hermes-hom
 
 **The stop of its gateway.** Tars stops it when the last Hermes terminal ends, at quit, and at the next start, by the
 pid the record in Tars's own home names. The record is not believed on its own word: a
-crash can leave it while the pid goes to another process, and any agent can write it. The user's own gateway runs the
-same command line. So the process itself decides: on macOS and Linux its own `HERMES_HOME`, read from its environment
+crash can leave it while the pid goes to another process, and any agent can write it. The process must run a Hermes
+gateway, in either form its command line takes (`python3 -m hermes_cli.main ... gateway run`, which Hermes gives the
+gateways it starts, and the relaunch of its `hermes` launcher, `python3 -I -c "...; sys.argv = ['-c', 'gateway',
+'run', ...]; ... from hermes_cli.main import main ..."`, which is how the one Tars starts runs). The user's own gateway
+runs the same command line. So the process itself decides: on macOS and Linux its own `HERMES_HOME`, read from its environment
 (`ps -E`, `/proc/<pid>/environ`), must be Tars's home or one of its profiles; on Windows, where another process's
 environment cannot be read, it must have started within two minutes of the record's writing. Anything else stops
 nothing, and an environment that cannot be read stops nothing either. Paths are compared resolved, as Hermes resolves
