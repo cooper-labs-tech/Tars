@@ -69,8 +69,88 @@ export interface WireRecord {
   cancel?: RequestCancel;
 }
 
-/** Who cut a request, why and when, and what reached the harness before (nothing, for one given up while held). */
-export interface RequestCancel { by: 'harness'; cause: 'abandoned_while_held'; at: number; deliveredBytes: number }
+/**
+ * Who cut a request, why and when, and what of the model's response reached the harness before (nothing, for one given
+ * up while held). The causes, a closed list per party (trace feature B3, 27/11; A3's `abandoned_while_held` kept):
+ * - harness: `esc` or `ctrl_c` (a key Tars saw from the window during the request), `cli_interrupt` (the CLI's own log
+ *   said its turn was interrupted, codex's turn_aborted or pi's), `abandoned_while_held`, `unknown` (no key Tars saw:
+ *   its own timeout, a crash);
+ * - tars: `stop`, `restart`, `sleep`, `remove`, `quit`, `replace` (Tars ended the agent's terminal);
+ * - proxy: `hold_ceiling` (the hold reached its ceiling and the endpoint's answer passed);
+ * - endpoint: `stream_cut` (it closed or reset the stream before its end).
+ */
+export const CANCEL_CAUSES = {
+  harness: ['esc', 'ctrl_c', 'cli_interrupt', 'abandoned_while_held', 'unknown'],
+  tars: ['stop', 'restart', 'sleep', 'remove', 'quit', 'replace'],
+  proxy: ['hold_ceiling'],
+  endpoint: ['stream_cut'],
+} as const;
+export type CancelBy = keyof typeof CANCEL_CAUSES;
+export interface RequestCancel { by: CancelBy; cause: string; at: number; deliveredBytes: number }
+
+/**
+ * Given up while held: a request that never reached the endpoint. A3's cause, or a cut by the harness or Tars (an Esc,
+ * a Ctrl-C, a stop...) of a request the proxy held and never answered (status 499, after a hold). One rule, read by
+ * every count that leaves such a request out (the request counts, the model time, the first request, the export) and
+ * by `abandonedWhileHeld`, so none counts it both ways (the Audit's M1 on #680 at 9c3784838).
+ */
+export function givenUpWhileHeld(r: { cancel?: RequestCancel | null; status?: number | null; attempts?: number | null; heldMs?: number | null }): boolean {
+  if (!r.cancel) return false;
+  if (r.cancel.cause === 'abandoned_while_held') return true;
+  return (r.cancel.by === 'harness' || r.cancel.by === 'tars') && r.status === 499 && ((r.attempts ?? 1) > 1 || (r.heldMs ?? 0) > 0);
+}
+
+/** The same rule over a `requests` row, in SQL: 1 when given up while held, else 0. */
+const GIVEN_UP_WHILE_HELD_SQL = `COALESCE(cancel_json IS NOT NULL AND (json_extract(cancel_json, '$.cause') IS 'abandoned_while_held'
+  OR (json_extract(cancel_json, '$.by') IN ('harness', 'tars') AND status = 499 AND (attempts > 1 OR held_ms > 0))), 0)`;
+
+/**
+ * How a turn was interrupted, a closed list (the back office checks it as an enum): a lone key from the window (`esc`,
+ * `ctrl_c`), the CLI's own log (`cli`), or Tars ending the terminal while the turn was open (`stop`, `remove`, `quit`,
+ * `sleep`).
+ */
+export const INTERRUPTED_BY = ['esc', 'ctrl_c', 'cli', 'stop', 'remove', 'quit', 'sleep'] as const;
+export type InterruptedBy = typeof INTERRUPTED_BY[number];
+/** How a turn's agent restarted: asked or for its settings (`restart`), or its terminal replaced (`replace`). */
+export const RESTARTED_BY = ['restart', 'replace'] as const;
+export type RestartedBy = typeof RESTARTED_BY[number];
+/** What the agent was doing when interrupted: answering (a request in flight) or running its tools (the turn open). */
+export const INTERVENTION_DURING = ['answer', 'tools'] as const;
+export type InterventionDuring = typeof INTERVENTION_DURING[number];
+/** Who wrote a turn, by kind (authorFor): the owner, an orchestrator, an agent, a channel, Tars, or nobody known. */
+export const TURN_AUTHORS = ['user', 'orchestrator', 'agent', 'relay', 'tars', 'unknown'] as const;
+export type TurnAuthor = typeof TURN_AUTHORS[number];
+
+const isOneOf = <T extends string>(list: readonly T[], v: unknown): v is T => typeof v === 'string' && (list as readonly string[]).includes(v);
+
+/**
+ * What a person, an orchestrator or Tars did to a session's work, as it happened (trace feature B3): an interruption
+ * or a restart, each `by` of its closed list. Kept with the session; each lands on the turn it came in when read
+ * (TurnInterventions), and one a store holds outside the lists (an older or edited build's) is dropped there.
+ */
+export type InterventionEvent =
+  | { kind: 'interrupted'; at: number; by: InterruptedBy; during: InterventionDuring }
+  | { kind: 'restarted'; at: number; by: RestartedBy };
+
+/**
+ * A turn's interventions, as read (trace feature B3): its first interruption and restart; `next`, the instruction that
+ * opened the turn after it, by its author's kind (one outside TURN_AUTHORS reads `unknown`) and its delay in seconds
+ * from this turn's end, a fraction, whatever the delay; `corrected`, that instruction from the owner or an orchestrator
+ * within CORRECTION_WINDOW_MS of a turn that ended done; `redelegated`, a later session that took this session's task
+ * (start.redelegatedFrom, A3), on the last turn.
+ */
+export interface TurnInterventions {
+  interrupted?: { at: number; by: InterruptedBy; during: InterventionDuring };
+  restarted?: { at: number; by: RestartedBy };
+  next?: { by: TurnAuthor; delaySec: number };
+  corrected?: true;
+  redelegated?: { to: string; at: number };
+}
+
+/** A correction: the next instruction within 10 minutes of a turn that ended done (the reader's N). */
+export const CORRECTION_WINDOW_MS = 10 * 60_000;
+/** Who may correct a turn: the owner and an orchestrator. */
+const CORRECTORS: ReadonlySet<string> = new Set(['user', 'orchestrator']);
 
 /**
  * What started a session, read at its spawn (core/session-start.ts), and what it started from. Every field but the
@@ -133,8 +213,8 @@ export interface TraceTask {
 export interface TypedInput {
   agentId: string;
   at: number;
-  /** user | orchestrator | chat | relay | agent | tars */
-  author: string;
+  /** Who typed it, by kind: one of TURN_AUTHORS but `unknown`, which is no typist. */
+  author: Exclude<TurnAuthor, 'unknown'>;
   authorDetail?: string;
   text: string;
   /** The words come from a closed model (a Claude agent, say): the session becomes `mixed`. */
@@ -243,6 +323,8 @@ export interface TraceTurnView {
   modelMs: number; toolMs: number; requests: TraceRequestView[];
   /** The ref of the task the turn served, when the words that opened it handed one over, or the session started on one. */
   taskRef?: string;
+  /** Its interventions (trace feature B3), absent when none. */
+  interventions?: TurnInterventions;
 }
 
 export interface TracePart {
@@ -302,8 +384,10 @@ CREATE INDEX IF NOT EXISTS typed_inputs_agent ON typed_inputs(agent_id, at);
  * Columns added to a store after its first schema, each added where it is missing (a store an earlier build made):
  * a session's start and the demand it never received (trace feature A3), and a request's cancel.
  */
-const ADDED_COLUMNS: ReadonlyArray<readonly [table: string, column: string]> = [
+const ADDED_COLUMNS: ReadonlyArray<readonly [table: string, column: string, type?: string]> = [
   ['traces', 'start_json'], ['traces', 'demand_json'], ['requests', 'cancel_json'], ['typed_inputs', 'task_ref'], ['turns', 'task_ref'],
+  // Trace feature B3: a session's interventions, and when the words that opened a turn were typed.
+  ['traces', 'interventions_json'], ['turns', 'instructed_at', 'INTEGER'],
 ];
 
 /** Per request, what the cap counts on top of its blobs: the rows themselves. */
@@ -427,9 +511,9 @@ export class TraceStore {
     this.db.pragma('journal_mode = WAL');
     this.db.pragma('foreign_keys = OFF');
     this.db.exec(SCHEMA);
-    for (const [table, column] of ADDED_COLUMNS) {
+    for (const [table, column, type] of ADDED_COLUMNS) {
       const has = (this.db.prepare(`PRAGMA table_info(${table})`).all() as Array<{ name: string }>).some(c => c.name === column);
-      if (!has) this.db.exec(`ALTER TABLE ${table} ADD COLUMN ${column} TEXT`);
+      if (!has) this.db.exec(`ALTER TABLE ${table} ADD COLUMN ${column} ${type ?? 'TEXT'}`);
     }
   }
 
@@ -473,7 +557,7 @@ export class TraceStore {
    * reader's cursor and the upload take it up again. False when nothing changed: the same state written again moves
    * nothing.
    */
-  private changeJson<T>(traceId: string, column: 'start_json' | 'demand_json' | 'outcome_json', change: (current: T | undefined) => T): boolean {
+  private changeJson<T>(traceId: string, column: 'start_json' | 'demand_json' | 'outcome_json' | 'interventions_json', change: (current: T | undefined) => T): boolean {
     const row = this.db.prepare(`SELECT ${column} AS v FROM traces WHERE trace_id = ?`).get(traceId) as { v?: string | null } | undefined;
     if (!row) return false;
     const before = row.v ?? null;
@@ -509,9 +593,41 @@ export class TraceStore {
     return this.changeJson<TraceOutcome>(traceId, 'outcome_json', current => ({ ...(current ?? {}), ...patch }));
   }
 
+  /** An intervention, kept with its session (trace feature B3): its change sequence moves, so it is sent again. */
+  addIntervention(traceId: string, e: InterventionEvent): boolean {
+    return this.changeJson<InterventionEvent[]>(traceId, 'interventions_json', current => [...(current ?? []), e]);
+  }
+
+  /** The session's change sequence moved: what another session now links to it is read and sent anew. */
+  touch(traceId: string): void {
+    this.db.prepare('UPDATE traces SET updated_seq = ? WHERE trace_id = ?').run(this.nextSeq(), traceId);
+  }
+
+  /** Whether the session's last turn is open: its model called tools, which run. */
+  lastTurnOpen(traceId: string): boolean {
+    const r = this.db.prepare('SELECT final_status FROM turns WHERE trace_id = ? ORDER BY turn_index DESC LIMIT 1').get(traceId) as { final_status?: string | null } | undefined;
+    return r?.final_status === 'open';
+  }
+
+  /**
+   * The session's latest request the harness hung up on for no cause Tars knew, cut at or after `since`, given the
+   * cause its CLI's own log tells (`cli_interrupt`). The moment of its cut, or undefined when there is none.
+   */
+  reviseUnknownCut(traceId: string, since: number, cause: string): number | undefined {
+    const row = this.db.prepare(`SELECT request_id, cancel_json FROM requests WHERE trace_id = ? AND cancel_json IS NOT NULL
+      AND json_extract(cancel_json, '$.by') = 'harness' AND json_extract(cancel_json, '$.cause') = 'unknown'
+      AND json_extract(cancel_json, '$.at') >= ? ORDER BY json_extract(cancel_json, '$.at') DESC LIMIT 1`).get(traceId, since) as Row | undefined;
+    if (!row) return undefined;
+    const cancel = { ...(JSON.parse(String(row.cancel_json)) as RequestCancel), cause };
+    this.db.prepare('UPDATE requests SET cancel_json = ? WHERE request_id = ?').run(JSON.stringify(cancel), String(row.request_id));
+    this.touch(traceId);
+    return cancel.at;
+  }
+
   /** The session's first request at the endpoint at or after `from`: one given up while held never reached it. */
   firstRequestAt(traceId: string, from: number = Number.MIN_SAFE_INTEGER): number | undefined {
-    const r = this.db.prepare('SELECT MIN(started_at) AS m FROM requests WHERE trace_id = ? AND started_at >= ? AND cancel_json IS NULL').get(traceId, from) as { m: number | null };
+    const r = this.db.prepare(`SELECT MIN(started_at) AS m FROM requests WHERE trace_id = ? AND started_at >= ?
+      AND ${GIVEN_UP_WHILE_HELD_SQL} = 0`).get(traceId, from) as { m: number | null };
     return r.m ?? undefined;
   }
 
@@ -595,9 +711,13 @@ export class TraceStore {
    * the harness gave up while held, which are no error of the endpoint's.
    */
   requestCounts(traceId: string): { held: number; errors: number; abandoned: number } {
+    // A cut by the harness or by Tars is no error of the endpoint's; one by the proxy (its hold's ceiling) or the
+    // endpoint (a stream cut) is (trace feature B3). Abandoned while held: A3's cause, or a cut by the harness or Tars
+    // of a request held and never answered.
     const r = this.db.prepare(`SELECT COALESCE(SUM(CASE WHEN attempts > 1 THEN 1 ELSE 0 END), 0) AS held,
-      COALESCE(SUM(CASE WHEN cancel_json IS NULL AND (error IS NOT NULL OR status >= 400) THEN 1 ELSE 0 END), 0) AS errors,
-      COALESCE(SUM(CASE WHEN cancel_json IS NOT NULL THEN 1 ELSE 0 END), 0) AS abandoned FROM requests WHERE trace_id = ?`).get(traceId) as { held: number; errors: number; abandoned: number };
+      COALESCE(SUM(CASE WHEN (cancel_json IS NULL OR json_extract(cancel_json, '$.by') IN ('proxy', 'endpoint'))
+        AND (error IS NOT NULL OR status >= 400) THEN 1 ELSE 0 END), 0) AS errors,
+      COALESCE(SUM(${GIVEN_UP_WHILE_HELD_SQL}), 0) AS abandoned FROM requests WHERE trace_id = ?`).get(traceId) as { held: number; errors: number; abandoned: number };
     return r;
   }
 
@@ -626,16 +746,16 @@ export class TraceStore {
     return JSON.parse(decompress(row.codec, row.data).toString('utf8'));
   }
 
-  private authorFor(agentId: string, instruction: string, at: number): { author: string; detail?: string; closed: boolean; id?: number; taskRef?: string } {
+  private authorFor(agentId: string, instruction: string, at: number): { author: string; detail?: string; closed: boolean; id?: number; taskRef?: string; typedAt?: number } {
     const said = norm(instruction);
     if (!said) return { author: 'unknown', closed: false };
-    const rows = this.db.prepare(`SELECT id, author, author_detail, text_norm, closed, task_ref FROM typed_inputs
+    const rows = this.db.prepare(`SELECT id, at, author, author_detail, text_norm, closed, task_ref FROM typed_inputs
       WHERE agent_id = ? AND used_by IS NULL AND at <= ? AND at >= ? ORDER BY at DESC`).all(agentId, at + 1000, at - TYPED_INPUT_WINDOW_MS) as Row[];
     for (const r of rows) {
       const typed = String(r.text_norm);
       const head = typed.slice(0, 200);
       if (said.includes(head) || typed.includes(said)) {
-        return { author: String(r.author), detail: optStr(r.author_detail), closed: r.closed === 1, id: num(r.id), taskRef: optStr(r.task_ref) };
+        return { author: String(r.author), detail: optStr(r.author_detail), closed: r.closed === 1, id: num(r.id), taskRef: optStr(r.task_ref), typedAt: num(r.at) };
       }
     }
     return { author: 'unknown', closed: false };
@@ -654,6 +774,9 @@ export class TraceStore {
   private ingestNow(rec: WireRecord): string {
     const trace = this.db.prepare('SELECT * FROM traces WHERE trace_id = ?').get(rec.traceId) as Row | undefined;
     if (!trace) throw new Error('no such trace');
+    // Given up while held: the one cut that never reached the endpoint (counted in no request count, model time or
+    // first request). Every other cut request did, and counts.
+    const heldOnly = givenUpWhileHeld({ cancel: rec.cancel, status: rec.status, attempts: rec.attempts, heldMs: rec.heldMs });
     const req = parseRequest(rec.surface, rec.requestBody);
     const resp = parseResponse(rec.surface, rec.status, rec.contentType, rec.responseBody);
     const systemHash = req && req.system !== undefined ? hashOf(req.system) : undefined;
@@ -679,6 +802,8 @@ export class TraceStore {
         VALUES (?, ?, ?, ?, ?, ?, ?, ?)`).run(turnId, rec.traceId, lastTurn ? num(lastTurn.turn_index) + 1 : 0, rec.startedAt,
         lastEnd !== undefined ? Math.max(0, rec.startedAt - lastEnd) : null, who.author, who.detail ?? null, who.taskRef ?? startRef ?? null);
       if (who.id !== undefined) this.db.prepare('UPDATE typed_inputs SET used_by = ? WHERE id = ?').run(turnId, who.id);
+      // When its words were typed: a correction's delay runs from the turn before's end to them (trace feature B3).
+      if (who.typedAt !== undefined) this.db.prepare('UPDATE turns SET instructed_at = ? WHERE turn_id = ?').run(who.typedAt, turnId);
       if (who.closed) mixed = true;
       if (who.author === 'unknown') unknownTurns++;
       turnCount++;
@@ -715,6 +840,7 @@ export class TraceStore {
     }
 
     const total = rec.endedAt - rec.startedAt;
+    const cutByCaller = rec.cancel?.by === 'harness' || rec.cancel?.by === 'tars';
     // TTFT measures the model (the owner's decision of 26/11): a stream's first token, never its first byte, which
     // may be a chunk with only a role; none when it carried no content. A response that is not streamed: its first byte.
     const ttft = rec.firstContentAt !== undefined ? rec.firstContentAt - rec.startedAt
@@ -727,21 +853,23 @@ export class TraceStore {
       requestId, rec.upstreamRequestId ?? null, rec.traceId, turnId ?? null, seqRow.n, side ? 1 : 0, rec.surface, req?.model ?? null,
       resp.modelServed ?? null, req ? JSON.stringify(req.params) : null, systemHash ?? null, toolsHash ?? null, rec.startedAt,
       ttft, total, resp.usage.input, resp.usage.cached, resp.usage.output,
-      // A request the harness gave up is no error of the endpoint's: its cancel says what happened.
-      rec.status, rec.cancel ? null : rec.error ?? resp.error ?? null, resp.finishReason ?? null, req?.stream ? 1 : 0, rec.requestBody.length, rec.responseBody.length,
+      // A request the harness or Tars cut is no error of the endpoint's: its cancel says what happened. One the
+      // endpoint or the proxy cut keeps its error (trace feature B3).
+      rec.status, cutByCaller ? null : rec.error ?? resp.error ?? null, resp.finishReason ?? null, req?.stream ? 1 : 0, rec.requestBody.length, rec.responseBody.length,
       newMessages, rec.attempts, rec.heldMs, dropped ? 1 : 0, rec.cancel ? JSON.stringify(rec.cancel) : null);
 
     if (turnId) {
-      const failed = !!(rec.error || resp.error);
-      // Given up by the harness while held: the turn ends there, neither done nor failed at the endpoint.
-      const status = rec.cancel ? 'abandoned' : failed ? 'failed' : resp.toolCalls > 0 ? 'open' : 'done';
+      const failed = !!(rec.error || resp.error) || rec.cancel?.by === 'proxy' || rec.cancel?.by === 'endpoint';
+      // Cut by the harness (given up, an Esc) or by Tars: the turn ends there, neither done nor failed at the endpoint.
+      const status = cutByCaller ? 'abandoned' : failed ? 'failed' : resp.toolCalls > 0 ? 'open' : 'done';
       if (!side) {
         const toolMs = !opens && lastEnd !== undefined ? Math.max(0, rec.startedAt - lastEnd) : 0;
-        // A request given up while held never reached the endpoint: no request of the turn, no model time.
+        // A request given up while held never reached the endpoint: no request of the turn, no model time. Any other
+        // cut one did, and counts (an Esc mid-answer, a cut stream, a Tars stop...).
         this.db.prepare(`UPDATE turns SET ended_at = ?, request_count = request_count + ?, tool_call_count = tool_call_count + ?,
           tool_error_count = tool_error_count + ?, tool_ms = tool_ms + ?, model_ms = model_ms + ?, tokens_in = tokens_in + ?,
           tokens_cached = tokens_cached + ?, tokens_out = tokens_out + ?, final_status = ?, final_finish_reason = ? WHERE turn_id = ?`)
-          .run(rec.endedAt, rec.cancel ? 0 : 1, resp.toolCalls, toolErrors, toolMs, rec.cancel ? 0 : total, resp.usage.input, resp.usage.cached,
+          .run(rec.endedAt, heldOnly ? 0 : 1, resp.toolCalls, toolErrors, toolMs, heldOnly ? 0 : total, resp.usage.input, resp.usage.cached,
             resp.usage.output, status, resp.finishReason ?? null, turnId);
       } else {
         this.db.prepare('UPDATE turns SET tokens_in = tokens_in + ?, tokens_cached = tokens_cached + ?, tokens_out = tokens_out + ? WHERE turn_id = ?')
@@ -751,7 +879,7 @@ export class TraceStore {
     this.db.prepare(`UPDATE traces SET request_count = request_count + ?, turn_count = ?, tokens_in = tokens_in + ?,
       tokens_cached = tokens_cached + ?, tokens_out = tokens_out + ?, mixed = ?, unknown_turns = ?, main_system_hash = ?,
       last_end_at = CASE WHEN ? THEN last_end_at ELSE ? END, bytes = bytes + ?, updated_seq = ? WHERE trace_id = ?`).run(
-      rec.cancel ? 0 : 1, turnCount, resp.usage.input, resp.usage.cached, resp.usage.output, mixed ? 1 : 0, unknownTurns, mainSystem ?? null,
+      heldOnly ? 0 : 1, turnCount, resp.usage.input, resp.usage.cached, resp.usage.output, mixed ? 1 : 0, unknownTurns, mainSystem ?? null,
       side ? 1 : 0, rec.endedAt, added + ROW_BYTES, this.nextSeq(), rec.traceId);
     return requestId;
   }
@@ -814,19 +942,62 @@ export class TraceStore {
       attempts: num(r.attempts), heldMs: num(r.held_ms), bodiesDropped: r.bodies_dropped === 1,
       ...(r.cancel_json ? { cancel: JSON.parse(String(r.cancel_json)) as RequestCancel } : {}),
     });
+    const interventions = this.turnInterventions(traceId, trace, turns);
     return {
       session: summaryOf(trace),
       outcome: trace.outcome_json ? JSON.parse(String(trace.outcome_json)) : undefined,
       ...(start ? { start } : {}),
       ...demandOf(trace.demand_json),
-      turns: turns.map(t => ({
+      turns: turns.map((t, i) => ({
         turnId: String(t.turn_id), index: num(t.turn_index), startedAt: num(t.started_at), endedAt: optNum(t.ended_at),
         gapBeforeMs: optNum(t.gap_before_ms), author: String(t.author), authorDetail: optStr(t.author_detail), finalStatus: optStr(t.final_status),
         toolCalls: num(t.tool_call_count), toolErrors: num(t.tool_error_count), modelMs: num(t.model_ms), toolMs: num(t.tool_ms),
         requests: requests.filter(r => r.turn_id === t.turn_id).map(view),
         ...(optStr(t.task_ref) ? { taskRef: String(t.task_ref) } : {}),
+        ...(interventions[i] ? { interventions: interventions[i] } : {}),
       })),
     };
+  }
+
+  /**
+   * Each turn's interventions, read from what the session holds (trace feature B3), nothing of it stored twice: its
+   * interruptions and restarts, each on the last turn begun at or before it; the instruction after each turn, its
+   * author and its delay from the turn's end to the words typed (else to the next turn's first request); and the later
+   * session that took this session's task, A3's link read from that session's start, on the last turn.
+   */
+  private turnInterventions(traceId: string, trace: Row, turns: Row[]): Array<TurnInterventions | undefined> {
+    const out: Array<TurnInterventions | undefined> = turns.map(() => undefined);
+    const of = (i: number): TurnInterventions => (out[i] ??= {});
+    const events = trace.interventions_json ? (JSON.parse(String(trace.interventions_json)) as InterventionEvent[]) : [];
+    for (const e of [...events].sort((a, b) => a.at - b.at)) {
+      let i = -1;
+      turns.forEach((t, k) => { if (num(t.started_at) <= e.at) i = k; });
+      if (i < 0) continue;
+      // Only values of the closed lists: a store an older or edited build wrote may hold others, which never leave.
+      if (e.kind === 'interrupted' && isOneOf(INTERRUPTED_BY, e.by) && isOneOf(INTERVENTION_DURING, e.during)) {
+        const iv = of(i);
+        if (!iv.interrupted) iv.interrupted = { at: e.at, by: e.by, during: e.during };
+      }
+      if (e.kind === 'restarted' && isOneOf(RESTARTED_BY, e.by)) {
+        const iv = of(i);
+        if (!iv.restarted) iv.restarted = { at: e.at, by: e.by };
+      }
+    }
+    for (let i = 0; i + 1 < turns.length; i++) {
+      const ended = optNum(turns[i].ended_at);
+      if (ended === undefined) continue;
+      const next = turns[i + 1];
+      const delayMs = Math.max(0, (optNum(next.instructed_at) ?? num(next.started_at)) - ended);
+      const iv = of(i);
+      const by: TurnAuthor = isOneOf(TURN_AUTHORS, next.author) ? next.author : 'unknown';
+      // The raw delay, a fraction of seconds: never rounded.
+      iv.next = { by, delaySec: delayMs / 1000 };
+      if (turns[i].final_status === 'done' && CORRECTORS.has(by) && delayMs <= CORRECTION_WINDOW_MS) iv.corrected = true;
+    }
+    const later = this.db.prepare(`SELECT trace_id, started_at, json_extract(start_json, '$.handedAt') AS handed FROM traces
+      WHERE json_extract(start_json, '$.redelegatedFrom') = ? ORDER BY started_at LIMIT 1`).get(traceId) as Row | undefined;
+    if (later && turns.length) of(turns.length - 1).redelegated = { to: String(later.trace_id), at: optNum(later.handed) ?? num(later.started_at) };
+    return out;
   }
 
   /** One request's messages, decoded: the window's parts, and the raw shapes for an export. */

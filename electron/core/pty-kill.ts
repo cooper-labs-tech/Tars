@@ -75,7 +75,18 @@ interface ConptyAgent {
 
 const LIST_TIMEOUT_MS = 5_000;
 
+/** Told of each terminal about to be killed (pty-manager.ts: whose agent session it ends, trace feature B3). */
+let beforeKill: ((pty: IPty) => void) | null = null;
+export function onBeforeKill(listener: ((pty: IPty) => void) | null): void {
+  beforeKill = listener;
+}
+
 export function killPty(pty: IPty, deps: PtyKillDeps = {}): void {
+  try {
+    beforeKill?.(pty);
+  } catch (err) {
+    console.error('[pty] a kill\'s listener failed:', err);
+  }
   if ((deps.platform ?? process.platform) === 'win32') listConsoleSafely(pty, deps);
   pty.kill();
 }

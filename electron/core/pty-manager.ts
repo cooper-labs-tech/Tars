@@ -1,4 +1,4 @@
-import { noteTypedForTraces } from '../services/traces-runtime';
+import { noteTarsEnding, noteTypedForTraces, noteWindowKeys } from '../services/traces-runtime';
 import * as fs from 'fs';
 import * as path from 'path';
 import { randomBytes } from 'crypto';
@@ -7,7 +7,7 @@ import { beginQuit, isQuitting, refuseWhileQuitting } from './quit-state';
 import * as pty from 'node-pty';
 import { spawnPty } from './pty-spawn';
 import { resolveShell, shellArgs, childEnv } from '../platform';
-import { holdExitUntilTerminalsExit, killPty as endTerminal, shellStillRuns } from './pty-kill';
+import { holdExitUntilTerminalsExit, killPty as endTerminal, onBeforeKill, shellStillRuns } from './pty-kill';
 import { killTree } from '../platform/kill-tree';
 import { v4 as uuidv4 } from 'uuid';
 import * as os from 'os';
@@ -74,6 +74,11 @@ const FIRST_READ_MS = 1_000;
  */
 export async function endAllTerminals(graceMs: number = TERMINAL_GRACE_MS): Promise<void> {
   beginQuit();
+  // Each agent's session told first: the quit ends its terminal (trace feature B3).
+  for (const terminal of ptyProcesses.values()) {
+    const owner = terminalOwner.get(terminal);
+    if (owner) noteTarsEnding(owner, 'quit');
+  }
   const agentMaps = [ptyProcesses, skillPtyProcesses, pluginPtyProcesses];
   const trees = agentMaps.flatMap(map => [...map.values()]);
   const shells = [...quickPtyProcesses.values()];
@@ -614,6 +619,14 @@ export function rememberTerminalOwner(ptyProcess: pty.IPty, agentId: string): vo
   terminalOwner.set(ptyProcess, agentId);
 }
 
+// An agent's terminal Tars kills to replace it (a new folder, key, provider or account; a start over a terminal
+// still there) ends its session's requests too: Tars's cut, unless the caller named another cause just before (a
+// restart, core/agent-restart.ts). Trace feature B3.
+onBeforeKill((terminal) => {
+  const owner = terminalOwner.get(terminal as pty.IPty);
+  if (owner) noteTarsEnding(owner, 'replace', Date.now(), { ifNone: true });
+});
+
 /**
  * What the CLI in a terminal was started without and is owed: how Tars works
  * and the project's memory, for a CLI with no SessionStart hook that started
@@ -714,6 +727,10 @@ export function writeHumanInput(ptyProcess: pty.IPty, data: string): void {
     ptyProcess.write(data);
     return;
   }
+  // A lone Esc or Ctrl-C into a traced agent's turn: an interruption, and the cause of the cut it makes (trace feature
+  // B3, services/traces-runtime.ts). Read here, before node-pty writes it, the same bytes on every system.
+  const owner = state.agentId ?? terminalOwner.get(ptyProcess);
+  if (owner) noteWindowKeys(owner, data);
   if (isKeystroke(data)) {
     state.lastKeyAt = Date.now();
     state.lastKeyClosesPanel = data === '\r' || data === '\x1b';
@@ -722,7 +739,14 @@ export function writeHumanInput(ptyProcess: pty.IPty, data: string): void {
     state.held.push(data);
     return;
   }
+  const before = state.draft;
   state.draft = feedDraft(state.draft, data);
+  // The owner's words, sent from the pane: the turn they open is theirs, as Tars's own writes are (a correction of
+  // theirs is told from an agent's only so). Only a field the model follows (known, or typed on top of a submission
+  // the hook has not confirmed yet): words it cannot vouch for are not noted.
+  if (owner && data === '\r' && before.state !== 'unknown' && before.text.trim()) {
+    noteTypedForTraces({ agentId: owner, sender: { kind: 'user', via: 'window' } }, before.text);
+  }
   ptyProcess.write(data);
   if (state.queue.length > 0) pump(ptyProcess);
   fieldChanged(ptyProcess);

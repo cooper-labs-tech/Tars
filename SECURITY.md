@@ -1166,6 +1166,10 @@ else.
   transcript under `~/.claude` and `~/.codex`.
 - Nothing is masked on this machine. Masking secrets and pseudonymising is the reader's job, on its side.
 - The endpoint's key never enters a trace: the proxy records the request body, never its headers.
+- What opened each turn is matched to who typed it: Tars's own writes, and, for a traced session only, the words the
+  owner sends from an agent's pane (the field's words when Enter is pressed alone), kept beside them: those older than
+  7 days go whenever the next words are noted, and all of a session's go with it. The upload sends a turn's author by kind and what was done to the turn (its
+  interventions: kinds, times, delays), never these words apart from the messages they are.
 - What is kept is bounded: off by default for every project and every agent, a size cap and a retention set in
   Settings, and a delete in the back-office.
 

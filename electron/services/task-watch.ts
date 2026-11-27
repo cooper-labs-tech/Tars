@@ -79,11 +79,13 @@ const interruptedAt = new Map<string, number>();
  * runInTerminal). Only from the agent's current session: an older one's is
  * not its task's.
  */
-export function turnInterrupted(agentId: string, sessionId: string, at = Date.now()): void {
+export function turnInterrupted(agentId: string, sessionId: string, at = Date.now()): boolean {
   const agent = agents.get(agentId);
-  if (!agent || agent.currentSessionId !== sessionId) return;
+  if (!agent || agent.currentSessionId !== sessionId) return false;
   interruptedAt.set(agentId, at);
   liveTaskLedger()?.stateChanged({ id: agentId, status: 'stopped' });
+  // True: the agent's current session's turn, which its traced session ties to the request it cut (main.ts).
+  return true;
 }
 
 /** When the agent's turn was last said interrupted by its CLI's own log, or undefined. */

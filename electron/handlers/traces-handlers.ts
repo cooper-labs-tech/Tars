@@ -316,6 +316,8 @@ export function registerTracesHandlers(deps: TracesHandlerDeps): void {
       'the tasks taken out of an agent\'s queue before they started, with when and why, by its kind',
       'past the last 50, how many more tasks a session ran and how many more were taken out of its queue',
       'the requests a harness gave up while Tars held them for a paused endpoint',
+      'why each request cut before its end was cut, by whom (the harness, Tars, the hold\'s limit or the endpoint), when, and how much of the answer had reached the harness',
+      'what was done to each turn: an Esc or a Ctrl-C typed into it, a stop or a restart, who sent the next instruction (by kind) and how long after, whether it corrected a finished turn, and a later session that took its task',
     ],
     stays: ['your keys and Tars\'s tokens (masked before upload)', 'sessions of projects and agents not opted in', 'the endpoints\' keys and addresses', 'anything outside traced sessions'],
     scrubbing: {
