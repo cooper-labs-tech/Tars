@@ -61,6 +61,13 @@ import { hasPosixModes } from '../../setup/platform-limits';
  *      as running, blocks the next approval, or would be run. Only a run the owner approved counts, as kept in the
  *      private folder (its id, its snapshot's sha256 and its window); and a snapshot changed after the approval stops
  *      its run with an error, never runs it.
+ *  A7. (The Audit's M1 at fdd82ca3d, written before its fix.) A run's state is read from its record under
+ *      ~/.tars/load-runs, which any agent can write: a stop removed from a stopped run's record lifts the owner's stop;
+ *      a stop an agent writes there stops the run; a `planned` or `tasks` edited there is what the run follows; a
+ *      "not now" kept there can be undone or forged. The owner's stop is kept with the approval, in the private folder;
+ *      the tasks and the planned arrivals come from the verified snapshot, the approved task lines and the approved
+ *      window; a record that disagrees with them stops its run with an error; the set-asides are private too. The
+ *      record is a log of the run, read for nothing a decision needs.
  */
 
 let dir: string;
@@ -104,6 +111,7 @@ const g = (p: string, harnesses: LoadGrant['harnesses'], allowedByName = false):
 function deps(over: Partial<LoadWindowDeps> = {}): LoadWindowDeps {
   return {
     poolsDir: path.join(dir, 'pools'), runsDir: path.join(dir, 'runs'), approvedFile: path.join(dir, 'private', 'load-approved.json'),
+    setAsideFile: path.join(dir, 'private', 'load-set-aside.json'),
     projects: () => Object.values(projects),
     grants: () => grants, tracedProjects: () => traced, endpoints: () => [ENDPOINT, { ...ENDPOINT, id: 'ep-2', name: 'Not approved', approved: false }],
     loadAgents: () => loadAgents,
@@ -404,5 +412,58 @@ describe('the approval', () => {
     fs.writeFileSync(path.join(dir, 'runs', runId, 'tasks.snapshot.jsonl'), 'tampered\n');
     expect((await w.refresh()).running).toBeUndefined();
     expect(readRun(path.join(dir, 'runs'), runId)!.stop).toMatchObject({ reason: 'error', detail: expect.stringContaining('snapshot') });
+  });
+
+  /** Approves pool `name` as shown; its run's id and its record's file. */
+  async function approved(w: ReturnType<typeof createLoadWindow>, name: string): Promise<{ runId: string; record: string }> {
+    writePool(name, [line({ task_id: `${name}-1` }), line({ task_id: `${name}-2` })], { seed: 7, rate_per_hour: 30 });
+    const shown = (await w.refresh()).proposal!;
+    expect(shown.pool).toBe(name);
+    const r = await w.approve({ pool: name, sha256: shown.sha256, proposalId: shown.id, window: {} }) as { ok: boolean; runId: string };
+    expect(r.ok).toBe(true);
+    return { runId: r.runId, record: path.join(dir, 'runs', r.runId, 'run.json') };
+  }
+  const editRecord = (file: string, fn: (r: Record<string, unknown>) => void) => {
+    const r = JSON.parse(fs.readFileSync(file, 'utf8')) as Record<string, unknown>;
+    fn(r);
+    fs.writeFileSync(file, JSON.stringify(r));
+  };
+
+  it('A7: a stop an agent writes in the record stops nothing; the owner\'s stop holds when the record loses it', async () => {
+    const w = createLoadWindow(deps());
+    const { runId, record } = await approved(w, 'p');
+    editRecord(record, (r) => { r.stop = { reason: 'switch', at: now }; });
+    expect((await w.refresh()).running?.runId).toBe(runId);
+    expect(await w.stop(runId)).toMatchObject({ ok: true });
+    editRecord(record, (r) => { delete r.stop; });
+    const after = await w.refresh();
+    expect(after.running).toBeUndefined();
+    expect(after.last).toMatchObject({ runId, stop: { reason: 'switch', at: now } });
+    // Nor can the record undo it through the approval's other fields: the run is not proposed again either.
+    expect(after.proposal).toBeUndefined();
+  });
+
+  it('A7: a record whose planned arrivals or tasks were edited stops its run with an error', async () => {
+    const w = createLoadWindow(deps());
+    const first = await approved(w, 'p');
+    editRecord(first.record, (r) => { (r.planned as Array<Record<string, unknown>>)[0].taskId = 'p-2-forged'; });
+    expect((await w.refresh()).running).toBeUndefined();
+    expect((await w.refresh()).last).toMatchObject({ runId: first.runId, stop: { reason: 'error', detail: expect.stringContaining('record') } });
+    const second = await approved(w, 'q');
+    editRecord(second.record, (r) => { (r.tasks as Array<Record<string, unknown>>)[0].split = 'eval'; });
+    expect((await w.refresh()).running).toBeUndefined();
+    expect((await w.refresh()).last).toMatchObject({ runId: second.runId, stop: { reason: 'error', detail: expect.stringContaining('record') } });
+  });
+
+  it('A7: "not now" is kept in the private folder; a set-aside written under ~/.tars hides nothing', async () => {
+    writePool('p', [line({ task_id: 'p-1' })]);
+    const w = createLoadWindow(deps());
+    const shown = (await w.refresh()).proposal!;
+    fs.mkdirSync(path.join(dir, 'runs'), { recursive: true });
+    fs.writeFileSync(path.join(dir, 'runs', 'set-aside.json'), JSON.stringify({ p: shown.sha256 }));
+    expect((await createLoadWindow(deps()).refresh()).proposal?.pool).toBe('p');
+    await w.notNow({ pool: 'p', sha256: shown.sha256 });
+    expect(JSON.parse(fs.readFileSync(path.join(dir, 'private', 'load-set-aside.json'), 'utf8'))).toEqual({ p: shown.sha256 });
+    expect((await createLoadWindow(deps()).refresh()).proposal).toBeUndefined();
   });
 });

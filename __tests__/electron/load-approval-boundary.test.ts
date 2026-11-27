@@ -13,8 +13,9 @@ import * as path from 'node:path';
  *      grants or approvals file.
  *  B3. Another part of the main process holds the load window's runtime or writes a grant, so that a message, a
  *      bot or an agent's tool could call it: anything but the window's handlers imports load-window.ts or writeGrant.
- *  B4. The handlers take a call that is not the main window's: another web contents (a webview, a second window)
- *      approves, grants, sets a pool aside or stops a window.
+ *  B4. The handlers take a call that is not the main window's: another web contents (a webview, a second window), or
+ *      a subframe of the main window, which shares its web contents (the Audit's I-1 at fdd82ca3d), approves, grants,
+ *      sets a pool aside or stops a window.
  *  B5. The grants or the approvals are kept where agents are handed (~/.tars), not in the private folder.
  */
 
@@ -72,7 +73,7 @@ vi.mock('electron', () => ({
 describe('the handlers take the main window\'s calls only', () => {
   let dir: string;
   let dispose: () => void;
-  const W = { send: vi.fn() };
+  const W = { send: vi.fn(), mainFrame: { url: 'app://-/index.html' } };
   const project = '/work/atlas';
   const endpoint = { id: 'ep-1', name: 'Host', baseUrl: 'http://127.0.0.1:9/v1', approved: true, approvedBaseUrl: 'http://127.0.0.1:9/v1', models: ['m'] };
 
@@ -84,23 +85,30 @@ describe('the handlers take the main window\'s calls only', () => {
       agents: new Map(),
       getMainWindow: () => ({ webContents: W, isDestroyed: () => false }) as never,
       projects: () => [project],
-      dirs: { pools: path.join(dir, 'pools'), runs: path.join(dir, 'runs'), grants: path.join(dir, 'private', 'load-grants.json'), approved: path.join(dir, 'private', 'load-approved.json') },
+      dirs: {
+        pools: path.join(dir, 'pools'), runs: path.join(dir, 'runs'), grants: path.join(dir, 'private', 'load-grants.json'),
+        approved: path.join(dir, 'private', 'load-approved.json'), setAside: path.join(dir, 'private', 'load-set-aside.json'),
+      },
     }).dispose;
   });
   afterEach(() => { dispose(); fs.rmSync(dir, { recursive: true, force: true }); });
 
   it('B4: another web contents is refused on every channel that changes anything', async () => {
     const other = { sender: { send: vi.fn() } };
+    // A subframe of the main window shares its web contents, not its main frame (the Audit's I-1 at fdd82ca3d).
+    const subframe = { sender: W, senderFrame: { url: 'about:blank' } };
     const grant = { path: project, enabled: true, allowedByName: false, endpointId: 'ep-1', model: 'm', harnesses: ['codex'] };
     for (const [channel, arg] of [['load:approve', { pool: 'p', sha256: 'x', proposalId: 'y', window: {} }], ['load:grant', grant], ['load:notNow', { pool: 'p', sha256: 'x' }], ['load:stop', 'r']] as const) {
       expect(await handlers.get(channel)!(other, arg), channel).toMatchObject({ ok: false, error: expect.stringContaining('click') });
+      expect(await handlers.get(channel)!(subframe, arg), `${channel} from a subframe`).toMatchObject({ ok: false, error: expect.stringContaining('click') });
     }
     expect(fs.existsSync(path.join(dir, 'private', 'load-grants.json'))).toBe(false);
     // The main window's own call reaches them: the settings kept, the switch off (/work/atlas is no git work tree),
     // and the project as the Projects view shows it.
-    expect(await handlers.get('load:grant')!({ sender: W }, grant)).toMatchObject({ ok: true, project: { path: project, allowed: false, state: 'no_repo' } });
+    const main = { sender: W, senderFrame: W.mainFrame };
+    expect(await handlers.get('load:grant')!(main, grant)).toMatchObject({ ok: true, project: { path: project, allowed: false, state: 'no_repo' } });
     expect(JSON.parse(fs.readFileSync(path.join(dir, 'private', 'load-grants.json'), 'utf8')).projects).toEqual([{ ...grant, enabled: false }]);
-    expect(await handlers.get('load:approve')!({ sender: W }, { pool: 'none', sha256: 'x', proposalId: 'y', window: {} })).toMatchObject({ ok: false, reason: 'stale' });
+    expect(await handlers.get('load:approve')!(main, { pool: 'none', sha256: 'x', proposalId: 'y', window: {} })).toMatchObject({ ok: false, reason: 'stale' });
   });
 
   it('B5: the grants and the approvals live in the private folder', async () => {
