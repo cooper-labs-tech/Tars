@@ -14,7 +14,9 @@ const HASH = /^[0-9a-f]{64}$/;
 
 const SESSION_SELECT = `install_id, session_id, agent_id, project_key, harness, harness_version, native_session_id,
   endpoint_key, endpoint_name, model, started_at, ended_at, final_status, turn_count, request_count, tokens_in, tokens_cached,
-  tokens_out, mixed, unknown_turns, outcome, environment, events, start, lost_demand, masking_version, mask_counts, rtt_median_ms, clock_offset_ms, received_at`;
+  tokens_out, mixed, unknown_turns, outcome, environment, events, start, lost_demand, masking_version, mask_counts, rtt_median_ms, clock_offset_ms, consent, received_at,
+  (SELECT consent_training FROM installs i WHERE i.id = sessions.install_id) AS install_consent_training,
+  (SELECT consent_at FROM installs i WHERE i.id = sessions.install_id) AS install_consent_at`;
 
 function session(r: QueryResultRow) {
   return {
@@ -27,6 +29,9 @@ function session(r: QueryResultRow) {
     // Always present: null is "the uploading Tars did not send it" (one before the field, or one that could not read it).
     environment: r.environment ?? null, events: r.events ?? null, start: r.start ?? null, lostDemand: r.lost_demand ?? null,
     maskingVersion: r.masking_version ?? null, maskCounts: r.mask_counts ?? null,
+    // The session's own consent as it was recorded, and its install's current one (PUT /v1/installs/me/consent).
+    consent: r.consent ?? null,
+    installConsent: r.install_consent_training === null || r.install_consent_training === undefined ? null : { training: r.install_consent_training, at: ms(r.install_consent_at) },
     rttMedianMs: r.rtt_median_ms ?? null, clockOffsetMs: r.clock_offset_ms ?? null,
   };
 }
@@ -57,7 +62,7 @@ function limitOf(url: URL): number {
  * cursor is the highest change committed when the page was read: under the lock of db.ts, no change
  * numbered at or below it can still be on its way, so a filtered reader never rescans.
  */
-async function page(ctx: Ctx, table: 'sessions' | 'tombstones', seqCol: string, select: string, where: string[], args: unknown[], cursor: bigint, limit: number) {
+async function page(ctx: Ctx, table: 'sessions' | 'tombstones' | 'install_consent_changes', seqCol: string, select: string, where: string[], args: unknown[], cursor: bigint, limit: number) {
   return inTx(ctx.db, async (tx) => {
     await tx.query('SET TRANSACTION ISOLATION LEVEL REPEATABLE READ READ ONLY');
     const top = (await tx.query<{ n: string | null }>(`SELECT max(${seqCol})::text AS n FROM ${table}`)).rows[0]!.n;
@@ -94,6 +99,19 @@ export async function listDeletions(ctx: Ctx, req: IncomingMessage, res: ServerR
   const p = await page(ctx, 'tombstones', 'seq', 'install_id, session_id, reason, at', [], [], cursorOf(url), limitOf(url));
   json(res, 200, {
     deletions: p.rows.map((r) => ({ install: r.install_id, sessionId: r.session_id, reason: r.reason, at: ms(r.at) })),
+    nextCursor: p.nextCursor, more: p.more,
+  });
+}
+
+/**
+ * Every change of an install's training consent, oldest first, by the same cursor as the deletions: a reader learns
+ * of an install that turned training off and then sent nothing more. A deleted install's changes go with it.
+ */
+export async function listConsentChanges(ctx: Ctx, req: IncomingMessage, res: ServerResponse, url: URL): Promise<void> {
+  await authReader(ctx, req);
+  const p = await page(ctx, 'install_consent_changes', 'seq', 'install_id, training, at', [], [], cursorOf(url), limitOf(url));
+  json(res, 200, {
+    changes: p.rows.map((r) => ({ install: r.install_id, training: r.training, at: ms(r.at) })),
     nextCursor: p.nextCursor, more: p.more,
   });
 }

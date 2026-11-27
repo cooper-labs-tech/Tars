@@ -5,7 +5,7 @@ import { zstdCompressSync } from 'node:zlib';
 import { type Ctx, json, clientAddr, smallJson, readJson, authInstall, assertRoom, type Install } from './http.ts';
 import { HttpError, readRaw, decodeBody } from './body.ts';
 import { validateBatch, type Batch } from './batch.ts';
-import { inTx, type Tx } from './db.ts';
+import { inTx, nextChange, type Tx } from './db.ts';
 import { mintToken } from './tokens.ts';
 import { LIMITS } from './config.ts';
 import { deleteInstall, deleteSession } from './purge.ts';
@@ -41,14 +41,44 @@ export async function register(ctx: Ctx, req: IncomingMessage, res: ServerRespon
     `SELECT count(*) FILTER (WHERE addr_hash = $1)::int AS mine, count(*)::int AS all FROM registrations WHERE at > now() - interval '1 hour'`, [addrHash]);
   const c = counts.rows[0]!;
   if (c.mine >= s.registrationsPerHourPerAddress || c.all >= s.registrationsPerHour) throw new HttpError(429, 'rate_limited', undefined, { retryAfter: 3600 });
+  const consent = isRecord(value) && value.consent !== undefined ? consentOf(value.consent) : null;
   const id = randomUUID();
   const { token, hash } = mintToken('install');
   await inTx(ctx.db, async (tx) => {
     await tx.query('INSERT INTO installs (id, token_hash, client_name, client_version, platform) VALUES ($1, $2, $3, $4, $5)',
       [id, hash, field(client.name), field(client.version), field(client.platform)]);
     await tx.query('INSERT INTO registrations (addr_hash) VALUES ($1)', [addrHash]);
+    if (consent) await recordConsent(tx, id, consent.training);
   });
   json(res, 201, { installId: id, token, limits: limitsOf(s), retentionDays: s.retentionDays });
+}
+
+/** `{training: boolean}` and nothing else, or a 400. */
+function consentOf(v: unknown): { training: boolean } {
+  if (!isRecord(v) || typeof v.training !== 'boolean' || Object.keys(v).some((k) => k !== 'training')) {
+    throw new HttpError(400, 'bad_request', 'consent must be {training: boolean}');
+  }
+  return { training: v.training };
+}
+
+/**
+ * An install's current training consent, and one row of the readers' consent feed for the change, numbered under
+ * the change lock (db.ts) so the feed's cursor misses nothing. The rows go with the install (a foreign key).
+ */
+async function recordConsent(tx: Tx, installId: string, training: boolean): Promise<Date> {
+  const seq = await nextChange(tx);
+  const at = (await tx.query<{ at: Date }>('INSERT INTO install_consent_changes (seq, install_id, training) VALUES ($1, $2, $3) RETURNING at',
+    [seq, installId, training])).rows[0]!.at;
+  await tx.query('UPDATE installs SET consent_training = $2, consent_at = $3 WHERE id = $1', [installId, training, at]);
+  return at;
+}
+
+export async function putConsent(ctx: Ctx, req: IncomingMessage, res: ServerResponse): Promise<void> {
+  const inst = await authInstall(ctx, req);
+  const { value } = await smallJson(req);
+  const { training } = consentOf(value);
+  const at = await inTx(ctx.db, (tx) => recordConsent(tx, inst.id, training));
+  json(res, 200, { training, at: at.getTime() });
 }
 
 export async function me(ctx: Ctx, req: IncomingMessage, res: ServerResponse): Promise<void> {
@@ -144,7 +174,7 @@ const SESSION_COLS: Col[] = [
   ['mixed', 'mixed', 'bool'], ['unknownTurns', 'unknown_turns', 'int'], ['outcome', 'outcome', 'jsonb'],
   ['environment', 'environment', 'jsonb'], ['events', 'events', 'jsonb'], ['start', 'start', 'jsonb'], ['lostDemand', 'lost_demand', 'jsonb'],
   ['maskingVersion', 'masking_version', 'text'], ['maskCounts', 'mask_counts', 'jsonb'],
-  ['rttMedianMs', 'rtt_median_ms', 'float8'], ['clockOffsetMs', 'clock_offset_ms', 'float8'],
+  ['rttMedianMs', 'rtt_median_ms', 'float8'], ['clockOffsetMs', 'clock_offset_ms', 'float8'], ['consent', 'consent', 'jsonb'],
 ];
 // What a turn changed in the repository: the heads and trees, the counts, and the survival of its lines.
 const TURN_WORKSPACE: Col[] = [
@@ -197,7 +227,7 @@ function keepWhenAbsent(sql: string, table: string, columns: string[]): string {
 }
 const SQL = {
   sessions: keepWhenAbsent(upsertSql('sessions', 'sessionId', 'session_id', SESSION_COLS, { cols: ['changed_seq'], vals: [`nextval('change_seq')`] }).replace(
-    /DO UPDATE SET /, 'DO UPDATE SET received_at = now(), '), 'sessions', ['environment', 'events', 'start', 'lost_demand', 'masking_version', 'mask_counts', 'rtt_median_ms', 'clock_offset_ms']),
+    /DO UPDATE SET /, 'DO UPDATE SET received_at = now(), '), 'sessions', ['environment', 'events', 'start', 'lost_demand', 'masking_version', 'mask_counts', 'rtt_median_ms', 'clock_offset_ms', 'consent']),
   turns: keepWhenAbsent(upsertSql('turns', 'turnId', 'turn_id', TURN_COLS), 'turns', ['task_ref', 'interventions', ...TURN_WORKSPACE.map(([, c]) => c)]),
   // A request sent again without its side mark keeps the one it had: only true or false replaces it.
   requests: keepWhenAbsent(upsertSql('requests', 'requestId', 'request_id', REQUEST_COLS), 'requests', ['side', 'live_sessions', 'cancel', 'rtt_ms', 'clock_offset_ms', 'queue_ms', 'upstream_ms']),

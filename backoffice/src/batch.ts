@@ -102,6 +102,7 @@ const SESSION: Shape = {
   start: { t: 'shape', shape: START }, lostDemand: { t: 'list', shape: LOST_DEMAND, max: 1000 },
   maskingVersion: str(40), maskCounts: { t: 'shape', shape: MASK_COUNTS },
   rttMedianMs: MS, clockOffsetMs: SIGNED_MS,
+  consent: { t: 'shape', shape: { training: r(bool) } },
 };
 const TURN: Shape = {
   turnId: r(id), sessionId: r(id), index: r(int), startedAt: r(int), endedAt: int, gapBeforeMs: int, requestCount: r(int),

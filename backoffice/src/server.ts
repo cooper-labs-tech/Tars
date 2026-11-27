@@ -5,8 +5,8 @@ import { connect, pending } from './db.ts';
 import { BlobStore } from './blobstore.ts';
 import { makeCtx, json, type Ctx } from './http.ts';
 import { HttpError } from './body.ts';
-import { register, me, deleteMe, deleteOneSession, missingBlobs, putBlob, putBatch } from './ingest.ts';
-import { listSessions, listDeletions, getSession, findRequests, getBlob } from './read.ts';
+import { register, me, deleteMe, deleteOneSession, missingBlobs, putBlob, putBatch, putConsent } from './ingest.ts';
+import { listSessions, listDeletions, listConsentChanges, getSession, findRequests, getBlob } from './read.ts';
 import { admin } from './admin.ts';
 import { sweep } from './purge.ts';
 
@@ -23,6 +23,7 @@ async function route(ctx: Ctx, req: IncomingMessage, res: ServerResponse): Promi
   if (p === '/v1/installs' && m === 'POST') return register(ctx, req, res);
   if (p === '/v1/installs/me' && m === 'GET') return me(ctx, req, res);
   if (p === '/v1/installs/me' && m === 'DELETE') return deleteMe(ctx, req, res);
+  if (p === '/v1/installs/me/consent' && m === 'PUT') return putConsent(ctx, req, res);
   if ((x = /^\/v1\/sessions\/([^/]+)$/.exec(p)) && m === 'DELETE') return deleteOneSession(ctx, req, res, decodeURIComponent(x[1]!));
   if (p === '/v1/blobs/missing' && m === 'POST') return missingBlobs(ctx, req, res);
   if ((x = /^\/v1\/blobs\/([^/]+)$/.exec(p)) && m === 'PUT') return putBlob(ctx, req, res, x[1]!);
@@ -30,6 +31,7 @@ async function route(ctx: Ctx, req: IncomingMessage, res: ServerResponse): Promi
   if (p === '/v1/read/sessions' && m === 'GET') return listSessions(ctx, req, res, url);
   if ((x = /^\/v1\/read\/sessions\/([^/]+)\/([^/]+)$/.exec(p)) && m === 'GET') return getSession(ctx, req, res, x[1]!, decodeURIComponent(x[2]!));
   if (p === '/v1/read/deletions' && m === 'GET') return listDeletions(ctx, req, res, url);
+  if (p === '/v1/read/install-consent' && m === 'GET') return listConsentChanges(ctx, req, res, url);
   if (p === '/v1/read/requests' && m === 'GET') return findRequests(ctx, req, res, url);
   if ((x = /^\/v1\/read\/blobs\/([^/]+)$/.exec(p)) && m === 'GET') return getBlob(ctx, req, res, x[1]!);
   throw new HttpError(404, 'not_found');

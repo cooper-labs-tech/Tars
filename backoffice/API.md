@@ -65,8 +65,11 @@ with backoff. Every write below is idempotent, so a retry never duplicates anyth
 ### `POST /v1/installs` (no token)
 
 ```json
-{ "client": { "name": "tars", "version": "2.0.7", "platform": "darwin" } }
+{ "client": { "name": "tars", "version": "2.0.7", "platform": "darwin" }, "consent": { "training": false } }
 ```
+
+`consent` is optional: the install's training consent as it registers (§ 3, consent). Anything but
+`{training: boolean}` is a `400`.
 
 `201`:
 
@@ -91,6 +94,18 @@ with backoff. Every write below is idempotent, so a retry never duplicates anyth
   "retentionDays": 90
 }
 ```
+
+### `PUT /v1/installs/me/consent`
+
+The install's current training consent, `{ "training": true | false }` and nothing else (`400` otherwise). Send it
+whenever the user changes it, and again until it is answered: setting the same value twice is harmless.
+
+`200 {"training": false, "at": 1763600000000}`.
+
+- The value is kept on the install, and shows as `installConsent` on every read of its sessions (§ 6.2).
+- Each call adds one change to the readers' consent feed (§ 6.6), so a reader learns of a change even when the
+  install sends nothing after it. The value given at registration is a change too.
+- Only the install's own token sets it.
 
 ### `DELETE /v1/installs/me`
 
@@ -216,6 +231,7 @@ missing blob, then `PUT` the batch, and send any `missingBlobs` it reports.
 | `lostDemand` | array ≤ 1,000 | no | Tasks that left the agent's queue never to start while the session ran: `{ "kind": "queue_drop", "ref": task ref, "queuedAt": ms, "at": ms, "reason": "cancelled" \| "taken_back" \| "dropped_with_stop" \| "queue_cleared" \| "agent_removed" \| "not_handed_again" }`, all required, no other key. The list as a whole, kept when absent |
 | `maskingVersion` | string ≤ 40 | no | The version of the masking the client applied to the content before upload. Kept when absent |
 | `maskCounts` | object | no | What that masking replaced, by type: exactly `SECRET`, `EMAIL`, `IP`, `PERSON`, `HOME` and `PHONE`, each an int ≥ 0, all required, no other key. Kept when absent |
+| `consent` | `{ "training": bool }` | no | The training consent the session was recorded under, no other key. Kept when absent |
 | `rttMedianMs` | ms, a number from 0 to 10^10 | no | The median round trip of the session's requests, from the endpoint's Server-Timing. Kept when absent |
 | `clockOffsetMs` | ms, a number from -10^10 to 10^10 | no | The endpoint's clock against the client's, from the lowest round trip. Kept when absent |
 
@@ -384,6 +400,19 @@ What was deleted, so a reader deletes its own copies:
 The requests carrying that upstream request id (normally one), each with its `install`, `sessionId`
 and `turnId`, for a reader that starts from its own request id.
 
+### 6.6 `GET /v1/read/install-consent`
+
+Every change of an install's training consent, oldest first:
+
+```json
+{ "changes": [ { "install": "...", "training": false, "at": 1763600000000 } ], "nextCursor": "...", "more": false }
+```
+
+- One change per `PUT /v1/installs/me/consent`, and one for the value given at registration.
+- Same cursor rules as § 6.1. A reader that keeps sessions must read this feed: an install that turns training
+  off and then sends nothing would otherwise never be seen, and its sessions already read would stay eligible.
+- A deleted install's changes go with it; its deletion is in § 6.4.
+
 ## 7. What a client sends, and does not
 
 The server stores what it is given, so privacy is decided on the client:
@@ -426,3 +455,4 @@ before the clients.
 | 27/11/2026 | `start` and `lostDemand` on a session, `taskRef` on a turn, `cancel` on a request (read back the same way), migration `004_session_start` |
 | 27/11/2026 | `maskingVersion` and `maskCounts` on a session, `interventions` on a turn (read back the same way), migration `005_masking_and_interventions` |
 | 27/11/2026 | the timings (`rttMedianMs`, `clockOffsetMs` on a session; `rttMs`, `clockOffsetMs`, `queueMs`, `upstreamMs` on a request) and a turn's workspace, migration `006_timing_and_workspace` |
+| 27/11/2026 | the training consent: `consent` on registration and on a session, `PUT /v1/installs/me/consent`, `installConsent` on session reads, the feed `GET /v1/read/install-consent` (§ 6.6), migration `007_training_consent` |
