@@ -5,7 +5,7 @@ import {
   checkWindow, expectedArrivals, parseTasksJsonl, parseWindowJson, planArrivals,
   type LoadHarness, type LoadSplit, type LoadTask, type LoadWindowParams, type RefusedLine,
 } from './load-pool';
-import type { LoadGrant } from './load-grants';
+import { approvedEndpoint, type LoadGrant } from './load-grants';
 import { writeSecretFileSync } from '../utils/secret-file';
 import {
   createRun, listRuns, newRunId, readSnapshot, updateRun,
@@ -44,12 +44,14 @@ export interface LoadWindowDeps {
    * write, is a record, never an approval.
    */
   approvedFile: string;
+  /** Tars's projects: the Projects view lists them, and a pool's project must be one. */
+  projects(): string[];
   grants(): LoadGrant[];
   /** The projects opted into traces (traces.projects). */
   tracedProjects(): string[];
-  endpoints(): Array<{ id: string; name: string; baseUrl: string; approvedBaseUrl?: string }>;
+  endpoints(): Array<{ id: string; name: string; baseUrl: string; approved?: boolean; approvedBaseUrl?: string; models?: string[] }>;
   /** The fleet's load agents (`load: true`). */
-  loadAgents(): Array<{ id: string; name: string; projectPath: string; provider: string }>;
+  loadAgents(): Array<{ id: string; name: string; projectPath: string; provider: string; endpointId?: string; model?: string }>;
   /** git in a folder, through safe-git: its output, or a throw. */
   git(cwd: string, args: string[]): Promise<string>;
   /** gh, read-only: its output, or a throw. */
@@ -65,6 +67,43 @@ export interface LoadWindowDeps {
 
 export type Visibility = 'public' | 'allowed_by_name' | 'refused';
 
+/**
+ * Where a project stands for load windows, decided once (checkProject) for the Projects view, the switch and the
+ * proposal, in this order: one of Tars's projects, traced, a git work tree, an endpoint and a model chosen, a harness
+ * chosen, a public repository or allowed by name, the switch on.
+ */
+export const LOAD_PROJECT_STATES = [
+  'allowed', 'allowed_by_name', 'off', 'private', 'unknown', 'no_harness', 'no_endpoint', 'no_repo', 'traces_off', 'unknown_project',
+] as const;
+export type LoadProjectState = typeof LOAD_PROJECT_STATES[number];
+
+/** A project's repository as gh says: never asked for a project allowed by name, with traces off or no work tree. */
+export type RepoVisibility = 'public' | 'private' | 'unknown' | 'none' | 'not_asked';
+
+/** A project as the Projects view of #672's frames shows it. */
+export interface LoadProjectView {
+  path: string;
+  name: string;
+  /** Its GitHub repository, `owner/name`, from its remotes (origin first); null when none is on GitHub. */
+  repo: string | null;
+  visibility: RepoVisibility;
+  traced: boolean;
+  /** Its settings as kept, the switch included; null when never set. */
+  grant: LoadGrant | null;
+  /** Whether a load window may run its tasks now. */
+  allowed: boolean;
+  state: LoadProjectState;
+  /** The line under the project, as the frames word it. */
+  reason: string;
+  agents: Array<{ id: string; name: string; harness: string; endpointName?: string; model?: string; inWindow: boolean }>;
+}
+
+export interface LoadProjectsView {
+  projects: LoadProjectView[];
+  /** The endpoints a grant may name: approved, at their approved address, with their models. */
+  endpoints: Array<{ id: string; name: string; models: string[] }>;
+}
+
 export interface LoadProposal {
   /** What the card shows, digested: approve carries it back, and another one is stale. */
   id: string;
@@ -76,7 +115,8 @@ export interface LoadProposal {
   total: number;
   runnable: number;
   counts: { train: number; heldout: number; eval: number; tasks: number };
-  projects: Array<{ path: string; name: string; repo: string | null; visibility: Visibility; reason?: string; tasks: number }>;
+  /** Each project of the pool, decided as the Projects view decides it (`state`, and `reason` when refused). */
+  projects: Array<{ path: string; name: string; repo: string | null; visibility: Visibility; state: LoadProjectState; reason?: string; tasks: number }>;
   /** The tasks that will run, in file order, with every setup line and test command as they will run. */
   tasks: Array<{ n: number; line: number; taskId: string; project: string; split: LoadSplit; capMin: number; setup: string[]; testCmd: string | null; harnesses: LoadHarness[] | null }>;
   refused: RefusedLine[];
@@ -186,11 +226,96 @@ export function createLoadWindow(deps: LoadWindowDeps) {
 
   const ok = (p: Promise<unknown>) => p.then(() => true, () => false);
 
+  /** The load agents a window runs now: those of the run under way's arrivals that have not ended. */
+  function agentsInWindow(): Set<string> {
+    const run = current();
+    return new Set((run?.arrivals ?? []).filter(a => a.actualAt !== undefined && !a.blocked && a.endedAt === undefined && a.agentId).map(a => a.agentId!));
+  }
+
+  interface ProjectCheck extends LoadProjectView { remotes: Set<string> }
+
+  /**
+   * Where a project stands for load windows: the one decision the Projects view, the switch (settle) and the proposal
+   * all take, so they never disagree. `grant` is the project's as kept unless one is given (a change to try).
+   */
+  async function checkProject(project: string, given?: LoadGrant | null, busy: Set<string> = agentsInWindow()): Promise<ProjectCheck> {
+    const name = path.basename(project);
+    const grant = given !== undefined ? given : (deps.grants().find(g => g.path === project) ?? null);
+    const traced = deps.tracedProjects().includes(project);
+    const endpoints = deps.endpoints();
+    const agents = deps.loadAgents().filter(a => a.projectPath === project).map(a => ({
+      id: a.id, name: a.name, harness: a.provider,
+      ...(a.endpointId ? { endpointName: endpoints.find(e => e.id === a.endpointId)?.name ?? a.endpointId } : {}),
+      ...(a.model ? { model: a.model } : {}), inWindow: busy.has(a.id),
+    }));
+    let repo: string | null = null;
+    let visibility: RepoVisibility = 'not_asked';
+    let remotes = new Set<string>();
+    const decide = (state: LoadProjectState, reason: string): ProjectCheck => ({
+      path: project, name, repo, visibility, traced, grant, allowed: state === 'allowed' || state === 'allowed_by_name', state, reason, agents, remotes,
+    });
+    if (!deps.projects().includes(project)) return decide('unknown_project', 'Refused: it is not one of your projects in Tars.');
+    if (!traced) return decide('traces_off', `Refused: traces are off for ${name}, and a load window runs only projects that are traced. Opt it in first.`);
+    if (!(await ok(deps.git(project, ['rev-parse', '--is-inside-work-tree'])))) {
+      return decide('no_repo', `Refused: ${name} is not a git work tree, and a load window starts every task at a commit of its repository.`);
+    }
+    const listed = (await deps.git(project, ['remote', '-v']).catch(() => '')).split('\n')
+      .map(l => l.split(/\s+/)).filter(p => p[1]).map(p => ({ remote: p[0], repo: githubRepo(p[1]) })).filter((r): r is { remote: string; repo: string } => !!r.repo);
+    remotes = new Set(listed.map(r => r.repo));
+    repo = (listed.find(r => r.remote === 'origin') ?? listed[0])?.repo ?? null;
+    let ghError: string | undefined;
+    // A project allowed by name is never asked of gh.
+    if (!grant?.allowedByName) {
+      if (!repo) visibility = 'none';
+      else {
+        const seen = await visibilityOf(repo);
+        if (seen.error) { visibility = 'unknown'; ghError = seen.error; } else visibility = seen.visibility === 'PUBLIC' ? 'public' : 'private';
+      }
+    }
+    const endpoint = approvedEndpoint(endpoints, grant?.endpointId);
+    if (!grant || !endpoint || !grant.model || (endpoint.models?.length && !endpoint.models.includes(grant.model))) {
+      return decide('no_endpoint', 'No endpoint yet: choose the endpoint and the model its load agents use, then allow it.');
+    }
+    if (!grant.harnesses.length) return decide('no_harness', 'No harness yet: choose the harnesses its load agents run, then allow it.');
+    if (!grant.allowedByName) {
+      const byName = 'Allow it by name to let a load window run its tasks.';
+      if (visibility === 'private') return decide('private', `Not allowed: its repository is private. ${byName}`);
+      if (visibility === 'none') return decide('unknown', `Not allowed: ${name} has no repository on GitHub, so Tars cannot tell whether it is public. ${byName}`);
+      if (visibility === 'unknown') return decide('unknown', `Not allowed: gh could not tell whether ${repo} is public (${ghError}). ${byName}`);
+    }
+    const runsOn = `Its load agents run on ${endpoint.name}, ${grant.model}.`;
+    if (!grant.enabled) return decide('off', `Off: turn load windows on to let a window run its tasks. ${runsOn}`);
+    return grant.allowedByName
+      ? decide('allowed_by_name', `Allowed by name: you allowed it here. ${runsOn}`)
+      : decide('allowed', `Allowed: its repository is public. ${runsOn}`);
+  }
+
+  /** The Projects view: every project of Tars's as checkProject decides it, and the endpoints a grant may name. */
+  async function projects(): Promise<LoadProjectsView> {
+    const busy = agentsInWindow();
+    const checked = await Promise.all([...new Set(deps.projects())].map(p => checkProject(p, undefined, busy)));
+    return {
+      projects: checked.map(({ remotes: _remotes, ...view }) => view),
+      endpoints: deps.endpoints().filter(e => approvedEndpoint([e], e.id)).map(e => ({ id: e.id, name: e.name, models: e.models ?? [] })),
+    };
+  }
+
+  /** A grant as it can be kept: its settings as asked, its switch on only when the project can then run. */
+  async function settle(grant: LoadGrant): Promise<LoadGrant> {
+    const can = await checkProject(grant.path, { ...grant, enabled: true });
+    return { ...grant, enabled: grant.enabled && can.allowed };
+  }
+
+  /** One project of the Projects view. */
+  async function project(projectPath: string): Promise<LoadProjectView> {
+    const { remotes: _remotes, ...view } = await checkProject(projectPath);
+    return view;
+  }
+
   async function buildProposal(pool: PoolFile): Promise<LoadProposal> {
     const parsed = parseTasksJsonl(pool.bytes.toString('utf8'));
     const win = parseWindowJson(pool.windowText);
     const grants = deps.grants();
-    const traced = deps.tracedProjects();
     const taskRefused: RefusedLine[] = [];
     const refuseTask = (t: LoadTask, reason: string) => taskRefused.push({ file: 'tasks.jsonl', line: t.line, reason });
     const byProject = new Map<string, LoadTask[]>();
@@ -198,36 +323,25 @@ export function createLoadWindow(deps: LoadWindowDeps) {
 
     const projects: LoadProposal['projects'] = [];
     const runnable: LoadTask[] = [];
+    const busy = agentsInWindow();
     for (const [project, tasks] of byProject) {
-      const name = path.basename(project);
-      const shownRepo = tasks.find(t => t.repo)?.repo ?? null;
-      const refuse = (reason: string) => { projects.push({ path: project, name, repo: shownRepo, visibility: 'refused', reason, tasks: tasks.length }); };
-      const grant = grants.find(g => g.path === project);
-      if (!grant) { refuse('not allowed for load windows: no grant of yours'); continue; }
-      if (!traced.includes(project)) { refuse('not opted into traces: its sessions would not be traced'); continue; }
-      if (!(await ok(deps.git(project, ['rev-parse', '--is-inside-work-tree'])))) { refuse('not a git work tree'); continue; }
-      const remotes = new Set((await deps.git(project, ['remote', '-v']).catch(() => '')).split('\n')
-        .map(l => l.split(/\s+/)[1]).filter(Boolean).map(u => githubRepo(u)).filter((r): r is string => !!r));
-      let kept = tasks.filter((t) => {
-        if (t.repo !== null && !remotes.has(t.repo.toLowerCase())) { refuseTask(t, `repo: ${t.repo} is not a remote of ${name}`); return false; }
-        if (t.repo === null && !grant.allowedByName) { refuseTask(t, `repo: none, and ${name} is not allowed by name`); return false; }
-        return true;
-      });
-      if (!grant.allowedByName) {
-        let projectRefusal: string | undefined;
-        for (const repo of [...new Set(kept.map(t => t.repo as string))]) {
-          const seen = await visibilityOf(repo);
-          if (seen.error) { projectRefusal = `gh could not tell whether ${repo} is public (${seen.error}), and ${name} is not allowed by name`; break; }
-          if (seen.visibility !== 'PUBLIC') { projectRefusal = `its repository ${repo} is private, not allowed by name`; break; }
-        }
-        if (projectRefusal) {
-          // Its tasks already refused alone stay so; the rest go with the project.
-          projects.push({ path: project, name, repo: shownRepo, visibility: 'refused', reason: projectRefusal, tasks: tasks.length });
-          continue;
-        }
+      // The project as the Projects view decides it: refused whole, with its state and reason, or run.
+      const check = await checkProject(project, undefined, busy);
+      const { name } = check;
+      if (!check.allowed || !check.grant) {
+        projects.push({ path: project, name, repo: check.repo ?? tasks.find(t => t.repo)?.repo ?? null, visibility: 'refused', state: check.state, reason: check.reason, tasks: tasks.length });
+        continue;
       }
-      const checked: LoadTask[] = [];
-      for (const t of kept) {
+      const grant = check.grant;
+      const kept: LoadTask[] = [];
+      for (const t of tasks) {
+        if (t.repo !== null && !check.remotes.has(t.repo.toLowerCase())) { refuseTask(t, `repo: ${t.repo} is not a remote of ${name}`); continue; }
+        if (t.repo === null && !grant.allowedByName) { refuseTask(t, `repo: none, and ${name} is not allowed by name`); continue; }
+        // Another of its remotes, not allowed by name: public too, or the task is left out.
+        if (t.repo !== null && !grant.allowedByName && t.repo.toLowerCase() !== check.repo) {
+          const seen = await visibilityOf(t.repo.toLowerCase());
+          if (seen.error || seen.visibility !== 'PUBLIC') { refuseTask(t, `repo: ${t.repo} is ${seen.error ? `of a visibility gh could not tell (${seen.error})` : 'private'}, and ${name} is not allowed by name`); continue; }
+        }
         if (!(await ok(deps.git(project, ['cat-file', '-e', `${t.base_commit}^{commit}`])))) {
           refuseTask(t, `base_commit ${t.base_commit.slice(0, 10)} is not in ${name}: nothing is fetched during a window`);
           continue;
@@ -236,10 +350,9 @@ export function createLoadWindow(deps: LoadWindowDeps) {
           refuseTask(t, `harnesses: no load agent of ${name} runs ${t.harnesses.join(' or ')} (it runs ${grant.harnesses.join(', ')})`);
           continue;
         }
-        checked.push(t);
+        kept.push(t);
       }
-      kept = checked;
-      projects.push({ path: project, name, repo: shownRepo, visibility: grant.allowedByName ? 'allowed_by_name' : 'public', tasks: kept.length });
+      projects.push({ path: project, name, repo: check.repo, visibility: check.state === 'allowed_by_name' ? 'allowed_by_name' : 'public', state: check.state, tasks: kept.length });
       runnable.push(...kept);
     }
     runnable.sort((a, b) => a.line - b.line);
@@ -256,7 +369,7 @@ export function createLoadWindow(deps: LoadWindowDeps) {
       const planned: LoadProposal['agents'] = mine.map(a => ({ name: a.name, project, harness: a.provider as LoadHarness, existing: true, agentId: a.id }));
       for (const h of grant.harnesses) if (!planned.some(a => a.harness === h)) planned.push({ name: '', project, harness: h, existing: false });
       for (const a of planned.slice(0, win.window.max_concurrent)) agents.push(a.existing ? a : { ...a, name: nextName() });
-      const e = deps.endpoints().find(x => x.id === grant.endpointId);
+      const e = approvedEndpoint(deps.endpoints(), grant.endpointId);
       if (e) endpoints.set(e.id, { id: e.id, name: e.name, baseUrl: e.approvedBaseUrl ?? e.baseUrl });
     }
 
@@ -414,7 +527,7 @@ export function createLoadWindow(deps: LoadWindowDeps) {
     return { ok: true };
   }
 
-  return { refresh, approve, notNow, stop };
+  return { refresh, approve, notNow, stop, projects, project, settle };
 }
 
 export type LoadWindow = ReturnType<typeof createLoadWindow>;

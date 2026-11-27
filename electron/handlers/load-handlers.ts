@@ -72,10 +72,16 @@ export function registerLoadHandlers(deps: LoadHandlerDeps): { window: LoadWindo
   const tell = () => { void window.refresh().then(send, err => console.error(`[load] the state not read: ${(err as Error).message}`)); };
   const windowDeps: LoadWindowDeps = {
     poolsDir: dirs.pools, runsDir: dirs.runs, approvedFile: dirs.approved,
+    projects: deps.projects,
     grants: () => readGrants(dirs.grants),
     tracedProjects: () => traceSettingsOf(deps.getAppSettings()).projects,
-    endpoints: () => (deps.getAppSettings().inferenceEndpoints ?? []).map(e => ({ id: e.id, name: e.name, baseUrl: e.baseUrl, ...(e.approvedBaseUrl ? { approvedBaseUrl: e.approvedBaseUrl } : {}) })),
-    loadAgents: () => [...deps.agents.values()].filter(a => a.load === true).map(a => ({ id: a.id, name: a.name ?? '', projectPath: a.projectPath, provider: String(a.provider ?? '') })),
+    endpoints: () => (deps.getAppSettings().inferenceEndpoints ?? []).map(e => ({
+      id: e.id, name: e.name, baseUrl: e.baseUrl, approved: e.approved === true, models: e.models ?? [], ...(e.approvedBaseUrl ? { approvedBaseUrl: e.approvedBaseUrl } : {}),
+    })),
+    loadAgents: () => [...deps.agents.values()].filter(a => a.load === true).map(a => ({
+      id: a.id, name: a.name ?? '', projectPath: a.projectPath, provider: String(a.provider ?? ''),
+      ...(a.endpointId ? { endpointId: a.endpointId } : {}), ...(a.model ? { model: a.model } : {}),
+    })),
     git: (cwd, args) => safeGit(cwd, args, { timeout: 10_000 }).then(r => r.stdout),
     gh,
     now: deps.now ?? Date.now,
@@ -94,23 +100,25 @@ export function registerLoadHandlers(deps: LoadHandlerDeps): { window: LoadWindo
   ipcMain.handle('load:approve', (e, input: unknown) => (fromWindow(e) ? window.approve((input ?? {}) as Record<string, unknown>) : refused));
   ipcMain.handle('load:notNow', (e, input: unknown) => (fromWindow(e) ? window.notNow((input ?? {}) as Record<string, unknown>) : refused));
   ipcMain.handle('load:stop', (e, runId: unknown) => (fromWindow(e) ? window.stop(runId) : refused));
-  ipcMain.handle('load:grants', () => readGrants(dirs.grants));
-  ipcMain.handle('load:grant', (e, input: unknown) => {
+  ipcMain.handle('load:projects', () => window.projects());
+  // A project's settings as the Projects view sets them, kept whether its switch is on or off; the switch kept on only
+  // when the project can then run. Answered with the project as the view now shows it.
+  ipcMain.handle('load:grant', async (e, input: unknown) => {
     if (!fromWindow(e)) return refused;
     const asked = (input ?? {}) as { path?: unknown; remove?: unknown };
     try {
       if (asked.remove === true && typeof asked.path === 'string') {
         writeGrant({ path: asked.path, remove: true }, dirs.grants);
       } else {
-        const grant = checkGrant(input, { projects: deps.projects(), endpoints: deps.getAppSettings().inferenceEndpoints ?? [] });
+        const grant = checkGrant(input, { projects: deps.projects(), endpoints: windowDeps.endpoints() });
         if (typeof grant === 'string') return { ok: false, error: grant };
-        writeGrant(grant, dirs.grants);
+        writeGrant(await window.settle(grant), dirs.grants);
       }
     } catch (err) {
       return { ok: false, error: `Tars could not save the grant: ${(err as Error).message}` };
     }
     tell();
-    return { ok: true, grants: readGrants(dirs.grants) };
+    return { ok: true, project: await window.project(asked.path as string) };
   });
 
   tellWindow = tell;
@@ -118,7 +126,7 @@ export function registerLoadHandlers(deps: LoadHandlerDeps): { window: LoadWindo
     window,
     dispose: () => {
       if (tellWindow === tell) tellWindow = undefined;
-      for (const channel of ['load:state', 'load:approve', 'load:notNow', 'load:stop', 'load:grants', 'load:grant']) ipcMain.removeHandler(channel);
+      for (const channel of ['load:state', 'load:approve', 'load:notNow', 'load:stop', 'load:projects', 'load:grant']) ipcMain.removeHandler(channel);
     },
   };
 }
