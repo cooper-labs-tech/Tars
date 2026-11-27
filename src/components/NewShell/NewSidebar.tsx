@@ -8,6 +8,8 @@ import {
   LayoutDashboard, MessageSquare, Plus,
 } from 'lucide-react';
 import { ChatList } from './ChatList';
+import { useChats } from '@/hooks/useChats';
+import { chatShown } from '@/lib/chat-sections';
 import { Brand, BrandMark } from '@/components/Brand';
 import { Button } from '@/components/ui';
 import { useWhatsNewBadge } from '@/hooks/useWhatsNewBadge';
@@ -52,10 +54,16 @@ function readFilter(): string | null {
   }
 }
 
-/** The chat list, with the chat the page shows as its current row. */
-function ListOfChats({ filter, onFilter }: { filter: string | null; onFilter: (path: string | null) => void }) {
-  const selectedId = useSearchParams().get('chat');
-  return <ChatList filter={filter} onFilter={onFilter} selectedId={selectedId} />;
+/**
+ * The chat list, with the chat the chats page shows as its current row: the one
+ * `?chat=` names, or the one the page opens without it (chatShown). A new chat's
+ * record and every other page mark none.
+ */
+function ListOfChats({ filter, onFilter, onChats }: { filter: string | null; onFilter: (path: string | null) => void; onChats: boolean }) {
+  const params = useSearchParams();
+  const { chats, at } = useChats();
+  const shown = onChats && params.get('new') !== '1' && chats ? chatShown(chats, params.get('chat'), at) : undefined;
+  return <ChatList filter={filter} onFilter={onFilter} selectedId={shown?.id ?? null} />;
 }
 
 /**
@@ -65,7 +73,8 @@ function ListOfChats({ filter, onFilter }: { filter: string | null; onFilter: (p
  * says: that comes with PR D and E.
  */
 export default function NewSidebar({ onOpenPage }: { onOpenPage: (id: MorePageId) => void }) {
-  const place = shellPlaceFor(useAppPathname());
+  const pathname = useAppPathname();
+  const place = shellPlaceFor(pathname);
   const whatsNewHasNew = useWhatsNewBadge();
   const { vaultUnreadCount, pendingUpdateVersion, setUpdateBannerDismissed } = useStore();
   const [moreOpen, setMoreOpen] = useState(false);
@@ -174,7 +183,7 @@ export default function NewSidebar({ onOpenPage }: { onOpenPage: (id: MorePageId
       {/* The list takes the height left, and scrolls in it; without one, it is the gap above the foot. */}
       <div className="flex-1 min-h-0 flex flex-col">
         <Suspense fallback={null}>
-          <ListOfChats filter={filter} onFilter={chooseFilter} />
+          <ListOfChats filter={filter} onFilter={chooseFilter} onChats={pathname === '/chats'} />
         </Suspense>
       </div>
 

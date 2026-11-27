@@ -15,6 +15,7 @@ export const CHANGELOG: Release[] = [
       'The theme is in Settings, Preferences, Appearance: Dark or Light, kept across restarts.',
       'Cmd and a digit (Ctrl on Windows) work as before: 1 Dashboard, 3 Kanban, 4 Schedules and 8 Projects open their page, and 2 Agents, 5 Review, 6 Logs, 7 Vault, 9 Extensions and 0 Usage open their card.',
       'On Windows, the caption band works over the new interface: the window drags by its top, and the caption buttons follow the theme.',
+      'Schedules says in words when Tars cannot reach Hermes, instead of the window\'s raw error, and the chats page marks the chat it opens in the sidebar.',
     ],
   },
   {

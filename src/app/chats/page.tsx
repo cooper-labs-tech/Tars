@@ -8,7 +8,7 @@ import { BrandMark } from '@/components/Brand';
 import { LoadingPanel, PageHeader } from '@/components/ui';
 import { ChatPage } from '@/components/NewShell/ChatPage';
 import { NewChatRecord } from '@/components/NewShell/NewChatRecord';
-import { chatSections } from '@/lib/chat-sections';
+import { chatShown } from '@/lib/chat-sections';
 import { useChats } from '@/hooks/useChats';
 
 /**
@@ -33,9 +33,7 @@ function ChatsPageInner() {
   if (params.get('new') === '1') return <NewChatRecord initialProject={params.get('project')} />;
   if (chats === null) return <LoadingPanel what="Reading the chats" />;
 
-  const asked = params.get('chat');
-  const open = (asked && chats.find(chat => chat.id === asked))
-    || chatSections(chats, { now: at }).flatMap(section => section.chats)[0];
+  const open = chatShown(chats, params.get('chat'), at);
   if (open) return <ChatPage key={open.id} chat={open} />;
 
   return (

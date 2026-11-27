@@ -50,6 +50,16 @@ export function chatSections(chats: ChatView[], { now, project }: { now: number;
     .filter(section => section.chats.length > 0);
 }
 
+/**
+ * The chat the chats page opens: the one `?chat=` names, else the first of the
+ * list (Main first, as it is pinned). The page opens it and the sidebar marks
+ * its row current, from this one answer.
+ */
+export function chatShown(chats: ChatView[], asked: string | null, now: number): ChatView | undefined {
+  return (asked ? chats.find(chat => chat.id === asked) : undefined)
+    || chatSections(chats, { now }).flatMap(section => section.chats)[0];
+}
+
 export type ChatStateWord = 'working' | 'waiting' | 'error';
 
 /** What a chat's row says of its runner: working, waiting on you, or in error; nothing otherwise. */

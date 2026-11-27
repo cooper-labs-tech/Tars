@@ -110,6 +110,10 @@ test('the chat list from the records: sections, a new chat, rename, pin, snooze,
     await expect(main.getByRole('heading', { name: 'Main', exact: true })).toBeVisible();
     await expect(main.getByRole('log', { name: 'Conversation' })).toBeVisible();
     await expect(main.getByRole('group', { name: 'Message composer' }).getByRole('textbox', { name: 'Message' })).toBeEnabled();
+    // /chats with no `?chat=` opened tars-demo's Main: its row is the current one, as when the address names it, and
+    // the other Main's is not (QA's finding on #653's surfaces, chatShown in src/lib/chat-sections.ts).
+    await expect(rows('Active').first().getByRole('link')).toHaveAttribute('aria-current', 'page');
+    await expect(rows('Active').nth(1).getByRole('link')).not.toHaveAttribute('aria-current', 'page');
     await stepShot(page, '01-list');
 
     // New chat: a project without an orchestrator cannot be chosen.
