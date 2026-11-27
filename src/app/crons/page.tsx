@@ -11,8 +11,17 @@ import {
 import { formatSchedule, scheduleExpression, type CronSchedule } from './schedule-text';
 import { ipcReason } from '@/lib/ipc-error';
 
-/** A Hermes call that threw: the gateway never answered (`Shell · Schedules · Hermes did not answer`). */
-const unreached = (thrown: unknown) => `Tars could not reach Hermes (${ipcReason(thrown, 'no reason given')}).`;
+/** What a socket says when the gateway did not answer: refused, timed out, not found, unreachable, reset. */
+const NO_ANSWER = /\b(ECONNREFUSED|ECONNRESET|ETIMEDOUT|ENOTFOUND|EAI_AGAIN|EHOSTUNREACH|ENETUNREACH)\b|^timeout$|socket hang up/i;
+
+/**
+ * A Hermes call that threw, worded by what it is (`Shell · Schedules · Hermes did not answer · notes`): "Tars could
+ * not reach Hermes" only when the gateway did not answer, else what failed, plainly.
+ */
+const thrownLine = (thrown: unknown) => {
+  const reason = ipcReason(thrown, 'no reason given');
+  return NO_ANSWER.test(reason) ? `Tars could not reach Hermes (${reason}).` : `${reason.replace(/\.$/, '')}.`;
+};
 
 /** A Hermes call that answered `{ success: false, error }`: its reason on one line, through the same ipcReason. */
 const refused = (error: string | undefined) => `${ipcReason(error, 'Hermes refused it').replace(/\.$/, '')}.`;
@@ -130,7 +139,7 @@ export default function CronsPage() {
     } catch (err) {
       // The call itself failed: the request to the gateway never got an answer
       // (refused, timed out). Said in words, never Electron's own preface.
-      setError(`Could not read the schedules: ${unreached(err)}`);
+      setError(`Could not read the schedules: ${thrownLine(err)}`);
     } finally {
       setLoading(false);
     }
@@ -153,7 +162,7 @@ export default function CronsPage() {
       if (r && !r.success) { setError(`Could not ${VERB[action]} the schedule: ${refused(r.error)}`); return; }
       await load();
     } catch (err) {
-      setError(`Could not ${VERB[action]} the schedule: ${unreached(err)}`);
+      setError(`Could not ${VERB[action]} the schedule: ${thrownLine(err)}`);
     } finally {
       setBusyId(null);
     }
@@ -194,7 +203,7 @@ export default function CronsPage() {
       setDraft(null);
       await load();
     } catch (err) {
-      setSaveError(`Could not save the change: ${unreached(err)}`);
+      setSaveError(`Could not save the change: ${thrownLine(err)}`);
     } finally {
       setSaving(false);
     }
@@ -208,7 +217,7 @@ export default function CronsPage() {
       if (r && !r.success) { setError(`Could not delete the schedule: ${refused(r.error)}`); return; }
       await load();
     } catch (err) {
-      setError(`Could not delete the schedule: ${unreached(err)}`);
+      setError(`Could not delete the schedule: ${thrownLine(err)}`);
     } finally {
       setBusyId(null);
     }
