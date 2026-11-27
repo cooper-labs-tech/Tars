@@ -47,6 +47,10 @@ import { TraceUploader, type UploaderDeps } from '../../electron/services/trace-
  * 17. The same with a whole deletion the user asked for ("delete everything sent", owed while its DELETE has not gone
  *     through): a moment's bad read forgets it, and sharing may start again with the copy still there. Only a file
  *     truly gone (ENOENT) forgets it.
+ * Added after the fixes of 16 and 17, which the task asked for and those two left out (27/11), shown red on the code
+ * before each fix:
+ * 18. A read of the install file refused (its permission), with deletes owed per session: forgotten for good.
+ * 19. The same with a whole deletion owed.
  */
 
 type Seen = { method: string; url: string; auth?: string };
@@ -432,6 +436,48 @@ describe('the per-session delete owed to the back-office', () => {
     expect(u.isDeletionOwed()).toBe(false);
     expect(deletion.owed).toBe(false);
     expect(deletion.since).toBeDefined();
+  });
+
+  /** The install file made unreadable for `run`, then readable again; skipped where a mode cannot refuse a read. */
+  async function withReadRefused(ctx: { skip: () => void }, run: () => Promise<void>) {
+    const file = path.join(dir, 'private', 'traces-install.json');
+    if (process.platform === 'win32') ctx.skip(); // a file mode refuses no read there; a lock does, which Node cannot take
+    fs.chmodSync(file, 0o000);
+    try {
+      let refused = false;
+      try { fs.readFileSync(file); } catch { refused = true; }
+      if (!refused) ctx.skip(); // root reads it anyway
+      await run();
+    } finally {
+      fs.chmodSync(file, 0o600);
+    }
+  }
+
+  it('18: a refused read of the install file keeps the deletes owed per session, and they go at the next good pass', async (ctx) => {
+    const u = uploader();
+    await sendThenDelete(u, ['s-1', 's-2'], ['s-1']);
+    settings.consentAt = undefined;
+    await withReadRefused(ctx, async () => {
+      await u.runOnce();
+      expect(store.owedDeletes(10).map(o => o.traceId), 'a read refused').toEqual(['s-1']);
+    });
+    await u.runOnce();
+    expect(bo.deletesOf()).toEqual(['s-1']);
+    expect(store.owedDeletes(10)).toEqual([]);
+  });
+
+  it('19: a refused read of the install file keeps a whole deletion owed, and it goes once the file reads again', async (ctx) => {
+    const u = uploader();
+    await sendThenDelete(u, ['s-1'], []);
+    bo.failNext.push({ status: 503 });
+    expect(await u.deleteEverywhere()).toMatchObject({ ok: false });
+    expect(deletion.owed).toBe(true);
+    await withReadRefused(ctx, async () => {
+      expect(u.isDeletionOwed(), 'a read refused').toBe(true);
+      expect(deletion.owed).toBe(true);
+    });
+    expect(await u.deleteEverywhere()).toMatchObject({ ok: true });
+    expect(deletion.owed).toBe(false);
   });
 
   it('10: after "delete everything" went through, a delete owed before it is never sent', async () => {
