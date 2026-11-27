@@ -62,6 +62,24 @@ import {
  *     behind origin/main;
  * 21. status does not say how far behind its base each worktree is, nor flag
  *     an active one that needs main merged in before a gate.
+ * And the sub-packages (27/11: every fresh worktree's full suite had one
+ * false red, mcp-shared-transport T1, "Cannot find module
+ * mcp-orchestrator/node_modules/@modelcontextprotocol/sdk", and agents had
+ * learned to ignore a red):
+ * 22. a sub-package with an install of its own (a first-level folder with its
+ *     package.json and package-lock.json: mcp-*, landing) comes without its
+ *     node_modules, so its tests and its build fail in the worktree;
+ * 23. a sub-package's node_modules is a symlink, or a symlinked one is taken
+ *     as its source;
+ * 24. a sub-package at another lock is used without npm install in that
+ *     sub-package, or npm runs there when the clone matches;
+ * 25. a sub-package with nothing to clone runs a full npm install or ci at
+ *     every new worktree (landing's alone weighs about 470 MB), or is left
+ *     out without a word;
+ * 26. a folder that is no sub-package (a package.json without a lock, as
+ *     mcp-shared) gets a node_modules cloned in;
+ * 27. a worktree whose sub-packages were cloned is refused at remove, their
+ *     node_modules taken for files to keep rather than rebuildable caches.
  *
  * Every repository here is a throwaway one in the temp directory. Free space,
  * the processes' working directories, the clock, npm and gh are handed in, so
@@ -93,21 +111,39 @@ const INSTALLED = (version: string) => JSON.stringify({
   packages: { 'node_modules/left-pad': { version, integrity: `sha-${version}` } },
 });
 
-/** A main checkout with one commit, .worktrees/ ignored as in the real repository, and an installed node_modules. */
-function makeRepo(opts: { installed?: string | null } = {}): string {
+/** An installed node_modules at `at`, as npm leaves it: a package and its hidden lockfile. */
+function install(at: string, version: string): void {
+  fs.mkdirSync(path.join(at, 'node_modules', 'left-pad'), { recursive: true });
+  fs.writeFileSync(path.join(at, 'node_modules', 'left-pad', 'index.js'), 'module.exports = 1;\n');
+  fs.writeFileSync(path.join(at, 'node_modules', '.package-lock.json'), INSTALLED(version));
+}
+
+/**
+ * A main checkout with one commit, .worktrees/ ignored as in the real repository, and an installed node_modules.
+ * `subs`: sub-packages with a lock at 1.0.0 each, and the version installed in the main checkout (null: none).
+ * `bare`: folders with a package.json and no lock, as mcp-shared, each with a node_modules in the main checkout.
+ */
+function makeRepo(opts: { installed?: string | null; subs?: Record<string, string | null>; bare?: string[] } = {}): string {
   const root = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'tars-wt-')));
   git(root, 'init', '-q', '-b', 'main');
-  fs.writeFileSync(path.join(root, '.gitignore'), '/node_modules\n/.next/\n.worktrees/\n.env*\ntest-results/\n');
+  fs.writeFileSync(path.join(root, '.gitignore'), '/node_modules\nnode_modules/\n/.next/\n.worktrees/\n.env*\ntest-results/\n');
   fs.writeFileSync(path.join(root, 'package-lock.json'), LOCK('1.0.0'));
   fs.writeFileSync(path.join(root, 'README.md'), 'hello\n');
+  for (const sub of Object.keys(opts.subs ?? {})) {
+    fs.mkdirSync(path.join(root, sub));
+    fs.writeFileSync(path.join(root, sub, 'package.json'), JSON.stringify({ name: sub }));
+    fs.writeFileSync(path.join(root, sub, 'package-lock.json'), LOCK('1.0.0'));
+  }
+  for (const dir of opts.bare ?? []) {
+    fs.mkdirSync(path.join(root, dir));
+    fs.writeFileSync(path.join(root, dir, 'package.json'), JSON.stringify({ name: dir }));
+  }
   git(root, 'add', '-A');
   git(root, 'commit', '-q', '-m', 'init');
   const installed = opts.installed === undefined ? '1.0.0' : opts.installed;
-  if (installed) {
-    fs.mkdirSync(path.join(root, 'node_modules', 'left-pad'), { recursive: true });
-    fs.writeFileSync(path.join(root, 'node_modules', 'left-pad', 'index.js'), 'module.exports = 1;\n');
-    fs.writeFileSync(path.join(root, 'node_modules', '.package-lock.json'), INSTALLED(installed));
-  }
+  if (installed) install(root, installed);
+  for (const [sub, version] of Object.entries(opts.subs ?? {})) if (version) install(path.join(root, sub), version);
+  for (const dir of opts.bare ?? []) install(path.join(root, dir), '1.0.0');
   return root;
 }
 
@@ -245,6 +281,74 @@ describe('dependencies', () => {
     const wt = await createWorktree(repo, 'deps-electron', { from: 'main' }, ctx);
 
     expect(calls).toContainEqual(expect.objectContaining({ command: 'npx', args: expect.arrayContaining(['install-electron']), cwd: wt.path }));
+  });
+
+  it("22. clones each sub-package's installed node_modules into a real folder, at the same lock with no npm", async () => {
+    const root = makeRepo({ subs: { 'mcp-x': '1.0.0', landing: '1.0.0' } });
+    const { ctx, calls } = world();
+    const repo = await openRepo(root);
+    const wt = await createWorktree(repo, 'subs-same', { from: 'main' }, ctx);
+
+    for (const sub of ['mcp-x', 'landing']) {
+      const nm = path.join(wt.path, sub, 'node_modules');
+      expect(fs.lstatSync(nm).isSymbolicLink(), sub).toBe(false);
+      expect(fs.readFileSync(path.join(nm, 'left-pad', 'index.js'), 'utf8'), sub).toContain('module.exports');
+    }
+    expect(calls.filter(c => c.command === 'npm' || c.command === 'npx')).toEqual([]);
+  });
+
+  it.skipIf(cannotSymlink())("23. never takes a sub-package's symlinked node_modules as a source, nor makes one", async () => {
+    const root = makeRepo({ subs: { 'mcp-x': null } });
+    const elsewhere = makeRepo();
+    fs.symlinkSync(path.join(elsewhere, 'node_modules'), path.join(root, 'mcp-x', 'node_modules'));
+    const { ctx } = world();
+    const repo = await openRepo(root);
+    const wt = await createWorktree(repo, 'subs-link', { from: 'main' }, ctx);
+
+    const nm = path.join(wt.path, 'mcp-x', 'node_modules');
+    expect(fs.existsSync(nm) && fs.lstatSync(nm).isSymbolicLink()).toBe(false);
+  });
+
+  it('24. reconciles a sub-package at another lock with npm install there, and leaves one that matches alone', async () => {
+    const root = makeRepo({ subs: { 'mcp-x': '0.9.0', landing: '1.0.0' } });
+    const { ctx, calls } = world();
+    const repo = await openRepo(root);
+    const wt = await createWorktree(repo, 'subs-differ', { from: 'main' }, ctx);
+
+    expect(fs.existsSync(path.join(wt.path, 'mcp-x', 'node_modules', 'left-pad', 'index.js'))).toBe(true);
+    const npm = calls.filter(c => c.command === 'npm');
+    expect(npm).toEqual([expect.objectContaining({ args: expect.arrayContaining(['install']), cwd: path.join(wt.path, 'mcp-x') })]);
+  });
+
+  it('25. a sub-package with nothing to clone is left uninstalled, with no npm, and the summary says so', async () => {
+    const root = makeRepo({ subs: { 'mcp-x': null } });
+    const { ctx, calls } = world();
+    const repo = await openRepo(root);
+    const wt = await createWorktree(repo, 'subs-none', { from: 'main' }, ctx);
+
+    expect(fs.existsSync(path.join(wt.path, 'mcp-x', 'node_modules'))).toBe(false);
+    expect(calls.filter(c => c.command === 'npm' || c.command === 'npx')).toEqual([]);
+    expect(wt.deps).toMatch(/mcp-x/);
+  });
+
+  it('26. a folder with a package.json and no lock gets no node_modules', async () => {
+    const root = makeRepo({ bare: ['mcp-shared'] });
+    const { ctx } = world();
+    const repo = await openRepo(root);
+    const wt = await createWorktree(repo, 'subs-bare', { from: 'main' }, ctx);
+
+    expect(fs.existsSync(path.join(wt.path, 'mcp-shared', 'node_modules'))).toBe(false);
+  });
+
+  it("27. a worktree with its sub-packages' clones is removed: they are rebuildable caches", async () => {
+    const root = makeRepo({ subs: { 'mcp-x': '1.0.0' } });
+    const { ctx } = world();
+    const repo = await openRepo(root);
+    const wt = await createWorktree(repo, 'subs-remove', { from: 'main' }, ctx);
+    expect(fs.existsSync(path.join(wt.path, 'mcp-x', 'node_modules'))).toBe(true);
+
+    await removeWorktree(repo, 'subs-remove', {}, world().ctx);
+    expect(fs.existsSync(wt.path)).toBe(false);
   });
 
   it('reads an installed tree against a lock', () => {
