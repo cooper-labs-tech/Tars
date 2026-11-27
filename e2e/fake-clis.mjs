@@ -498,9 +498,19 @@ export async function run() {
       await res.text();
       log({ model: true, side: true, status: res.status, keyHead: key.slice(0, 4), keyLength: key.length });
     }
+    // A task that says `GIVE UP AFTER <ms>` gives its model call up after that long, as a harness's own timeout or an
+    // Esc does: what a request given up while Tars holds it looks like (trace feature A3).
+    const giveUp = /\bGIVE UP AFTER (\d+)\b/.exec(text);
     for (let step = 0; step < 4; step++) {
       const sentAt = Date.now();
-      const res = await fetch(`${base}/chat/completions`, { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${key}` }, body: JSON.stringify({ model: process.env.OPENAI_MODEL, messages, tools, stream: true, stream_options: { include_usage: true } }) });
+      let res;
+      try {
+        res = await fetch(`${base}/chat/completions`, { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${key}` }, body: JSON.stringify({ model: process.env.OPENAI_MODEL, messages, tools, stream: true, stream_options: { include_usage: true } }), ...(giveUp ? { signal: AbortSignal.timeout(Number(giveUp[1])) } : {}) });
+      } catch (err) {
+        if (!giveUp) throw err;
+        log({ model: true, gaveUp: true, sentAt, gaveUpAt: Date.now(), keyHead: key.slice(0, 4), keyLength: key.length });
+        return `gave up after ${giveUp[1]} ms`;
+      }
       let firstChunkAt;
       let raw = '';
       const reader = res.body.getReader();
