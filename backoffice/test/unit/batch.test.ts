@@ -23,6 +23,13 @@
 //     or a valid list, the empty one included, is refused.
 // 12. A request's `liveSessions` takes a negative, fractional or absurd count, or a valid one is
 //     refused.
+// 13. A session's `start` (27/11, what started it) takes a key it does not know, a trigger, a via or
+//     a time of the wrong form, or goes without its trigger; or a valid one, the trigger alone
+//     included, is refused. Its words (trigger, via) are lowercase words of at most 40, not names.
+// 14. A session's `lostDemand` takes an item other than {kind: queue_drop, ref, queuedAt, at, reason},
+//     a key besides those, or more than 1,000; or a valid list is refused.
+// 15. A request's `cancel` takes something other than {by, cause, at, deliveredBytes} of their types,
+//     or a valid one is refused.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { validateBatch } from '../../src/batch.ts';
@@ -142,4 +149,46 @@ test('11. events: a list of {at, kind}', () => {
 test('12. liveSessions: a count', () => {
   for (const n of [0, 1, 40]) assert.ok(!('errors' in validateBatch({ ...ok, requests: [{ ...request, liveSessions: n }] })), String(n));
   for (const n of [-1, 1.5, '3', true, 1_000_001]) assert.ok(errs({ ...ok, requests: [{ ...request, liveSessions: n }] }).length, String(n));
+});
+
+const start = {
+  trigger: 'task', via: 'api', taskRef: 'ref-1', taskId: 'task-1', requesterAgentId: 'agent-0', queuedAt: 10, handedAt: 12,
+  firstRequestAt: 15, commit: '0123456789abcdef0123456789abcdef01234567', branch: 'feat/x', redelegatedFrom: 'tr_old',
+};
+
+test('13. start: what started the session', () => {
+  const r = validateBatch(withSession({ start }));
+  assert.ok(!('errors' in r), JSON.stringify(r));
+  assert.deepEqual(r.sessions[0]!.start, start);
+  assert.ok(!('errors' in validateBatch(withSession({ start: { trigger: 'unknown' } }))), 'the trigger alone');
+  assert.ok(!('errors' in validateBatch(withSession({ start: { ...start, commit: '<SECRET_1>' } }))), 'a commit the client scrubbed');
+  const bad: unknown[] = [
+    'task', [], {}, { ...start, trigger: undefined }, { ...start, who: 'someone' }, { ...start, trigger: 'Owner Name' }, { ...start, via: 'x'.repeat(41) },
+    { ...start, queuedAt: -1 }, { ...start, handedAt: '12' }, { ...start, branch: 'b'.repeat(256) }, { ...start, taskRef: 7 },
+  ];
+  for (const s of bad) assert.ok(errs(withSession({ start: s })).length, JSON.stringify(s).slice(0, 80));
+});
+
+test('14. lostDemand: tasks that left the queue unstarted', () => {
+  const lost = [{ kind: 'queue_drop', ref: 'ref-2', queuedAt: 20, at: 30, reason: 'cancelled' }];
+  const r = validateBatch(withSession({ lostDemand: lost }));
+  assert.ok(!('errors' in r), JSON.stringify(r));
+  assert.deepEqual(r.sessions[0]!.lostDemand, lost);
+  const bad: unknown[] = [
+    {}, [{ ...lost[0], kind: 'crash' }], [{ ...lost[0], by: 'x' }], [{ ...lost[0], reason: 'Not A Word' }], [{ ...lost[0], at: -1 }],
+    [{ kind: 'queue_drop', ref: 'r', queuedAt: 1, at: 2 }], Array.from({ length: 1001 }, () => lost[0]),
+  ];
+  for (const l of bad) assert.ok(errs(withSession({ lostDemand: l })).length, JSON.stringify(l).slice(0, 80));
+});
+
+test('15. cancel: who cut a request, why, when, what reached the harness', () => {
+  const cancel = { by: 'harness', cause: 'abandoned_while_held', at: 40, deliveredBytes: 0 };
+  const r = validateBatch({ ...ok, requests: [{ ...request, cancel }] });
+  assert.ok(!('errors' in r), JSON.stringify(r));
+  assert.deepEqual(r.requests[0]!.cancel, cancel);
+  const bad: unknown[] = [
+    'harness', { ...cancel, by: 'Some One' }, { ...cancel, cause: '' }, { ...cancel, at: 1.5 }, { ...cancel, deliveredBytes: -1 },
+    { ...cancel, note: 'x' }, { by: 'harness', cause: 'abandoned_while_held', at: 40 },
+  ];
+  for (const c of bad) assert.ok(errs({ ...ok, requests: [{ ...request, cancel: c }] }).length, JSON.stringify(c).slice(0, 80));
 });

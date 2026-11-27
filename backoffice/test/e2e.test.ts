@@ -47,6 +47,17 @@
 // E7. The environment reaches the operator's deletion log, or the server's own log.
 // E8. Migration 003 over a database that holds them: its down loses a row or a value other than the three new
 //     ones, or its up gives the rows from before it a value other than `null`.
+//
+// What started a session, the demand it never served, and a request's cancel (27/11, the second trace wave): the
+// ways it can fail, written before the code.
+// L1. A session sent with `start` or `lostDemand`, or a request with `cancel`, is refused as an unknown field.
+// L2. They are not stored, or not read back with the shape they were sent in: the session on the list and in the
+//     detail, the request in the detail and on the join.
+// L3. Sent without them (an older Tars), they read back other than `null`, or without the key.
+// L4. Sent again without them, a session or request loses them.
+// L5. A malformed one is taken (a key not in the shape, a name where a word belongs, a negative time); the batch
+//     must be refused whole.
+// L6. A deleted session leaves them in any table; migration 004's down loses anything else, its up reads them null.
 import { describe, it, before, after } from 'node:test';
 import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
@@ -105,6 +116,13 @@ const ENV = {
   ramBytes: 17179869184, tarsVersion: '2.0.7', tarsArch: 'arm64', locale: 'de-DE', timeZone: 'Europe/Berlin', utcOffsetMinutes: 60, onBattery: false,
 };
 const EVENTS = [{ at: T0 + 1000, kind: 'sleep' }, { at: T0 + 2000, kind: 'wake' }];
+// What started a session, the tasks it lost, and a request cut while held.
+const START = {
+  trigger: 'task', via: 'api', taskRef: 'ref-e2e-1', taskId: 'task-e2e-1', requesterAgentId: 'agent-0', queuedAt: T0 - 5000, handedAt: T0 - 4000,
+  firstRequestAt: T0, commit: '0123456789abcdef0123456789abcdef01234567', branch: 'feat/e2e', redelegatedFrom: 'tr_before',
+};
+const LOST = [{ kind: 'queue_drop', ref: 'ref-e2e-2', queuedAt: T0 - 3000, at: T0 + 500, reason: 'cancelled' }];
+const CANCEL = { by: 'harness', cause: 'abandoned_while_held', at: T0 + 3000, deliveredBytes: 0 };
 
 function session(over: Record<string, unknown> = {}) {
   return {
@@ -403,6 +421,53 @@ describe('trace back-office, end to end', () => {
     assert.deepEqual([still.session.environment?.chip, still.requests[0].liveSessions], [ENV.chip, 3]);
   });
 
+  it('takes what started a session, the demand it lost and a request\'s cancel, reads them back, and refuses them malformed', async () => {
+    const detail = async () => (await call('GET', `/v1/read/sessions/${installA.id}/sess-1`, { token: reader.token })).json;
+    // L3. Sent without them: null, never absent.
+    const before = await detail();
+    assert.deepEqual(note('start.before', [('start' in before.session), before.session.start, ('lostDemand' in before.session), before.session.lostDemand,
+      before.requests.map((r: any) => ['cancel' in r, r.cancel])]), [true, null, true, null, [[true, null], [true, null], [true, null]]]);
+    // L1, L2. Sent with them.
+    const sent = await call('PUT', '/v1/batches/batch-start', { token: installA.token, body: {
+      schema: 1, sessions: [session({ finalStatus: 'done', endedAt: T0 + 6000, start: START, lostDemand: LOST })],
+      requests: [{ ...requests[1], cancel: CANCEL }],
+    } });
+    assert.equal(sent.status, 200, String(sent.buf));
+    const after = await detail();
+    assert.deepEqual(after.session.start, START);
+    assert.deepEqual(after.session.lostDemand, LOST);
+    assert.deepEqual(note('start.cancels', after.requests.map((r: any) => [r.requestId, r.cancel])), [['req-1', null], ['req-2', CANCEL], ['req-t', null]]);
+    const listed = (await call('GET', '/v1/read/sessions?agent=agent-1', { token: reader.token })).json.sessions;
+    assert.deepEqual(note('start.list', listed.map((s: any) => [s.sessionId, s.start?.trigger, s.lostDemand?.length])), [['sess-1', 'task', 1]]);
+    const joined = (await call('GET', '/v1/read/requests?upstreamRequestId=up-222', { token: reader.token })).json.requests;
+    assert.deepEqual(joined.map((r: any) => r.cancel), [CANCEL]);
+    // L4. Sent again without them: kept.
+    const older = await call('PUT', '/v1/batches/batch-start-older', { token: installA.token, body: {
+      schema: 1, sessions: [session({ finalStatus: 'done', endedAt: T0 + 6000 })], requests: [requests[1]],
+    } });
+    assert.equal(older.status, 200, String(older.buf));
+    const kept = await detail();
+    assert.deepEqual(note('start.keptAfterOlder', [kept.session.start?.taskRef, kept.session.lostDemand?.length, kept.requests[1].cancel?.cause]),
+      [START.taskRef, 1, CANCEL.cause]);
+    // L5. Malformed: refused whole.
+    const bad: Array<[string, Record<string, unknown>, Record<string, unknown>]> = [
+      ['startKey', { start: { ...START, requester: 'Someone' } }, {}],
+      ['triggerName', { start: { ...START, trigger: 'Some Person' } }, {}],
+      ['lostKind', { lostDemand: [{ ...LOST[0], kind: 'crash' }] }, {}],
+      ['cancelTime', {}, { cancel: { ...CANCEL, at: -1 } }],
+    ];
+    const codes: Array<[string, number, string]> = [];
+    for (const [name, s, r] of bad) {
+      const put = await call('PUT', `/v1/batches/batch-bad-start-${name}`, { token: installA.token, body: {
+        schema: 1, sessions: [session({ finalStatus: 'done', endedAt: T0 + 6000, start: { trigger: 'owner' }, ...s })], requests: [{ ...requests[1], ...r }],
+      } });
+      codes.push([name, put.status, put.json.error]);
+    }
+    assert.deepEqual(note('start.malformed', codes), bad.map(([n]) => [n, 422, 'invalid_batch']));
+    const still = await detail();
+    assert.deepEqual([still.session.start?.trigger, still.requests[1].cancel?.at], [START.trigger, CANCEL.at]);
+  });
+
   it('migrates a database that holds requests: down keeps every row but the marks, up reads them back unknown', async () => {
     // M1, M2. The server stopped, as an operator migrates; what it logged so far is kept for the artefact.
     const earlier = srv.log.slice();
@@ -415,7 +480,7 @@ describe('trace back-office, end to end', () => {
         const tables = (await client.query("SELECT tablename FROM pg_tables WHERE schemaname = 'public' AND tablename <> 'schema_migrations' ORDER BY 1")).rows.map((r) => r.tablename as string);
         const out: Record<string, string> = {};
         for (const t of tables) {
-          const r = (await client.query(`SELECT count(*)::int AS n, md5(coalesce(string_agg(x, '|' ORDER BY x), '')) AS d FROM (SELECT (to_jsonb(t) - 'side' - 'environment' - 'events' - 'live_sessions')::text AS x FROM "${t}" t) s`)).rows[0];
+          const r = (await client.query(`SELECT count(*)::int AS n, md5(coalesce(string_agg(x, '|' ORDER BY x), '')) AS d FROM (SELECT (to_jsonb(t) - 'side' - 'environment' - 'events' - 'live_sessions' - 'start' - 'lost_demand' - 'cancel')::text AS x FROM "${t}" t) s`)).rows[0];
           out[t] = `${r.n}:${r.d}`;
         }
         return out;
@@ -428,7 +493,14 @@ describe('trace back-office, end to end', () => {
       const before = note('migrate.withData.before', await rows());
       assert.deepEqual(note('migrate.withData.marksBefore', await marks()), [['req-1', false], ['req-2', true], ['req-t', true]]);
       assert.deepEqual(note('migrate.withData.waveOneBefore', await waveOne()), [[['sess-1', ENV.chip, EVENTS.length]], [['req-1', 3]]]);
-      // E8, M2. Down through 003, then 002.
+      const waveTwo = async () => [
+        (await client.query("SELECT session_id, start->>'trigger' AS t, jsonb_array_length(lost_demand) AS n FROM sessions WHERE start IS NOT NULL OR lost_demand IS NOT NULL ORDER BY 1")).rows.map((r) => [r.session_id, r.t, r.n]),
+        (await client.query("SELECT request_id, cancel->>'cause' AS c FROM requests WHERE cancel IS NOT NULL ORDER BY 1")).rows.map((r) => [r.request_id, r.c]),
+      ];
+      assert.deepEqual(note('migrate.withData.waveTwoBefore', await waveTwo()), [[['sess-1', 'task', 1]], [['req-2', CANCEL.cause]]]);
+      // L6, E8, M2. Down through 004, 003, then 002.
+      note('migrate.withData.down004', runCli(['migrate', 'down'], env).trim());
+      assert.deepEqual(note('migrate.withData.afterDown004', await rows()), before, 'the down of 004 kept every row and value but its own');
       note('migrate.withData.down003', runCli(['migrate', 'down'], env).trim());
       assert.deepEqual(note('migrate.withData.afterDown003', await rows()), before, 'the down of 003 kept every row and value but its own');
       note('migrate.withData.down002', runCli(['migrate', 'down'], env).trim());
@@ -437,6 +509,7 @@ describe('trace back-office, end to end', () => {
       assert.deepEqual(await rows(), before, 'the up kept every request and value');
       assert.deepEqual(note('migrate.withData.marksAfterUp', await marks()), [['req-1', null], ['req-2', null], ['req-t', null]]);
       assert.deepEqual(note('migrate.withData.waveOneAfterUp', await waveOne()), [[], []]);
+      assert.deepEqual(note('migrate.withData.waveTwoAfterUp', await waveTwo()), [[], []]);
     } finally {
       // Up again and serving whatever this step found, so a failure here is this step's alone.
       runCli(['migrate', 'up'], env);
@@ -520,8 +593,9 @@ describe('trace back-office, end to end', () => {
     const meta = (hash: string, raw: Buffer, role: string) => ({ hash, role, createdAt: T0, size: raw.length });
     for (const [id, refs] of [['b-del', [h.system, sha(twice), sha(only)]], ['b-del2', [sha(twice)]]] as const) {
       const put = await call('PUT', `/v1/batches/${id}.1`, { token: installB.token, body: {
-        schema: 1, sessions: [session({ sessionId: id, finalStatus: 'done', endedAt: T0 + 10_000, turnCount: 1, requestCount: 1, environment: { ...ENV, chip: `Chip-${id}-7731` }, events: EVENTS })],
-        turns: [{ ...turn, turnId: `${id}-t`, sessionId: id }], requests: [{ ...req(id, [...refs]), liveSessions: 5 }],
+        schema: 1, sessions: [session({ sessionId: id, finalStatus: 'done', endedAt: T0 + 10_000, turnCount: 1, requestCount: 1, environment: { ...ENV, chip: `Chip-${id}-7731` }, events: EVENTS,
+          start: { ...START, taskRef: `Chip-${id}-7731-task` }, lostDemand: [{ ...LOST[0], ref: `Chip-${id}-7731-lost` }] })],
+        turns: [{ ...turn, turnId: `${id}-t`, sessionId: id }], requests: [{ ...req(id, [...refs]), liveSessions: 5, cancel: { ...CANCEL, cause: `chip_${id.replace('-', '_')}_7731` } }],
         messages: [meta(h.system, msgs.system, 'system'), meta(sha(twice), twice, 'user'), meta(sha(only), only, 'assistant')].filter((m) => (refs as readonly string[]).includes(m.hash)),
       } });
       assert.equal(put.status, 200, String(put.buf));
@@ -566,7 +640,7 @@ describe('trace back-office, end to end', () => {
       const tables = (await client.query("SELECT tablename FROM pg_tables WHERE schemaname = 'public'")).rows.map((r) => r.tablename as string);
       const holding: string[] = [];
       for (const t of tables) {
-        const n = (await client.query(`SELECT count(*)::int AS n FROM "${t}" x WHERE to_jsonb(x)::text LIKE '%Chip-b-del-7731%'`)).rows[0].n;
+        const n = (await client.query(`SELECT count(*)::int AS n FROM "${t}" x WHERE to_jsonb(x)::text LIKE '%Chip-b-del-7731%' OR to_jsonb(x)::text LIKE '%chip_b_del_7731%'`)).rows[0].n;
         if (n) holding.push(t);
       }
       assert.deepEqual(note('env.afterSessionDelete.tablesHolding', holding), []);
