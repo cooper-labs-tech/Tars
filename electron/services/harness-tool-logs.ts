@@ -3,6 +3,7 @@ import * as os from 'os';
 import * as path from 'path';
 import Database from 'better-sqlite3';
 import { qwenTranscriptPath } from './qwen-code';
+import { transcriptRoots } from '../utils/resume-session';
 import { opencodeToolPartOf, qwenToolPartOf, type ToolCallPart } from './tool-calls';
 
 /**
@@ -80,10 +81,10 @@ export class HarnessToolLogs {
   private readQwen(s: FollowedSession): void {
     const sessionId = this.deps.sessionIdOf(s.agentId);
     if (!sessionId) return;
-    // Qwen Code names its chat folder after its real working folder: under it first (macOS's /tmp is /private/tmp),
-    // then under the folder as Tars names it.
+    // Qwen Code names its chat folder after its real working folder (macOS's /tmp is /private/tmp): every spelling of
+    // the folder is tried, as every reader of a transcript does (transcriptRoots).
     const homeDir = (this.deps.homeDir ?? os.homedir)();
-    const file = [...new Set([realpathOr(s.folder), s.folder])].map(f => qwenTranscriptPath(f, sessionId, homeDir)).find(f => fs.existsSync(f));
+    const file = transcriptRoots(s.folder).map(f => qwenTranscriptPath(f, sessionId, homeDir)).find(f => fs.existsSync(f));
     if (!file) return;
     let size: number;
     try { size = fs.statSync(file).size; } catch { return; }
