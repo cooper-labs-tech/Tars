@@ -33,6 +33,10 @@ import { turnStats, survival, WorkspaceRecorder, type PathHistory } from '../../
  *     uploader never see it; or a recount with nothing new moves it.
  * 13. The branch's merge or deletion is not noticed, or a branch still open, or a session on the default branch, is
  *     taken for merged.
+ * Added after the code, when mutant W16 of the bench survived (27/11):
+ * 14. A side request (no tools, or a system prompt other than the session's) is taken at its arrival for a turn's
+ *     start, and snapshots the checkout where ingest() opens no turn; or a tool's result does; or the session's first
+ *     request, or a new instruction, does not.
  */
 
 const H = (versions: Array<string | null | undefined>, p = 'f.txt'): PathHistory => ({ path: p, versions });
@@ -186,7 +190,7 @@ describe('the recorder', () => {
     expect(store.workspaceTurns('tr-1')).toEqual([]);
   });
 
-  it('11: the upload carries numbers and keyed hashes only', async () => {
+  it('11: the upload carries numbers and hashes only', async () => {
     const rec = new WorkspaceRecorder({ store });
     const { c1 } = await threeTurns(rec);
     const installFile = path.join(home, 'private', 'traces-install.json');
@@ -237,6 +241,22 @@ describe('the recorder', () => {
     // Asked again with nothing new: the sequence stays.
     expect(await rec.finalize('tr-1', repo)).toBe('done');
     expect(store.seqOf('tr-1')).toBe(moved);
+  });
+
+  it('14: a request opens a turn at its arrival by ingest()\'s own rule', () => {
+    const body = (v: unknown) => Buffer.from(JSON.stringify(v));
+    const TOOLS = [{ type: 'function', function: { name: 'bash' } }];
+    const main = (messages: unknown[]) => body({ model: 'm', messages: [{ role: 'system', content: 's' }, ...messages], tools: TOOLS });
+    expect(store.opensTurnAt('no-such-trace', 'openai_chat', main([{ role: 'user', content: 'x' }]))).toBe(false);
+    // The session's first request, with tools under its system prompt: a turn.
+    expect(store.opensTurnAt('tr-1', 'openai_chat', main([{ role: 'user', content: 'first' }]))).toBe(true);
+    // A title call (no tools), and a memory call (another system prompt): side requests, never a turn.
+    expect(store.opensTurnAt('tr-1', 'openai_chat', body({ model: 'm', messages: [{ role: 'system', content: 'Generate a title.' }, { role: 'user', content: 'first' }] }))).toBe(false);
+    turnAt('tr-1', T + 1000, 'first');
+    expect(store.opensTurnAt('tr-1', 'openai_chat', body({ model: 'm', messages: [{ role: 'system', content: 'Remember this.' }, { role: 'user', content: 'second' }], tools: TOOLS }))).toBe(false);
+    // A tool's result continues the turn; a new instruction opens the next.
+    expect(store.opensTurnAt('tr-1', 'openai_chat', main([{ role: 'user', content: 'first' }, { role: 'assistant', content: null, tool_calls: [{ id: 'c1', type: 'function', function: { name: 'bash', arguments: '{}' } }] }, { role: 'tool', tool_call_id: 'c1', content: 'ok' }]))).toBe(false);
+    expect(store.opensTurnAt('tr-1', 'openai_chat', main([{ role: 'user', content: 'second' }]))).toBe(true);
   });
 
   it('13: a branch deleted unmerged is measured on the default branch; a session on the default branch is left', async () => {
