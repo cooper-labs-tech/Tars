@@ -33,8 +33,9 @@ import { assertThrowaway } from '../../setup/throwaway-dirs';
  *
  * How it fails, written before the code:
  *  1. The gap is measured wrong: from a side request's end, or from a request given up while held (it never reached
- *     the endpoint), or from the session's start for its first request, which has no previous reply and so no gap; or
- *     the hold is left out, though the endpoint sees it in the gap.
+ *     the endpoint: #680's rule, `givenUpWhileHeld`, an Esc, a Ctrl-C or Tars cutting a held request included), or
+ *     from the session's start for its first request, which has no previous reply and so no gap; or the hold is left
+ *     out, though the endpoint sees it in the gap.
  *  2. A request carrying tool results whose records are missing (the log not read yet, missing, or no reader for its
  *     harness) reads 0 tool time, not null; a request carrying no tool result reads null, not 0.
  *  3. Two calls run at once are summed, their overlap counted twice, not their union; a call partly outside the gap
@@ -152,11 +153,14 @@ describe('the gap', () => {
     request(traceId, t0, [said], { calls: ['a'] });
     request(traceId, t0 + 300, [{ role: 'system', content: 'Generate a title.' }, said], { side: true });
     request(traceId, t0 + 500, [said, asks(['a']), ...answers(['a'])], { cancel: { by: 'harness', cause: 'abandoned_while_held', at: t0 + 900, deliveredBytes: 0 }, status: 499 });
+    // An Esc that cut a request the proxy held and never answered: given up while held too (#680's rule).
+    request(traceId, t0 + 700, [said, asks(['a']), ...answers(['a'])], { cancel: { by: 'harness', cause: 'esc', at: t0 + 950, deliveredBytes: 0 }, status: 499, heldMs: 150 });
     request(traceId, t0 + 1010, [said, asks(['a']), ...answers(['a'])], { heldMs: 200 });
     const [first, ...rest] = requestsOf(traceId).filter(r => !r.side);
     expect(first.gap).toBeUndefined();
-    const given = rest.find(r => r.cancel)!;
-    expect(given.gap, 'a request that never reached the endpoint has no gap').toBeUndefined();
+    const given = rest.filter(r => r.cancel);
+    expect(given.length).toBe(2);
+    for (const g of given) expect(g.gap, `a request that never reached the endpoint (${g.cancel!.cause}) has no gap`).toBeUndefined();
     const last = lastRequest(traceId);
     expect(last.gap).toMatchObject({ ms: 1000 + 200, heldMs: 200 });
   });
