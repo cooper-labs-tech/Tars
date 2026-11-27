@@ -35,6 +35,13 @@
 //     valid one is refused.
 // 16. A turn's `taskRef` (the task its instruction came from) takes something other than t- and 8
 //     hex, or a valid one is refused.
+// 17. A session's `maskingVersion` takes something other than a string of at most 40, or its
+//     `maskCounts` takes a key other than SECRET, EMAIL, IP, PERSON, HOME and PHONE, goes without
+//     one of them, or takes a count that is not an int >= 0; or valid ones are refused.
+// 18. A turn's `interventions` takes a key other than interrupted, restarted, next, corrected and
+//     redelegated, one of them in another shape (a `during` other than answer or tools, a name
+//     where a kind belongs, a negative delay, `corrected` other than true, a `to` over 64), or a
+//     valid one is refused: every key alone, all together, and a fractional delay.
 // 10 again (the client's own contract, 27/11): every environment value may be null, the
 //     architecture Tars runs as included, and a negative UTC offset is valid.
 import { test } from 'node:test';
@@ -223,6 +230,40 @@ test('15. cancel: who cut a request, why, when, what reached the harness', () =>
     { ...cancel, deliveredBytes: -1 }, { ...cancel, note: 'x' }, { by: 'harness', cause: 'abandoned_while_held', at: 40 },
   ];
   for (const c of bad) assert.ok(errs({ ...ok, requests: [{ ...request, cancel: c }] }).length, JSON.stringify(c).slice(0, 80));
+});
+
+test('17. masking: the version and the six counts', () => {
+  const maskCounts = { SECRET: 2, EMAIL: 1, IP: 0, PERSON: 3, HOME: 4, PHONE: 0 };
+  const r = validateBatch(withSession({ maskingVersion: 'tars-scrub-2', maskCounts }));
+  assert.ok(!('errors' in r), JSON.stringify(r));
+  assert.deepEqual([r.sessions[0]!.maskingVersion, r.sessions[0]!.maskCounts], ['tars-scrub-2', maskCounts]);
+  const { PHONE: _p, ...five } = maskCounts;
+  const bad: Array<Record<string, unknown>> = [
+    { maskingVersion: 2 }, { maskingVersion: 'v'.repeat(41) }, { maskCounts: five }, { maskCounts: { ...maskCounts, NAME: 1 } },
+    { maskCounts: { ...maskCounts, EMAIL: -1 } }, { maskCounts: { ...maskCounts, IP: 1.5 } }, { maskCounts: { ...maskCounts, HOME: '4' } }, { maskCounts: [] },
+  ];
+  for (const b of bad) assert.ok(errs(withSession(b)).length, JSON.stringify(b).slice(0, 80));
+});
+
+test('18. a turn\'s interventions', () => {
+  const all = {
+    interrupted: { at: 5, by: 'esc', during: 'answer' }, restarted: { at: 6, by: 'restart' }, next: { by: 'user', delaySec: 12.5 },
+    corrected: true, redelegated: { to: 'tr_later', at: 7 },
+  };
+  const r = validateBatch({ ...ok, turns: [{ ...turn, interventions: all }] });
+  assert.ok(!('errors' in r), JSON.stringify(r));
+  assert.deepEqual(r.turns[0]!.interventions, all);
+  for (const [k, v] of Object.entries(all)) {
+    assert.ok(!('errors' in validateBatch({ ...ok, turns: [{ ...turn, interventions: { [k]: v } }] })), `${k} alone`);
+  }
+  assert.ok(!('errors' in validateBatch({ ...ok, turns: [{ ...turn, interventions: { interrupted: { ...all.interrupted, during: 'tools', by: 'cli' } } }] })), 'during tools');
+  const bad: unknown[] = [
+    [], 'interrupted', { paused: { at: 1 } }, { interrupted: { ...all.interrupted, during: 'thinking' } }, { interrupted: { ...all.interrupted, by: 'Some One' } },
+    { interrupted: { at: 5, by: 'esc' } }, { restarted: { at: -1, by: 'stop' } }, { next: { by: 'user', delaySec: -1 } }, { next: { by: 'user' } },
+    { corrected: false }, { corrected: 'yes' }, { redelegated: { to: 'x'.repeat(65), at: 7 } }, { redelegated: { to: 'tr_later' } },
+    { next: { ...all.next, note: 'x' } },
+  ];
+  for (const b of bad) assert.ok(errs({ ...ok, turns: [{ ...turn, interventions: b }] }).length, JSON.stringify(b).slice(0, 80));
 });
 
 test('16. a turn\'s taskRef', () => {

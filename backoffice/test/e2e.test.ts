@@ -58,6 +58,17 @@
 // L5. A malformed one is taken (a key not in the shape, a name where a word belongs, a negative time); the batch
 //     must be refused whole.
 // L6. A deleted session leaves them in any table; migration 004's down loses anything else, its up reads them null.
+//
+// How a session was masked, and what was done to each turn (27/11, the third trace wave): the ways it can fail,
+// written before the code.
+// K1. A session sent with `maskingVersion` or `maskCounts`, or a turn with `interventions`, is refused as unknown.
+// K2. They are not stored, or not read back with their shape: the session on the list and in the detail, the turn
+//     in the detail.
+// K3. Sent without them (an older Tars), they read back other than `null`, or without the key.
+// K4. Sent again without them, a session or turn loses them.
+// K5. A malformed one is taken (a seventh count, a missing one, a name where a kind belongs, `during` outside its
+//     two); the batch must be refused whole.
+// K6. A deleted session leaves them in any table; migration 005's down loses anything else, its up reads them null.
 import { describe, it, before, after } from 'node:test';
 import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
@@ -123,6 +134,12 @@ const START = {
 };
 const LOST = [{ kind: 'queue_drop', ref: 't-0e2e0002', queuedAt: T0 - 3000, at: T0 + 500, reason: 'cancelled' }];
 const CANCEL = { by: 'harness', cause: 'abandoned_while_held', at: T0 + 3000, deliveredBytes: 0 };
+// How a session was masked, and what was done to a turn.
+const MASK = { maskingVersion: 'tars-scrub-2', maskCounts: { SECRET: 2, EMAIL: 1, IP: 0, PERSON: 3, HOME: 4, PHONE: 0 } };
+const INTERVENTIONS = {
+  interrupted: { at: T0 + 2500, by: 'esc', during: 'answer' }, restarted: { at: T0 + 2600, by: 'restart' }, next: { by: 'user', delaySec: 12.5 },
+  corrected: true, redelegated: { to: 'tr_later', at: T0 + 9000 },
+};
 
 function session(over: Record<string, unknown> = {}) {
   return {
@@ -472,6 +489,50 @@ describe('trace back-office, end to end', () => {
     assert.deepEqual([still.session.start?.trigger, still.requests[1].cancel?.at], [START.trigger, CANCEL.at]);
   });
 
+  it('takes how a session was masked and what was done to each turn, reads them back, and refuses them malformed', async () => {
+    const detail = async () => (await call('GET', `/v1/read/sessions/${installA.id}/sess-1`, { token: reader.token })).json;
+    // K3. Sent without them: null, never absent.
+    const before = await detail();
+    assert.deepEqual(note('mask.before', [('maskingVersion' in before.session), before.session.maskingVersion, ('maskCounts' in before.session),
+      before.session.maskCounts, before.turns.map((t: any) => ['interventions' in t, t.interventions])]), [true, null, true, null, [[true, null]]]);
+    // K1, K2. Sent with them.
+    const sent = await call('PUT', '/v1/batches/batch-mask', { token: installA.token, body: {
+      schema: 1, sessions: [session({ finalStatus: 'done', endedAt: T0 + 6000, ...MASK })], turns: [{ ...turn, interventions: INTERVENTIONS }],
+    } });
+    assert.equal(sent.status, 200, String(sent.buf));
+    const after = await detail();
+    assert.deepEqual([after.session.maskingVersion, after.session.maskCounts], [MASK.maskingVersion, MASK.maskCounts]);
+    assert.deepEqual(note('mask.interventions', after.turns[0].interventions), INTERVENTIONS);
+    const listed = (await call('GET', '/v1/read/sessions?agent=agent-1', { token: reader.token })).json.sessions;
+    assert.deepEqual(note('mask.list', listed.map((s: any) => [s.sessionId, s.maskingVersion, s.maskCounts?.PERSON])), [['sess-1', MASK.maskingVersion, 3]]);
+    // K4. Sent again without them: kept.
+    const older = await call('PUT', '/v1/batches/batch-mask-older', { token: installA.token, body: {
+      schema: 1, sessions: [session({ finalStatus: 'done', endedAt: T0 + 6000 })], turns: [turn],
+    } });
+    assert.equal(older.status, 200, String(older.buf));
+    const kept = await detail();
+    assert.deepEqual(note('mask.keptAfterOlder', [kept.session.maskingVersion, kept.session.maskCounts?.HOME, kept.turns[0].interventions?.next?.delaySec]),
+      [MASK.maskingVersion, 4, 12.5]);
+    // K5. Malformed: refused whole.
+    const { PHONE: _p, ...five } = MASK.maskCounts;
+    const bad: Array<[string, Record<string, unknown>, Record<string, unknown>]> = [
+      ['seventhCount', { maskCounts: { ...MASK.maskCounts, NAME: 1 } }, {}],
+      ['missingCount', { maskCounts: five }, {}],
+      ['duringOutside', {}, { interventions: { interrupted: { ...INTERVENTIONS.interrupted, during: 'thinking' } } }],
+      ['nameAsKind', {}, { interventions: { next: { by: 'Some Person', delaySec: 1 } } }],
+    ];
+    const codes: Array<[string, number, string]> = [];
+    for (const [name, s, t] of bad) {
+      const put = await call('PUT', `/v1/batches/batch-bad-mask-${name}`, { token: installA.token, body: {
+        schema: 1, sessions: [session({ finalStatus: 'done', endedAt: T0 + 6000, maskingVersion: 'never-stored', ...s })], turns: [{ ...turn, ...t }],
+      } });
+      codes.push([name, put.status, put.json.error]);
+    }
+    assert.deepEqual(note('mask.malformed', codes), bad.map(([n]) => [n, 422, 'invalid_batch']));
+    const still = await detail();
+    assert.deepEqual([still.session.maskingVersion, still.turns[0].interventions?.interrupted?.by], [MASK.maskingVersion, 'esc']);
+  });
+
   it('migrates a database that holds requests: down keeps every row but the marks, up reads them back unknown', async () => {
     // M1, M2. The server stopped, as an operator migrates; what it logged so far is kept for the artefact.
     const earlier = srv.log.slice();
@@ -484,7 +545,7 @@ describe('trace back-office, end to end', () => {
         const tables = (await client.query("SELECT tablename FROM pg_tables WHERE schemaname = 'public' AND tablename <> 'schema_migrations' ORDER BY 1")).rows.map((r) => r.tablename as string);
         const out: Record<string, string> = {};
         for (const t of tables) {
-          const r = (await client.query(`SELECT count(*)::int AS n, md5(coalesce(string_agg(x, '|' ORDER BY x), '')) AS d FROM (SELECT (to_jsonb(t) - 'side' - 'environment' - 'events' - 'live_sessions' - 'start' - 'lost_demand' - 'cancel' - 'task_ref')::text AS x FROM "${t}" t) s`)).rows[0];
+          const r = (await client.query(`SELECT count(*)::int AS n, md5(coalesce(string_agg(x, '|' ORDER BY x), '')) AS d FROM (SELECT (to_jsonb(t) - 'side' - 'environment' - 'events' - 'live_sessions' - 'start' - 'lost_demand' - 'cancel' - 'task_ref' - 'masking_version' - 'mask_counts' - 'interventions')::text AS x FROM "${t}" t) s`)).rows[0];
           out[t] = `${r.n}:${r.d}`;
         }
         return out;
@@ -502,7 +563,14 @@ describe('trace back-office, end to end', () => {
         (await client.query("SELECT request_id, cancel->>'cause' AS c FROM requests WHERE cancel IS NOT NULL ORDER BY 1")).rows.map((r) => [r.request_id, r.c]),
       ];
       assert.deepEqual(note('migrate.withData.waveTwoBefore', await waveTwo()), [[['sess-1', 'task', 1]], [['req-2', CANCEL.cause]]]);
-      // L6, E8, M2. Down through 004, 003, then 002.
+      const waveThree = async () => [
+        (await client.query('SELECT session_id, masking_version, mask_counts->>\'PERSON\' AS p FROM sessions WHERE masking_version IS NOT NULL OR mask_counts IS NOT NULL ORDER BY 1')).rows.map((r) => [r.session_id, r.masking_version, r.p]),
+        (await client.query("SELECT turn_id, interventions->'interrupted'->>'by' AS b FROM turns WHERE interventions IS NOT NULL ORDER BY 1")).rows.map((r) => [r.turn_id, r.b]),
+      ];
+      assert.deepEqual(note('migrate.withData.waveThreeBefore', await waveThree()), [[['sess-1', MASK.maskingVersion, '3']], [['turn-1', 'esc']]]);
+      // K6, L6, E8, M2. Down through 005, 004, 003, then 002.
+      note('migrate.withData.down005', runCli(['migrate', 'down'], env).trim());
+      assert.deepEqual(note('migrate.withData.afterDown005', await rows()), before, 'the down of 005 kept every row and value but its own');
       note('migrate.withData.down004', runCli(['migrate', 'down'], env).trim());
       assert.deepEqual(note('migrate.withData.afterDown004', await rows()), before, 'the down of 004 kept every row and value but its own');
       note('migrate.withData.down003', runCli(['migrate', 'down'], env).trim());
@@ -514,6 +582,7 @@ describe('trace back-office, end to end', () => {
       assert.deepEqual(note('migrate.withData.marksAfterUp', await marks()), [['req-1', null], ['req-2', null], ['req-t', null]]);
       assert.deepEqual(note('migrate.withData.waveOneAfterUp', await waveOne()), [[], []]);
       assert.deepEqual(note('migrate.withData.waveTwoAfterUp', await waveTwo()), [[], []]);
+      assert.deepEqual(note('migrate.withData.waveThreeAfterUp', await waveThree()), [[], []]);
     } finally {
       // Up again and serving whatever this step found, so a failure here is this step's alone.
       runCli(['migrate', 'up'], env);
@@ -598,8 +667,8 @@ describe('trace back-office, end to end', () => {
     for (const [id, refs] of [['b-del', [h.system, sha(twice), sha(only)]], ['b-del2', [sha(twice)]]] as const) {
       const put = await call('PUT', `/v1/batches/${id}.1`, { token: installB.token, body: {
         schema: 1, sessions: [session({ sessionId: id, finalStatus: 'done', endedAt: T0 + 10_000, turnCount: 1, requestCount: 1, environment: { ...ENV, chip: `Chip-${id}-7731` }, events: EVENTS,
-          start: { ...START, branch: `Chip-${id}-7731-branch` }, lostDemand: LOST })],
-        turns: [{ ...turn, turnId: `${id}-t`, sessionId: id }], requests: [{ ...req(id, [...refs]), liveSessions: 5, cancel: CANCEL }],
+          start: { ...START, branch: `Chip-${id}-7731-branch` }, lostDemand: LOST, ...MASK, maskingVersion: `Chip-${id}-7731` })],
+        turns: [{ ...turn, turnId: `${id}-t`, sessionId: id, interventions: { redelegated: { to: `Chip-${id}-7731-to`, at: T0 } } }], requests: [{ ...req(id, [...refs]), liveSessions: 5, cancel: CANCEL }],
         messages: [meta(h.system, msgs.system, 'system'), meta(sha(twice), twice, 'user'), meta(sha(only), only, 'assistant')].filter((m) => (refs as readonly string[]).includes(m.hash)),
       } });
       assert.equal(put.status, 200, String(put.buf));
