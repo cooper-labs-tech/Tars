@@ -14,6 +14,7 @@ import { API_PORT, DATA_DIR } from '../constants';
 import { TARS_MCP_ENV } from './mcp-orchestrator-env';
 import { dropSharedMcpEntries, ensureSharedMcp, SHARED_MCP_SERVERS, writeClaudeCopy, writeSharedMcpEntries } from './mcp-shared';
 import { tarsInstanceId } from '../core/agent-tokens';
+import { mcpRegistrationEnds } from '../core/mcp-registration';
 
 /**
  * MCP Orchestrator Service
@@ -232,6 +233,9 @@ export async function setupMcpOrchestrator(appSettings?: AppSettings): Promise<v
     await installBundledSkills();
   } catch (err) {
     console.error('Failed to auto-setup MCP servers:', err);
+  } finally {
+    // Every launch held for the configs this writes goes on now, whatever it did (core/mcp-registration.ts).
+    mcpRegistrationEnds();
   }
 }
 

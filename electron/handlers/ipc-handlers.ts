@@ -91,6 +91,7 @@ import { mcpConfigPathFor } from '../services/mcp-roles';
 import { registerFirstRunHandlers } from './first-run-handlers';
 import { setFirstTask, spendFirstTask, withFirstTask } from '../core/first-task';
 import { registerChromeSwitchHandlers } from '../services/chrome-without-asking';
+import { untilMcpRegistered } from '../core/mcp-registration';
 
 /**
  * Normalize a JIRA domain value to a full hostname.
@@ -753,6 +754,8 @@ function registerAgentHandlers(deps: IpcHandlerDependencies): void {
     const appSettingsForCommand = getAppSettings();
     const cliProvider = getProvider(provider);
     const binaryPath = agent.cliPath || cliProvider.resolveBinaryPath(appSettingsForCommand);
+    // Its line is built from the configs the start-up registration writes: once that has ended (core/mcp-registration.ts).
+    await untilMcpRegistered();
     // What its line needs read from the CLI (codex's flags), off the main thread.
     await cliProvider.prepareLaunch?.(binaryPath, options?.permissionMode ?? agent.permissionMode ?? (agent.skipPermissions ? 'auto' : 'normal'));
 

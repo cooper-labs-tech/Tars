@@ -115,6 +115,7 @@ import {
 // Handlers
 import { registerIpcHandlers, IpcHandlerDependencies } from './handlers/ipc-handlers';
 import { noteApiPhase } from './core/api-listening';
+import { mcpRegistrationBegins } from './core/mcp-registration';
 import { registerCLIPathsHandlers } from './handlers/cli-paths-handlers';
 import { registerBusHandlers } from './handlers/bus-handlers';
 import { registerChatHandlers } from './handlers/chat-handlers';
@@ -518,6 +519,10 @@ app.whenReady().then(async () => {
   // and the window and the IPC come up before initApiServer, so the API reads "starting" from here (the Audit's L3 on
   // #541).
   noteApiPhase('starting');
+  // And no launch builds its line until the MCP registration below has ended, which writes the configs a line is
+  // built from (core/mcp-registration.ts; the Audit's L1 on #657): the restart recovery, the bots and the API can
+  // launch before it ends.
+  mcpRegistrationBegins();
 
   // Ensure data directory exists
   ensureDataDir();
@@ -973,6 +978,8 @@ app.whenReady().then(async () => {
 
   // Registration only has to finish before an agent starts, not before the
   // window paints. It used to hold the main thread through the first render.
+  // Each launch waits for its end (mcpRegistrationBegins above), which it
+  // marks whatever it did.
   void setupMcpOrchestrator(appSettings).catch(err =>
     console.error('MCP registration failed:', err));
   setupMemoryBackends(appSettings);
