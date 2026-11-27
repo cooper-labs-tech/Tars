@@ -95,9 +95,15 @@ test('each traced request\'s gap splits into its tools\' run, read from codex\'s
     app.process().stdout?.on('data', (d) => fs.appendFileSync(appLog, d));
     app.process().stderr?.on('data', (d) => fs.appendFileSync(appLog, d));
     const page: Page = await app.firstWindow();
+    // Each read runs as a task of its own. An evaluate reaches the main process through its inspector, which can run it
+    // in the middle of one of the app's own statements on the same SQLite connection, and the read then finds it busy:
+    // measured on 27/11 (bench-b4/trace-c1/measure/inspector-busy.cjs), 3755 of 4000 evaluates run directly against a
+    // connection at work, 0 of 4000 deferred with setImmediate.
     const evaluate = <T>(fn: string, arg: Row = {}) => app!.evaluate(({}, { fn, arg, dist }) => {
       const req = process.mainModule!.require;
-      return new Function('req', 'dist', 'arg', fn)(req, dist, arg);
+      return new Promise((resolve, reject) => setImmediate(() => {
+        try { resolve(new Function('req', 'dist', 'arg', fn)(req, dist, arg)); } catch (err) { reject(err); }
+      }));
     }, { fn, arg, dist }) as Promise<T>;
 
     const token = await evaluate<string>(`return req(dist + '/core/agent-tokens.js').mintRunToken(arg.lead).token;`, { lead: LEAD });
