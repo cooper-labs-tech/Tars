@@ -47,6 +47,15 @@ import { spawnSync } from 'node:child_process';
  *     line's start and at its end, in an agent's name (`4747-Backend`), and
  *     inside a URL path (`/p/4747/x`). An entry with a letter in it keeps its
  *     rules: letters only, word boundaries; anything else, a substring.
+ * And from the Audit's gate of #670 (M1, 27/11):
+ * 18. A real use glued to a word is missed because the letter that touches it
+ *     is a to f: a handle written without its dot (`4747capital`,
+ *     `4747Capital`), a word ending on it (`fund4747`). A hex letter refuses
+ *     only when the whole run of letters and digits around the number is hex,
+ *     or follows `#`: a word with any other letter is a word.
+ * 19. Over-correction: a hex run (`ff4747`, `deadbeef4747`), a colour behind
+ *     `#` (`#ab4747`), or a code point or hex literal (`0x4747`, `䝇`,
+ *     `U+4747`) is reported.
  */
 
 const SCRIPT = path.join(__dirname, '../../scripts/check-private-names.mjs');
@@ -306,5 +315,28 @@ describe('check:names', () => {
     for (let n = 1; n <= lines.length; n++) expect(r.out, `line ${n}`).toContain(`${path.join('src', 'a.ts')}:${n}:`);
     expect(r.out).not.toContain(`${path.join('src', 'b.ts')}:1:`);
     expect(r.out).not.toContain('4747');
+  });
+
+  /** The tests' invented number, built from pieces as the Audit asks of a listed one. */
+  const N = `${47}${47}`;
+
+  it('18. an all-digit entry glued to a word is found, whatever letter touches it', () => {
+    const lines = [`handle: ${N}capital`, `const who = '${N}Capital';`, `// fund${N} said so`, `name = acme${N}x;`];
+    const t = tree({ 'src/a.ts': `${lines.join('\n')}\n` });
+
+    const r = check(t, { TARS_PRIVATE_NAMES: names(t, [N]) });
+
+    expect(r.status, r.out).toBe(1);
+    for (let n = 1; n <= lines.length; n++) expect(r.out, lines[n - 1]).toContain(`${path.join('src', 'a.ts')}:${n}:`);
+  });
+
+  it('19. an all-digit entry inside a hex run, behind #, or in a code point or hex literal is no match', () => {
+    const t = tree({
+      'src/hex.ts': [`const a = 'ff${N}';`, `const b = 'deadbeef${N}';`, `const c = '#ab${N}';`, `const d = 0x${N};`, `const e = '\\u${N}';`, `// U+${N} is a code point`, ''].join('\n'),
+    });
+
+    const r = check(t, { TARS_PRIVATE_NAMES: names(t, [N]) });
+
+    expect(r.status, r.out).toBe(0);
   });
 });
