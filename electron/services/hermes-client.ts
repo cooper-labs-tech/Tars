@@ -228,6 +228,9 @@ function noAnswer(err: unknown, baseUrl: string, wait: Omit<Unanswered, 'baseUrl
   return err;
 }
 
+/** What the probe and the sign-in answer for a value that is not such an address: the save's refusal, less its "nothing was saved". */
+const NOT_AN_ADDRESS_TARS_CALLS = 'Tars calls a gateway only at an http:// or https:// address.';
+
 /** A gateway's address as Tars calls it, an http: or https: URL; null for anything else, which Tars never calls. */
 export function gatewayUrl(value: string): URL | null {
   try {
@@ -450,6 +453,11 @@ export async function probeHermes(conn: HermesConnection): Promise<HermesStatus 
   if (!baseUrl) {
     return { baseUrl: '', reachable: false, authRequired: false, authFlows: [], authProviders: [], signedIn: false, error: 'No gateway URL for this mode.' };
   }
+  // Not an address Tars calls: said in the save's words, not called, and the value not handed back, where
+  // Settings printed it beside Node's "Protocol "user:" not supported" (the Audit's I-1 on #660).
+  if (!gatewayUrl(baseUrl)) {
+    return { baseUrl: '', reachable: false, authRequired: false, authFlows: [], authProviders: [], signedIn: false, error: NOT_AN_ADDRESS_TARS_CALLS };
+  }
   try {
     const { status, body } = await hermesRequest(baseUrl, '/api/status', { token: sessionToken(conn) });
     const info = (body && typeof body === 'object' ? body : {}) as Record<string, unknown>;
@@ -491,6 +499,7 @@ export async function signInHermes(
 ): Promise<{ success: boolean; error?: string }> {
   const baseUrl = resolveHermesBaseUrl(conn);
   if (!baseUrl) return { success: false, error: 'No gateway URL for this mode.' };
+  if (!gatewayUrl(baseUrl)) return { success: false, error: NOT_AN_ADDRESS_TARS_CALLS };
   try {
     const provider = credentials.provider || 'basic';
     const { status, body } = await hermesRequest(baseUrl, '/auth/password-login', {
