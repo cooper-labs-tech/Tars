@@ -9,6 +9,10 @@ import {
 // Hermes sends `schedule` as an object, not a string. Putting it straight into
 // JSX threw React error #31 and killed the whole document - see schedule-text.ts.
 import { formatSchedule, scheduleExpression, type CronSchedule } from './schedule-text';
+import { ipcReason } from '@/lib/ipc-error';
+
+/** A Hermes call that threw: the gateway never answered (`Shell · Schedules · Hermes did not answer`). */
+const unreached = (thrown: unknown) => `Tars could not reach Hermes (${ipcReason(thrown, 'no reason given')}).`;
 
 // Row actions are words, not glyphs (R7): 26px bordered lowercase-mono
 // buttons, 8px apart, in the same order on every row.
@@ -118,7 +122,9 @@ export default function CronsPage() {
       setNeedsSignIn(false);
       setJobs(asJobs(r.jobs));
     } catch (err) {
-      setError(err instanceof Error ? err.message : String(err));
+      // The call itself failed: the request to the gateway never got an answer
+      // (refused, timed out). Said in words, never Electron's own preface.
+      setError(`Could not read the schedules: ${unreached(err)}`);
     } finally {
       setLoading(false);
     }
@@ -179,7 +185,7 @@ export default function CronsPage() {
       setDraft(null);
       await load();
     } catch (err) {
-      setSaveError(err instanceof Error ? err.message : String(err));
+      setSaveError(`Could not save the change: ${unreached(err)}`);
     } finally {
       setSaving(false);
     }
