@@ -110,6 +110,8 @@ import {
   setupMemoryBackends,
   registerMcpOrchestratorHandlers,
   getMcpOrchestratorPath,
+  e2eMcpBundlesDir,
+  useTestMcpBundles,
 } from './services/mcp-orchestrator';
 
 // Handlers
@@ -516,6 +518,9 @@ app.whenReady().then(async () => {
   // and the window and the IPC come up before initApiServer, so the API reads "starting" from here (the Audit's L3 on
   // #541).
   noteApiPhase('starting');
+  // An E2E run may name the tree's own MCP bundles, for the start-up registration to write what a packaged Tars writes,
+  // into the sandbox's homes only; read once, here, never in a packaged build (services/mcp-orchestrator.ts).
+  useTestMcpBundles(e2eMcpBundlesDir(process.env, app.isPackaged));
 
   // Ensure data directory exists
   ensureDataDir();

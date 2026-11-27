@@ -24,13 +24,51 @@ import { tarsInstanceId } from '../core/agent-tokens';
 
 // ============== Helper Functions ==============
 
+/** The CLI homes the registration writes into besides HOME: each must lie inside the sandbox for the seam below. */
+const CLI_HOME_VARS = ['CODEX_HOME', 'XDG_CONFIG_HOME', 'GEMINI_CLI_HOME', 'GROK_HOME', 'PI_CODING_AGENT_DIR'] as const;
+
+/**
+ * An E2E spec's own built bundles (DOROTHY_E2E_MCP_BUNDLES), for the start-up registration to register as a packaged
+ * Tars registers the app's: read under DOROTHY_E2E only, never by a packaged build, and only as an absolute folder that
+ * holds the orchestrator's bundle. Null as well while HOME is the account's own home or inside it, or while a CLI home
+ * the registration writes into (CLI_HOME_VARS) lies outside HOME: a dev run would write the tree's paths into the real
+ * home's CLI configs, the #201 incident. Without it a dev or E2E Tars finds no bundle under process.resourcesPath
+ * (Electron's own folder) and registers nothing, by design.
+ */
+export function e2eMcpBundlesDir(
+  env: NodeJS.ProcessEnv,
+  packaged: boolean,
+  homes: { home: string; account: string } = { home: os.homedir(), account: os.userInfo().homedir },
+): string | null {
+  if (packaged || env.DOROTHY_E2E !== '1' || !env.DOROTHY_E2E_MCP_BUNDLES) return null;
+  const dir = env.DOROTHY_E2E_MCP_BUNDLES;
+  const refuse = (why: string): null => { console.warn(`[mcp] DOROTHY_E2E_MCP_BUNDLES ignored: ${why}`); return null; };
+  const inside = (parent: string, child: string) => {
+    const rel = path.relative(path.resolve(parent), path.resolve(child));
+    return rel === '' || (!rel.startsWith('..') && !path.isAbsolute(rel));
+  };
+  if (!path.isAbsolute(dir)) return refuse('not an absolute folder');
+  if (!fs.existsSync(path.join(dir, 'mcp-orchestrator', 'dist', 'bundle.js'))) return refuse(`no mcp-orchestrator/dist/bundle.js under ${dir}`);
+  if (inside(homes.account, homes.home)) return refuse('HOME is the account\'s own home, not a sandbox');
+  for (const name of CLI_HOME_VARS) {
+    const value = env[name];
+    if (value && !inside(homes.home, value)) return refuse(`${name} lies outside the sandbox's HOME`);
+  }
+  return dir;
+}
+
+/** Where the bundles are read from: the app's resources, or the tree main.ts set from e2eMcpBundlesDir at start. */
+let testBundlesDir: string | null = null;
+export function useTestMcpBundles(dir: string | null): void { testBundlesDir = dir; }
+function bundlesDir(): string { return testBundlesDir ?? process.resourcesPath; }
+
 /**
  * Get the path to the bundled MCP orchestrator
  * Always uses the packaged app path - MCP servers are bundled in extraResources
  */
 export function getMcpOrchestratorPath(): string {
   // Always use the packaged app path - works for all users
-  return path.join(process.resourcesPath, 'mcp-orchestrator', 'dist', 'bundle.js');
+  return path.join(bundlesDir(), 'mcp-orchestrator', 'dist', 'bundle.js');
 }
 
 /**
@@ -41,7 +79,7 @@ export function getMcpOrchestratorPath(): string {
  */
 export function getMcpTelegramPath(): string {
   // Always use the packaged app path - works for all users
-  return path.join(process.resourcesPath, 'mcp-telegram', 'dist', 'bundle.js');
+  return path.join(bundlesDir(), 'mcp-telegram', 'dist', 'bundle.js');
 }
 
 /**
@@ -50,7 +88,7 @@ export function getMcpTelegramPath(): string {
  */
 export function getMcpKanbanPath(): string {
   // Always use the packaged app path - works for all users
-  return path.join(process.resourcesPath, 'mcp-kanban', 'dist', 'bundle.js');
+  return path.join(bundlesDir(), 'mcp-kanban', 'dist', 'bundle.js');
 }
 
 /**
@@ -58,7 +96,7 @@ export function getMcpKanbanPath(): string {
  * Always uses the packaged app path - MCP servers are bundled in extraResources
  */
 export function getMcpVaultPath(): string {
-  return path.join(process.resourcesPath, 'mcp-vault', 'dist', 'bundle.js');
+  return path.join(bundlesDir(), 'mcp-vault', 'dist', 'bundle.js');
 }
 
 /**
@@ -66,7 +104,7 @@ export function getMcpVaultPath(): string {
  * Always uses the packaged app path - MCP servers are bundled in extraResources
  */
 export function getMcpSocialDataPath(): string {
-  return path.join(process.resourcesPath, 'mcp-socialdata', 'dist', 'bundle.js');
+  return path.join(bundlesDir(), 'mcp-socialdata', 'dist', 'bundle.js');
 }
 
 /**
@@ -74,7 +112,7 @@ export function getMcpSocialDataPath(): string {
  * Always uses the packaged app path - MCP servers are bundled in extraResources
  */
 export function getMcpXPath(): string {
-  return path.join(process.resourcesPath, 'mcp-x', 'dist', 'bundle.js');
+  return path.join(bundlesDir(), 'mcp-x', 'dist', 'bundle.js');
 }
 
 /**
@@ -82,7 +120,7 @@ export function getMcpXPath(): string {
  * This is the one that makes memory provider-agnostic: every CLI gets it.
  */
 export function getMcpMemoryPath(): string {
-  return path.join(process.resourcesPath, 'mcp-memory', 'dist', 'bundle.js');
+  return path.join(bundlesDir(), 'mcp-memory', 'dist', 'bundle.js');
 }
 
 /**
