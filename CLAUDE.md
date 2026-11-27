@@ -300,7 +300,9 @@ node scripts/worktree.mjs prune --dry-run      # what the cleanup would remove, 
   clone of an installed one (9.8 s and about 65 MB of real space for 1.2 GB, measured 01/10),
   reconciled by `npm install` when the lock differs. Never a symlink: `next dev` refuses one.
   Each sub-package with a lock of its own (`mcp-*/`, `landing/`) gets its `node_modules` the same
-  way, from another worktree's; one with nothing to clone is left uninstalled and said
+  way, from another worktree's; one with nothing to clone is left uninstalled and said. A clone
+  lands whole or not at all, never from a source written in the last 10 s, and `new` also refuses
+  when the clones, where the disk copies them in full (ext4, Windows), would bring it under the floor
 - **`remove`** refuses a dirty worktree (commit, or `--save` to keep the work on `wip/<name>`), one
   any process works in (your own shell excepted, for `remove` only), a locked one, one with a
   rebase, merge, cherry-pick or bisect in progress, the worktree of one of Tars's own agents

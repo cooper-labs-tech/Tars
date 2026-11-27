@@ -305,6 +305,9 @@ describe('dependencies', () => {
     const root = makeRepo();
     fs.mkdirSync(path.join(root, 'node_modules', 'electron'), { recursive: true });
     fs.writeFileSync(path.join(root, 'node_modules', 'electron', 'package.json'), '{}');
+    // Settled, as an install an hour old is: a source that moved in the last seconds is not cloned (case 28).
+    const then = new Date(Date.now() - HOUR);
+    fs.utimesSync(path.join(root, 'node_modules'), then, then);
     const { ctx, calls } = world();
     const repo = await openRepo(root);
     const wt = await createWorktree(repo, 'deps-electron', { from: 'main' }, ctx);
