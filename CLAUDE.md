@@ -298,7 +298,9 @@ node scripts/worktree.mjs prune --dry-run      # what the cleanup would remove, 
   changes, then fetches and fast-forwards it, and starts the worktree from that fresh `origin/main`:
   Tars shows each agent the branch of the folder it works in. Its `node_modules` is an APFS
   clone of an installed one (9.8 s and about 65 MB of real space for 1.2 GB, measured 01/10),
-  reconciled by `npm install` when the lock differs. Never a symlink: `next dev` refuses one
+  reconciled by `npm install` when the lock differs. Never a symlink: `next dev` refuses one.
+  Each sub-package with a lock of its own (`mcp-*/`, `landing/`) gets its `node_modules` the same
+  way, from another worktree's; one with nothing to clone is left uninstalled and said
 - **`remove`** refuses a dirty worktree (commit, or `--save` to keep the work on `wip/<name>`), one
   any process works in (your own shell excepted, for `remove` only), a locked one, one with a
   rebase, merge, cherry-pick or bisect in progress, the worktree of one of Tars's own agents

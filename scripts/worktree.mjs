@@ -26,6 +26,12 @@
  *   binary and node-pty's build (measured 01/10). A clone at the same lock is
  *   used as is; one at another lock is reconciled by `npm install`, which only
  *   writes what differs; `npm ci` runs only when there is nothing to clone.
+ *   Each sub-package with an install of its own (mcp-*, landing: a folder with
+ *   its package.json and lock) gets the same, from the same folder of another
+ *   worktree; one with nothing to clone is left uninstalled and said, its
+ *   build installing it (27/11: without them every fresh worktree's suite had
+ *   a false red). Linux clones with `--reflink=auto` (shared blocks on btrfs
+ *   or XFS, a full copy elsewhere), Windows copies.
  * - **remove** loses nothing: a dirty worktree is refused with its files
  *   named, or with --save committed on wip/<name> (its own branch untouched);
  *   a detached HEAD on no branch gets wip/<name> first; a worktree any other
@@ -312,25 +318,10 @@ export async function prepareDeps(repo, target, ctx) {
   const lock = path.join(target, 'package-lock.json');
   if (!fs.existsSync(lock)) return 'none';
   const nm = path.join(target, 'node_modules');
-  const sources = (await listWorktrees(repo, ctx))
-    .map(e => path.join(e.path, 'node_modules'))
-    .filter(p => p !== nm && depsKind(path.dirname(p)) === 'folder');
-  const matching = sources.find(p => installedMatches(p, lock));
-  const recency = p => {
-    try { return fs.statSync(path.join(p, '.package-lock.json')).mtimeMs; } catch { return 0; }
-  };
-  const source = matching ?? sources.sort((a, b) => recency(b) - recency(a))[0];
+  const worktrees = await listWorktrees(repo, ctx);
 
-  let how;
-  if (source) {
-    ctx.log(`cloning ${source}`);
-    await cloneTree(source, nm, ctx);
-    how = `cloned from ${source}`;
-    if (!matching) {
-      await tool(ctx, 'npm', ['install', '--no-audit', '--no-fund'], target);
-      how += ', then npm install for the lock';
-    }
-  } else {
+  let how = await cloneDeps(worktrees, target, '', ctx);
+  if (!how) {
     await tool(ctx, 'npm', ['ci', '--no-audit', '--no-fund'], target);
     how = 'npm ci (nothing to clone)';
   }
@@ -341,7 +332,49 @@ export async function prepareDeps(repo, target, ctx) {
     && !fs.existsSync(path.join(nm, 'node-pty', 'build', 'Release', 'spawn-helper'))) {
     await tool(ctx, 'npx', ['--no-install', 'electron-rebuild', '-f', '-o', 'node-pty'], target);
   }
-  return how;
+  const subs = [];
+  for (const sub of subPackages(target)) {
+    subs.push(`${sub} ${(await cloneDeps(worktrees, target, sub, ctx)) ? 'cloned' : 'not installed: nothing to clone, its build installs it'}`);
+  }
+  return subs.length ? `${how}; sub-packages: ${subs.join(', ')}` : how;
+}
+
+/**
+ * The sub-packages of a checkout with an install of their own: a first-level folder holding its package.json and its
+ * package-lock.json (mcp-*, landing). Their tests and builds read their own node_modules: without one, every fresh
+ * worktree's full suite had one false red (mcp-shared-transport, 27/11). A folder with no lock (mcp-shared) is none.
+ */
+export function subPackages(at) {
+  return fs.readdirSync(at, { withFileTypes: true })
+    .filter(e => e.isDirectory() && !e.name.startsWith('.') && e.name !== 'node_modules')
+    .filter(e => fs.existsSync(path.join(at, e.name, 'package.json')) && fs.existsSync(path.join(at, e.name, 'package-lock.json')))
+    .map(e => e.name)
+    .sort();
+}
+
+/**
+ * `<target>/<sub>/node_modules` (the root's when sub is ''), cloned from the same folder of another worktree of the
+ * repository: one at the same lock if any, else the most recently installed, reconciled by `npm install` in that folder.
+ * Never from a symlinked one, and never a symlink. Answers how, or null when there is nothing to clone.
+ */
+async function cloneDeps(worktrees, target, sub, ctx) {
+  const at = path.join(target, sub);
+  const lock = path.join(at, 'package-lock.json');
+  const nm = path.join(at, 'node_modules');
+  const sources = worktrees
+    .map(e => path.join(e.path, sub, 'node_modules'))
+    .filter(p => p !== nm && depsKind(path.dirname(p)) === 'folder');
+  const matching = sources.find(p => installedMatches(p, lock));
+  const recency = p => {
+    try { return fs.statSync(path.join(p, '.package-lock.json')).mtimeMs; } catch { return 0; }
+  };
+  const source = matching ?? sources.sort((a, b) => recency(b) - recency(a))[0];
+  if (!source) return null;
+  ctx.log(`cloning ${source}`);
+  await cloneTree(source, nm, ctx);
+  if (matching) return `cloned from ${source}`;
+  await tool(ctx, 'npm', ['install', '--no-audit', '--no-fund'], at);
+  return `cloned from ${source}, then npm install for the lock`;
 }
 
 const NAME = /^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$/;
