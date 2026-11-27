@@ -33,6 +33,8 @@ export function sessionDocument(store: TraceStore, traceId: string, seen: Set<st
       endpoint_name: x.endpointName ?? null, model: x.model, started_at: x.startedAt, ended_at: x.endedAt ?? null,
       turn_count: x.turnCount, request_count: x.requestCount, tokens_in: x.tokensIn, tokens_cached: x.tokensCached,
       tokens_out: x.tokensOut, final_status: x.finalStatus, mixed: x.mixed, unknown_turns: x.unknownTurns, outcome: s.outcome ?? null,
+      // Whether the session may be used to train models (trace feature A5): false once the switch was off while it ran.
+      consent: { training: x.consent.training },
     },
     turns: [], requests: [], request_messages: [], messages: [],
   };

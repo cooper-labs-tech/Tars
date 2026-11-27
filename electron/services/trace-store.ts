@@ -41,6 +41,11 @@ export interface TraceMeta {
   endpointBaseUrl?: string;
   model: string;
   startedAt: number;
+  /**
+   * The owner's switch "May be used to train models" as it stood when the session opened (trace feature A5). Turned
+   * off while the session runs, the session is false for good (denyTraining). None given reads false.
+   */
+  training?: boolean;
 }
 
 /** One request and its response as the proxy saw them on the wire. */
@@ -116,6 +121,8 @@ export interface TraceSessionSummary {
   startedAt: number; endedAt?: number; finalStatus: 'done' | 'failed' | 'abandoned' | 'open';
   turnCount: number; requestCount: number; tokensIn: number; tokensCached: number; tokensOut: number;
   bytes: number; mixed: boolean; unknownTurns: number;
+  /** Whether the session may be used to train models: false once the switch was off at any moment while it ran. */
+  consent: { training: boolean };
 }
 
 export interface TraceRequestView {
@@ -149,7 +156,8 @@ CREATE TABLE IF NOT EXISTS traces (
   tokens_in INTEGER NOT NULL DEFAULT 0, tokens_cached INTEGER NOT NULL DEFAULT 0, tokens_out INTEGER NOT NULL DEFAULT 0,
   final_status TEXT NOT NULL DEFAULT 'open', outcome_json TEXT,
   mixed INTEGER NOT NULL DEFAULT 0, unknown_turns INTEGER NOT NULL DEFAULT 0,
-  main_system_hash TEXT, bytes INTEGER NOT NULL DEFAULT 0, updated_seq INTEGER NOT NULL DEFAULT 0
+  main_system_hash TEXT, bytes INTEGER NOT NULL DEFAULT 0, updated_seq INTEGER NOT NULL DEFAULT 0,
+  training INTEGER
 );
 CREATE INDEX IF NOT EXISTS traces_seq ON traces(updated_seq);
 CREATE INDEX IF NOT EXISTS traces_started ON traces(started_at);
@@ -220,6 +228,8 @@ function summaryOf(r: Row): TraceSessionSummary {
     turnCount: num(r.turn_count), requestCount: num(r.request_count),
     tokensIn: num(r.tokens_in), tokensCached: num(r.tokens_cached), tokensOut: num(r.tokens_out),
     bytes: num(r.bytes), mixed: r.mixed === 1, unknownTurns: num(r.unknown_turns),
+    // Only a stamp of 1 is a yes: a session with none (recorded before the switch existed) is not one.
+    consent: { training: r.training === 1 },
   };
 }
 
@@ -296,6 +306,9 @@ export class TraceStore {
     this.db.pragma('journal_mode = WAL');
     this.db.pragma('foreign_keys = OFF');
     this.db.exec(SCHEMA);
+    // A store made before the training stamp (trace feature A5) gets its column; its sessions then read false.
+    const columns = (this.db.prepare('PRAGMA table_info(traces)').all() as Array<{ name: string }>).map(c => c.name);
+    if (!columns.includes('training')) this.db.exec('ALTER TABLE traces ADD COLUMN training INTEGER');
   }
 
   close(): void {
@@ -316,9 +329,22 @@ export class TraceStore {
 
   openTrace(m: TraceMeta): void {
     this.db.prepare(`INSERT OR IGNORE INTO traces (trace_id, project_path, agent_id, agent_name, harness, harness_version,
-      endpoint_id, endpoint_name, endpoint_base_url, model, started_at, updated_seq)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`).run(m.traceId, m.projectPath, m.agentId, m.agentName ?? null, m.harness,
-      m.harnessVersion ?? null, m.endpointId, m.endpointName ?? null, m.endpointBaseUrl ?? null, m.model, m.startedAt, this.nextSeq());
+      endpoint_id, endpoint_name, endpoint_base_url, model, started_at, updated_seq, training)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`).run(m.traceId, m.projectPath, m.agentId, m.agentName ?? null, m.harness,
+      m.harnessVersion ?? null, m.endpointId, m.endpointName ?? null, m.endpointBaseUrl ?? null, m.model, m.startedAt, this.nextSeq(),
+      m.training === undefined ? null : m.training ? 1 : 0);
+  }
+
+  /**
+   * The training switch turned off while these sessions run: each is false for good, and its change sequence moves,
+   * so a session already sent goes again with its consent false. A session already false is left as it is.
+   */
+  denyTraining(traceIds: string[]): void {
+    const deny = this.db.prepare('UPDATE traces SET training = 0, updated_seq = ? WHERE trace_id = ? AND (training IS NULL OR training != 0)');
+    for (const traceId of traceIds) {
+      const seq = this.nextSeq();
+      deny.run(seq, traceId);
+    }
   }
 
   hasTrace(traceId: string): boolean {
