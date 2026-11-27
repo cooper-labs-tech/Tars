@@ -142,3 +142,35 @@ describe('~/.tars-private on Windows', () => {
     warn.mockRestore();
   });
 });
+
+/**
+ * A folder where credentials are kept, on Windows (handed-folder-credentials.test.ts for the rule and its failure
+ * list): %USERPROFILE%\.ssh, the stores under %APPDATA%, in Windows's spellings, behind a junction, and what holds them.
+ */
+describe('a credential folder on Windows', () => {
+  const SSH = `${HOME}\\.ssh`;
+  const ROAMING = `${HOME}\\AppData\\Roaming`;
+  const CREDS = [SSH, `${ROAMING}\\Microsoft\\Credentials`, `${ROAMING}\\GitHub CLI`];
+  beforeEach(() => {
+    for (const r of [SSH, `${HOME}\\AppData`, ROAMING, `${ROAMING}\\Microsoft`, `${ROAMING}\\Microsoft\\Credentials`, `${ROAMING}\\GitHub CLI`, `${ROAMING}\\SomeApp`]) {
+      disk.entries.set(r.toUpperCase(), r);
+    }
+    disk.entries.set(`${HOME}\\projects\\demo\\keys`.toUpperCase(), SSH);
+  });
+  const cred = (folder: string) => handedFolderProblem(folder, { privateDir: PRIVATE, credentialDirs: CREDS } as never);
+
+  it('refuses the folder in every spelling, one inside it, and one behind a junction', () => {
+    const refused = [SSH, 'c:\\users\\nexarion434\\.SSH', 'C:/Users/Nexarion434/.ssh', `${SSH}\\`, `${SSH}\\id_not_made`,
+      `${ROAMING}\\GitHub CLI\\hosts`, `${HOME}\\projects\\demo\\keys`, `${HOME}\\projects\\demo\\KEYS\\not-made`];
+    expect(refused.filter(f => cred(f) === null)).toEqual([]);
+  });
+
+  it('refuses %APPDATA% and AppData, which hold the stores', () => {
+    expect([ROAMING, `${HOME}\\AppData`, 'c:/users/nexarion434/appdata/roaming'].filter(f => cred(f) === null)).toEqual([]);
+  });
+
+  it('takes another folder of %APPDATA%, a project and another drive', () => {
+    const fine = [`${ROAMING}\\SomeApp`, `${HOME}\\projects\\demo`, 'D:\\work'];
+    expect(fine.map(f => [f, cred(f)])).toEqual(fine.map(f => [f, null]));
+  });
+});
