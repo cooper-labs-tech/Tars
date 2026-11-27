@@ -4,6 +4,7 @@ import { ptyProcesses, type MessageSender } from './pty-manager';
 import { cliRunningIn } from './agent-pty';
 import { dialogOnScreen } from './terminal-mirror';
 import { lastInterruptAt } from '../services/agent-truth';
+import { mcpGateOpenedAt, mcpRegistrationUnderWay } from './mcp-registration';
 
 /**
  * The launch of an agent's CLI in its terminal, reachable without a renderer.
@@ -176,7 +177,12 @@ export function launchAbandoned(agentId: string, launch: object): void {
 export function sessionStarting(agent: StartingAgent): boolean {
   const launch = launchesUnderWay.get(agent.id);
   if (!launch) return false;
-  const elapsed = Date.now() - launch.since;
+  // Held for the start-up registration of the MCP servers, a launch has not reached its CLI yet: it is starting for as
+  // long as the registration runs (its own bound caps that), and its boot time counts from the moment the gate opened.
+  // Read from the gate itself, never stamped on the launch a second time (core/mcp-registration.ts; the Audit's L-a
+  // on #657).
+  if (mcpRegistrationUnderWay()) return true;
+  const elapsed = Date.now() - Math.max(launch.since, mcpGateOpenedAt() ?? 0);
   const terminal = agent.ptyId ? ptyProcesses.get(agent.ptyId) : undefined;
   // Past CLI_BOOT_MS, only a CLI that runs is still starting: see CLI_UP_MS.
   const booting = elapsed < CLI_BOOT_MS || (elapsed < CLI_UP_MS && !!terminal && cliRunningIn(terminal));
