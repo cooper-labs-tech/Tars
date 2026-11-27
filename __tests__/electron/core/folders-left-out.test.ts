@@ -31,7 +31,9 @@ vi.mock('electron', () => ({
   app: { getPath: () => os.tmpdir(), getAppPath: () => process.cwd(), isPackaged: false, getVersion: () => '0.0.0', on: vi.fn() },
   BrowserWindow: Object.assign(vi.fn(), { getAllWindows: () => [] }),
   Notification: vi.fn(),
+  ipcMain: { handle: (channel: string, handler: (event: unknown, ...args: unknown[]) => Promise<Record<string, unknown>>) => { handlers.set(channel, handler); } },
 }));
+const handlers = vi.hoisted(() => new Map<string, (event: unknown, ...args: unknown[]) => Promise<Record<string, unknown>>>());
 const broadcasts = vi.hoisted(() => [] as Array<{ channel: string; payload: Record<string, unknown> }>);
 vi.mock('../../../electron/utils/broadcast', () => ({
   broadcastToAllWindows: (channel: string, payload: Record<string, unknown>) => { broadcasts.push({ channel, payload }); },
@@ -41,6 +43,7 @@ import { foldersLeftOut } from '../../../electron/core/folders-left-out';
 import { agents, initAgentPty, launchIntoTerminal } from '../../../electron/core/agent-manager';
 import { ptyProcesses } from '../../../electron/core/pty-manager';
 import { toLaunch } from '../../../electron/platform/launch';
+import { registerTemplateHandlers } from '../../../electron/handlers/template-handlers';
 import type { AgentStatus } from '../../../electron/types';
 
 const home = () => os.homedir();
@@ -92,6 +95,31 @@ describe('the folders an agent was saved with that its line leaves out', () => {
     expect(foldersLeftOut(agent({ secondaryProjectPath: fine, obsidianVaultPaths: [fine] }))).toEqual([]);
     expect(foldersLeftOut(agent())).toEqual([]);
     expect(foldersLeftOut(agent({ obsidianVaultPaths: [path.join(home(), 'no-such-vault')] }))).toEqual([]);
+  });
+});
+
+/**
+ * 7. A template saved before the rule, with a folder Tars no longer hands: an agent made from it gets the line at each
+ *    start (2); the template itself, as it is loaded, says nothing anywhere. Until the window has a place for it, the
+ *    same sentence goes to the log as the template is loaded, once per folder, not at every listing.
+ */
+describe('7. a template loaded with such a folder', () => {
+  it('says the same sentence as it is loaded, once', async () => {
+    fs.mkdirSync(path.join(home(), '.tars'), { recursive: true });
+    fs.writeFileSync(path.join(home(), '.tars', 'templates.json'), JSON.stringify({
+      user: [{ id: 'tpl-keys', displayName: 'Keys', provider: 'claude', obsidianVaultPaths: [docker], createdAt: '2026-11-01T00:00:00Z', updatedAt: '2026-11-01T00:00:00Z' }],
+      overrides: {},
+    }));
+    handlers.clear();
+    registerTemplateHandlers();
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    await handlers.get('template:list')!({});
+    await handlers.get('template:list')!({});
+    const said = warn.mock.calls.map(c => c.join(' ')).filter(l => l.includes(docker));
+    warn.mockRestore();
+    expect(said).toHaveLength(1);
+    expect(said[0]).toMatch(/Keys/);
+    expect(said[0]).toMatch(/credentials/);
   });
 });
 
