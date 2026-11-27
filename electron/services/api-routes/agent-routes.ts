@@ -71,6 +71,7 @@ import { envelopeValue } from '../../utils/envelope-value';
 import { replyTargetOf } from '../../core/reply-target';
 import { oneTaskQueue, neverStarted, workerOrderRefusal, workerStopRefusal, isReportTo, noteFrom, behindText, unknownTaskText, terminalTurnOf, holdsMessages, type Busy, type QueuedTask } from '../../core/one-task';
 import { chatIdentityOf, chatOfAsker, orchestratorMoved } from '../../core/chat-identity';
+import { untilMcpRegistered } from '../../core/mcp-registration';
 
 /**
  * The orchestrator instructions, or nothing for a regular agent. The UI start
@@ -294,7 +295,9 @@ async function spawnAgentSessionInSlot(
   // MCP config for flag-strategy providers (all claude-based ones), by role
   // (services/mcp-roles.ts): a worker's lacks Telegram and X. os.homedir(),
   // which follows HOME, and never Electron's home path, which on macOS does
-  // not: a sandboxed Tars handed its agents the real one.
+  // not: a sandboxed Tars handed its agents the real one. Read, and the line
+  // built, once the start-up registration has written them (core/mcp-registration.ts).
+  await untilMcpRegistered();
   const mcpConfigPath = mcpConfigPathFor(cliProvider, isSuperAgentApi);
 
   // An explicit model on this call wins, otherwise the model the agent is set

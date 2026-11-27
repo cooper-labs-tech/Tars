@@ -28,6 +28,7 @@ import { sessionStarted, launchUnlessRunning, launchAbandoned, dialogShown, take
 import { handOffFrom, noteHandOff } from './task-ledger';
 import { guideForPrompt } from './agent-guide';
 import { mcpConfigPathFor } from './mcp-roles';
+import { untilMcpRegistered } from '../core/mcp-registration';
 
 /** What a bot needs from the rest of Tars. */
 export interface BotFleet {
@@ -370,6 +371,8 @@ export async function startWithTask(
     // Resolved before the resume id is taken, as they always were: a throw
     // here leaves the conversation to resume next time.
     const binaryPath = provider.resolveBinaryPath(fleet.settings());
+    // Its line is built from the configs the start-up registration writes: once that has ended (core/mcp-registration.ts).
+    await untilMcpRegistered();
     const mcpConfigPath = mcpConfigPathFor(provider, hasOrchestratorPowers(agent));
     // What its line needs read from the CLI (codex's flags), off the main thread.
     await provider.prepareLaunch?.(binaryPath, agent.permissionMode ?? (agent.skipPermissions ? 'bypass' : 'normal'));
@@ -489,6 +492,7 @@ export async function forwardToOrchestrator(
     const workingDir = workingDirOf(orchestrator);
     const provider = getProvider(orchestrator.provider || 'claude');
     const binaryPath = provider.resolveBinaryPath(fleet.settings());
+    await untilMcpRegistered();
     const mcpConfigPath = mcpConfigPathFor(provider, true);
     await provider.prepareLaunch?.(binaryPath, opts.permissionMode);
     // A file, never inlined: in a double-quoted shell word the instructions'

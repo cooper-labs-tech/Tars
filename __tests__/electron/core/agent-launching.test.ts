@@ -17,6 +17,14 @@ import * as path from 'path';
  *    and the word stays or never shows.
  * 3. It keeps saying starting after the launch was given up, or after the
  *    session came up (SessionStart), until something unrelated ticks.
+ * 4. (2026-11-27, the Audit's L-a on #657, written before the code) A launch
+ *    held for the start-up registration of the MCP servers
+ *    (core/mcp-registration.ts) is begun before it waits: its 15 s run out
+ *    while it still waits, the card goes back to its earlier state with nothing
+ *    said, and a /dispatch or a message then no longer sees it starting (the
+ *    session started over a launch of 23/09). It reads starting while the
+ *    registration is under way, and has its 15 s from the moment the gate
+ *    opened, by the registration's end or by the bound.
  */
 
 const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'tars-launching-'));
@@ -88,6 +96,35 @@ describe('an agent whose launch is on its way', () => {
     await vi.advanceTimersByTimeAsync(16_000);
 
     expect(lastTick()?.launching).toBe(false);
+  });
+
+  it('4. reads launching while the start-up registration holds it past 15 s, then 15 s from the gate\'s opening', async () => {
+    const gate = await import('../../../electron/core/mcp-registration');
+    gate.mcpRegistrationBegins();
+    launch.launchBegins('a');
+    await vi.advanceTimersByTimeAsync(30_000);
+    expect(lastTick()?.launching, 'the card dropped a launch still waiting for the registration').toBe(true);
+    expect(launch.sessionStarting(manager.agents.get('a')!), 'a dispatch would start a session over the launch').toBe(true);
+
+    gate.mcpRegistrationEnds();
+    await vi.advanceTimersByTimeAsync(14_000);
+    expect(launch.sessionStarting(manager.agents.get('a')!)).toBe(true);
+    await vi.advanceTimersByTimeAsync(2_000);
+    expect(launch.sessionStarting(manager.agents.get('a')!), 'no CLI 15 s after the gate opened: given up').toBe(false);
+    expect(lastTick()?.launching).toBe(false);
+  });
+
+  it('4. reads launching for the whole bound of a registration that never ends, then 15 s', async () => {
+    const gate = await import('../../../electron/core/mcp-registration');
+    vi.spyOn(console, 'warn').mockImplementation(() => {});
+    gate.mcpRegistrationBegins();
+    launch.launchBegins('a');
+    await vi.advanceTimersByTimeAsync(gate.MCP_REGISTRATION_WAIT_MS - 1_000);
+    expect(launch.sessionStarting(manager.agents.get('a')!)).toBe(true);
+    await vi.advanceTimersByTimeAsync(1_000 + 14_000);
+    expect(launch.sessionStarting(manager.agents.get('a')!), 'the launch goes on at the bound: its 15 s start there').toBe(true);
+    await vi.advanceTimersByTimeAsync(2_000);
+    expect(launch.sessionStarting(manager.agents.get('a')!)).toBe(false);
   });
 
   it('is false for an agent nobody is launching', async () => {

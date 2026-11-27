@@ -65,6 +65,11 @@ import { promisify } from 'node:util';
  *    the fresh-install report, 10/11/2026: 12 agents' role was a restart
  *    notice); or an agent with no role is given the prompt as one. A launch's
  *    prompt is a turn; a role is set by the role editor or a template only.
+ * 15. (2026-11-27, the Audit's L1 on #657) Every system: a launch issued while
+ *    the start-up registration of the MCP servers runs builds its line at
+ *    once, from the configs as they were before it (core/mcp-registration.ts
+ *    says what that breaks): from a window, a resume (the restart recovery's
+ *    path), a bot or the API. Each builds it only once the registration ended.
  */
 
 /** PSModulePath as a process started from PowerShell 7 has it: pwsh 7's modules first. */
@@ -258,6 +263,7 @@ import { API_PORT } from '../../../electron/constants';
 import { agents, initAgentPty } from '../../../electron/core/agent-manager';
 import { ptyProcesses, createQuickPty } from '../../../electron/core/pty-manager';
 import { launchAgent, resetLaunches } from '../../../electron/core/agent-launch';
+import { mcpRegistrationBegins, mcpRegistrationEnds } from '../../../electron/core/mcp-registration';
 import { startWithTask, type BotFleet } from '../../../electron/services/bot-core';
 import { performDispatch, registerAgentRoutes } from '../../../electron/services/api-routes/agent-routes';
 import type { RouteApp, RouteContext, RouteRequest } from '../../../electron/services/api-routes/types';
@@ -547,6 +553,38 @@ describe.each(['darwin', 'linux'] as const)('1. on %s, what each call site start
     await pause(50);
     expect(agent.savedPrompt).toBeUndefined();
     expect(agent.currentTask).toBe(TASK);
+  });
+
+  // The registration begins once per run, so the four paths go in one test, launched together while it runs.
+  it('15. the window, a resume, a bot and the API each build their line only once the start-up registration ended', async () => {
+    const fromWindow = await createAgent();
+    const resumed = await createAgent();
+    const bot = { id: 'bot-agent', name: 'Bot', status: 'idle', provider: 'claude', projectPath: project, skills: [], output: [], lastActivity: '', permissionMode: 'normal' } as unknown as AgentStatus;
+    agents.set(bot.id, bot);
+    const fleet: BotFleet = { agents, ptyProcesses, settings: () => settings, saveAgents: vi.fn(), initAgentPty: (a) => initAgentPty(a, null, vi.fn(), vi.fn()) };
+    const shells = spawned.length;
+    // A launch line, wherever a path puts it: typed (directly or through a launch script) or in the spawn's own argv
+    // (the API). A bot opens its agent's shell first, which builds no line: only lines are counted.
+    const launched = () => spawned.slice(shells - 2).filter((t) => launchedLine(typed(t)).includes("'claude'") || JSON.stringify(t.args).includes("'claude'"));
+    mcpRegistrationBegins();
+    try {
+      const starts = [
+        handlers.get('agent:start')!({}, { id: fromWindow.id, prompt: TASK }),
+        launchAgent(resumed.id, TASK),
+        startWithTask(fleet, bot, TASK, 'Telegram', { resume: false, reply: vi.fn() }),
+        apiCall({}, () => undefined),
+      ];
+      await pause(150);
+      expect(launched(), 'a launch built its line while the registration ran').toEqual([]);
+      mcpRegistrationEnds();
+      await Promise.all(starts);
+      await pause(50);
+      expect(typed(spawned[shells - 2])).toBe(`cd ${q(project)} && ${claudeCommand(TASK)}\r`);
+      expect(launched(), 'the window, the resume, the bot and the API each built theirs once it ended').toHaveLength(4);
+    } finally {
+      // Never left under way for the tests after this one, whatever happened here.
+      mcpRegistrationEnds();
+    }
   });
 });
 
