@@ -23,6 +23,9 @@ import { machineFacts, sessionEnvironment, type EnvironmentIo, type MachineFacts
  * E6. Values are bucketed or rounded: the memory is not the exact byte count, the cores not the exact count.
  * E7. The session's part: the time zone or the UTC offset is not the one at the session's start (a zone with summer
  *     time gives two offsets in a year), Tars's version or the power state is guessed when unknown.
+ * From the Audit of #677 (27/11, its I-1), written before the fix:
+ * E8. Windows runs `reg` by its bare name, which Windows looks for in the working folder before the PATH: it is run
+ *     as `%SystemRoot%\System32\reg.exe`, and a SystemRoot that is not a plain absolute folder is not trusted.
  */
 
 type Read = { kind: 'file' | 'run'; what: string };
@@ -118,13 +121,26 @@ describe('machine facts', () => {
     expect(m.cpuCores).toBe(4);
   });
 
+  it('E8: Windows runs reg.exe from the system folder, never by its bare name', async () => {
+    const key = 'HKLM\\HARDWARE\\DESCRIPTION\\System\\BIOS';
+    for (const [systemRoot, folder] of [
+      ['D:\\Windows', 'D:\\Windows'], [undefined, 'C:\\Windows'], ['Windows', 'C:\\Windows'], ['C:Windows', 'C:\\Windows'], ['C:\\Win:dows', 'C:\\Windows'],
+    ] as const) {
+      const { io: x, reads } = io('win32', {}, {}, { systemRoot } as Partial<EnvironmentIo>);
+      await machineFacts(x);
+      const runs = reads.filter(r => r.kind === 'run').map(r => r.what);
+      expect(runs, String(systemRoot)).toEqual([`${folder}\\System32\\reg.exe query ${key} /v SystemManufacturer`, `${folder}\\System32\\reg.exe query ${key} /v SystemProductName`]);
+    }
+  });
+
   it('E4: Windows reads the BIOS key of the registry', async () => {
     const key = 'HKLM\\HARDWARE\\DESCRIPTION\\System\\BIOS';
+    const reg = 'C:\\Windows\\System32\\reg.exe';
     const { io: x, reads } = io('win32', {}, {
-      [`reg query ${key} /v SystemManufacturer`]: `\r\n${key}\r\n    SystemManufacturer    REG_SZ    Dell Inc.\r\n\r\n`,
-      [`reg query ${key} /v SystemProductName`]: `\r\n${key}\r\n    SystemProductName    REG_SZ    XPS 13 9340\r\n\r\n`,
+      [`${reg} query ${key} /v SystemManufacturer`]: `\r\n${key}\r\n    SystemManufacturer    REG_SZ    Dell Inc.\r\n\r\n`,
+      [`${reg} query ${key} /v SystemProductName`]: `\r\n${key}\r\n    SystemProductName    REG_SZ    XPS 13 9340\r\n\r\n`,
     }, {
-      systemVersion: () => '10.0.26100', release: () => '10.0.26100', machine: () => 'x86_64',
+      systemRoot: 'C:\\Windows', systemVersion: () => '10.0.26100', release: () => '10.0.26100', machine: () => 'x86_64',
       cpus: () => Array.from({ length: 22 }, () => ({ model: 'Intel(R) Core(TM) Ultra 7 155H' })), totalmem: () => 34_014_294_016,
     });
     const m = await machineFacts(x);

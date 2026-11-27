@@ -26,10 +26,15 @@ import { harnessVersions, isolatedProbeEnv, versionIn, type HarnessVersionDeps }
  * V7. A probe that fails (a timeout, an exit code) throws to the caller, or its null is kept for good: the next
  *     session never asks again.
  * V8. Two sessions starting together probe the same binary twice.
+ * From the Audit of #677 (27/11), written before the fix:
+ * V9. (M1) The probe runs in Tars's own working folder, not inside its throwaway folder: a CLI that reads or writes
+ *     relative to its working folder touches the owner's folders.
+ * V10. A version longer than the back-office takes (40 characters) is kept, and its batch refused: it is left out
+ *      rather than cut, since a cut version is another version.
  */
 
 let dir: string;
-let probes: Array<{ binary: string; env: NodeJS.ProcessEnv; sandboxSeen: boolean }>;
+let probes: Array<{ binary: string; env: NodeJS.ProcessEnv; sandboxSeen: boolean; cwd?: string; cwdSeen: boolean }>;
 let answer: (binary: string) => Promise<{ stdout: string; stderr: string }>;
 
 function deps(over: Partial<HarnessVersionDeps> = {}): HarnessVersionDeps {
@@ -38,8 +43,8 @@ function deps(over: Partial<HarnessVersionDeps> = {}): HarnessVersionDeps {
     platform: 'darwin',
     tmpRoot: path.join(dir, 'tmp'),
     env: { HOME: '/Users/owner', CODEX_HOME: '/Users/owner/.codex', OPENAI_API_KEY: 'sk-owner', npm_config_prefix: '/opt/owner-npm', XDG_CONFIG_HOME: '/Users/owner/.config', PATH: '/owner/path' },
-    probe: async (binary, env) => {
-      probes.push({ binary, env, sandboxSeen: !!env.HOME && fs.existsSync(env.HOME) });
+    probe: async (binary, env, _timeoutMs, cwd) => {
+      probes.push({ binary, env, sandboxSeen: !!env.HOME && fs.existsSync(env.HOME), cwd, cwdSeen: !!cwd && fs.existsSync(cwd) });
       return answer(binary);
     },
     ...over,
@@ -139,6 +144,32 @@ describe('the harness version of a binary', () => {
       expect(env[name]!.startsWith(sandbox), name).toBe(true);
     }
     expect(env.OPENAI_API_KEY).toBeUndefined();
+  });
+
+  it('V9: the probe\'s working folder is inside its throwaway folder', async () => {
+    const bin = file(path.join(dir, 'bin', 'qwen'));
+    await harnessVersions(deps()).of(bin);
+    const { env, cwd, cwdSeen } = probes[0];
+    const sandbox = path.dirname(env.HOME!);
+    expect(cwd, 'a working folder was given').toBeTruthy();
+    expect(cwdSeen, 'it existed while the probe ran').toBe(true);
+    expect(cwd!.startsWith(sandbox + path.sep), `${cwd} inside ${sandbox}`).toBe(true);
+    expect(fs.existsSync(cwd!), 'removed with the throwaway folder').toBe(false);
+  });
+
+  it('V10: a version longer than 40 characters is left out, whether read from a package or asked', async () => {
+    const long = `1.2.3-${'b'.repeat(35)}`;
+    expect(long.length).toBe(41);
+    answer = async () => ({ stdout: `${long}\n`, stderr: '' });
+    file(path.join(dir, 'bin', 'qwen'));
+    expect(await harnessVersions(deps()).of('qwen')).toBeNull();
+    const fits = `1.2.3-${'b'.repeat(34)}`;
+    answer = async () => ({ stdout: `${fits}\n`, stderr: '' });
+    file(path.join(dir, 'bin', 'other'));
+    expect(await harnessVersions(deps()).of('other')).toBe(fits);
+    const pkg = path.join(dir, 'lib', 'node_modules', 'agent-cli');
+    file(path.join(pkg, 'package.json'), JSON.stringify({ name: 'agent-cli', version: long, bin: 'cli.js' }), 0o644);
+    expect(await harnessVersions(deps()).of(file(path.join(pkg, 'cli.js')))).toBeNull();
   });
 
   it('V5: the throwaway folder is gone after an answer and after a failure', async () => {

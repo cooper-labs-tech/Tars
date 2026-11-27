@@ -24,7 +24,7 @@
 // - `codex login status` exits 0 "Logged in using ChatGPT" or 1 "Not logged in", as 0.163 does (measured). With
 //   FAKE_CODEX_SIGN_IN=1 it reads its login as codex does by default, from its home's auth.json, and a home with none
 //   shows 0.163's sign-in screen, waits for a key and writes no session (measured on 0.163); without, it is signed in.
-// - `--version` answers `codex-cli 0.163.0`, and logs the HOME, CODEX_HOME and npm prefix it was given;
+// - `--version` answers `codex-cli 0.163.0`, and logs the HOME, CODEX_HOME, npm prefix and working folder it was given;
 // - on an inference endpoint (Tars's `-c model_providers.<id>...`), a turn is a model's over Responses, in the shape
 //   codex 0.170 sends (endpointTurn below).
 // Every launch and turn is logged to FAKE_CODEX_LOG, one JSON line each, with whether the agent's token was in its
@@ -61,7 +61,7 @@ if (argv[0] === 'login' && argv[1] === 'status') {
   process.exit(signedIn() ? 0 : 1);
 }
 if (argv[0] === '--version' || argv[0] === '-V') {
-  log({ version: true, home: process.env.HOME ?? null, codexHome: process.env.CODEX_HOME ?? null, npmPrefix: process.env.npm_config_prefix ?? null });
+  log({ version: true, home: process.env.HOME ?? null, codexHome: process.env.CODEX_HOME ?? null, npmPrefix: process.env.npm_config_prefix ?? null, cwd: process.cwd() });
   process.stdout.write('codex-cli 0.163.0\n');
   process.exit(0);
 }

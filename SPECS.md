@@ -276,12 +276,20 @@ from the window, or from an agent's drop file (`~/.tars/endpoint-keys/<name>.key
   Tars did not type counts in `unknown_turns`;
 - the outcome holds the branch, the head, held requests and errors;
 - each session keeps its environment: the harness's exact version, read from the binary its terminal started (an npm
-  package's own version, else its `--version` asked in a throwaway home, `harness-version.ts`), the harness's own
+  package's own version, else its `--version` asked in a throwaway folder that is its working folder and its home,
+  `harness-version.ts`), the harness's own
   session id (codex's `session-id`), the system's name, version, kernel and architecture, the machine's model, chip,
   cores and memory, exact, read by each system's own means, Tars's version, the locale, the time zone and its offset,
   and whether it ran on battery (`session-environment.ts`); and the sleeps, wakes and changes of power during it.
   Never the computer's name, the user's, a serial number or an address;
 - each request keeps how many traced sessions were live on this computer when it was sent;
+- from the endpoint's `Server-Timing` (W3C: `recv` and `send` as epoch ms on its clock, `queue` and `upstream` as
+  durations), each request keeps its round trip and the offset of the endpoint's clock from ours, taken with the times
+  the proxy wrote the answered attempt out whole (t1) and got its headers (t4): offset = ((t2 - t1) + (t3 - t4)) / 2,
+  round trip = (t4 - t1) - (t3 - t2), and the endpoint's queue and upstream times. Each is null when the endpoint
+  sent no header or one that could not be read, never 0; a negative round trip is kept as measured. The session keeps
+  the median of its round trips and the offset at its shortest one, negatives left out (`server-timing.ts`). The
+  `Date` header is never used, and nothing is derived from the endpoint's times for the model's own TTFT;
 - a harness's installation id (codex sends one in its body) is taken out of a request before it is stored.
 
 Retention and a size cap come from Settings. The back-office reads it through `window.electronAPI.traces`. An external
@@ -297,9 +305,11 @@ consent, opted-in sessions are uploaded:
   request is never counted as a step of its turn. A back-office refuses fields it does not know (422
   `invalid_batch`), so it takes `side` before Tars sends it: the back-office is updated first. A batch it refuses
   stays unsent and is tried again on the backoff, never sent without the mark;
-- each session with its environment, its power events and the harness's own session id, and each request with its
-  live count, each field on its own line of the notice; the back-office takes them before Tars sends them, as for
-  `side`;
+- each session with its environment, its power events, the harness's own session id, its median round trip and its
+  clock offset, and each request with its live count, its round trip, its clock offset and the endpoint's queue and
+  upstream times, each field on its own line of the notice; the back-office takes them before Tars sends them, as
+  for `side`. A harness version over 40 characters or a session id over 128, the back-office's limits, is left out,
+  never cut;
 - resumed after a restart, with backoff.
 
 `deleteEverywhere` asks the back-office to delete all of it.

@@ -7,6 +7,7 @@ import {
   hashOf, instructionText, isStreamed, opensTurn, parseRequest, parseResponse, type Surface,
 } from './trace-wire';
 import type { SessionEnvironment } from './session-environment';
+import { sessionTiming, type RequestTiming } from './server-timing';
 
 /**
  * The trace store (native traces): one SQLite file, `~/.tars/traces/traces.db`.
@@ -70,6 +71,8 @@ export interface WireRecord {
   liveSessions?: number;
   /** The harness's own id for its session, when it sends one (codex's session-id header). */
   nativeSessionId?: string;
+  /** The round trip, the clocks' offset, the endpoint's queue and upstream times, from its Server-Timing. */
+  timing?: RequestTiming;
 }
 
 /** Something that happened to the computer during a session (Electron's powerMonitor, traces-runtime.ts). */
@@ -129,6 +132,8 @@ export interface TraceSessionSummary {
   bytes: number; mixed: boolean; unknownTurns: number;
   /** The harness's own session id, the machine and the system at the start, and the power events (session-environment.ts). */
   nativeSessionId?: string; environment?: SessionEnvironment; events?: TraceEvent[];
+  /** From its requests' Server-Timing (server-timing.ts sessionTiming), in a session read whole (session()). */
+  rttMedianMs?: number; clockOffsetMs?: number;
 }
 
 export interface TraceRequestView {
@@ -136,7 +141,7 @@ export interface TraceRequestView {
   startedAt: number; ttftMs?: number; totalMs?: number; status: number; finishReason?: string; error?: string;
   tokensIn?: number; tokensCached?: number; tokensOut?: number; reqBytes: number; respBytes: number;
   newMessages: number; attempts: number; heldMs: number; bodiesDropped: boolean;
-  liveSessions?: number;
+  liveSessions?: number; rttMs?: number; clockOffsetMs?: number; queueMs?: number; upstreamMs?: number;
 }
 
 export interface TraceTurnView {
@@ -206,6 +211,11 @@ const ADDED_COLUMNS: Array<[table: string, column: string, type: string]> = [
   ['traces', 'environment_json', 'TEXT'],
   ['traces', 'events_json', 'TEXT'],
   ['requests', 'live_sessions', 'INTEGER'],
+  // From the endpoint's Server-Timing (server-timing.ts): null when it sent none, or one that could not be read.
+  ['requests', 'rtt_ms', 'REAL'],
+  ['requests', 'clock_offset_ms', 'REAL'],
+  ['requests', 'queue_ms', 'REAL'],
+  ['requests', 'upstream_ms', 'REAL'],
 ];
 
 /** Per request, what the cap counts on top of its blobs: the rows themselves. */
@@ -576,13 +586,15 @@ export class TraceStore {
         : rec.firstByteAt !== undefined ? rec.firstByteAt - rec.startedAt : null;
     this.db.prepare(`INSERT INTO requests (request_id, upstream_request_id, trace_id, turn_id, seq, side, surface, model_requested,
       model_served, params_json, system_hash, tools_hash, started_at, ttft_ms, total_ms, tokens_in, tokens_cached, tokens_out, status, error,
-      finish_reason, streamed, req_bytes, resp_bytes, new_messages, attempts, held_ms, bodies_dropped, live_sessions)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`).run(
+      finish_reason, streamed, req_bytes, resp_bytes, new_messages, attempts, held_ms, bodies_dropped, live_sessions,
+      rtt_ms, clock_offset_ms, queue_ms, upstream_ms)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`).run(
       requestId, rec.upstreamRequestId ?? null, rec.traceId, turnId ?? null, seqRow.n, side ? 1 : 0, rec.surface, req?.model ?? null,
       resp.modelServed ?? null, req ? JSON.stringify(req.params) : null, systemHash ?? null, toolsHash ?? null, rec.startedAt,
       ttft, total, resp.usage.input, resp.usage.cached, resp.usage.output,
       rec.status, rec.error ?? resp.error ?? null, resp.finishReason ?? null, req?.stream ? 1 : 0, rec.requestBody.length, rec.responseBody.length,
-      newMessages, rec.attempts, rec.heldMs, dropped ? 1 : 0, typeof rec.liveSessions === 'number' ? rec.liveSessions : null);
+      newMessages, rec.attempts, rec.heldMs, dropped ? 1 : 0, typeof rec.liveSessions === 'number' ? rec.liveSessions : null,
+      rec.timing?.rttMs ?? null, rec.timing?.clockOffsetMs ?? null, rec.timing?.queueMs ?? null, rec.timing?.upstreamMs ?? null);
     // The harness's own session id: the first it sent stays (a resumed session keeps the id it began with).
     if (rec.nativeSessionId) {
       this.db.prepare('UPDATE traces SET native_session_id = ? WHERE trace_id = ? AND native_session_id IS NULL').run(rec.nativeSessionId, rec.traceId);
@@ -663,9 +675,11 @@ export class TraceStore {
       finishReason: optStr(r.finish_reason), error: optStr(r.error), tokensIn: optNum(r.tokens_in), tokensCached: optNum(r.tokens_cached),
       tokensOut: optNum(r.tokens_out), reqBytes: num(r.req_bytes), respBytes: num(r.resp_bytes), newMessages: num(r.new_messages),
       attempts: num(r.attempts), heldMs: num(r.held_ms), bodiesDropped: r.bodies_dropped === 1, liveSessions: optNum(r.live_sessions),
+      rttMs: optNum(r.rtt_ms), clockOffsetMs: optNum(r.clock_offset_ms), queueMs: optNum(r.queue_ms), upstreamMs: optNum(r.upstream_ms),
     });
+    const timing = sessionTiming(requests.map(r => ({ rttMs: optNum(r.rtt_ms) ?? null, clockOffsetMs: optNum(r.clock_offset_ms) ?? null })));
     return {
-      session: summaryOf(trace),
+      session: { ...summaryOf(trace), rttMedianMs: timing.rttMedianMs ?? undefined, clockOffsetMs: timing.clockOffsetMs ?? undefined },
       outcome: trace.outcome_json ? JSON.parse(String(trace.outcome_json)) : undefined,
       turns: turns.map(t => ({
         turnId: String(t.turn_id), index: num(t.turn_index), startedAt: num(t.started_at), endedAt: optNum(t.ended_at),

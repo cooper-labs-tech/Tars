@@ -11,16 +11,21 @@ import { resolveCliBinary } from '../platform';
  *   that file. Read, never run. A package.json that does not list it (a project's own, above a script) is not the
  *   harness's.
  * - **Anything else** is asked `--version` (core/version-probe.ts, which the quit ends) in a throwaway folder made for
- *   that one probe and removed after it: its own HOME, temporary, XDG and npm folders, npm's prefix inside it (an update
- *   prompt cannot install anything globally), and nothing of the owner's environment but the PATH the terminals get
- *   and, on Windows, the system's own variables. Never the owner's configuration.
+ *   that one probe and removed after it: it runs there (its working folder, never Tars's own: the Audit's M1 on #677),
+ *   with its own HOME, temporary, XDG and npm folders, npm's prefix inside it (an update prompt cannot install
+ *   anything globally), and nothing of the owner's environment but the PATH the terminals get and, on Windows, the
+ *   system's own variables. Never the owner's configuration.
  *
  * A probe that fails gives null and is not kept: the next session asks again. Two sessions at once share one probe.
+ * A version longer than the back-office takes (MAX_VERSION_CHARS) is left out, never cut: a cut version is another one.
  */
 
+/** The longest harness version the back-office takes. */
+export const MAX_VERSION_CHARS = 40;
+
 export interface HarnessVersionDeps {
-  /** Runs `<binary> --version` (core/version-probe.ts probeVersion). */
-  probe(binary: string, env: NodeJS.ProcessEnv, timeoutMs: number): Promise<{ stdout: string; stderr: string }>;
+  /** Runs `<binary> --version` in `cwd` (core/version-probe.ts probeVersion). */
+  probe(binary: string, env: NodeJS.ProcessEnv, timeoutMs: number, cwd: string): Promise<{ stdout: string; stderr: string }>;
   /** The PATH the agents' terminals get (buildFullPath with the configured CLI folders). */
   path(): string;
   platform?: NodeJS.Platform;
@@ -143,8 +148,10 @@ export function harnessVersions(deps: HarnessVersionDeps): { of(binary: string):
     try {
       sandbox = fs.mkdtempSync(path.join(root, 'tars-version-probe-'));
       const env = isolatedProbeEnv(sandbox, { path: deps.path(), platform, from: deps.env ?? process.env });
-      for (const d of [env.HOME!, env.TMPDIR!, env.npm_config_prefix!]) fs.mkdirSync(d, { recursive: true });
-      const out = await deps.probe(run, env, PROBE_TIMEOUT_MS);
+      // Its working folder too: a CLI that reads or writes where it runs finds only this.
+      const work = path.join(sandbox, 'work');
+      for (const d of [env.HOME!, env.TMPDIR!, env.npm_config_prefix!, work]) fs.mkdirSync(d, { recursive: true });
+      const out = await deps.probe(run, env, PROBE_TIMEOUT_MS, work);
       return versionIn(out.stdout) ?? versionIn(out.stderr);
     } catch (err) {
       console.error(`[traces] ${path.basename(run)} --version gave no version: ${(err as Error).message}`);
@@ -177,7 +184,15 @@ export function harnessVersions(deps: HarnessVersionDeps): { of(binary: string):
       const run = found.run;
       const reading = Promise.resolve().then(() => packageVersionOf(real) ?? probe(run)).then((version) => {
         // A probe that failed is asked again by the next session; a version is kept for this file as it is.
-        if (version === null) known.delete(key);
+        if (version === null) {
+          known.delete(key);
+          return null;
+        }
+        // One the back-office would refuse is left out, never cut (and not asked again for this file).
+        if (version.length > MAX_VERSION_CHARS) {
+          console.error(`[traces] ${path.basename(run)}'s version is ${version.length} characters, over ${MAX_VERSION_CHARS}: not kept`);
+          return null;
+        }
         return version;
       });
       known.set(key, reading);

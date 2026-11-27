@@ -28,6 +28,12 @@ import { skipOnWindows } from '../../setup/platform-limits';
  * once the probe answered survived.
  * 7. A probe that answers at once leaves what it started running, and
  *    writing, after its answer.
+ *
+ * And from the Audit's M1 on #677 (2026-11-27), written before the fix:
+ * 8. A probe given a working folder runs in Tars's own instead (`/` packaged
+ *    on macOS, the install folder on Windows, the home from a Linux desktop
+ *    entry), where a CLI that reads or writes relative to it touches the
+ *    owner's folders.
  */
 
 const ELECTRON = path.join(__dirname, '../../../electron');
@@ -91,6 +97,20 @@ describe('a version probe', () => {
       expect(Date.now() - began).toBeLessThan(3000);
     } finally {
       fs.rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  it('8. runs in the working folder it is given, not in Tars\'s own', async () => {
+    const { probe } = await fresh();
+    const { bin, dir } = standIn('pwd', 'console.log(process.cwd());');
+    const work = fs.mkdtempSync(path.join(os.tmpdir(), 'tars-probe-cwd-'));
+    try {
+      const { stdout } = await probe.probeVersion(bin, process.env, 8000, work);
+      expect(fs.realpathSync(stdout.trim())).toBe(fs.realpathSync(work));
+      expect(fs.realpathSync(work)).not.toBe(fs.realpathSync(process.cwd()));
+    } finally {
+      fs.rmSync(dir, { recursive: true, force: true });
+      fs.rmSync(work, { recursive: true, force: true });
     }
   });
 
