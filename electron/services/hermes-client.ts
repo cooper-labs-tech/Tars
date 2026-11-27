@@ -216,14 +216,15 @@ export function hasHermesSession(baseUrl: string): boolean {
  * The errors hermesRequest rejected with because the gateway gave no answer
  * (nothing listening, no answer in time, an answer that is not HTTP, a
  * connection cut, a URL it cannot call), with the gateway each one concerns,
- * and the wait for its own timeout. Their messages are left as they are: the
- * Kanban board (describeHermesFailure), the agents' kanban (kanban-board.ts)
- * and the probe read the transport's own words.
+ * and the wait for its own timeout or its deadline. Their messages are left as
+ * they are: the Kanban board (describeHermesFailure), the agents' kanban
+ * (kanban-board.ts) and the probe read the transport's own words.
  */
-const unanswered = new WeakMap<object, { baseUrl: string; waitedMs?: number }>();
+type Unanswered = { baseUrl: string; waitedMs?: number; deadlineMs?: number };
+const unanswered = new WeakMap<object, Unanswered>();
 
-function noAnswer(err: unknown, baseUrl: string, waitedMs?: number): unknown {
-  if (err && typeof err === 'object') unanswered.set(err, { baseUrl, waitedMs });
+function noAnswer(err: unknown, baseUrl: string, wait: Omit<Unanswered, 'baseUrl'> = {}): unknown {
+  if (err && typeof err === 'object') unanswered.set(err, { baseUrl, ...wait });
   return err;
 }
 
@@ -247,6 +248,8 @@ export function noAnswerSentence(err: unknown): string | undefined {
   const said = typeof message === 'string' ? message : String(err);
   const reason = seen.waitedMs !== undefined
     ? `no answer within ${Math.round(seen.waitedMs / 1000)} s`
+    : seen.deadlineMs !== undefined
+      ? `its answer did not end within ${Math.round(seen.deadlineMs / 1000)} s`
     : typeof code === 'string' && code.startsWith('HPE_')
       ? `its answer is not HTTP (${said})`
       : said;
@@ -269,13 +272,30 @@ export async function reachingHermes<T>(call: () => Promise<T>): Promise<T | { s
   }
 }
 
+/**
+ * One request to the gateway.
+ *
+ * `timeoutMs` is an idle timeout: it fires when the socket says nothing for that
+ * long. A gateway that trickles its answer, a byte within each wait, held a call
+ * for good, so the whole request also has a deadline (the Audit's I-2 on #660):
+ * three times the idle timeout, 30 s at least, unless the caller names one. The
+ * calls of the pages, the overseer, the relay, the probe and the sign-in wait
+ * 10 s idle, so 30 s whole; the reasoning effort's write 20 s, so 60 s; an
+ * upload 120 s, so 6 minutes. The overseer's turn is many short requests, each
+ * with its own deadline, inside the turn's own bound (its 60 s poll and the live
+ * conversation's 180 s, over a WebSocket, not here).
+ */
 export function hermesRequest(
   baseUrl: string,
   pathname: string,
-  options: { method?: string; body?: unknown; token?: string; timeoutMs?: number } = {},
+  options: { method?: string; body?: unknown; token?: string; timeoutMs?: number; deadlineMs?: number } = {},
 ): Promise<HermesResponse> {
   const { method = 'GET', body, token, timeoutMs = 10000 } = options;
-  return new Promise((resolve, reject) => {
+  const deadlineMs = options.deadlineMs ?? Math.max(30_000, 3 * timeoutMs);
+  return new Promise((settle, fail) => {
+    const deadline: { timer?: NodeJS.Timeout } = {};
+    const resolve = (answer: HermesResponse) => { clearTimeout(deadline.timer); settle(answer); };
+    const reject = (err: unknown) => { clearTimeout(deadline.timer); fail(err); };
     let target: URL;
     try { target = new URL(baseUrl + pathname); } catch { reject(noAnswer(new Error('Invalid gateway URL'), baseUrl)); return; }
 
@@ -315,7 +335,8 @@ export function hermesRequest(
       return;
     }
     req.on('error', err => reject(noAnswer(err, baseUrl)));
-    req.on('timeout', () => { req.destroy(); reject(noAnswer(new Error('timeout'), baseUrl, timeoutMs)); });
+    req.on('timeout', () => { req.destroy(); reject(noAnswer(new Error('timeout'), baseUrl, { waitedMs: timeoutMs })); });
+    deadline.timer = setTimeout(() => { reject(noAnswer(new Error('deadline'), baseUrl, { deadlineMs })); req.destroy(); }, deadlineMs);
     if (payload) req.write(payload);
     req.end();
   });
