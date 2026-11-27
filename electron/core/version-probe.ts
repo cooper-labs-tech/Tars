@@ -36,10 +36,16 @@ export function endProbe(child: ChildProcess): void {
   try { child.kill('SIGKILL'); } catch { /* already gone */ }
 }
 
+/**
+ * `cwd`: the folder the probe runs in. Without one it runs in Tars's own (`/` packaged on macOS, the install folder on
+ * Windows, the home from a Linux desktop entry), where a CLI that reads or writes relative to its working folder
+ * touches the owner's folders: a probe that must not (the traces' harness version) gives its throwaway folder.
+ */
 export function probeVersion(
   binary: string,
   env: NodeJS.ProcessEnv,
   timeoutMs = 8000,
+  cwd?: string,
 ): Promise<{ stdout: string; stderr: string }> {
   try {
     refuseWhileQuitting('version probe');
@@ -56,7 +62,7 @@ export function probeVersion(
     // the binary alone would leave what it started running. Not on Windows,
     // where it would open a console of its own and taskkill ends the tree.
     const child = spawn(cli.file, [...cli.prefixArgs, '--version'], {
-      env, detached: process.platform !== 'win32', windowsHide: true, stdio: ['ignore', 'pipe', 'pipe'],
+      env, ...(cwd ? { cwd } : {}), detached: process.platform !== 'win32', windowsHide: true, stdio: ['ignore', 'pipe', 'pipe'],
     });
     running.add(child);
     let stdout = '';

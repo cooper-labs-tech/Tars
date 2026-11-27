@@ -47,8 +47,32 @@ export function hashOf(value: unknown): string {
   return createHash('sha256').update(canonicalJson(value)).digest('hex');
 }
 
+/** A harness's installation id, by its name (codex 0.170: `x-codex-installation-id`, and `installation_id`). */
+const INSTALL_ID_KEY = /installation[-_]?id/i;
+
+/**
+ * A value with every installation id taken out, at any depth, and inside a string that holds a JSON object (codex's
+ * turn metadata): a stable id of the computer, which a trace never keeps. Everything else is left as it was, and the
+ * value given is not changed. A string that only looks like JSON stays as it is.
+ */
+export function withoutInstallIds(value: unknown): unknown {
+  if (Array.isArray(value)) return value.map(withoutInstallIds);
+  if (value && typeof value === 'object') {
+    const out: Json = {};
+    for (const [k, v] of Object.entries(value as Json)) if (!INSTALL_ID_KEY.test(k)) out[k] = withoutInstallIds(v);
+    return out;
+  }
+  if (typeof value === 'string' && value.startsWith('{') && INSTALL_ID_KEY.test(value)) {
+    try {
+      const parsed: unknown = JSON.parse(value);
+      if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) return JSON.stringify(withoutInstallIds(parsed));
+    } catch { /* not JSON: kept as it is */ }
+  }
+  return value;
+}
+
 export interface WireRequest {
-  /** Every field but the system prompt, the tools and the history, as sent. */
+  /** Every field but the system prompt, the tools and the history, as sent, but for installation ids (withoutInstallIds). */
   params: Json;
   system?: unknown;
   tools?: unknown[];
@@ -67,7 +91,7 @@ export function parseRequest(surface: Surface, body: Buffer): WireRequest | null
   const params: Json = {};
   const skip = new Set(['tools', surface === 'openai_chat' ? 'messages' : surface === 'openai_responses' ? 'input' : 'messages',
     surface === 'openai_responses' ? 'instructions' : 'system']);
-  for (const [k, v] of Object.entries(b)) if (!skip.has(k)) params[k] = v;
+  for (const [k, v] of Object.entries(b)) if (!skip.has(k) && !INSTALL_ID_KEY.test(k)) params[k] = withoutInstallIds(v);
   let system: unknown;
   let input: unknown[];
   if (surface === 'openai_chat') {
