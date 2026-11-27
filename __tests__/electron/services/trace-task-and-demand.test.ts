@@ -73,8 +73,19 @@ import { assertThrowaway } from '../../setup/throwaway-dirs';
  *     handed a task over (its ref, core/task-requests.ts) does not carry that ref; the first turn of a session started
  *     on a task does not carry the start's ref; a turn with neither carries one anyway.
  *
+ * The Audit's NO-MERGE at 0346e9a65:
+ * 15. (M1) A long session is refused whole by the back office and holds every later upload back. Its outcome (a
+ *     permanent agent's 200 tasks) passes the 16 KiB cap, or its lost demand (hundreds of queue drops) grows without
+ *     bound. The lost demand must keep its last 50 within its budget, with `lostDemandOmitted` counting the rest; the
+ *     session must upload to a back office that refuses an outcome over 16 KiB.
+ * 16. (L1) gh is asked for good. Asked about a session ended more than 14 days ago, or one on its repository's default
+ *     branch (origin's HEAD, else main or master), which never gets a pull request.
+ * 17. (L2) A request given up while held counts as one that reached the endpoint: it adds to its turn's and its
+ *     session's request count and to its turn's model time, or it is the session's or a task's first request.
+ * 18. (Info) A start that opened no terminal leaves its note for the agent's next spawn to read.
+ *
  * The negative witness is feat/traces-window at 69c8f3f08, which records none of it; for 13 and 14, #675 at
- * 0346e9a65, which lists every task and puts none on a turn.
+ * 0346e9a65, which lists every task and puts none on a turn; for 15 to 18, #675 at 77463aad7.
  */
 
 assertThrowaway({ DATA_DIR, PRIVATE_DIR });
@@ -88,10 +99,13 @@ vi.mock('../../../electron/services/endpoint-proxy', async (importOriginal) => (
 
 import {
   TRACES_DB_FILE, TRACES_INSTALL_FILE, applyPrStates, closeEndpointSession, configureTraces, liveTraceOf, noteTypedForTraces, openEndpointSession,
-  recordConsent, stopTracesRuntime, traceStore, traceUploader,
+  recordConsent, sessionsToAskForPr, stopTracesRuntime, traceStore, traceUploader,
 } from '../../../electron/services/traces-runtime';
-import { OUTCOME_BYTES_MAX, boundOutcomeTasks, type TraceTask } from '../../../electron/services/trace-store';
-import { noteSessionStart, START_NOTE_MS } from '../../../electron/core/session-start';
+import { LOST_DEMAND_BYTES_MAX, LOST_DEMAND_MAX, OUTCOME_BYTES_MAX, boundOutcomeTasks, type TraceTask } from '../../../electron/services/trace-store';
+import { clearSessionStart, noteSessionStart, takeSessionStart, START_NOTE_MS } from '../../../electron/core/session-start';
+import * as http from 'http';
+import * as zlib from 'zlib';
+import type { AddressInfo } from 'net';
 import { oneTaskQueue } from '../../../electron/core/one-task';
 import { createTaskLedger, setLiveTaskLedger, type TaskAgentView, type TaskLedger } from '../../../electron/services/task-ledger';
 import { sessionDocument } from '../../../electron/services/trace-export';
@@ -540,6 +554,154 @@ describe('14. the task each turn served', () => {
     recordConsent(new Date().toISOString());
     const body = traceUploader().preview(traceId)!.document.batches[0].body as { turns: Array<Record<string, unknown>> };
     expect(body.turns.map(x => x.taskRef ?? null)).toEqual([ref, null]);
+  });
+});
+
+/**
+ * A back office as the uploader meets it (trace-upload.ts), refusing what the real one refuses on size: an outcome
+ * over 16 KiB, and a lost demand over its budget, each with 422 invalid_batch, the whole batch.
+ */
+async function sizeCheckingBackOffice(): Promise<{ base: string; sessions: Map<string, Record<string, unknown>>; refused: number; close: () => Promise<void> }> {
+  const bo = { base: '', sessions: new Map<string, Record<string, unknown>>(), refused: 0, close: async () => {} };
+  const server = http.createServer((req, res) => {
+    const chunks: Buffer[] = [];
+    req.on('data', (c) => chunks.push(c as Buffer));
+    req.on('end', () => {
+      const send = (status: number, body: unknown) => { res.writeHead(status, { 'Content-Type': 'application/json' }); res.end(JSON.stringify(body)); };
+      const raw = Buffer.concat(chunks);
+      const enc = req.headers['content-encoding'];
+      const body = enc === 'zstd' ? (zlib as unknown as { zstdDecompressSync: (b: Buffer) => Buffer }).zstdDecompressSync(raw) : enc === 'gzip' ? zlib.gunzipSync(raw) : raw;
+      const url = req.url ?? '';
+      if (req.method === 'POST' && url === '/v1/installs') { send(201, { installId: 'inst-1', token: 'tbi_1', limits: {}, retentionDays: 90 }); return; }
+      if (req.method === 'POST' && url === '/v1/blobs/missing') { send(200, { missing: [] }); return; }
+      if (req.method === 'PUT' && url.startsWith('/v1/blobs/')) { send(201, { stored: true }); return; }
+      if (req.method === 'PUT' && url.startsWith('/v1/batches/')) {
+        const batch = JSON.parse(body.toString()) as { sessions?: Array<Record<string, unknown>> };
+        const tooBig = (batch.sessions ?? []).some(s => Buffer.byteLength(JSON.stringify(s.outcome ?? {})) > 16 * 1024 || Buffer.byteLength(JSON.stringify(s.lostDemand ?? [])) > 8 * 1024);
+        if (tooBig) { bo.refused++; send(422, { error: 'invalid_batch' }); return; }
+        for (const s of batch.sessions ?? []) bo.sessions.set(String(s.sessionId), s);
+        send(200, { batchId: url, replayed: false, applied: {}, missingBlobs: [] });
+        return;
+      }
+      send(404, { error: 'not_found' });
+    });
+  });
+  await new Promise<void>(r => server.listen(0, '127.0.0.1', () => r()));
+  bo.base = `http://127.0.0.1:${(server.address() as AddressInfo).port}`;
+  bo.close = () => new Promise<void>(r => server.close(() => r()));
+  return bo;
+}
+
+describe('15. a long session still uploads', () => {
+  it('200 tasks and 300 queue drops: bounded, counted, and taken by a back office that refuses an outcome over 16 KiB', async () => {
+    const q = agent('long');
+    noteSessionStart('long', { trigger: 'owner', via: 'window' });
+    const { traceId, token } = open('long');
+    request(traceId, 'long', Date.now() + 5);
+    for (let i = 0; i < 200; i++) {
+      ledger.handedOff('long', { source: 'agent', requesterAgentId: LEAD, text: `task ${i}` });
+      ledger.turnStarted(view(q), { sessionId: 'long-1' });
+      ledger.stateChanged(view(q, { status: 'idle' }));
+    }
+    const drops: string[] = [];
+    for (let i = 0; i < 300; i++) {
+      const item = oneTaskQueue.enqueue('long', { requesterId: LEAD, title: `drop ${i}` });
+      drops.push(item.ref);
+      oneTaskQueue.cancel(item.ref, 'gone', i % 2 ? 'taken_back' : 'not_handed_again');
+    }
+    await close(token, traceId);
+
+    const s = traceStore().session(traceId)!;
+    expect(s.outcome!.tasks!.length).toBeLessThanOrEqual(50);
+    expect(s.outcome!.tasksOmitted).toBe(200 - s.outcome!.tasks!.length);
+    expect(s.lostDemand!.map(l => l.ref)).toEqual(drops.slice(-LOST_DEMAND_MAX));
+    expect(s.lostDemandOmitted).toBe(300 - LOST_DEMAND_MAX);
+    expect(Buffer.byteLength(JSON.stringify(s.lostDemand))).toBeLessThanOrEqual(LOST_DEMAND_BYTES_MAX);
+
+    const bo = await sizeCheckingBackOffice();
+    try {
+      settings = { ...settings, traces: { ...settings.traces!, uploadUrl: bo.base, uploadAllowPlainHttp: true } } as AppSettings;
+      recordConsent(new Date().toISOString());
+      const pass = await traceUploader().runOnce();
+      expect(pass, JSON.stringify(pass)).toMatchObject({ failed: 0 });
+      expect(bo.refused).toBe(0);
+      const sent = bo.sessions.get(traceId)!;
+      expect(sent, 'the session reached the back office').toBeTruthy();
+      expect(Buffer.byteLength(JSON.stringify(sent.outcome))).toBeLessThanOrEqual(16 * 1024);
+      expect(sent).toMatchObject({ lostDemandOmitted: 300 - LOST_DEMAND_MAX, outcome: { tasksOmitted: 200 - s.outcome!.tasks!.length } });
+      expect((sent.lostDemand as unknown[]).length).toBe(LOST_DEMAND_MAX);
+    } finally {
+      await bo.close();
+    }
+  });
+});
+
+describe('16. gh is asked only while a pull request can still come', () => {
+  it('not for a session ended more than 14 days ago, nor one on its repository\'s default branch', async () => {
+    repo(project, 'feat/a');
+    const develop = path.join(home, 'develop-repo');
+    repo(develop, 'develop');
+    // Its origin says its default branch is develop.
+    git(develop, 'symbolic-ref', 'refs/remotes/origin/HEAD', 'refs/remotes/origin/develop');
+    settings.traces!.projects.push(develop);
+    const ended = (id: string, folder: string, branch: string, daysAgo: number) => {
+      agent(id, { projectPath: folder });
+      noteSessionStart(id, { trigger: 'owner', via: 'window' });
+      const { traceId } = open(id);
+      traceStore().endTrace(traceId, Date.now() - daysAgo * 86_400_000, { branch });
+      return traceId;
+    };
+    const asked = ended('p1', project, 'feat/a', 1);
+    ended('p2', project, 'feat/a', 15);
+    ended('p3', project, 'main', 1);
+    ended('p4', project, 'master', 1);
+    ended('p5', develop, 'develop', 1);
+    const askedToo = ended('p6', develop, 'main', 1);
+    const sessions = await sessionsToAskForPr(Date.now());
+    expect(sessions.map(x => x.traceId).sort()).toEqual([asked, askedToo].sort());
+  });
+});
+
+describe('17. a request given up while held never reached the endpoint', () => {
+  it('it adds nothing to the request counts or the model time, and is no first request', async () => {
+    agent('l2');
+    const now = Date.now();
+    const ref = delegate('l2', { queued: now - 100, handed: now - 50 });
+    const { traceId, token } = open('l2');
+    const t0 = Date.now() + 100;
+    // Given up first, then one that reached the endpoint, in the same turn.
+    const given = { status: 499, responseBody: Buffer.alloc(0), contentType: undefined, attempts: 3, heldMs: 2000, cancel: { by: 'harness', cause: 'abandoned_while_held', at: t0 + 2000, deliveredBytes: 0 } };
+    request(traceId, 'l2', t0, given);
+    const body = Buffer.from(JSON.stringify({ model: 'open-model-1', stream: false, tools: [{ type: 'function', function: { name: 'sh', parameters: {} } }], messages: [{ role: 'user', content: `go ${t0}` }, { role: 'assistant', content: 'x' }, { role: 'tool', content: 'out', tool_call_id: 'c' }] }));
+    request(traceId, 'l2', t0 + 3000, { requestBody: body });
+    const s = traceStore().session(traceId)!;
+    expect(s.session.requestCount).toBe(1);
+    expect(s.turns).toHaveLength(1);
+    expect(s.turns[0].modelMs).toBe(10);
+    expect(s.start!.firstRequestAt).toBe(t0 + 3000);
+    const doc = sessionDocument(traceStore(), traceId)!;
+    expect(doc.turns[0].request_count).toBe(1);
+    expect(doc.trace.request_count).toBe(1);
+    // A task's first request is the one that reached the endpoint.
+    ledger.handedOff('l2', { source: 'agent', requesterAgentId: LEAD, text: 'probe' });
+    const task = ledger.turnStarted(view(fleet.get('l2')!), { sessionId: 'l2-1' })!;
+    oneTaskQueue.runNamed('l2', task);
+    ledger.stateChanged(view(fleet.get('l2')!, { status: 'idle' }));
+    expect(ref).toBeTruthy();
+    await close(token, traceId);
+    expect(traceStore().session(traceId)!.outcome!.task!.firstRequestAt).toBe(t0 + 3000);
+  });
+});
+
+describe('18. a start that opens no terminal', () => {
+  it('clears its note, which no later spawn of the agent reads', () => {
+    noteSessionStart('nospawn', { trigger: 'owner', via: 'window' });
+    clearSessionStart('nospawn');
+    expect(takeSessionStart('nospawn')).toBeUndefined();
+    // Clearing another agent's note does nothing to this one's.
+    noteSessionStart('keeps', { trigger: 'task', via: 'api' });
+    clearSessionStart('other');
+    expect(takeSessionStart('keeps')).toMatchObject({ trigger: 'task' });
   });
 });
 
