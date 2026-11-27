@@ -178,6 +178,9 @@ export class TraceUploader {
     const s = this.deps.settings();
     if (!s.deletionOwed) return false;
     if (this.readInstall()) return true;
+    // There but unreadable for a moment (its JSON caught mid-write, a lock an antivirus or an indexer took): the
+    // deletion the user asked for stays owed (the Audit's pre-existing Low at fff13140c).
+    if (!this.installFileGone()) return true;
     this.deps.setDeletion({ owed: false, since: s.since });
     this.clearedUnsaid = true;
     return false;
@@ -287,11 +290,13 @@ export class TraceUploader {
   }
 
   /** One pass: the per-session deletes owed, then what is new or grew, for sessions opted in now. Never throws. */
-  /** Whether the install file is not there at all (ENOENT), as opposed to there and unreadable for a moment. */
+  /**
+   * Whether the install file is gone: absent (ENOENT), or emptied, which is how Tars drops one it may not unlink
+   * (dropInstall). One there and unreadable for a moment, or a stat refused, is not gone.
+   */
   private installFileGone(): boolean {
     try {
-      fs.statSync(this.deps.installFile);
-      return false;
+      return fs.statSync(this.deps.installFile).size === 0;
     } catch (err) {
       return (err as NodeJS.ErrnoException).code === 'ENOENT';
     }
