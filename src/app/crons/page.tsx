@@ -14,6 +14,9 @@ import { ipcReason } from '@/lib/ipc-error';
 /** A Hermes call that threw: the gateway never answered (`Shell · Schedules · Hermes did not answer`). */
 const unreached = (thrown: unknown) => `Tars could not reach Hermes (${ipcReason(thrown, 'no reason given')}).`;
 
+/** A Hermes call that answered `{ success: false, error }`: its reason on one line, through the same ipcReason. */
+const refused = (error: string | undefined) => `${ipcReason(error, 'Hermes refused it').replace(/\.$/, '')}.`;
+
 /** A row action, as its sentence says it (`Shell · Schedules · Hermes did not answer · notes`). */
 const VERB = { pause: 'pause', resume: 'resume', trigger: 'run' } as const;
 
@@ -147,7 +150,7 @@ export default function CronsPage() {
     setBusyId(job.id);
     try {
       const r = await window.electronAPI?.hermes?.cronAction({ action, jobId: job.id, profile: job.profile });
-      if (r && !r.success) { setError(`Could not ${VERB[action]} the schedule: ${r.error || 'Hermes refused it'}.`); return; }
+      if (r && !r.success) { setError(`Could not ${VERB[action]} the schedule: ${refused(r.error)}`); return; }
       await load();
     } catch (err) {
       setError(`Could not ${VERB[action]} the schedule: ${unreached(err)}`);
@@ -202,7 +205,7 @@ export default function CronsPage() {
     setBusyId(job.id);
     try {
       const r = await window.electronAPI?.hermes?.cronDelete({ jobId: job.id, profile: job.profile });
-      if (r && !r.success) { setError(`Could not delete the schedule: ${r.error || 'Hermes refused it'}.`); return; }
+      if (r && !r.success) { setError(`Could not delete the schedule: ${refused(r.error)}`); return; }
       await load();
     } catch (err) {
       setError(`Could not delete the schedule: ${unreached(err)}`);
