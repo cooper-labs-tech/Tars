@@ -40,6 +40,9 @@ import { TraceUploader, type UploaderDeps } from '../../electron/services/trace-
  *     queue, so a pass that failed never sends it again.
  * 15. A delete owed to an install that is gone (the back-office answered 401, or its file was removed) stays owed for
  *     good: nothing can ever send it.
+ * Added before its code after the Audit's Low at 9a1e9e8c4 (27/11):
+ * 16. An install file that is there but cannot be read for a moment (its JSON caught mid-write, a read refused) is taken
+ *     for gone, and every delete owed to it is forgotten for good.
  */
 
 type Seen = { method: string; url: string; auth?: string };
@@ -381,6 +384,22 @@ describe('the per-session delete owed to the back-office', () => {
     settings.consentAt = undefined;
     fs.rmSync(path.join(dir, 'private', 'traces-install.json'));
     await v.runOnce();
+    expect(store.owedDeletes(10)).toEqual([]);
+  });
+
+  it('16: an install file that cannot be read for a moment keeps the deletes owed to it', async () => {
+    const u = uploader();
+    await sendThenDelete(u, ['s-1', 's-2'], ['s-1']);
+    const file = path.join(dir, 'private', 'traces-install.json');
+    const whole = fs.readFileSync(file, 'utf8');
+    // Sharing off, so no pass registers anew over the file: what it does with the debt is the file's read alone.
+    settings.consentAt = undefined;
+    fs.writeFileSync(file, whole.slice(0, Math.floor(whole.length / 2)));
+    await u.runOnce();
+    expect(store.owedDeletes(10).map(o => o.traceId), 'a file caught mid-write').toEqual(['s-1']);
+    fs.writeFileSync(file, whole);
+    await u.runOnce();
+    expect(bo.deletesOf()).toEqual(['s-1']);
     expect(store.owedDeletes(10)).toEqual([]);
   });
 
