@@ -128,6 +128,8 @@ describe('masking personal data', () => {
     expect(s.text('git clone https://will.pruitt%40mail.example.com:s3cr3tpass@git.example.org/r.git')).toBe('git clone https://<EMAIL_1>:<SECRET_1>@git.example.org/r.git');
     expect(s.text('reach will.pruitt%40mail.example.com, or WILL.PRUITT%40MAIL.EXAMPLE.COM')).toBe('reach <EMAIL_1>, or <EMAIL_1>');
     expect(s.text('the same as will.pruitt@mail.example.com; then ada%40example.org')).toBe('the same as <EMAIL_1>; then <EMAIL_2>');
+    // An encoded address as a URL's whole user part: the address, then its host, never one address of both.
+    expect(s.text('https://will.pruitt%40mail.example.com@git.example.org/r.git')).toBe('https://<EMAIL_1>@git.example.org/r.git');
     for (const kept of ['save 30%40 today', 'width: 100%40px', 'name=%40handle and q=%40', 'ratio 1%40.5']) expect(one(kept), kept).toBe(kept);
   });
 
