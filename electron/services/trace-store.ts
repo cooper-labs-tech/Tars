@@ -1049,7 +1049,8 @@ export class TraceStore {
   /**
    * Each main request's gap and tool calls (trace feature C1), read from what the session holds, so a log line read late
    * fills them in. The previous reply is the previous main request that reached the endpoint: a side request and a
-   * request given up while held (it never reached it) are no reply, and have no gap.
+   * request given up while held (it never reached it, by the one rule every count reads, givenUpWhileHeld) are no
+   * reply, and have no gap.
    */
   private requestGaps(traceId: string, turns: Row[], requests: Row[]): Map<string, Pick<TraceRequestView, 'gap' | 'toolCalls'>> {
     const out = new Map<string, Pick<TraceRequestView, 'gap' | 'toolCalls'>>();
@@ -1060,7 +1061,7 @@ export class TraceStore {
     for (const r of requests) {
       if (r.side === 1) continue;
       const cancel = r.cancel_json ? JSON.parse(String(r.cancel_json)) as RequestCancel : undefined;
-      if (cancel?.cause === 'abandoned_while_held') continue;
+      if (givenUpWhileHeld({ cancel, status: optNum(r.status), attempts: optNum(r.attempts), heldMs: optNum(r.held_ms) })) continue;
       const startedAt = num(r.started_at);
       const ids = r.tool_result_ids ? JSON.parse(String(r.tool_result_ids)) as string[] : [];
       const known = ids.filter(id => parts.has(id));
