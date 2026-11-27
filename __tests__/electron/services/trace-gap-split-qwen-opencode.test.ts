@@ -43,6 +43,9 @@ import { assertThrowaway } from '../../setup/throwaway-dirs';
  *  9. A session that ended is dropped at once, so the lines its harness writes as it exits are lost; or it is followed
  *     for ever.
  * 10. A line or a row that is no tool call is read as one.
+ * 11. (Found by the E2E, 27/11, before its fix.) The agent's folder is named through a link (macOS's /tmp is
+ *     /private/tmp): Qwen Code names its chat folder after its real working folder, so a file looked for under the
+ *     folder as Tars names it is never found.
  */
 
 assertThrowaway({ DATA_DIR, PRIVATE_DIR });
@@ -182,6 +185,20 @@ describe('the follower, Qwen Code', () => {
     expect(noted.length, 'the call past the first MiB waits').toBe(0);
     logs.tick();
     expect(noted.map(n => n.part.callId)).toEqual(['call_late']);
+  });
+
+  it('11: a folder named through a link is read under its real path, where Qwen Code names its chat folder', () => {
+    const t = Date.now();
+    const real = path.join(root, 'real-project');
+    const link = path.join(root, 'project-link');
+    fs.mkdirSync(real);
+    fs.symlinkSync(real, link, process.platform === 'win32' ? 'junction' : 'dir');
+    const { logs, noted } = follower(() => [{ traceId: 'tr1', agentId: 'q', harness: 'qwen-code', folder: link, startedAt: t - 1000 }], () => 'sess-1');
+    const file = qwenTranscriptPath(fs.realpathSync(link), 'sess-1', home);
+    fs.mkdirSync(path.dirname(file), { recursive: true });
+    fs.writeFileSync(file, `${qwenTelemetry(t, 'call_real', { started: t, ms: 4, success: true })}\n`);
+    logs.tick();
+    expect(noted.map(n => n.part.callId)).toEqual(['call_real']);
   });
 
   it('8: no session id, or no file, is nothing, and no throw', () => {
