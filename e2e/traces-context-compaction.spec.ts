@@ -98,7 +98,9 @@ test('the endpoint\'s limits reach codex, and its compactions are kept inside th
     soft(open?.session.turnCount, 'one task, one turn').toBe(1);
     soft(requests.map(r => r.side), 'the compaction calls are side requests').toEqual([false, true, false, true, false, false]);
     soft(requests.map(r => r.contextReset?.kind ?? null), 'the requests after a compaction').toEqual([null, null, 'compact', null, 'compact', null]);
-    soft(requests.filter(r => r.contextReset).every(r => Number(r.contextReset!.droppedTokens) > 0), 'the tokens each dropped').toBe(true);
+    // The first compaction drops codex's long context: the prompt shrinks. The second keeps the prompt's size: no
+    // tokens dropped are said.
+    soft(requests.filter(r => r.contextReset).map(r => Number(r.contextReset!.droppedTokens ?? 0) > 0), 'the tokens each dropped').toEqual([true, false]);
 
     // 4. The terminal exits: codex's log is read.
     await api('agent', 'stop', C);
@@ -111,7 +113,15 @@ test('the endpoint\'s limits reach codex, and its compactions are kept inside th
     keep({ compactions, marked: marked.map(r => ({ requestId: r.requestId, contextReset: r.contextReset })), modelCalls: usage.length });
     soft(compactions.map(c => [c.kind, c.source]), "codex's compactions").toEqual([['compact', 'harness'], ['compact', 'harness']]);
     soft(compactions.map(c => c.requestId), 'each tied to its marked request').toEqual(marked.map(r => r.requestId));
-    soft(compactions.every(c => Number(c.before) > Number(c.after) && Number(c.after) > 0), 'the prompt before and after, from the rollout').toBe(true);
+    // Codex's own counts, from its rollout: the prompt of the main request before its compaction call, and of the
+    // request after it, which the endpoint counted the same.
+    const sorted = (ended?.turns ?? []).flatMap(t => t.requests).sort((a, b) => a.startedAt - b.startedAt) as Array<Request & { tokensIn?: number }>;
+    const expectedCounts = compactions.map((c) => {
+      const k = sorted.findIndex(r => r.requestId === c.requestId);
+      return [sorted.slice(0, Math.max(k, 0)).filter(r => !r.side).pop()?.tokensIn ?? null, k >= 0 ? sorted[k].tokensIn ?? null : null];
+    });
+    soft(compactions.map(c => [c.before ?? null, c.after ?? null]), 'the prompt before and after, from the rollout').toEqual(expectedCounts);
+    soft(expectedCounts.every(([b, a]) => typeof b === 'number' && typeof a === 'number'), 'both counts known').toBe(true);
 
     // 5. The export and the preview.
     const held = await app.evaluate((_e, { dist, traceId }) => {

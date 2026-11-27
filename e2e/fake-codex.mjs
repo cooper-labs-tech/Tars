@@ -267,11 +267,14 @@ async function endpointTurn(text) {
   const turnMetadata = JSON.stringify({ installation_id: install, session_id: sessionId, thread_id: sessionId, turn_id: turnId, window_id: `${sessionId}:0`, request_kind: 'turn', model: opts.model, reasoning_effort: effort ?? 'medium' });
   const tools = [{ type: 'function', name: 'exec_command', description: 'Runs a command', strict: false, parameters: { type: 'object', properties: { cmd: { type: 'string' } }, required: ['cmd'] } }];
   const first = { type: 'message', role: 'user', content: [{ type: 'input_text', text }] };
-  let input = [first];
   // `COMPACT` (once) or `COMPACT TWICE` in the task: after a tool call, codex compacts as 0.163 was measured to (trace
   // feature C2, 27/11): a call of its own with no tools asking for a summary, a `compacted` line in its rollout, then
-  // a history of the task and the summary as a new user message.
+  // a history of the task and the summary as a new user message. The long context codex sends ahead of a task stands
+  // for what the compaction drops, so the prompt after it is shorter; each summary is its own.
   let compactions = /\bCOMPACT TWICE\b/.test(text) ? 2 : /\bCOMPACT\b/.test(text) ? 1 : 0;
+  const context = { type: 'message', role: 'developer', content: [{ type: 'input_text', text: `<environment_context>${' context'.repeat(600)}</environment_context>` }] };
+  let input = compactions > 0 ? [context, first] : [first];
+  let compacted = 0;
   const ask = async (body) => {
     const res = await fetch(`${endpoint.baseUrl.replace(/\/+$/, '')}/responses`, {
       method: 'POST',
@@ -308,7 +311,8 @@ async function endpointTurn(text) {
       const { res: cres, answer: summary } = await ask({ input: [...input, prompt] });
       if (!cres.ok) return `the endpoint answered ${cres.status}`;
       const said = (summary.output ?? []).flatMap(i => i.content ?? []).map(c => c.text ?? '').join('') || 'no summary';
-      const bridge = `Another language model started to solve this problem and produced a summary of its thinking process. You also have access to the state of the tools that were used by that language model. Use this to build on the work that has already been done and avoid duplicating work. Here is the summary produced by the other language model, use the information in this summary to assist with your own analysis:\n${said}`;
+      compacted++;
+      const bridge = `Another language model started to solve this problem and produced a summary of its thinking process. You also have access to the state of the tools that were used by that language model. Use this to build on the work that has already been done and avoid duplicating work. Here is the summary produced by the other language model, use the information in this summary to assist with your own analysis:\n${said} (summary ${compacted})`;
       write('compacted', { message: bridge, compaction_response_id: summary.id });
       input = [first, { type: 'message', role: 'user', content: [{ type: 'input_text', text: bridge }] }];
     }
