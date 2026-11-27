@@ -194,8 +194,11 @@ export function qwenToolPartOf(line: string): ToolCallPart | null {
     if (typeof r.callId !== 'string' || !r.callId) return null;
     const shell = asObj(r.resultDisplay);
     const isShell = shell.type === 'shell_result';
+    const at = Date.parse(typeof entry.timestamp === 'string' ? entry.timestamp : '');
     return partOf({
       callId: r.callId,
+      // When it was written: the only time this line gives, and what puts it on the session it happened in.
+      outputAt: Number.isFinite(at) ? at : undefined,
       exit: isShell ? num(shell.exitCode) : undefined,
       failed: r.status === 'error' || r.status === 'cancelled',
       timedOut: isShell && (shell.outcome === 'timeout' || shell.outcome === 'timed_out'),
