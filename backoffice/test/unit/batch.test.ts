@@ -186,6 +186,8 @@ test('15. cancel: who cut a request, why, when, what reached the harness', () =>
   const r = validateBatch({ ...ok, requests: [{ ...request, cancel }] });
   assert.ok(!('errors' in r), JSON.stringify(r));
   assert.deepEqual(r.requests[0]!.cancel, cancel);
+  assert.ok(!('errors' in validateBatch({ ...ok, requests: [{ ...request, cancel: { ...cancel, cause: 'http2_reset' } }] })), 'a word with digits, a letter first');
+  assert.ok(errs({ ...ok, requests: [{ ...request, cancel: { ...cancel, cause: '2fast' } }] }).length, 'a word starts with a letter');
   const bad: unknown[] = [
     'harness', { ...cancel, by: 'Some One' }, { ...cancel, cause: '' }, { ...cancel, at: 1.5 }, { ...cancel, deliveredBytes: -1 },
     { ...cancel, note: 'x' }, { by: 'harness', cause: 'abandoned_while_held', at: 40 },

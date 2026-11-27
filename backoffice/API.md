@@ -215,7 +215,7 @@ missing blob, then `PUT` the batch, and send any `missingBlobs` it reports.
 | `start` | Start | no | What started the session (below). Sent again without it, a session keeps it |
 | `lostDemand` | array ≤ 1,000 | no | Tasks that left the agent's queue never to start while the session ran: `{ "kind": "queue_drop", "ref": string ≤ 128, "queuedAt": ms, "at": ms, "reason": word }`, all required, no other key. The list as a whole, kept when absent |
 
-A *word* is a lowercase word of at most 40 characters, `a` to `z` and `_`: a kind or a cause, never a name.
+A *word* is a lowercase word of at most 40 characters, `a` to `z`, `0` to `9` and `_`, a letter first: a kind or a cause, never a name.
 
 **Start.** An object of these keys and no other:
 

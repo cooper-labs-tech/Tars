@@ -117,7 +117,7 @@ function checkValue(s: Spec, v: unknown): string | null {
     case 'count': return isInt(v) && (v as number) <= s.max ? null : `an integer from 0 to ${s.max}`;
     case 'env': return checkEnvironment(v);
     case 'events': return checkEvents(v);
-    case 'word': return typeof v === 'string' && /^[a-z][a-z_]{0,39}$/.test(v) ? null : 'a lowercase word of at most 40 (a-z, _)';
+    case 'word': return typeof v === 'string' && /^[a-z][a-z0-9_]{0,39}$/.test(v) ? null : 'a lowercase word of at most 40 (a-z, 0-9, _, a letter first)';
     case 'shape': return checkShape(v, s.shape);
     case 'list': {
       if (!Array.isArray(v) || v.length > s.max) return `an array of at most ${s.max}`;
