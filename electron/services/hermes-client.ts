@@ -350,6 +350,21 @@ function readable(body: unknown): body is object {
   return typeof body === 'object' && body !== null;
 }
 
+/**
+ * Whether every entry of a list the gateway answered is a record named by
+ * `key`: a non-empty string, or for an id a number too. A null among them
+ * threw a TypeError through IPC, in the readers below or in the page; a
+ * number, or a record without the key, was dropped without a word (#660).
+ * Either is an answer that is not what Tars expected.
+ */
+function rowsNamedBy(list: unknown[], key: string, id = false): boolean {
+  return list.every(entry => {
+    if (typeof entry !== 'object' || entry === null || Array.isArray(entry)) return false;
+    const name = (entry as Record<string, unknown>)[key];
+    return (typeof name === 'string' && name !== '') || (id && typeof name === 'number' && Number.isFinite(name));
+  });
+}
+
 /** A read the gateway refused: the sign-in prompt when that is the reason,
  *  the status otherwise. */
 function failedRead(status: number, signInPrompt: string) {
@@ -496,6 +511,12 @@ export async function fetchHermesBoard(conn: HermesConnection, board?: string, t
   const { status, body } = await gatewayCall(conn, `${KANBAN}/board${query}`);
   if (status !== 200) return refused(status, errorDetail(status, body));
   if (!readable(body)) return unexpectedAnswer('the board');
+  // Its columns and their tasks go to the page as they are: a row it cannot read is refused here.
+  const columns = (body as { columns?: unknown }).columns;
+  if (Array.isArray(columns) && (!rowsNamedBy(columns, 'name')
+    || columns.some(c => { const tasks = (c as { tasks?: unknown }).tasks; return Array.isArray(tasks) && !rowsNamedBy(tasks, 'id', true); }))) {
+    return unexpectedAnswer('the board');
+  }
   return { success: true as const, board: body };
 }
 
@@ -535,6 +556,10 @@ export async function fetchHermesCrons(conn: HermesConnection) {
   const { status, body } = await gatewayCall(conn, '/api/cron/jobs?profile=all');
   if (status !== 200) return refused(status, errorDetail(status, body));
   if (!readable(body)) return unexpectedAnswer('the schedules');
+  // Its jobs go to the page as they are, found as Schedules finds them (asJobs): a row it cannot read is refused here.
+  const jobs = Array.isArray(body) ? body
+    : ['jobs', 'items', 'results'].map(k => (body as Record<string, unknown>)[k]).find(Array.isArray) as unknown[] | undefined;
+  if (jobs && !rowsNamedBy(jobs, 'id', true)) return unexpectedAnswer('the schedules');
   return { success: true as const, jobs: body };
 }
 
@@ -625,6 +650,7 @@ export async function fetchHermesModelOptions(
 
   const b = (body ?? {}) as Record<string, unknown>;
   const raw = Array.isArray(b.providers) ? b.providers : [];
+  if (!rowsNamedBy(raw, 'slug')) return unexpectedAnswer('the models');
   return {
     success: true,
     provider: typeof b.provider === 'string' ? b.provider : '',
@@ -987,6 +1013,7 @@ export async function fetchHermesMcpServers(
 
   const raw = (body as { servers?: unknown[] } | null)?.servers;
   if (!Array.isArray(raw)) return { success: true, servers: [] };
+  if (!rowsNamedBy(raw, 'name')) return unexpectedAnswer('the MCP servers');
 
   const servers = raw.map(entry => {
     const s = entry as Record<string, unknown>;
@@ -1031,6 +1058,7 @@ export async function fetchHermesMemoryProviders(
 
   const b = (body ?? {}) as Record<string, unknown>;
   const raw = Array.isArray(b.providers) ? b.providers : [];
+  if (!rowsNamedBy(raw, 'name')) return unexpectedAnswer('the memory providers');
   const builtin = (b.builtin_files ?? {}) as Record<string, unknown>;
 
   return {
