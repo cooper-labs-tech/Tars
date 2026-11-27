@@ -2,5 +2,6 @@
 -- cancels the installs sent; every other value stays.
 ALTER TABLE turns DROP COLUMN IF EXISTS task_ref;
 ALTER TABLE requests DROP COLUMN IF EXISTS cancel;
+ALTER TABLE sessions DROP COLUMN IF EXISTS lost_demand_omitted;
 ALTER TABLE sessions DROP COLUMN IF EXISTS lost_demand;
 ALTER TABLE sessions DROP COLUMN IF EXISTS start;

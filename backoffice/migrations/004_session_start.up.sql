@@ -4,6 +4,8 @@
 -- session or an install takes them with it.
 ALTER TABLE sessions ADD COLUMN start jsonb;
 ALTER TABLE sessions ADD COLUMN lost_demand jsonb;
+-- How many lost tasks the client left out of that list, past its own bound.
+ALTER TABLE sessions ADD COLUMN lost_demand_omitted int;
 ALTER TABLE requests ADD COLUMN cancel jsonb;
 -- The task a turn's instruction came from, by its ref (t- and 8 hex).
 ALTER TABLE turns ADD COLUMN task_ref text;

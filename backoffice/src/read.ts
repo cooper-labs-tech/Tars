@@ -14,7 +14,7 @@ const HASH = /^[0-9a-f]{64}$/;
 
 const SESSION_SELECT = `install_id, session_id, agent_id, project_key, harness, harness_version, native_session_id,
   endpoint_key, endpoint_name, model, started_at, ended_at, final_status, turn_count, request_count, tokens_in, tokens_cached,
-  tokens_out, mixed, unknown_turns, outcome, environment, events, start, lost_demand, masking_version, mask_counts, rtt_median_ms, clock_offset_ms, consent, received_at,
+  tokens_out, mixed, unknown_turns, outcome, environment, events, start, lost_demand, lost_demand_omitted, masking_version, mask_counts, rtt_median_ms, clock_offset_ms, consent, received_at,
   (SELECT consent_training FROM installs i WHERE i.id = sessions.install_id) AS install_consent_training,
   (SELECT consent_at FROM installs i WHERE i.id = sessions.install_id) AS install_consent_at`;
 
@@ -27,7 +27,7 @@ function session(r: QueryResultRow) {
     requestCount: r.request_count, tokensIn: r.tokens_in, tokensCached: r.tokens_cached, tokensOut: r.tokens_out, mixed: r.mixed,
     unknownTurns: r.unknown_turns, outcome: r.outcome ?? undefined, receivedAt: ms(r.received_at),
     // Always present: null is "the uploading Tars did not send it" (one before the field, or one that could not read it).
-    environment: r.environment ?? null, events: r.events ?? null, start: r.start ?? null, lostDemand: r.lost_demand ?? null,
+    environment: r.environment ?? null, events: r.events ?? null, start: r.start ?? null, lostDemand: r.lost_demand ?? null, lostDemandOmitted: r.lost_demand_omitted ?? null,
     maskingVersion: r.masking_version ?? null, maskCounts: r.mask_counts ?? null,
     // The session's own consent as it was recorded, and its install's current one (PUT /v1/installs/me/consent).
     consent: r.consent ?? null,

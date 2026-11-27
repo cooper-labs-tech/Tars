@@ -710,7 +710,7 @@ describe('trace back-office, end to end', () => {
         const tables = (await client.query("SELECT tablename FROM pg_tables WHERE schemaname = 'public' AND tablename NOT IN ('schema_migrations', 'install_consent_changes') ORDER BY 1")).rows.map((r) => r.tablename as string);
         const out: Record<string, string> = {};
         for (const t of tables) {
-          const r = (await client.query(`SELECT count(*)::int AS n, md5(coalesce(string_agg(x, '|' ORDER BY x), '')) AS d FROM (SELECT (to_jsonb(t) - 'side' - 'environment' - 'events' - 'live_sessions' - 'start' - 'lost_demand' - 'cancel' - 'task_ref' - 'masking_version' - 'mask_counts' - 'interventions' - ${WAVE_FOUR_COLUMNS.map((c) => `'${c}'`).join(' - ')} - 'consent' - 'consent_training' - 'consent_at')::text AS x FROM "${t}" t) s`)).rows[0];
+          const r = (await client.query(`SELECT count(*)::int AS n, md5(coalesce(string_agg(x, '|' ORDER BY x), '')) AS d FROM (SELECT (to_jsonb(t) - 'side' - 'environment' - 'events' - 'live_sessions' - 'start' - 'lost_demand' - 'lost_demand_omitted' - 'cancel' - 'task_ref' - 'masking_version' - 'mask_counts' - 'interventions' - ${WAVE_FOUR_COLUMNS.map((c) => `'${c}'`).join(' - ')} - 'consent' - 'consent_training' - 'consent_at')::text AS x FROM "${t}" t) s`)).rows[0];
           out[t] = `${r.n}:${r.d}`;
         }
         return out;

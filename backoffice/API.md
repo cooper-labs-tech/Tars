@@ -229,6 +229,7 @@ missing blob, then `PUT` the batch, and send any `missingBlobs` it reports.
 | `events` | array ≤ 10,000 | no | Power events during the session, `{ "at": ms, "kind": "sleep" \| "wake" \| "battery" \| "ac" }`, no other key. The list as a whole: a session sent with it replaces the list it had, sent without it keeps it |
 | `start` | Start | no | What started the session (below). Sent again without it, a session keeps it |
 | `lostDemand` | array ≤ 1,000 | no | Tasks that left the agent's queue never to start while the session ran: `{ "kind": "queue_drop", "ref": task ref, "queuedAt": ms, "at": ms, "reason": "cancelled" \| "taken_back" \| "dropped_with_stop" \| "queue_cleared" \| "agent_removed" \| "not_handed_again" }`, all required, no other key. The list as a whole, kept when absent |
+| `lostDemandOmitted` | int ≥ 0 | no | How many lost tasks the client left out of `lostDemand`, past its own bound. Kept when absent |
 | `maskingVersion` | string ≤ 40 | no | The version of the masking the client applied to the content before upload. Kept when absent |
 | `maskCounts` | object | no | What that masking replaced, by type: exactly `SECRET`, `EMAIL`, `IP`, `PERSON`, `HOME` and `PHONE`, each an int ≥ 0, all required, no other key. Kept when absent |
 | `consent` | `{ "training": bool }` | no | The training consent the session was recorded under, no other key. Kept when absent |
@@ -280,7 +281,7 @@ a host name, a user name) refuses the batch.
 | `author` | string ≤ 40 | no | `user`, `orchestrator`, `chat`, `relay`, `agent`, `tars`, `unknown` |
 | `authorDetail` | string ≤ 128 | no | An agent or chat id; never a person's name |
 | `taskRef` | task ref | no | The task the turn's instruction came from. Sent again without it, a turn keeps it |
-| `interventions` | object | no | What was done to the turn, each key optional, no other: `interrupted {at, by, during: "answer" \| "tools"}`, `restarted {at, by}`, `next {by, delaySec}` (the next instruction's author kind and its delay in seconds, a number ≥ 0), `corrected: true`, `redelegated {to: a session id ≤ 64, at}`. Every `by` is a lowercase word (a-z, 0-9, `_`, a letter first, ≤ 40): a kind, never a name. Kept when absent |
+| `interventions` | object | no | What was done to the turn, each key optional, no other: `interrupted {at, by, during: "answer" \| "tools"}`, `restarted {at, by}`, `next {by, delaySec}` (the next instruction's author kind and its delay in seconds, a number ≥ 0), `corrected: true`, `redelegated {to: a session id ≤ 64, at}`. Each `by` is a kind from its closed list: `interrupted`: `esc`, `ctrl_c`, `cli`, `stop`, `remove`, `quit`, `sleep`; `restarted`: `restart`, `replace`; `next`: `user`, `orchestrator`, `agent`, `relay`, `tars`, `unknown`. Kept when absent |
 | `startHead`, `endHead` | 40 or 64 lowercase hex | no | The commit the turn started from and ended on, as git names them |
 | `startTree`, `endTree` | 40 or 64 lowercase hex | no | The tree hashes at the turn's start and end |
 | `filesChanged`, `linesAdded`, `linesRemoved`, `changedLines`, `survivedLines` | int ≥ 0 | no | What the turn changed, and how many of its changed lines survive |
@@ -309,7 +310,8 @@ a host name, a user name) refuses the batch.
 | `side` | bool | no | `true` for a harness's side request (a title request with no tools, a memory request with another system prompt), `false` for the agent's own loop. Leave it out when the client does not know. A request sent again without it keeps the mark it had |
 | `liveSessions` | int 0 to 1,000,000 | no | How many sessions were live on the install when the request was sent. Sent again without it, a request keeps the count it had |
 | `cancel` | object | no | A request cut before the endpoint answered: `{ "by", "cause", "at": ms, "deliveredBytes": int }`, all required, no other key, the cause one of its `by`'s: `harness`: `esc`, `ctrl_c`, `cli_interrupt`, `abandoned_while_held`, `unknown`; `tars`: `stop`, `restart`, `sleep`, `remove`, `quit`, `replace`; `proxy`: `hold_ceiling`; `endpoint`: `stream_cut`. Kept when absent |
-| `rttMs`, `queueMs`, `upstreamMs` | ms, a number from 0 to 10^10 | no | The round trip, and the endpoint's queue and upstream times from its Server-Timing. Absent when the endpoint sends no such header, never 0. Kept when absent |
+| `rttMs` | ms, a number from -10^10 to 10^10 | no | The round trip, kept as measured: the endpoint's span can read longer than the client's (clock rates, whole ms), so it may be negative. Absent when the endpoint sends no Server-Timing, never 0. Kept when absent |
+| `queueMs`, `upstreamMs` | ms, a number from 0 to 10^10 | no | The endpoint's queue and upstream times from its Server-Timing. Absent when it sends no such header, never 0. Kept when absent |
 | `clockOffsetMs` | ms, a number from -10^10 to 10^10 | no | |
 | `reqBytes`, `respBytes` | int ≥ 0 | no | |
 | `messages` | array ≤ 10,000 | yes | `{ "position": int, "hash": sha256, "direction": "input" \| "output" }`: what the request sent, in order, then what it produced |

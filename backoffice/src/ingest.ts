@@ -172,7 +172,7 @@ const SESSION_COLS: Col[] = [
   ['finalStatus', 'final_status', 'text'], ['turnCount', 'turn_count', 'int'], ['requestCount', 'request_count', 'int'],
   ['tokensIn', 'tokens_in', 'bigint'], ['tokensCached', 'tokens_cached', 'bigint'], ['tokensOut', 'tokens_out', 'bigint'],
   ['mixed', 'mixed', 'bool'], ['unknownTurns', 'unknown_turns', 'int'], ['outcome', 'outcome', 'jsonb'],
-  ['environment', 'environment', 'jsonb'], ['events', 'events', 'jsonb'], ['start', 'start', 'jsonb'], ['lostDemand', 'lost_demand', 'jsonb'],
+  ['environment', 'environment', 'jsonb'], ['events', 'events', 'jsonb'], ['start', 'start', 'jsonb'], ['lostDemand', 'lost_demand', 'jsonb'], ['lostDemandOmitted', 'lost_demand_omitted', 'int'],
   ['maskingVersion', 'masking_version', 'text'], ['maskCounts', 'mask_counts', 'jsonb'],
   ['rttMedianMs', 'rtt_median_ms', 'float8'], ['clockOffsetMs', 'clock_offset_ms', 'float8'], ['consent', 'consent', 'jsonb'],
 ];
@@ -227,7 +227,7 @@ function keepWhenAbsent(sql: string, table: string, columns: string[]): string {
 }
 const SQL = {
   sessions: keepWhenAbsent(upsertSql('sessions', 'sessionId', 'session_id', SESSION_COLS, { cols: ['changed_seq'], vals: [`nextval('change_seq')`] }).replace(
-    /DO UPDATE SET /, 'DO UPDATE SET received_at = now(), '), 'sessions', ['environment', 'events', 'start', 'lost_demand', 'masking_version', 'mask_counts', 'rtt_median_ms', 'clock_offset_ms', 'consent']),
+    /DO UPDATE SET /, 'DO UPDATE SET received_at = now(), '), 'sessions', ['environment', 'events', 'start', 'lost_demand', 'lost_demand_omitted', 'masking_version', 'mask_counts', 'rtt_median_ms', 'clock_offset_ms', 'consent']),
   turns: keepWhenAbsent(upsertSql('turns', 'turnId', 'turn_id', TURN_COLS), 'turns', ['task_ref', 'interventions', ...TURN_WORKSPACE.map(([, c]) => c)]),
   // A request sent again without its side mark keeps the one it had: only true or false replaces it.
   requests: keepWhenAbsent(upsertSql('requests', 'requestId', 'request_id', REQUEST_COLS), 'requests', ['side', 'live_sessions', 'cancel', 'rtt_ms', 'clock_offset_ms', 'queue_ms', 'upstream_ms']),

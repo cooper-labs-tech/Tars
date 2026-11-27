@@ -83,12 +83,11 @@ const SIGNED_MS = { t: 'ms', signed: true } as const;
 // How a session's content was masked on the client: the masking's version and its six counts, all required.
 const MASK_COUNTS: Shape = { SECRET: r(int), EMAIL: r(int), IP: r(int), PERSON: r(int), HOME: r(int), PHONE: r(int) };
 // What was done to a turn: its first interruption and restart, the next instruction's author kind and delay, a
-// correction, and the later session that took its task. Every `by` a lowercase word: a kind, never a name.
-const WORD = { t: 're', re: /^[a-z][a-z0-9_]{0,39}$/, desc: 'a lowercase word of at most 40 (a-z, 0-9, _, a letter first)' } as const;
+// correction, and the later session that took its task. Every `by` from the client's closed lists (#680): a kind, never a name.
 const INTERVENTIONS: Shape = {
-  interrupted: { t: 'shape', shape: { at: r(int), by: r(WORD), during: r(enumOf('answer', 'tools')) } },
-  restarted: { t: 'shape', shape: { at: r(int), by: r(WORD) } },
-  next: { t: 'shape', shape: { by: r(WORD), delaySec: r({ t: 'num' }) } },
+  interrupted: { t: 'shape', shape: { at: r(int), by: r(enumOf('esc', 'ctrl_c', 'cli', 'stop', 'remove', 'quit', 'sleep')), during: r(enumOf('answer', 'tools')) } },
+  restarted: { t: 'shape', shape: { at: r(int), by: r(enumOf('restart', 'replace')) } },
+  next: { t: 'shape', shape: { by: r(enumOf('user', 'orchestrator', 'agent', 'relay', 'tars', 'unknown')), delaySec: r({ t: 'num' }) } },
   corrected: { t: 'true' },
   redelegated: { t: 'shape', shape: { to: r(str(64)), at: r(int) } },
 };
@@ -99,7 +98,7 @@ const SESSION: Shape = {
   finalStatus: r({ t: 'enum', of: ['open', 'done', 'failed', 'abandoned'] }), turnCount: r(int), requestCount: r(int),
   tokensIn: r(int), tokensCached: r(int), tokensOut: r(int), mixed: bool, unknownTurns: int, outcome: { t: 'obj', maxBytes: 16 * 1024 },
   environment: { t: 'env' }, events: { t: 'events' },
-  start: { t: 'shape', shape: START }, lostDemand: { t: 'list', shape: LOST_DEMAND, max: 1000 },
+  start: { t: 'shape', shape: START }, lostDemand: { t: 'list', shape: LOST_DEMAND, max: 1000 }, lostDemandOmitted: int,
   maskingVersion: str(40), maskCounts: { t: 'shape', shape: MASK_COUNTS },
   rttMedianMs: MS, clockOffsetMs: SIGNED_MS,
   consent: { t: 'shape', shape: { training: r(bool) } },
@@ -119,7 +118,8 @@ const REQUEST: Shape = {
   ttftMs: int, totalMs: int, tokensIn: int, tokensCached: int, tokensOut: int, status: int, error: str(2000), finishReason: str(40),
   streamed: bool, side: bool, reqBytes: int, respBytes: int, messages: r({ t: 'msgs' }),
   liveSessions: { t: 'count', max: 1_000_000 }, cancel: { t: 'cancel' },
-  rttMs: MS, clockOffsetMs: SIGNED_MS, queueMs: MS, upstreamMs: MS,
+  // A request's round trip is kept as measured, negative included (clock rates, whole ms); a session's median is not.
+  rttMs: SIGNED_MS, clockOffsetMs: SIGNED_MS, queueMs: MS, upstreamMs: MS,
 };
 const MESSAGE: Shape = {
   hash: r(hash), role: r({ t: 'enum', of: ['system', 'user', 'assistant', 'tool', 'developer'] }), createdAt: r(int), size: r(int),
