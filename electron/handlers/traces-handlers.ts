@@ -307,6 +307,7 @@ export function registerTracesHandlers(deps: TracesHandlerDeps): void {
       'their timing, token counts, the harness and its version, the model and the endpoint\'s name',
       'who wrote each turn (you, an orchestrator, an agent, a channel) and how the session ended (branch, commit)',
       'an install id, to delete everything this install sent',
+      'the id of a session it holds once you delete that session here, or retention does, so the back-office deletes its copy too (a session the size cap removes stays there)',
     ],
     stays: ['your keys and Tars\'s tokens (masked before upload)', 'sessions of projects and agents not opted in', 'the endpoints\' keys and addresses', 'anything outside traced sessions'],
     scrubbing: {

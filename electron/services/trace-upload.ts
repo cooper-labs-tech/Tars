@@ -22,6 +22,10 @@ import { scrubValue, SCRUB_VERSION, type ScrubContext } from './trace-scrub';
  *   sequence, so a retry of the same state is replayed, never doubled.
  * - **Resumable**: what was sent is kept in the store (`uploads`), by change sequence, so a restart sends only what
  *   is new or grew. A failure waits (backoff, or Retry-After for a 429 or 503) and the next pass goes on.
+ * - **Per-session deletes**: a session sent, then deleted here by the user or by retention, is owed a
+ *   `DELETE /v1/sessions/{sessionId}` (the store's tombstones), sent first in a pass, retried as every other call, to
+ *   the install it was sent to and at the address the user set. With sharing off too: a delete carries no content,
+ *   only the id of a session the back-office already holds. Never while a whole deletion is owed or under way.
  * - **Never** a session whose project or agent is not opted in at the time of sending, a person's name as a turn's
  *   author detail, an endpoint's address or key, or anything outside the traced sessions.
  */
@@ -108,6 +112,9 @@ const ROLES = new Set(['system', 'user', 'assistant', 'tool', 'developer']);
 const QUEUE_PAGE = 5000;
 const PASS_PAGES = 200;
 const PASS_SESSIONS = 2000;
+/** One pass sends at most this many per-session deletes, read DELETE_PAGE at a time. */
+const PASS_DELETES = 2000;
+const DELETE_PAGE = 100;
 const sha256 = (b: Buffer): string => createHash('sha256').update(b).digest('hex');
 
 export class TraceUploader {
@@ -267,15 +274,28 @@ export class TraceUploader {
     return this.halts === 0 && !!now.consentAt && now.url === url;
   }
 
-  /** One pass: what is new or grew, for sessions opted in now. Never throws. */
+  /** Whether per-session deletes may go now: not halted, no whole deletion owed, the address as it was at the start. */
+  private mayDelete(url: string): boolean {
+    const now = this.deps.settings();
+    return this.halts === 0 && !now.deletionOwed && now.url === url;
+  }
+
+  /** The install a per-session delete goes to: the one registered at the address set, while a delete is owed. */
+  private deletesDue(url: string): boolean {
+    const install = this.readInstall();
+    return !!install && install.url === url && this.deps.store.owedDeletes(1).length > 0;
+  }
+
+  /** One pass: the per-session deletes owed, then what is new or grew, for sessions opted in now. Never throws. */
   async runOnce(): Promise<{ sent: number; failed: number; skipped?: 'off' | 'waiting' | 'busy' }> {
     const s = this.deps.settings();
-    if (!s.url || !s.consentAt || this.owed() || this.halts > 0) return { sent: 0, failed: 0, skipped: 'off' };
+    if (!s.url || this.owed() || this.halts > 0) return { sent: 0, failed: 0, skipped: 'off' };
+    if (!s.consentAt && !this.deletesDue(s.url)) return { sent: 0, failed: 0, skipped: 'off' };
     if (this.nextTryAt !== undefined && this.now() < this.nextTryAt) return { sent: 0, failed: 0, skipped: 'waiting' };
     if (this.running) return { sent: 0, failed: 0, skipped: 'busy' };
     this.running = true;
     this.abort = new AbortController();
-    const pass = this.passOnce(s.url);
+    const pass = this.passOnce(s.url, !!s.consentAt);
     this.pass = pass;
     try {
       return await pass;
@@ -286,31 +306,52 @@ export class TraceUploader {
     }
   }
 
-  private async passOnce(url: string): Promise<{ sent: number; failed: number }> {
+  /** The per-session deletes owed, oldest first, each marked sent once the back-office took it. Throws as call() does. */
+  private async sendDeletes(install: Install, url: string): Promise<void> {
+    let done = 0;
+    while (done < PASS_DELETES) {
+      const owed = this.deps.store.owedDeletes(Math.min(DELETE_PAGE, PASS_DELETES - done));
+      if (!owed.length) return;
+      for (const d of owed) {
+        if (!this.mayDelete(url)) return;
+        await this.call(install, install.url, 'DELETE', `/v1/sessions/${encodeURIComponent(d.traceId)}`);
+        this.deps.store.deleteSent(d.seq);
+        done++;
+      }
+    }
+  }
+
+  private async passOnce(url: string, sharing: boolean): Promise<{ sent: number; failed: number }> {
     let sent = 0;
     try {
-      // The consent is read again before a registration and before each session: a deletion, or a withdrawn
-      // consent, stops the pass between two calls (the re-audit's M1 at ec6951aa5).
-      if (!this.mayGoOn(url)) return { sent, failed: 0 };
-      let install = this.readInstall();
-      if (!install || install.url !== url) install = await this.register(url);
-      // The queue a page at a time, by change: a page with nothing to send (sessions of a project opted out, say) is
-      // passed over, never the end (the Audit's L2 at c447c1ceb). At most PASS_SESSIONS sent in one pass.
-      let afterSeq = 0;
-      for (let page = 0; page < PASS_PAGES && sent < PASS_SESSIONS; page++) {
-        const since = this.deps.settings().since;
-        const rows = this.deps.store.uploadQueue(QUEUE_PAGE, { afterSeq, since });
-        if (!rows.length) break;
-        afterSeq = rows[rows.length - 1].seq;
-        for (const q of rows) {
-          if (sent >= PASS_SESSIONS) break;
-          if (!this.sendable(q, this.deps.settings().since)) continue;
-          if (!this.mayGoOn(url)) return { sent, failed: 0 };
-          await this.sendSession(install, q.traceId, q.seq);
-          this.deps.store.markUploaded(q.traceId, q.seq, this.now());
-          sent++;
+      // The deletes owed first, so a failing upload never holds them back, and only to the install they are owed to,
+      // registered at the address set (a new registration forgets them: resetUploads).
+      const held = this.readInstall();
+      if (held && held.url === url) await this.sendDeletes(held, url);
+      if (sharing) {
+        // The consent is read again before a registration and before each session: a deletion, or a withdrawn
+        // consent, stops the pass between two calls (the re-audit's M1 at ec6951aa5).
+        if (!this.mayGoOn(url)) return { sent, failed: 0 };
+        let install = this.readInstall();
+        if (!install || install.url !== url) install = await this.register(url);
+        // The queue a page at a time, by change: a page with nothing to send (sessions of a project opted out, say)
+        // is passed over, never the end (the Audit's L2 at c447c1ceb). At most PASS_SESSIONS sent in one pass.
+        let afterSeq = 0;
+        for (let page = 0; page < PASS_PAGES && sent < PASS_SESSIONS; page++) {
+          const since = this.deps.settings().since;
+          const rows = this.deps.store.uploadQueue(QUEUE_PAGE, { afterSeq, since });
+          if (!rows.length) break;
+          afterSeq = rows[rows.length - 1].seq;
+          for (const q of rows) {
+            if (sent >= PASS_SESSIONS) break;
+            if (!this.sendable(q, this.deps.settings().since)) continue;
+            if (!this.mayGoOn(url)) return { sent, failed: 0 };
+            await this.sendSession(install, q.traceId, q.seq);
+            this.deps.store.markUploaded(q.traceId, q.seq, this.now());
+            sent++;
+          }
+          if (rows.length < QUEUE_PAGE) break;
         }
-        if (rows.length < QUEUE_PAGE) break;
       }
       this.failures = 0;
       this.nextTryAt = undefined;

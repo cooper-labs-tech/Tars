@@ -279,6 +279,12 @@ from the window, or from an agent's drop file (`~/.tars/endpoint-keys/<name>.key
 Retention and a size cap come from Settings. The back-office reads it through `window.electronAPI.traces`. An external
 reader reads it through `GET /api/traces/*`, with its own token, as the reader's trace format tables.
 
+A deleted session leaves a tombstone, written in the same transaction as the delete: its id, why it went (`user`,
+`retention` or `cap`) and when, nothing of its content. The reader lists them from a cursor at
+`GET /api/traces/deletions` (`{ deletions: [{ sessionId, reason, at }], nextCursor, more }`, the back-office's deletions
+feed's shape, one install), so it deletes its own copies. A tombstone is kept 365 days, then pruned by the hourly
+sweep, but one whose per-session delete is still owed to the back-office (below) stays until it is sent.
+
 **Upload** (`trace-upload.ts`, `trace-scrub.ts`). With a back-office address set (empty by default) and the user's
 consent, opted-in sessions are uploaded:
 - each string scrubbed;
@@ -291,7 +297,12 @@ consent, opted-in sessions are uploaded:
   stays unsent and is tried again on the backoff, never sent without the mark;
 - resumed after a restart, with backoff.
 
-`deleteEverywhere` asks the back-office to delete all of it.
+`deleteEverywhere` asks the back-office to delete all of it. A session sent and then deleted here, by the user or by
+retention, is owed a `DELETE /v1/sessions/{sessionId}`: sent first in each pass, retried as every other call, with the
+install's token to the install it went to, at the address set. It goes with sharing off too, since it carries only the
+id of a session the back-office already holds, and never while a whole deletion is owed or under way. A session the cap
+removes is not deleted there: the cap is this disk's room, not a decision about the data. A new install, or a whole
+deletion that went through, forgets the deletes owed to the old one.
 
 The consent is written before it is given, to its own file in the private folder and then to the settings, and a
 write that fails answers the window with the reason: nothing is given. A withdrawal holds in memory at once. It does

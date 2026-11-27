@@ -1168,6 +1168,9 @@ else.
 - The endpoint's key never enters a trace: the proxy records the request body, never its headers.
 - What is kept is bounded: off by default for every project and every agent, a size cap and a retention set in
   Settings, and a delete in the back-office.
+- A deleted session leaves a tombstone: its id, why it went (user, retention, cap) and when, nothing of its content.
+  The reader's token lists them at `GET /api/traces/deletions`, so the reader deletes its copies. They are kept 365
+  days; one still owed to the back-office stays until it is sent.
 
 **Who is traced** (`services/trace-gate.ts`). A session is traced only when all of these hold:
 - an approved endpoint that allows traces;
@@ -1208,6 +1211,12 @@ would be sent.
   the deletion is still never sent.
 - A pass under way is stopped and waited for before the deletion, and every pass reads the consent again before
   each session and before any registration, so nothing it sends lands after a deletion or a withdrawn consent.
+- A session sent and then deleted here, by the user or by retention, is deleted at the back-office too
+  (`DELETE /v1/sessions/{id}`, the install's token), first in each pass and retried as every other call. It goes with
+  sharing off as well, since it carries only the id of a session the back-office already holds, and only to the
+  install the session went to, at the address set; never while a whole deletion is owed or under way. A session the
+  cap removes stays there: the cap frees this disk and says nothing of the data. A new install, or a whole deletion
+  that went through, forgets the deletes owed to the old one.
 - When the back-office no longer knows the install (a 401: the user's deletion, or its operator's), Tars never
   registers again on its own. Uploads stop, the local traces stay, the consent is withdrawn, and the window says so.
   Registering again is the user's own act.
