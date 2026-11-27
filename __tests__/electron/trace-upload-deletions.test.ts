@@ -1,0 +1,277 @@
+import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import * as fs from 'node:fs';
+import * as os from 'node:os';
+import * as path from 'node:path';
+import * as http from 'node:http';
+import type { AddressInfo } from 'node:net';
+import { TraceStore } from '../../electron/services/trace-store';
+import { TraceUploader, type UploaderDeps } from '../../electron/services/trace-upload';
+
+/**
+ * The per-session delete the uploader owes the back-office: a session it sent, then deleted here by the user or by
+ * retention, is deleted there too (`DELETE /v1/sessions/{sessionId}`, the install's token), so the back-office's own
+ * deletions feed carries it to its readers.
+ *
+ * How it fails, written before the code (27/11):
+ * 1. A session sent and then deleted here (by the user, or by retention) is never deleted at the back-office.
+ * 2. One never sent, or one the cap deleted, is asked for there: the back-office is told of a session it never had,
+ *    or of this disk's room.
+ * 3. The delete goes without the install's token, to another address than the install's, or with the id unescaped.
+ * 4. A failure (the back-office down, a 503 with Retry-After, a 500) drops the delete, or retries it at once in a
+ *    loop: it stays owed, waits as the upload's other calls wait, and goes on a later pass.
+ * 5. A 401 (the back-office no longer knows this install) is retried for ever, or registers again: it is the other
+ *    calls' 401, the install forgotten and nothing more sent.
+ * 6. A delete the back-office took (200) is asked again on the next pass.
+ * 7. An owed delete waits behind the uploads, or is lost when a batch fails: it goes first in a pass.
+ * 8. With sharing off (no consent) an owed delete never goes, though the install is still registered at the address
+ *    set; or it goes to an address the user has changed or emptied since.
+ * 9. A whole deletion owed, or under way, sends per-session deletes as well (the whole one covers them, and its
+ *    token may be gone).
+ * 10. After "delete everything" went through, a per-session delete owed before it is still sent (with a token the
+ *     back-office revoked).
+ */
+
+type Seen = { method: string; url: string; auth?: string };
+
+class BackOffice {
+  server!: http.Server;
+  base = '';
+  seen: Seen[] = [];
+  tokens = new Set<string>();
+  sessions = new Set<string>();
+  failNext: Array<{ status: number; retryAfter?: string; code?: string }> = [];
+  /** Fail only the per-session deletes, the uploads going through. */
+  failDeletes: Array<{ status: number; retryAfter?: string; code?: string }> = [];
+  /** How many batch uploads to refuse (500) before taking them again. */
+  failBatches = 0;
+  down = false;
+  async start() {
+    this.server = http.createServer((req, res) => {
+      const chunks: Buffer[] = [];
+      req.on('data', c => chunks.push(c));
+      req.on('end', () => this.handle(req, res));
+    });
+    await new Promise<void>(r => this.server.listen(0, '127.0.0.1', () => r()));
+    this.base = `http://127.0.0.1:${(this.server.address() as AddressInfo).port}`;
+  }
+  stop() { return new Promise(r => this.server.close(() => r(undefined))); }
+  private send(res: http.ServerResponse, status: number, body: unknown, headers: Record<string, string> = {}) {
+    res.writeHead(status, { 'Content-Type': 'application/json', ...headers });
+    res.end(JSON.stringify(body));
+  }
+  private handle(req: http.IncomingMessage, res: http.ServerResponse) {
+    if (this.down) { req.socket.destroy(); return; }
+    const url = req.url ?? '';
+    const auth = String(req.headers.authorization ?? '');
+    this.seen.push({ method: req.method ?? '', url, auth });
+    const fail = this.failNext.shift();
+    if (fail) { this.send(res, fail.status, { error: fail.code ?? 'unavailable' }, fail.retryAfter ? { 'Retry-After': fail.retryAfter } : {}); return; }
+    if (req.method === 'POST' && url === '/v1/installs') {
+      const token = `tbi_${this.tokens.size + 1}`;
+      this.tokens.add(token);
+      this.send(res, 201, { installId: `inst-${this.tokens.size}`, token });
+      return;
+    }
+    const token = auth.replace(/^Bearer /, '');
+    if (!this.tokens.has(token)) { this.send(res, 401, { error: 'unauthorized' }); return; }
+    if (req.method === 'POST' && url === '/v1/blobs/missing') this.send(res, 200, { missing: [] });
+    else if (req.method === 'PUT' && url.startsWith('/v1/batches/')) {
+      if (this.failBatches > 0) { this.failBatches--; this.send(res, 500, { error: 'internal' }); return; }
+      this.sessions.add(decodeURIComponent(url.slice('/v1/batches/'.length)).split('.')[0]);
+      this.send(res, 200, { missingBlobs: [] });
+    } else if (req.method === 'DELETE' && url.startsWith('/v1/sessions/')) {
+      const f = this.failDeletes.shift();
+      if (f) { this.send(res, f.status, { error: f.code ?? 'unavailable' }, f.retryAfter ? { 'Retry-After': f.retryAfter } : {}); return; }
+      const id = decodeURIComponent(url.slice('/v1/sessions/'.length));
+      const had = this.sessions.delete(id);
+      this.send(res, 200, { deleted: { sessions: had ? 1 : 0 }, deletedAt: 1 });
+    } else if (req.method === 'DELETE' && url === '/v1/installs/me') {
+      this.tokens.delete(token);
+      this.sessions.clear();
+      this.send(res, 200, { deleted: { sessions: 0 } });
+    } else this.send(res, 404, { error: 'not_found' });
+  }
+  deletesOf(): string[] {
+    return this.seen.filter(s => s.method === 'DELETE' && s.url.startsWith('/v1/sessions/')).map(s => decodeURIComponent(s.url.slice('/v1/sessions/'.length)));
+  }
+}
+
+const PROJECT = '/p/project-a';
+let dir: string;
+let store: TraceStore;
+let bo: BackOffice;
+let clock: number;
+let settings: { url: string; consentAt?: string };
+let deletion: { owed: boolean; since?: number };
+
+/** A session; a time under 1e9 is that many ms into the 1000 s before the clock, so retention leaves it alone. */
+function seed(traceId: string, started: number, ended?: number) {
+  const at = (v: number) => (v < 1e9 ? clock - 1_000_000 + v : v);
+  const startedAt = at(started);
+  const endedAt = ended === undefined ? undefined : at(ended);
+  store.openTrace({ traceId, projectPath: PROJECT, agentId: 'agent-1', harness: 'qwen-code', endpointId: 'ep-000001', model: 'open-coder-1', startedAt });
+  const body = (v: unknown) => Buffer.from(JSON.stringify(v));
+  store.ingest({
+    traceId, agentId: 'agent-1', surface: 'openai_chat', startedAt, endedAt: startedAt + 100, status: 200, contentType: 'application/json',
+    requestBody: body({ model: 'open-coder-1', messages: [{ role: 'user', content: `the task of ${traceId}` }], tools: [{ type: 'function', function: { name: 'bash' } }] }),
+    responseBody: body({ choices: [{ message: { role: 'assistant', content: 'done' }, finish_reason: 'stop' }], usage: { prompt_tokens: 5, completion_tokens: 1 } }),
+    attempts: 1, heldMs: 0,
+  });
+  if (endedAt !== undefined) store.endTrace(traceId, endedAt);
+}
+
+function uploader(over: Partial<UploaderDeps> = {}) {
+  return new TraceUploader({
+    store,
+    installFile: path.join(dir, 'private', 'traces-install.json'),
+    settings: () => ({ url: settings.url, consentAt: settings.consentAt, since: deletion.since, deletionOwed: deletion.owed }),
+    setDeletion: (d) => { deletion = d; },
+    eligible: () => true,
+    scrubContext: () => ({ homeDirs: [os.homedir()], knownSecrets: [], envValues: [] }),
+    client: { name: 'tars', version: '0.0.0-test', platform: process.platform },
+    withdrawConsent: (d?: { owed: boolean; since?: number }) => { settings.consentAt = undefined; if (d) deletion = d; },
+    now: () => clock,
+    ...over,
+  });
+}
+
+/** Sessions sent by a first pass, then the ones named deleted here by the user. */
+async function sendThenDelete(u: TraceUploader, sent: string[], deleted: string[]) {
+  for (const id of sent) seed(id, 1000 + sent.indexOf(id), 2000);
+  expect(await u.runOnce()).toMatchObject({ sent: sent.length, failed: 0 });
+  store.remove({ traceIds: deleted }, clock);
+}
+
+beforeEach(async () => {
+  dir = fs.mkdtempSync(path.join(os.tmpdir(), 'trace-upload-deletions-'));
+  store = new TraceStore(path.join(dir, 'traces.db'));
+  bo = new BackOffice();
+  await bo.start();
+  clock = 1_800_000_000_000;
+  deletion = { owed: false };
+  settings = { url: bo.base, consentAt: '2026-11-27T00:00:00Z' };
+});
+afterEach(async () => {
+  store.close();
+  await bo.stop();
+  fs.rmSync(dir, { recursive: true, force: true });
+});
+
+describe('the per-session delete owed to the back-office', () => {
+  it('1 and 6: a session sent and then deleted here by the user, or by retention, is deleted there once', async () => {
+    const u = uploader();
+    seed('s-user', 1000, 2000);
+    seed('s-expired', clock - 41 * 86_400_000, clock - 40 * 86_400_000);
+    seed('s-kept', 1002, 2000);
+    expect(await u.runOnce()).toMatchObject({ sent: 3, failed: 0 });
+    store.remove({ traceIds: ['s-user'] }, clock);
+    store.sweep({ capBytes: 1024 ** 3, retentionDays: 30, now: clock });
+    expect(store.hasTrace('s-expired')).toBe(false);
+    await u.runOnce();
+    expect(bo.deletesOf().sort()).toEqual(['s-expired', 's-user']);
+    expect([...bo.sessions]).toEqual(['s-kept']);
+    await u.runOnce();
+    expect(bo.deletesOf()).toHaveLength(2);
+    expect(store.owedDeletes(10)).toEqual([]);
+  });
+
+  it('2: one never sent, or one the cap took, is not asked for there', async () => {
+    const u = uploader();
+    seed('s-kept', 3000, 4000);
+    const cap = store.stats().bytes + 100;
+    seed('s-capped', 1000, 2000);
+    expect(await u.runOnce()).toMatchObject({ sent: 2, failed: 0 });
+    seed('s-local', 5000, 6000);
+    store.remove({ traceIds: ['s-local'] }, clock);
+    store.sweep({ capBytes: cap, retentionDays: 3650, now: clock });
+    expect(store.hasTrace('s-capped')).toBe(false);
+    expect(store.hasTrace('s-kept')).toBe(true);
+    await u.runOnce();
+    expect(bo.deletesOf()).toEqual([]);
+  });
+
+  it('3: with the install\'s token, to the install\'s address, the id escaped', async () => {
+    const u = uploader();
+    await sendThenDelete(u, ['s:a.b-1'], ['s:a.b-1']);
+    await u.runOnce();
+    const del = bo.seen.find(s => s.method === 'DELETE')!;
+    expect(del.url).toBe(`/v1/sessions/${encodeURIComponent('s:a.b-1')}`);
+    expect(del.auth).toBe('Bearer tbi_1');
+  });
+
+  it('4: a failure keeps it owed and waits as the other calls do; it goes on a later pass', async () => {
+    const u = uploader();
+    await sendThenDelete(u, ['s-1'], ['s-1']);
+    bo.failDeletes.push({ status: 503, retryAfter: '120' });
+    expect(await u.runOnce()).toMatchObject({ failed: 1 });
+    expect(store.owedDeletes(10).map(o => o.traceId)).toEqual(['s-1']);
+    expect(u.state().nextTryAt).toBe(clock + 120_000);
+    expect(await u.runOnce()).toMatchObject({ skipped: 'waiting' });
+    expect(bo.deletesOf()).toEqual(['s-1']);
+    clock += 121_000;
+    bo.down = true;
+    expect(await u.runOnce()).toMatchObject({ failed: 1 });
+    expect(store.owedDeletes(10).map(o => o.traceId)).toEqual(['s-1']);
+    bo.down = false;
+    clock += 31 * 60_000;
+    await u.runOnce();
+    expect(store.owedDeletes(10)).toEqual([]);
+    expect(bo.sessions.has('s-1')).toBe(false);
+  });
+
+  it('5: a 401 forgets the install, as on the other calls, and nothing more is asked', async () => {
+    const u = uploader();
+    await sendThenDelete(u, ['s-1'], ['s-1']);
+    bo.tokens.clear();
+    expect(await u.runOnce()).toMatchObject({ failed: 1 });
+    expect(u.state().notice).toBe('forgotten');
+    const asked = bo.seen.length;
+    await u.runOnce();
+    expect(bo.seen.length).toBe(asked);
+  });
+
+  it('7: an owed delete goes first in a pass, before the uploads, so a failing upload does not hold it back', async () => {
+    const u = uploader();
+    await sendThenDelete(u, ['s-1'], ['s-1']);
+    seed('s-2', 3000, 4000);
+    bo.failBatches = 1;
+    const from = bo.seen.length;
+    expect(await u.runOnce()).toMatchObject({ failed: 1 });
+    expect(bo.seen.slice(from)[0].method).toBe('DELETE');
+    expect(bo.deletesOf()).toEqual(['s-1']);
+    expect(store.owedDeletes(10)).toEqual([]);
+  });
+
+  it('8: with sharing off it still goes while the install is registered at the address set; never to an address changed since', async () => {
+    const u = uploader();
+    await sendThenDelete(u, ['s-1', 's-2'], ['s-1']);
+    settings.consentAt = undefined;
+    expect(await u.runOnce()).toMatchObject({ sent: 0 });
+    expect(bo.deletesOf()).toEqual(['s-1']);
+    store.remove({ traceIds: ['s-2'] }, clock);
+    settings.url = 'http://127.0.0.1:9/elsewhere';
+    await u.runOnce();
+    settings.url = '';
+    await u.runOnce();
+    expect(bo.deletesOf()).toEqual(['s-1']);
+    expect(store.owedDeletes(10).map(o => o.traceId)).toEqual(['s-2']);
+  });
+
+  it('9: a whole deletion owed, or under way, sends no per-session delete', async () => {
+    const u = uploader();
+    await sendThenDelete(u, ['s-1', 's-2'], ['s-1']);
+    deletion = { owed: true, since: clock };
+    await u.runOnce();
+    expect(bo.deletesOf()).toEqual([]);
+  });
+
+  it('10: after "delete everything" went through, a delete owed before it is never sent', async () => {
+    const u = uploader();
+    await sendThenDelete(u, ['s-1', 's-2'], ['s-1']);
+    expect(await u.deleteEverywhere()).toMatchObject({ ok: true });
+    settings.consentAt = '2026-11-27T01:00:00Z';
+    await u.runOnce();
+    expect(bo.deletesOf()).toEqual([]);
+    expect(store.owedDeletes(10)).toEqual([]);
+  });
+});
