@@ -318,7 +318,6 @@ export function registerTracesHandlers(deps: TracesHandlerDeps): void {
         'each as a placeholder numbered within its session (<SECRET_1>, <EMAIL_2>, <HOME_1>...): the same value, the same number, and numbers start again in each session'],
       cannot: ['a secret with no known shape and no telling name that Tars does not hold', 'a secret or personal data cut in two, encoded, or in an image', 'a name Tars does not know: someone outside the project\'s git history and you',
         'another person\'s first or last name written alone, or a one-word name that is not yours: only their whole names are masked',
-        'a private address written after a user\'s name with every part under 100 (user@10.0.0.5)',
         'a phone number written some other way', 'what the endpoint itself already received'],
     },
   }));

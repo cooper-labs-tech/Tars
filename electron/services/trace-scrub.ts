@@ -38,8 +38,9 @@ import * as path from 'path';
  *    kin.
  * 9. `email`: an address with a dotted domain, Unicode letters included; not `git@host:` (a git remote over ssh).
  * 10. `ip`: IPv4 and IPv6 addresses, an IPv4-mapped one whole; not the loopback, unspecified or broadcast ones, x.0.0.0,
- *     a four-part version written after v, version or build, or after @ with every part under 100 (pkg@1.2.3.4), nor a
- *     pair of words in hex letters (add::bad).
+ *     a four-part version written after v, version or build, or a package spec's (@scope/tool@1.0.0.1,
+ *     vendor/lib@1.2.3.4), nor a pair of words in hex letters (add::bad). After a user's name it is an address
+ *     (deploy@10.0.0.5, git@10.1.2.3:), and so is pkg@1.2.3.4.
  * 11. `phone`: a number as people write one: international (+, 8 to 15 digits), North American ((555) 201-4567,
  *     202-555-0123), national with a trunk 0 and one separator throughout (06 12 34 56 78, 020 7946 0958), or a bare
  *     national 0612345678. Never a timestamp, a port, a version, a build's number, a hash, an id or a count (the false
@@ -52,9 +53,8 @@ import * as path from 'path';
  * in prose, a key in a YAML file under an innocent name); a secret shorter than its rule's floor; a secret or personal
  * data cut across two strings, encoded (base64, hex, URL-encoded) or inside an image; a name Tars does not know;
  * another person's given or family name alone, or a name of one word that is not the account's; a phone number
- * written another way, or in full-width digits; a home written ~name; a private address after a user's name with
- * every part under 100 (user@10.0.0.5). And it applies to what is uploaded only: the endpoint the agent talked to,
- * and the local store, saw the session as it was.
+ * written another way, or in full-width digits; a home written ~name. And it applies to what is uploaded only: the
+ * endpoint the agent talked to, and the local store, saw the session as it was.
  */
 
 /** The rules' version, sent with each session as its `maskingVersion`. */
@@ -266,8 +266,13 @@ const ipFinders: Finder[] = [
     if (/^127\./.test(addr) || addr === '0.0.0.0' || addr === '255.255.255.255') return null;
     // x.0.0.0 is a network or a version (1.0.0.0), never a host (the Audit's L2).
     if (/^\d+\.0\.0\.0$/.test(addr)) return null;
-    // After @, a package's version (pkg@1.2.3.4) when every part is under 100; else a user's host (root@203.0.113.5).
-    if (part[m.index! - 1] === '@' && addr.split('.').every(p => Number(p) < 100)) return null;
+    // After @, a user's host (deploy@10.0.0.5, git@10.1.2.3:), unless the left side is a package spec: it starts with
+    // @ (@scope/tool@1.0.0.1), or holds a / with no : after the address (vendor/lib@1.2.3.4). A bare name cannot be
+    // told from a user's, so pkg@1.2.3.4 is masked (the Audit's NO-MERGE at 46d1a56dd).
+    if (part[m.index! - 1] === '@') {
+      const left = /[^\s"'`<>()[\]{},;=]*$/.exec(part.slice(0, m.index! - 1))![0];
+      if (left.startsWith('@') || (left.includes('/') && part[m.index! + addr.length] !== ':')) return null;
+    }
     return { key: addr };
   }, 'ip', 'IP'),
   part => spansOf(IPV6, part, (m) => {
