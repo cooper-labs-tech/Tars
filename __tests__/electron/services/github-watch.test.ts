@@ -5,6 +5,7 @@ import * as path from 'node:path';
 import { pollGithub, githubRepoOf, GH_READ_ARGS, pollProjects } from '../../../electron/services/github-watch';
 import { execFileSync } from 'node:child_process';
 import { skipOnWindows } from '../../setup/platform-limits';
+import { endCliProbes } from '../../../electron/core/cli-probe';
 
 /** Why 9 and 10 cannot run on Windows. */
 const STAND_IN_GH_REASON = 'their stand-in gh is a sh script found on the PATH, and execFile(\'gh\') on Windows runs '
@@ -32,6 +33,9 @@ const STAND_IN_GH_REASON = 'their stand-in gh is a sh script found on the PATH, 
  * 8. Polling resumes after a long pause (the bot off, Tars closed) and
  *    reports everything merged in the meantime: a repository not polled for
  *    an hour is taken as a new baseline.
+ * 11. (the Audit's I-1 on #661, 27/11) A `gh` still running when the quit
+ *    begins outlives it, with what it started: a plain execFile, in no group,
+ *    which the quit's end of the CLI probes (core/cli-probe.ts) never reached.
  */
 
 const REPO = 'cooper-labs-tech/Tars';
@@ -144,6 +148,43 @@ describe.skipIf(skipOnWindows(STAND_IN_GH_REASON))('the gh and git a real poll r
 
     expect(fs.existsSync(log) ? fs.readFileSync(log, 'utf-8') : '', 'gh was never run').toMatch(/^pr list --repo cooper-labs-tech\/Tars/m);
   });
+});
+
+describe.skipIf(skipOnWindows(STAND_IN_GH_REASON))('a gh still running at the quit', () => {
+  it('11. ends with the quit, with what it started, and the poll reports nothing', async () => {
+    const home = os.homedir();
+    const bin = path.join(home, '.nvm', 'versions', 'node', 'v20.11.1', 'bin');
+    fs.mkdirSync(bin, { recursive: true });
+    const notes = path.join(home, 'gh-pids.jsonl');
+    // A gh that never answers, with a child of its own deaf to SIGTERM; the home on the child's line, for the cleanup.
+    fs.writeFileSync(path.join(bin, 'gh'), [
+      `#!${process.execPath}`,
+      "const fs = require('fs'); const { spawn } = require('child_process');",
+      `const note = (pid) => fs.appendFileSync(${JSON.stringify(notes)}, pid + '\\n');`,
+      'note(process.pid);',
+      `const c = spawn(process.execPath, ['-e', "process.on('SIGTERM', () => {}); setInterval(() => {}, 1000)", ${JSON.stringify(home)}], { stdio: 'ignore' });`,
+      'note(c.pid);',
+      'setInterval(() => {}, 1000);',
+      '',
+    ].join('\n'), { mode: 0o755 });
+    const project = fs.mkdtempSync(path.join(os.tmpdir(), 'tars-gh-project-'));
+    execFileSync('git', ['init', '-q', project]);
+    execFileSync('git', ['-C', project, 'remote', 'add', 'origin', 'https://github.com/cooper-labs-tech/Tars.git']);
+    const pids = () => (fs.existsSync(notes) ? fs.readFileSync(notes, 'utf8').trim().split('\n').filter(Boolean).map(Number) : []);
+    const alive = (pid: number) => { try { process.kill(pid, 0); return true; } catch { return false; } };
+    const settle = (ms: number) => new Promise(r => setTimeout(r, ms));
+    try {
+      const poll = pollProjects([project]);
+      for (const end = Date.now() + 10_000; pids().length < 2 && Date.now() < end;) await settle(50);
+      expect(pids(), 'gh and its child started').toHaveLength(2);
+      endCliProbes();
+      expect(await Promise.race([poll, settle(5_000).then(() => 'still waiting on gh')])).toEqual([]);
+      for (const end = Date.now() + 3_000; pids().some(alive) && Date.now() < end;) await settle(100);
+      expect(pids().filter(alive), 'left running after the quit').toEqual([]);
+    } finally {
+      for (const pid of pids().filter(alive)) { try { process.kill(pid, 'SIGKILL'); } catch { /* gone */ } }
+    }
+  }, 30_000);
 });
 
 describe.skipIf(skipOnWindows(STAND_IN_GH_REASON))('a PR event of a project', () => {

@@ -19,6 +19,10 @@ import { skipOnWindows } from '../../setup/platform-limits';
  *  5. A synchronous CLI call (execCliSync: `mcp add`, `mcp remove`) has no time. A CLI that hangs freezes the main
  *     thread, which paints the window and pumps every terminal, for good.
  *  6. Over-correction: a caller's own time is overridden, or an answer in time changes.
+ *  7. (the Audit's L1 on #661) The bound sends SIGTERM only, and execFileSync returns once its child has exited: a
+ *     CLI deaf to SIGTERM holds the main thread until it ends by itself. A grandchild holding the output is reached
+ *     by nothing: a synchronous call makes no process group, so it lives on (measured by the Audit). No `mcp add` or
+ *     `mcp remove` of the four CLIs starts one.
  * On Windows there is no process group: probeCli ends the tree with taskkill /T while it runs (cli-probe.test.ts and
  * version-probe-windows.test.ts hold it). The kanban's stand-in below is a node script started by its shebang, so 1
  * to 3 run on macOS and Linux; 5 and 6 run everywhere.
@@ -139,4 +143,16 @@ describe('a synchronous CLI call (execCliSync)', () => {
     expect(Date.now() - began).toBeLessThan(10_000);
     expect(exec.execCliSync(process.execPath, ['-e', 'process.stdout.write("ok")'], { encoding: 'utf-8', stdio: 'pipe' })).toBe('ok');
   }, 20_000);
+
+  it('7. a CLI deaf to SIGTERM is ended at its time too, not waited on until it ends by itself', async () => {
+    const { exec } = await fresh();
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'tars-probe-gaps-deaf-'));
+    dirs.push(dir);
+    const script = path.join(dir, 'deaf.js');
+    // Deaf to SIGTERM, and gone by itself at 12 s, so that the old bound's run ends too.
+    fs.writeFileSync(script, "process.on('SIGTERM', () => {}); setTimeout(() => process.exit(0), 12_000);\n");
+    const began = Date.now();
+    expect(() => exec.execCliSync(process.execPath, [script, 'mcp', 'add', 'x'], { encoding: 'utf-8', stdio: 'pipe', timeout: 1_000 })).toThrow();
+    expect(Date.now() - began, 'waited for a CLI deaf to SIGTERM').toBeLessThan(6_000);
+  }, 30_000);
 });
