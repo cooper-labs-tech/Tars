@@ -257,12 +257,12 @@ describe('reading the logs, from the agent\'s own folders only', () => {
 
 describe('what the harness was given, in the export and the preview', () => {
   it('C10: the given limits, the compactions and the resets go out; an unknown stays unknown', () => {
-    store.setContextGiven('t1', { contextWindow: 131_072, outputCap: 16_384, autoCompaction: 'on' });
+    store.setContextGiven('t1', { contextWindow: 65_536, outputCap: 16_384, autoCompaction: 'on' });
     const u1 = user('Fix the parser.');
     store.ingest(rec(T0, [u1], 7000));
     store.ingest(rec(T0 + 3000, [u1, user('Another language model started... SUMMARY')], 600));
     const trace = [...traceExportLines(store, {})].map(l => JSON.parse(l)).find(l => l.table === 'traces');
-    expect(trace).toMatchObject({ context_window_given: 131_072, output_cap_given: 16_384, auto_compaction: 'on' });
+    expect(trace).toMatchObject({ context_window_given: 65_536, output_cap_given: 16_384, auto_compaction: 'on' });
     expect(trace.compactions).toHaveLength(1);
     const doc = sessionDocument(store, 't1')!;
     expect(doc.requests.map(r => r.context_reset)).toEqual([null, { kind: 'compact', droppedTokens: 6400 }]);
@@ -272,7 +272,7 @@ describe('what the harness was given, in the export and the preview', () => {
       withdrawConsent: () => {},
     }).preview('t1')!;
     const body = preview.document.batches[0].body as { sessions: Array<Record<string, unknown>>; requests: Array<Record<string, unknown>> };
-    expect(body.sessions[0]).toMatchObject({ contextWindowGiven: 131_072, outputCapGiven: 16_384, autoCompaction: 'on' });
+    expect(body.sessions[0]).toMatchObject({ contextWindowGiven: 65_536, outputCapGiven: 16_384, autoCompaction: 'on' });
     expect(body.sessions[0].compactions).toHaveLength(1);
     expect(body.requests.map(r => r.contextReset ?? null)).toEqual([null, { kind: 'compact', droppedTokens: 6400 }]);
 

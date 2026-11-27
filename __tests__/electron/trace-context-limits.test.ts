@@ -48,9 +48,9 @@ function added(over: Record<string, unknown> = {}) {
 
 describe('an endpoint\'s limits', () => {
   it('L1: kept with the endpoint, and shown', () => {
-    const r = added({ contextWindow: 131_072, maxOutputTokens: 16_384 });
-    expect(r.endpoint).toMatchObject({ contextWindow: 131_072, maxOutputTokens: 16_384 });
-    expect(endpointViews(r.settings, [])[0]).toMatchObject({ contextWindow: 131_072, maxOutputTokens: 16_384 });
+    const r = added({ contextWindow: 65_536, maxOutputTokens: 16_384 });
+    expect(r.endpoint).toMatchObject({ contextWindow: 65_536, maxOutputTokens: 16_384 });
+    expect(endpointViews(r.settings, [])[0]).toMatchObject({ contextWindow: 65_536, maxOutputTokens: 16_384 });
     // None set: none shown, none made up.
     const none = added();
     expect(none.endpoint.contextWindow).toBeUndefined();
@@ -58,13 +58,13 @@ describe('an endpoint\'s limits', () => {
   });
 
   it('L2: a window or a cap a harness cannot take is refused, and null clears', () => {
-    for (const bad of [{ contextWindow: 1000 }, { contextWindow: 10_000_001 }, { contextWindow: 131_072.5 }, { contextWindow: '131072' },
+    for (const bad of [{ contextWindow: 1000 }, { contextWindow: 10_000_001 }, { contextWindow: 65_536.5 }, { contextWindow: '65536' },
       { maxOutputTokens: 0 }, { contextWindow: 8192, maxOutputTokens: 8193 }, { maxOutputTokens: -1 }]) {
       const r = saveEndpoint(base(), { name: 'x', baseUrl: 'http://192.168.50.10:9000/v1', allowTraces: false, ...bad } as never, OWNER, NOW);
       expect(r.ok, JSON.stringify(bad)).toBe(false);
       if (!r.ok) expect(r.error).toMatch(/context window|output cap/);
     }
-    const r = added({ contextWindow: 131_072, maxOutputTokens: 16_384 });
+    const r = added({ contextWindow: 65_536, maxOutputTokens: 16_384 });
     const cleared = saveEndpoint(r.settings, { id: r.endpoint.id, contextWindow: null, maxOutputTokens: null, shown: shownOf(r.endpoint) } as never, OWNER, NOW);
     expect(cleared.ok).toBe(true);
     if (cleared.ok) {
@@ -75,36 +75,36 @@ describe('an endpoint\'s limits', () => {
 
   it('L3: only the owner sets them', () => {
     const r = added();
-    const byAgent = saveEndpoint(r.settings, { id: r.endpoint.id, contextWindow: 131_072 } as never, AGENT, NOW);
+    const byAgent = saveEndpoint(r.settings, { id: r.endpoint.id, contextWindow: 65_536 } as never, AGENT, NOW);
     expect(byAgent.ok).toBe(false);
   });
 
   it('L4: a save of another field keeps them', () => {
-    const r = added({ contextWindow: 131_072, maxOutputTokens: 16_384 });
+    const r = added({ contextWindow: 65_536, maxOutputTokens: 16_384 });
     const renamed = saveEndpoint(r.settings, { id: r.endpoint.id, name: 'Renamed', shown: shownOf(r.endpoint) }, OWNER, NOW);
-    expect(renamed.ok && renamed.endpoint).toMatchObject({ name: 'Renamed', contextWindow: 131_072, maxOutputTokens: 16_384 });
+    expect(renamed.ok && renamed.endpoint).toMatchObject({ name: 'Renamed', contextWindow: 65_536, maxOutputTokens: 16_384 });
   });
 });
 
 describe('what each harness is given', () => {
   it('L5: codex gets its two knobs, and says what it was given', () => {
-    const l = endpointLaunchFor('codex', { proxyBase: PROXY, model: 'open-coder', contextWindow: 131_072, maxOutputTokens: 16_384 })!;
-    expect(l.args.join(' ')).toContain('-c model_context_window=131072');
+    const l = endpointLaunchFor('codex', { proxyBase: PROXY, model: 'open-coder', contextWindow: 65_536, maxOutputTokens: 16_384 })!;
+    expect(l.args.join(' ')).toContain('-c model_context_window=65536');
     expect(l.args.join(' ')).toContain('-c model_max_output_tokens=16384');
-    expect(l.given).toEqual({ contextWindow: 131_072, outputCap: 16_384, autoCompaction: 'on' });
+    expect(l.given).toEqual({ contextWindow: 65_536, outputCap: 16_384, autoCompaction: 'on' });
     const none = endpointLaunchFor('codex', { proxyBase: PROXY, model: 'open-coder' })!;
     expect(none.args.join(' ')).not.toMatch(/model_context_window|model_max_output_tokens/);
     expect(none.given).toEqual({ contextWindow: null, outputCap: null, autoCompaction: 'on' });
   });
 
   it('L6: Qwen Code gets them in its settings file, and only when there are some', () => {
-    const l = endpointLaunchFor('qwen-code', { proxyBase: PROXY, model: 'open-coder', contextWindow: 131_072, maxOutputTokens: 16_384 })!;
-    expect(l.given).toEqual({ contextWindow: 131_072, outputCap: 16_384, autoCompaction: 'on' });
+    const l = endpointLaunchFor('qwen-code', { proxyBase: PROXY, model: 'open-coder', contextWindow: 65_536, maxOutputTokens: 16_384 })!;
+    expect(l.given).toEqual({ contextWindow: 65_536, outputCap: 16_384, autoCompaction: 'on' });
     const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'qwen-limits-'));
     try {
       const system = path.join(dir, 'none.json');
       const withLimits = JSON.parse(fs.readFileSync(writeQwenAgentSettings('a1', { generation: l.given, systemFile: system }, dir), 'utf8'));
-      expect(withLimits.model.generationConfig).toEqual({ contextWindowSize: 131_072, samplingParams: { max_tokens: 16_384 } });
+      expect(withLimits.model.generationConfig).toEqual({ contextWindowSize: 65_536, samplingParams: { max_tokens: 16_384 } });
       const plain = JSON.parse(fs.readFileSync(writeQwenAgentSettings('a2', { effort: 'high', systemFile: system }, dir), 'utf8'));
       expect(plain.model).toEqual({ reasoningEffort: 'high' });
       const both = JSON.parse(fs.readFileSync(writeQwenAgentSettings('a3', { effort: 'high', generation: { contextWindow: 65_536, outputCap: null, autoCompaction: 'on' }, systemFile: system }, dir), 'utf8'));
@@ -115,20 +115,20 @@ describe('what each harness is given', () => {
   });
 
   it('L7: pi\'s models.json gives the launching model its limits, and no other', () => {
-    const file = piModelsWithEndpoint({}, PROXY, ['open-coder', 'other-model'], { model: 'open-coder', contextWindow: 131_072, outputCap: 16_384 });
+    const file = piModelsWithEndpoint({}, PROXY, ['open-coder', 'other-model'], { model: 'open-coder', contextWindow: 65_536, outputCap: 16_384 });
     const models = (file.providers as Record<string, { models: Array<Record<string, unknown>> }>)['tars-endpoint'].models;
-    expect(models.find(m => m.id === 'open-coder')).toEqual({ id: 'open-coder', contextWindow: 131_072, maxTokens: 16_384 });
+    expect(models.find(m => m.id === 'open-coder')).toEqual({ id: 'open-coder', contextWindow: 65_536, maxTokens: 16_384 });
     expect(models.find(m => m.id === 'other-model')).toEqual({ id: 'other-model' });
-    const l = endpointLaunchFor('pi', { proxyBase: PROXY, model: 'open-coder', contextWindow: 131_072, maxOutputTokens: 16_384 })!;
-    expect(l.given).toEqual({ contextWindow: 131_072, outputCap: 16_384, autoCompaction: null });
+    const l = endpointLaunchFor('pi', { proxyBase: PROXY, model: 'open-coder', contextWindow: 65_536, maxOutputTokens: 16_384 })!;
+    expect(l.given).toEqual({ contextWindow: 65_536, outputCap: 16_384, autoCompaction: null });
   });
 
   it('L8: a harness with no knob for what the endpoint gives says null, and is given nothing', () => {
-    const both = endpointLaunchFor('opencode', { proxyBase: PROXY, model: 'open-coder', contextWindow: 131_072, maxOutputTokens: 16_384 })!;
+    const both = endpointLaunchFor('opencode', { proxyBase: PROXY, model: 'open-coder', contextWindow: 65_536, maxOutputTokens: 16_384 })!;
     const config = JSON.parse(both.env.OPENCODE_CONFIG_CONTENT);
-    expect(config.provider['tars-endpoint'].models['open-coder'].limit).toEqual({ context: 131_072, output: 16_384 });
-    expect(both.given).toEqual({ contextWindow: 131_072, outputCap: 16_384, autoCompaction: null });
-    const half = endpointLaunchFor('opencode', { proxyBase: PROXY, model: 'open-coder', contextWindow: 131_072 })!;
+    expect(config.provider['tars-endpoint'].models['open-coder'].limit).toEqual({ context: 65_536, output: 16_384 });
+    expect(both.given).toEqual({ contextWindow: 65_536, outputCap: 16_384, autoCompaction: null });
+    const half = endpointLaunchFor('opencode', { proxyBase: PROXY, model: 'open-coder', contextWindow: 65_536 })!;
     expect(JSON.parse(half.env.OPENCODE_CONFIG_CONTENT).provider['tars-endpoint'].models['open-coder'].limit).toBeUndefined();
     expect(half.given).toEqual({ contextWindow: null, outputCap: null, autoCompaction: null });
   });
