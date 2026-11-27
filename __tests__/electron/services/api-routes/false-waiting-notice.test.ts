@@ -7,8 +7,8 @@ import * as path from 'node:path';
  * An orchestrator told "is now waiting" about an agent that had just started.
  *
  * JeanBrasse's report of 2026-09-18 (faux-waiting-2b86): the orchestrator of
- * 1212-Capital delegated a task to 1212-Backend and was told at once, in its
- * own terminal, that 1212-Backend "is now waiting", while it had only begun.
+ * a project delegated a task to its Backend agent and was told at once, in its
+ * own terminal, that the Backend "is now waiting", while it had only begun.
  * What the logs of that evening show, and what each case below replays:
  *
  * - delegate_task tried ACP first (until 2.0.4), through /run-task, which set `running`.

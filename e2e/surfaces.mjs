@@ -471,7 +471,7 @@ export const CHAT_ROOMS = [
     shows: 'Stop there, both of you. Cache the parts, and measure it before you tune it.',
   },
   {
-    name: 'chat-room-limit-reached', route: '/chat', clickText: '1212-capital',
+    name: 'chat-room-limit-reached', route: '/chat', clickText: 'aspen-meadow',
     shows: 'Nobody was stopped: every agent finished its turn and is waiting for you.',
   },
   {

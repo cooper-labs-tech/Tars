@@ -55,7 +55,7 @@ vi.mock('../../src/components/AgentWorld/AgentTerminalDialog', () => ({ default:
 vi.mock('../../src/components/Templates/TemplatesManagerDialog', () => ({ TemplatesManagerDialog: () => null }));
 
 const TARS = '/Users/you/tars';
-const CAPITAL = '/Users/you/1212-Capital';
+const CAPITAL = '/Users/you/Aspen-Meadow';
 const SAKARTVELO = '/Users/you/sakartvelo';
 
 let created = 0;
@@ -118,7 +118,7 @@ describe('groupByProject', () => {
 describe('projectLabels', () => {
   it('calls each project by its folder name when the names are unique', () => {
     const labels = projectLabels([TARS, CAPITAL]);
-    expect([...labels.entries()]).toEqual([[TARS, 'tars'], [CAPITAL, '1212-Capital']]);
+    expect([...labels.entries()]).toEqual([[TARS, 'tars'], [CAPITAL, 'Aspen-Meadow']]);
   });
 
   it('gives two projects that share a folder name their paths, and only those two', () => {
@@ -126,7 +126,7 @@ describe('projectLabels', () => {
     const labels = projectLabels([TARS, CAPITAL, work]);
     expect(labels.get(TARS)).toBe('~/tars');
     expect(labels.get(work)).toBe('~/work/tars');
-    expect(labels.get(CAPITAL)).toBe('1212-Capital');
+    expect(labels.get(CAPITAL)).toBe('Aspen-Meadow');
     expect(new Set(labels.values()).size).toBe(3);
   });
 });
@@ -225,7 +225,7 @@ describe('the Agents page', () => {
     open(seven());
     expect(sections().map(s => s.heading)).toEqual([
       ['tars', '~/tars', '4 agents'],
-      ['1212-Capital', '~/1212-Capital', '2 agents'],
+      ['Aspen-Meadow', '~/Aspen-Meadow', '2 agents'],
       ['sakartvelo', '~/sakartvelo', '1 agent'],
     ]);
   });
@@ -278,7 +278,7 @@ describe('the Agents page', () => {
     expect(pickerRows()).toEqual([
       ['all', 'All projects', '7 agents'],
       [TARS, 'tars', '4 agents'],
-      [CAPITAL, '1212-Capital', '2 agents'],
+      [CAPITAL, 'Aspen-Meadow', '2 agents'],
       [SAKARTVELO, 'sakartvelo', '1 agent'],
     ]);
     expect(picker().props.value).toBe('all');
