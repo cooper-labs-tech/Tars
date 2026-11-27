@@ -234,7 +234,7 @@ The proxy:
 - swaps the token for the endpoint's key;
 - adds `X-Session-Id` (the trace id) and `X-Agent-Id` when the endpoint's "send session headers" is on (off by
   default);
-- adds `X-Install-Id` (that exact name), the install's back-office id in lower case, when the endpoint's "send install id" is on too (off by default,
+- adds `X-Install-Id` (that exact name), the install's back-office id as a lower-case canonical uuid (any other id sends no header, and the log says so once), when the endpoint's "send install id" is on too (off by default,
   the owner's in the window, refused without the session headers), only while sharing is on and the install is
   registered with the back-office, and never after a deletion (`TraceUploader.currentInstallId`); a harness's own is always dropped. So a
   deletion of the whole install can reach the endpoint's own copy of what it served;

@@ -103,7 +103,9 @@ const BACKOFF_S = [2, 4, 8, 30];
 export const DEFAULT_MAX_BODY = 16 * 1024 * 1024;
 
 /**
- * The install's back-office id (trace feature A4), sent as exactly `X-Install-Id`, its value in lower case: set by Tars
+ * The install's back-office id (trace feature A4), sent as exactly `X-Install-Id`. Its value's contract: a lower-case
+ * canonical uuid (8-4-4-4-12 hex), the only value the endpoint reads; any other id sends no header (trace-upload.ts
+ * currentInstallId, CANONICAL_UUID). Set by Tars
  * alone, for an endpoint whose owner turned it on, while the install is registered. A harness's own is always dropped,
  * whatever the endpoint's switches: no harness names an install.
  */

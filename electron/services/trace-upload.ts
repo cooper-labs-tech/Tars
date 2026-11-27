@@ -61,8 +61,14 @@ export interface UploaderDeps {
 
 interface Install { url: string; installId: string; token: string; secret: string; registeredAt: number }
 
-/** What an install id may be to go on a request to an endpoint (a back-office gives a uuid). */
-const PLAIN_INSTALL_ID = /^[A-Za-z0-9._-]{1,128}$/;
+/**
+ * The X-Install-Id value's contract (the orchestrator's of 27/11): a lower-case canonical uuid, 8-4-4-4-12 hex, which
+ * is all the endpoint reads; it ignores any other value. The upload itself takes more (any id the back-office gives),
+ * and both agree only because the back-office issues randomUUID(). A canonical uuid with capitals goes lower-cased; any
+ * other id sends no header, and the log says so once, so a future id format fails where it can be seen rather than
+ * silently stop install-wide deletions from reaching the endpoint's copy.
+ */
+const CANONICAL_UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 export interface UploadStateView {
   configured: boolean;
@@ -130,6 +136,8 @@ export class TraceUploader {
   private clearedUnsaid = false;
   /** The ids of the installs this run deleted or forgot: never told to an endpoint again (currentInstallId). */
   private readonly retired = new Set<string>();
+  /** The install ids already said not to be canonical uuids, so the log says it once per id, not at every request. */
+  private readonly notUuidSaid = new Set<string>();
 
   constructor(private readonly deps: UploaderDeps) {
     this.now = deps.now ?? Date.now;
@@ -206,14 +214,22 @@ export class TraceUploader {
    * unless sharing is on (the upload notice the user agreed to names it; a deletion and a 401 both take the consent
    * back), and this install is registered with the back-office the settings name now, with no deletion owed, and was
    * registered after the latest deletion's moment (so an install file that could not be removed after a deletion is
-   * never told again, in a later run either), and not deleted or forgotten in this run. Only a plain token goes on a
-   * request: a back-office answer with a line break or a space in it is never a header. Given in lower case.
+   * never told again, in a later run either), and not deleted or forgotten in this run. The value's contract: a
+   * lower-case canonical uuid (CANONICAL_UUID). Any other id gives null, and the log says so once.
    */
   currentInstallId(): string | null {
     const s = this.deps.settings();
     if (!s.url || !s.consentAt || s.deletionOwed) return null;
     const install = this.readInstall();
-    if (!install || install.url !== s.url || typeof install.installId !== 'string' || !PLAIN_INSTALL_ID.test(install.installId)) return null;
+    if (!install || install.url !== s.url) return null;
+    if (typeof install.installId !== 'string' || !CANONICAL_UUID.test(install.installId)) {
+      const said = String(install.installId);
+      if (!this.notUuidSaid.has(said)) {
+        this.notUuidSaid.add(said);
+        console.warn('[traces] the install id is not a canonical uuid: no endpoint is told it (X-Install-Id), so an install-wide deletion cannot reach an endpoint\'s own copy');
+      }
+      return null;
+    }
     if (this.retired.has(install.installId)) return null;
     if (s.since !== undefined && !(typeof install.registeredAt === 'number' && install.registeredAt > s.since)) return null;
     // In lower case, as the header's value is pinned: one install, one spelling at the endpoint.

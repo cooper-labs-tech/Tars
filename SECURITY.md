@@ -1198,7 +1198,11 @@ install at the back-office can be passed on to that copy. What leaves, and what 
   new id;
 - a harness's own `X-Install-Id` is always dropped, whatever the switches, and no extra header may set it: no
   harness or agent names an install;
-- an id that is not a plain token (letters, digits, `.`, `_`, `-`, at most 128) is never sent.
+- the value's contract: **a lower-case canonical uuid** (8-4-4-4-12 hex), the only value the endpoint reads. A
+  canonical uuid with capitals goes lower-cased. Any other id, though the upload itself takes it (any id the
+  back-office gives; both agree only because the back-office issues `randomUUID()`), sends no header, and the log
+  says so once in a line that names no id: a new id format fails where it is seen, rather than silently stop
+  install-wide deletions from reaching the endpoint's copy.
 What it does not do: the endpoint's own purge is the endpoint's. Tars tells it the id; it cannot make it delete.
 One case is left open: an install the back-office forgot (a 401, not a deletion of yours) whose file could be neither
 removed nor emptied, with sharing given again and Tars restarted before a pass. Its id goes until that pass, whose 401
