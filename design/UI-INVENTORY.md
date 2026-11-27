@@ -4,7 +4,7 @@ Every surface the app can render today. A frame must exist for each line here;
 `npm run e2e:guard` checks the routed ones are covered by the visual suite too.
 
 The frames live in two Pencil documents, and the second is a fork of the first
-rather than a companion to it. `design/tars-redesign.pen` holds 363 root frames, 83 of them drawn and not built yet: the 72 listed at the end, and the 11 of the Usage activity grid in their own section. Every frame but the app icon, the launch pictures and the library sheet uses the tokens, so each has its light version.
+rather than a companion to it. `design/tars-redesign.pen` holds 382 root frames, 98 of them drawn and not built yet: the 87 listed at the end, and the 11 of the Usage activity grid in their own section. Every frame but the app icon, the launch pictures and the library sheet uses the tokens, so each has its light version.
 `design/chat-design.pen` holds 72 of those, the other two hundred and eighty-seven being newer than the
 fork; the two panel history frames this document dropped with the history view;
 and the eleven frames of the Chat
@@ -310,3 +310,14 @@ For 2.0.6 (the terminals, the agent that cannot start and the MEMORY.md notice a
 - What the window shows of a note, the waiting digest, both zones and the owner's words: nothing new, said in Messages
   (2.0.6) · a note, the waiting digest, both zones · what the window shows (and its light copy). PR 561 gives the window
   no mark of a note, which never goes through a Chat room.
+
+For the load window (C3 of the trace work, 27/11; new interface only, the engine is the Backend's, drawn first):
+- Where it shows: a 32 px row above More in the sidebar, from any page, while a window waits for the owner or runs;
+  it opens the window as a card of More, `Load window`, which More lists too: Shell · Load window · a window waits,
+  in the sidebar (and its light copy).
+- The approval, the only place a window is approved (a click of the owner; no agent, token or message can): Shell ·
+  Load window card · approval, · approval, refused lines, · approval, a private repo refused, · nothing to approve
+  (each with its light copy).
+- The window at work and after it: Shell · Load window card · running, · ended (each with its light copy).
+- Shell · Load window · notes: where it shows and why, every state, and the four stop reasons (window end, the
+  switch, the disk floor, an error), each in its sentence.
