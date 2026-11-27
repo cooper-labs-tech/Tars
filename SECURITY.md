@@ -1200,6 +1200,9 @@ install at the back-office can be passed on to that copy. What leaves, and what 
   harness or agent names an install;
 - an id that is not a plain token (letters, digits, `.`, `_`, `-`, at most 128) is never sent.
 What it does not do: the endpoint's own purge is the endpoint's. Tars tells it the id; it cannot make it delete.
+One case is left open: an install the back-office forgot (a 401, not a deletion of yours) whose file could be neither
+removed nor emptied, with sharing given again and Tars restarted before a pass. Its id goes until that pass, whose 401
+takes the consent back again. The deletion's moment does not date it, since no deletion was asked for.
 
 **Extra headers.** An endpoint may carry up to 16 fixed headers, sent with every request to it and with its probes,
 to the approved address only. They are not a secret: they are kept in `app-settings.json` with the endpoint, and every

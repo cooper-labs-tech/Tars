@@ -902,6 +902,9 @@ describe('the install id an endpoint may be told (trace feature A4)', () => {
       expect(JSON.parse(fs.readFileSync(installFile(), 'utf8')).installId, 'the file is still there').toBe('inst-1');
       expect(u.currentInstallId()).toBeNull();
       expect(uploader().currentInstallId(), 'in the next run').toBeNull();
+      // Sharing given again before a pass registers a new install, in a later run: the file still names the deleted one.
+      settings.consentAt = '2026-11-21T00:00:00Z';
+      expect(uploader().currentInstallId(), 'sharing given again, before a pass, in the next run').toBeNull();
     } finally {
       fs.chmodSync(path.dirname(installFile()), 0o700);
       fs.chmodSync(installFile(), 0o600);
@@ -929,6 +932,9 @@ describe('the install id an endpoint may be told (trace feature A4)', () => {
       expect(JSON.parse(fs.readFileSync(installFile(), 'utf8')).installId, 'the file is still there').toBe('inst-1');
       expect(u.currentInstallId()).toBeNull();
       expect(uploader().currentInstallId(), 'in the next run').toBeNull();
+      // Sharing given again before a pass registers a new install: the file still names the forgotten one.
+      settings.consentAt = '2026-11-21T00:00:00Z';
+      expect(u.currentInstallId(), 'sharing given again, before a pass').toBeNull();
     } finally {
       fs.chmodSync(path.dirname(installFile()), 0o700);
       fs.chmodSync(installFile(), 0o600);
