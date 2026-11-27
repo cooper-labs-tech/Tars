@@ -4,6 +4,7 @@ import * as os from 'node:os';
 import * as path from 'node:path';
 import { execFileSync } from 'node:child_process';
 import { snapshotWorkspace, readBlob } from '../../electron/services/workspace-snapshot';
+import { hasPosixModes } from '../setup/platform-limits';
 
 /**
  * The workspace snapshot a traced turn takes at its start and its end (trace feature B1): the HEAD, a hash of the
@@ -25,6 +26,9 @@ import { snapshotWorkspace, readBlob } from '../../electron/services/workspace-s
  * 11. A file git's autocrlf writes with CRLF over an LF blob, touched without a change, counts as changed.
  * 12. The bytes of a dirty file are not kept for the diff, or a file over the size limit is read into memory.
  * 13. readBlob writes, or throws on a blob that does not exist.
+ * Added before their code after the Audit's L3 at 08e5b439d (27/11):
+ * 14. A dirty file that cannot be read (another process holds it, as Windows lets one do) reads as deleted: its lines
+ *     count as removed and the tree hash moves. It is there and unknown: kept, and the tree hash is null.
  */
 
 let repo: string;
@@ -188,6 +192,21 @@ describe('the workspace snapshot', () => {
     expect(s.contents.get(s.files!.get('a.txt')!)?.toString()).toBe('one\ntwo\nkept\n');
     expect(s.files!.get('big.bin')).toMatch(/^large:/);
     expect(s.contents.size).toBe(1);
+  });
+
+  it.skipIf(!hasPosixModes())('14: a dirty file that cannot be read is there and unknown, never deleted', async () => {
+    // Taken unreadable by its mode here, as a lock taken by another process makes it on Windows.
+    write('a.txt', 'one\ntwo\nchanged\n');
+    fs.chmodSync(path.join(repo, 'a.txt'), 0o000);
+    try {
+      const s = await snapshotWorkspace(repo);
+      expect(s.head).toBe(git('rev-parse', 'HEAD'));
+      expect(s.files!.has('a.txt'), 'the file is still there').toBe(true);
+      expect(s.files!.get('a.txt')).toMatch(/^unreadable:/);
+      expect(s.tree, 'a tree hash that cannot hold the file is unknown').toBeNull();
+    } finally {
+      fs.chmodSync(path.join(repo, 'a.txt'), 0o644);
+    }
   });
 
   it('13: readBlob reads a committed blob without writing, and gives null for one that is not there', async () => {

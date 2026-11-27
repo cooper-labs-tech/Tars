@@ -3,7 +3,8 @@ import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
 import { execFileSync } from 'node:child_process';
-import { TraceStore } from '../../electron/services/trace-store';
+import { TraceStore, type TraceOutcome } from '../../electron/services/trace-store';
+import { safeGit } from '../../electron/utils/safe-git';
 import { TraceUploader } from '../../electron/services/trace-upload';
 import { sessionDocument } from '../../electron/services/trace-export';
 import { turnStats, survival, WorkspaceRecorder, type PathHistory } from '../../electron/services/turn-workspace';
@@ -37,6 +38,17 @@ import { turnStats, survival, WorkspaceRecorder, type PathHistory } from '../../
  * 14. A side request (no tools, or a system prompt other than the session's) is taken at its arrival for a turn's
  *     start, and snapshots the checkout where ingest() opens no turn; or a tool's result does; or the session's first
  *     request, or a new instruction, does not.
+ * Added before their code after the Audit's read at 08e5b439d (27/11):
+ * 15. (M1) Sessions that can never be measured on the default branch (on it already, no branch) stay first in line,
+ *     and once ten of them wait, no other session is ever measured; one still open, or unknown, is asked again at
+ *     every sweep without end.
+ * 16. (L1) A file a later turn renames without a change reads as the first turn reverted and the renaming turn its
+ *     author.
+ * 17. (L1) The same file renamed on the default branch after the merge reads as reverted there.
+ * 18. (L2) A branch merged by a squash or a rebase, its local branch kept, stays 'open' for good, though its pull
+ *     request is merged.
+ * 19. (L3) A session that touched many files with long paths asks git for all of them in one command line, which
+ *     Windows refuses past 32,767 characters: the measure is lost.
  */
 
 const H = (versions: Array<string | null | undefined>, p = 'f.txt'): PathHistory => ({ path: p, versions });
@@ -81,6 +93,16 @@ describe('turn counts and survival', () => {
     expect(turnStats(binary, 0)).toEqual({ files: 2, added: 1, removed: 0 });
     expect(survival(binary, 2)[0]).toEqual({ changed: 1, survived: 1, reverted: false });
     expect(turnStats(binary, 1)).toEqual({ files: 0, added: 0, removed: 0 });
+  });
+
+  it('16: lines followed through a rename at a boundary; the renaming turn changed none', () => {
+    const h = [H([null, 'l1\nl2\n', null, null], 'a.txt'), H([null, null, 'l1\nl2\n', 'l1\nl2\nl3\n'], 'b.txt')];
+    const renames = [{ index: 2, from: 'a.txt', to: 'b.txt' }];
+    expect(turnStats(h, 1, renames)).toEqual({ files: 1, added: 0, removed: 0 });
+    const s = survival(h, 3, undefined, renames);
+    expect(s[0]).toEqual({ changed: 2, survived: 2, reverted: false });
+    expect(s[1]).toEqual({ changed: 0, survived: null, reverted: false });
+    expect(s[2]).toEqual({ changed: 1, survived: 1, reverted: false });
   });
 
   it('7: at a merge, the default branch\'s version is the final one', () => {
@@ -241,6 +263,111 @@ describe('the recorder', () => {
     // Asked again with nothing new: the sequence stays.
     expect(await rec.finalize('tr-1', repo)).toBe('done');
     expect(store.seqOf('tr-1')).toBe(moved);
+  });
+
+  it('15: sessions never measurable leave the line, and one merged behind ten of them is measured at the next sweep', async () => {
+    const rec = new WorkspaceRecorder({ store });
+    const main = git('rev-parse', 'main');
+    // Eleven ended sessions on main, all older than the one on feat/x.
+    for (let i = 0; i < 11; i++) {
+      const id = `tr-main-${i}`;
+      store.openTrace({ traceId: id, projectPath: repo, agentId: 'agent-1', harness: 'qwen-code', endpointId: 'ep-000001', model: 'm', startedAt: T - 100_000 + i });
+      store.setTurnWorkspace(id, T - 100_000 + i, {});
+      store.setSurvival(id, [{ startedAt: T - 100_000 + i, changedLines: 0, survivedLines: null, reverted: false }], 'session_end', T);
+      store.endTrace(id, T - 50_000 + i, { branch: 'main', head: main });
+    }
+    await threeTurns(rec);
+    git('commit', '-q', '-am', 'c2');
+    git('checkout', '-q', 'main');
+    git('merge', '-q', '--no-ff', '-m', 'merge', 'feat/x');
+    const dirOf = () => repo;
+    await rec.finalizeDue(dirOf, 10, T + 10_000);
+    await rec.finalizeDue(dirOf, 10, T + 3_610_000);
+    expect(store.session('tr-1')!.turns[0].workspace?.survivalBasis).toBe('merged');
+    // Nothing left in line: the sessions on main are done with, the merged one too.
+    expect(store.workspaceToFinalize(10, T + 7_210_000)).toEqual([]);
+  });
+
+  it('15: a branch still open is asked again later, not at every sweep, and no more past its age', async () => {
+    const rec = new WorkspaceRecorder({ store });
+    await threeTurns(rec);
+    expect((await rec.finalizeDue(() => repo, 10, T + 10_000)).map(r => r.result)).toEqual(['open']);
+    expect(store.workspaceToFinalize(10, T + 20_000), 'asked again at once').toEqual([]);
+    expect(store.workspaceToFinalize(10, T + 2 * 3_600_000).map(s => s.traceId), 'asked again later').toEqual(['tr-1']);
+    expect(store.workspaceToFinalize(10, T + 15 * 86_400_000), 'past its age').toEqual([]);
+  });
+
+  it('16: a file a later turn renames without a change keeps its lines on a real repository', async () => {
+    const rec = new WorkspaceRecorder({ store });
+    await rec.turnStarted('tr-1', T + 1000, repo);
+    turnAt('tr-1', T + 1000, 'turn one');
+    write('a.txt', 'l1\nl2\nl3\n');
+    git('add', '-A');
+    git('commit', '-q', '-m', 'c1');
+    await rec.turnStarted('tr-1', T + 2000, repo);
+    turnAt('tr-1', T + 2000, 'turn two');
+    git('mv', 'a.txt', 'b.txt');
+    git('commit', '-q', '-m', 'rename');
+    await rec.sessionEnded('tr-1', T + 3000, repo);
+    await rec.idle('tr-1');
+    const turns = store.session('tr-1')!.turns;
+    expect(turns.map(t => [t.workspace?.files, t.workspace?.linesAdded, t.workspace?.linesRemoved])).toEqual([[1, 3, 0], [1, 0, 0]]);
+    expect(turns.map(t => [t.workspace?.changedLines, t.workspace?.survivedLines, t.workspace?.reverted])).toEqual([[3, 3, false], [0, null, false]]);
+  });
+
+  it('17: a file renamed on the default branch after the merge keeps its lines there', async () => {
+    const rec = new WorkspaceRecorder({ store });
+    await threeTurns(rec);
+    git('commit', '-q', '-am', 'c2');
+    git('checkout', '-q', 'main');
+    git('merge', '-q', '--no-ff', '-m', 'merge', 'feat/x');
+    git('mv', 'a.txt', 'renamed-on-main.txt');
+    git('commit', '-q', '-m', 'rename on main');
+    expect(await rec.finalize('tr-1', repo)).toBe('merged');
+    expect(store.session('tr-1')!.turns[0].workspace).toMatchObject({ changedLines: 5, survivedLines: 4, reverted: false, survivalBasis: 'merged' });
+  });
+
+  it('18: a squash merge, its branch kept, is merged when the pull request says so, and measured by content', async () => {
+    const rec = new WorkspaceRecorder({ store });
+    const { c1 } = await threeTurns(rec);
+    git('commit', '-q', '-am', 'c2');
+    git('checkout', '-q', 'main');
+    git('merge', '-q', '--squash', 'feat/x');
+    git('commit', '-q', '-m', 'squashed');
+    expect(await rec.finalize('tr-1', repo), 'no pull request known: still open').toBe('open');
+    // What #675's PR watch writes into the outcome once the pull request is merged (outcome.pr).
+    store.endTrace('tr-1', T + 4000, { branch: 'feat/x', head: c1, pr: { number: 7, state: 'merged', at: T + 5000 } } as TraceOutcome);
+    expect(await rec.finalize('tr-1', repo)).toBe('merged');
+    expect(store.session('tr-1')!.turns[0].workspace).toMatchObject({ changedLines: 5, survivedLines: 4, survivalBasis: 'merged' });
+  });
+
+  it('19: the paths go to git in command lines Windows takes (32,767 characters at most)', async () => {
+    const calls: string[][] = [];
+    const rec = new WorkspaceRecorder({
+      store,
+      git: (dir, args, opts) => {
+        calls.push(args);
+        if (args.join(' ').length > 32_767) return Promise.reject(Object.assign(new Error('spawn ENAMETOOLONG'), { code: 'ENAMETOOLONG' }));
+        return safeGit(dir, args, opts);
+      },
+    });
+    await rec.turnStarted('tr-1', T + 1000, repo);
+    turnAt('tr-1', T + 1000, 'many files');
+    for (let i = 0; i < 400; i++) {
+      fs.mkdirSync(path.join(repo, 'a-folder-with-a-long-name-'.padEnd(60, 'x')), { recursive: true });
+      write(path.join('a-folder-with-a-long-name-'.padEnd(60, 'x'), `a-file-with-a-long-name-${String(i).padStart(4, '0')}.txt`), `line ${i}\n`);
+    }
+    git('add', '-A');
+    git('commit', '-q', '-m', 'many');
+    await rec.sessionEnded('tr-1', T + 2000, repo);
+    await rec.idle('tr-1');
+    store.endTrace('tr-1', T + 2000, { branch: 'feat/x', head: git('rev-parse', 'HEAD') });
+    git('checkout', '-q', 'main');
+    git('merge', '-q', '--no-ff', '-m', 'merge', 'feat/x');
+    expect(await rec.finalize('tr-1', repo)).toBe('merged');
+    expect(store.session('tr-1')!.turns[0].workspace).toMatchObject({ changedLines: 400, survivedLines: 400, survivalBasis: 'merged' });
+    expect(calls.some(a => a[0] === 'ls-tree'), 'the paths were asked of git').toBe(true);
+    expect(Math.max(...calls.map(a => a.join(' ').length))).toBeLessThanOrEqual(32_767);
   });
 
   it('14: a request opens a turn at its arrival by ingest()\'s own rule', () => {
