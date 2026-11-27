@@ -10,6 +10,11 @@ vi.mock('react', async (importOriginal) => ({
   ...(await importOriginal<typeof import('react')>()),
   ...(await import('./hook-runtime')).hooks,
 }));
+// GeneralSection reads the theme from the zustand store since 2.1.0 (its Appearance row, #653). zustand, from
+// node_modules, calls the real React, which the hook runtime does not stand in for: the store is, at its default.
+vi.mock('../../src/store', () => ({
+  useStore: <T,>(select: (s: { darkMode: boolean; setDarkMode: (dark: boolean) => void }) => T) => select({ darkMode: true, setDarkMode: () => {} }),
+}));
 
 /**
  * Settings > Preferences, "Send error reports": step 1 of the Sentry plan JeanBrasse
