@@ -259,7 +259,11 @@ test('an agent is created, started from a window, over the API and from a bot, r
     const mcpConfig = path.join(home, '.claude', 'mcp.json');
     const expectedArgv = [
       ...(fs.existsSync(mcpConfig) ? ['--mcp-config', mcpConfig] : []),
-      '--permission-mode', 'default', '--add-dir', dataDir, '--', HOSTILE_PROMPT,
+      '--permission-mode', 'default',
+      // A worker takes no message from another session and has no tool to reach one (2.0.7): the setting whole, as
+      // one argument, and the two tools away.
+      '--settings', '{"crossSessionInbound":"refuse"}', '--disallowed-tools', 'SendMessage', 'ListAgents',
+      '--add-dir', dataDir, '--', HOSTILE_PROMPT,
     ];
     expect(fromWindow.argv, 'the argv the CLI received').toEqual(expectedArgv);
     expect(fromWindow.argv.at(-1), 'the prompt, byte for byte').toBe(HOSTILE_PROMPT);
