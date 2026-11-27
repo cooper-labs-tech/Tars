@@ -224,6 +224,15 @@ export function readCodexFlags(binaryPath: string, timeoutMs = 10_000): Promise<
 }
 
 /**
+ * The `-c` value that runs codex on the databases of `dir` (services/agent-tmp.ts, agentCodexDbDir): the path as a
+ * TOML basic string, which a JSON string is, so a Windows path's backslashes reach codex whole. Codex 0.163 takes
+ * the key; a key it does not know, it ignores (measured).
+ */
+export function codexSqliteHomeArg(dir: string): string {
+  return `sqlite_home=${JSON.stringify(dir)}`;
+}
+
+/**
  * Whether the codex at `binaryPath` has a flag, from the answer readCodexFlags kept for it (only auto needs one): never
  * codex run on the main thread. A launch reads the flags before it builds its line (CodexProvider.prepareLaunch); a
  * line built without that answer, or for a codex that could not answer, has the stable flags only, and the flags are

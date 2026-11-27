@@ -166,7 +166,7 @@ describe('a session the API starts', () => {
     const command = await dispatchedCommand('named');
 
     expect(command).not.toContain('--append-system-prompt-file');
-    expect(command).not.toContain('--disallowed-tools');
+    expect(command).not.toContain(TOOL_BLOCK);
     expect(command).toContain('worker of project');
     expect(command).toContain('an orchestrator reads your final message');
   });

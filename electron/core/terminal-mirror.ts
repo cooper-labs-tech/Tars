@@ -245,6 +245,9 @@ export function terminalSnapshot(pty: IPty | undefined): string | undefined {
   return screen;
 }
 
+/** The last rows of claude's held-message dialog: its second option, or its footer (dialogOnScreen). */
+const HELD_PEER_MESSAGE = /^(?:❯\s*)?Deliver\s+this\s+message\s+to\b|\bto\s+always\s+deliver\b/;
+
 /**
  * True when the screen of `pty` ends on a dialog's footer: "Esc to cancel" in
  * one of its last three non-blank rows. Both dialogs measured with claude
@@ -258,6 +261,13 @@ export function terminalSnapshot(pty: IPty | undefined): string | undefined {
  * Only ever a reason to hold a message (the PermissionRequest hook came 3 to
  * 648 ms after the dialog was drawn, in this PR's in-app proof), never a
  * reason to type: a dialog the hook reported stays one whatever this says.
+ *
+ * One dialog ends on no such footer: the one in which claude 2.1.332, in
+ * bypass, holds a message another session sent it, which no hook reports. Its
+ * last rows are its options and a footer, "❯ Deny ... / Deliver this message
+ * to Claude / ctrl+x a to always deliver ›", and an Enter typed there denies
+ * or delivers that message. A worker refuses such messages and never shows it;
+ * an orchestrator keeps the channel, and can.
  */
 export function dialogOnScreen(pty: IPty | undefined): boolean {
   const mirror = pty && mirrors.get(pty);
@@ -268,7 +278,7 @@ export function dialogOnScreen(pty: IPty | undefined): boolean {
     const text = buffer.getLine(y)?.translateToString(true).trim() ?? '';
     if (text) rows.push(text);
   }
-  return rows.some(row => /\bEsc\s+to\s+cancel\b/.test(row)) || codexDialogOnScreen(pty) !== undefined;
+  return rows.some(row => /\bEsc\s+to\s+cancel\b/.test(row) || HELD_PEER_MESSAGE.test(row)) || codexDialogOnScreen(pty) !== undefined;
 }
 
 /**

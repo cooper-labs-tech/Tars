@@ -17,7 +17,8 @@ import type {
 } from './cli-provider';
 import { readAppSettingsFromDisk, shellQuote } from './cli-provider';
 import { codexRoleArgs } from '../services/mcp-roles';
-import { CODEX_SESSION_ID, codexAccepts, codexEffortArgs, codexHome, codexPermissionArgs, readCodexFlags, readCodexModels } from './codex-cli';
+import { CODEX_SESSION_ID, codexAccepts, codexEffortArgs, codexHome, codexPermissionArgs, codexSqliteHomeArg, readCodexFlags, readCodexModels } from './codex-cli';
+import { agentCodexDbDir } from '../services/agent-tmp';
 
 /**
  * The models of a ChatGPT account as codex-cli 0.163.0 listed them on 2026-10-18, in its order: what Tars offers
@@ -109,6 +110,11 @@ export class CodexProvider implements CLIProvider {
     // `-c mcp_servers.<name>.enabled=false`, this run only (measured on 0.163, `codex mcp list` says disabled).
     const role = codexRoleArgs(params.orchestratorMode === true);
     for (let i = 0; i < role.length; i += 2) command += ` ${role[i]} ${shellQuote(role[i + 1])}`;
+
+    // A worker's codex on databases of its own: out of reach of `codex queue` from any other session, which writes
+    // into the queue every codex of a CODEX_HOME reads, and off the shared daemon (services/agent-tmp.ts,
+    // agentCodexDbDir). An orchestrator keeps the shared ones.
+    if (params.orchestratorMode !== true) command += ` -c ${shellQuote(codexSqliteHomeArg(agentCodexDbDir(params.agentId)))}`;
 
     // Secondary project, never ~/.tars-private (utils/handed-folder.ts)
     const secondary = handedSecondaryFolder(params.secondaryProjectPath);

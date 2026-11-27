@@ -128,7 +128,7 @@ describe('the role, on the launches the bots make', () => {
     expect(lead).toContain(INSTRUCTIONS());
     expect(lead).toContain(TOOL_BLOCK);
     expect(named).not.toContain('--append-system-prompt-file');
-    expect(named).not.toContain('--disallowed-tools');
+    expect(named).not.toContain(TOOL_BLOCK);
   });
 
   // A chat's runner is a worker with the orchestrator's powers

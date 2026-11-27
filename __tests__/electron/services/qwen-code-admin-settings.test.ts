@@ -110,8 +110,11 @@ describe('an agent of Qwen Code, and the administrator\'s system settings', () =
 
   it('A7. without an administrator\'s file, the agent\'s file is Tars\'s alone', () => {
     const s = read(writeQwenAgentSettings('a1', { effort: 'low', systemFile: admin }, dataDir));
-    expect(Object.keys(s).sort()).toEqual(['general', 'hooks', 'mcpServers', 'model']);
+    // `agents`: a worker's cross-session messaging off, since 2026-11-27 (worker-peer-channels.test.ts, 11).
+    expect(Object.keys(s).sort()).toEqual(['agents', 'general', 'hooks', 'mcpServers', 'model']);
     expect(s.general).toEqual({ enableAutoUpdate: false });
+    const orchestrator = read(writeQwenAgentSettings('o1', { effort: 'low', systemFile: admin, orchestratorMode: true }, dataDir));
+    expect(Object.keys(orchestrator).sort()).toEqual(['general', 'hooks', 'mcpServers', 'model']);
     expect(Object.keys(s.mcpServers)).toEqual(['claude-mgr-orchestrator']);
   });
 

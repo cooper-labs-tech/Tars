@@ -9,7 +9,7 @@ import type {
   ProviderModel,
   HookConfig,
 } from './cli-provider';
-import { servedPathMatches, readAppSettingsFromDisk, orchestratorToolFlags, promptOperand, effortFlag, resumeFlags, shellQuote, keyProviderEnv } from './cli-provider';
+import { servedPathMatches, readAppSettingsFromDisk, roleToolFlags, promptOperand, effortFlag, resumeFlags, shellQuote, keyProviderEnv } from './cli-provider';
 import { DATA_DIR } from '../constants';
 import { addMcpServerToJson, removeMcpServerFromJson } from '../utils/mcp-json';
 
@@ -59,7 +59,7 @@ export class ZhipuProvider implements CLIProvider {
     if (params.verbose) command += ' --verbose';
     if (params.permissionMode === 'auto') command += ' --permission-mode auto';
     else if (params.permissionMode === 'bypass') command += ' --permission-mode bypassPermissions';
-    command += orchestratorToolFlags(params.orchestratorMode);
+    command += roleToolFlags(params.orchestratorMode);
     command += effortFlag(params.effort);
     command += ` --add-dir ${shellQuote(DATA_DIR)}`;
     let finalPrompt = params.prompt?.trim() ? params.prompt : '';

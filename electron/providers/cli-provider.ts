@@ -18,6 +18,8 @@ export function readAppSettingsFromDisk(): Partial<AppSettings> {
 export interface PtyLaunch {
   model?: string;
   effort?: string;
+  /** The agent's role, for a CLI whose settings of Tars's say it (Qwen Code: a worker's cross-session messaging off). */
+  orchestratorMode?: boolean;
 }
 
 export interface InteractiveCommandParams {
@@ -217,6 +219,35 @@ export function orchestratorToolFlags(orchestratorMode: boolean | undefined): st
   // tool` at every orchestrator start (measured 2026-09-23), and Edit covers
   // what it did.
   return ' --disallowed-tools "Edit" "Write" "NotebookEdit" "Task"';
+}
+
+/**
+ * What a worker's claude starts without: the door other sessions of the
+ * machine have into it, and the tools that reach them (the owner's decision of
+ * 2026-11-26; SECURITY.md, "What other sessions can send an agent").
+ *
+ * Claude Code (2.1.224 and later) gives each session an inbox socket any
+ * process of the user's can post to, and the tools ListAgents and
+ * SendMessage to list and reach every other session. Between two sessions in
+ * bypass a post is delivered with no review (measured on 2.1.332). A worker
+ * refuses every post (`crossSessionInbound` "refuse": no dialog, the sender
+ * told it was declined), its own MCP servers' posts included, and loses the
+ * two tools. The setting rides on the command line, a settings source of
+ * Tars's for this launch alone, never a file of the user's; inline flag
+ * settings outrank the user's and the project's own. An orchestrator gets
+ * nothing of it: what its CLI and the user's settings give it stays.
+ *
+ * Measured on 2.1.332 and 2.1.280: the setting is taken without a word, and
+ * the tools named exist in both, so no warning is printed at start.
+ */
+export function workerPeerFlags(orchestratorMode: boolean | undefined): string {
+  if (orchestratorMode) return '';
+  return ` --settings '${JSON.stringify({ crossSessionInbound: 'refuse' })}' --disallowed-tools "SendMessage" "ListAgents"`;
+}
+
+/** The flags of an agent's role on the claude binary: an orchestrator's restriction, or a worker's. */
+export function roleToolFlags(orchestratorMode: boolean | undefined): string {
+  return orchestratorToolFlags(orchestratorMode) + workerPeerFlags(orchestratorMode);
 }
 
 /**

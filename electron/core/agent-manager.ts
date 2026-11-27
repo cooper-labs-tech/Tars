@@ -1337,7 +1337,7 @@ async function spawnShell(agent: AgentStatus): Promise<{ ptyProcess: pty.IPty; c
     agent.projectPath,
     agent.skills,
     savedSettings as unknown as AppSettings,
-    { model: agent.model, effort: agent.effort },
+    { model: agent.model, effort: agent.effort, orchestratorMode: hasOrchestratorPowers(agent) },
   );
 
   const ptyProcess = spawnAgentPty({

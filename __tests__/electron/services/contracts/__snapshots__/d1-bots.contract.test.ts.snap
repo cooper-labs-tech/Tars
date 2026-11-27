@@ -56,9 +56,9 @@ exports[`Files, launches and replies that fail, recorded before D1 > Slack: a re
   "typed": [
     {
       "terminal": 0,
-      "text": "cd '<HOME>/projects/orion' && '/opt/tars-contract/bin/claude' --model 'claude-opus-5-5' --dangerously-skip-permissions --effort medium --add-dir '<HOME>/.tars' -- 'Message from Slack: 
+      "text": "cd '<HOME>/projects/orion' && '/opt/tars-contract/bin/claude' --model 'claude-opus-5-5' --dangerously-skip-permissions --settings '{"crossSessionInbound":"refuse"}' --disallowed-tools "SendMessage" "ListAgents" --effort medium --add-dir '<HOME>/.tars' -- 'Message from Slack: 
 Measure the Usage page'
-cd '<HOME>/projects/orion' && '/opt/tars-contract/bin/claude' --model 'claude-opus-5-5' --dangerously-skip-permissions --effort medium --add-dir '<HOME>/.tars' -- 'Message from Slack: 
+cd '<HOME>/projects/orion' && '/opt/tars-contract/bin/claude' --model 'claude-opus-5-5' --dangerously-skip-permissions --settings '{"crossSessionInbound":"refuse"}' --disallowed-tools "SendMessage" "ListAgents" --effort medium --add-dir '<HOME>/.tars' -- 'Message from Slack: 
 Measure the Usage page'
 ",
     },
@@ -133,7 +133,7 @@ exports[`Files, launches and replies that fail, recorded before D1 > Slack: a te
   "typed": [
     {
       "terminal": 0,
-      "text": "cd '<HOME>/projects/orion' && '/opt/tars-contract/bin/claude' --model 'claude-opus-5-5' --dangerously-skip-permissions --effort medium --add-dir '<HOME>/.tars' -- 'Message from Slack: 
+      "text": "cd '<HOME>/projects/orion' && '/opt/tars-contract/bin/claude' --model 'claude-opus-5-5' --dangerously-skip-permissions --settings '{"crossSessionInbound":"refuse"}' --disallowed-tools "SendMessage" "ListAgents" --effort medium --add-dir '<HOME>/.tars' -- 'Message from Slack: 
 Measure the Usage page'
 ",
     },
@@ -447,7 +447,7 @@ exports[`Slack, as recorded before D1 > start: a cold start types the launch com
   "typed": [
     {
       "terminal": 0,
-      "text": "cd '<HOME>/projects/orion' && '/opt/tars-contract/bin/claude' --model 'claude-opus-5-5' --dangerously-skip-permissions --effort medium --add-dir '<HOME>/.tars' -- 'Message from Slack: 
+      "text": "cd '<HOME>/projects/orion' && '/opt/tars-contract/bin/claude' --model 'claude-opus-5-5' --dangerously-skip-permissions --settings '{"crossSessionInbound":"refuse"}' --disallowed-tools "SendMessage" "ListAgents" --effort medium --add-dir '<HOME>/.tars' -- 'Message from Slack: 
 Measure the Usage page'
 ",
     },
@@ -1070,7 +1070,7 @@ exports[`What sets the two bots apart, recorded before D1 > Slack: a worker cold
   "typed": [
     {
       "terminal": 0,
-      "text": "cd '<HOME>/projects/o'\\''rion-wt' && '/opt/tars-contract/bin/claude' --model 'claude-opus-5-5' --permission-mode auto --effort medium --add-dir '<HOME>/.tars' -- 'Message from Slack: 
+      "text": "cd '<HOME>/projects/o'\\''rion-wt' && '/opt/tars-contract/bin/claude' --model 'claude-opus-5-5' --permission-mode auto --settings '{"crossSessionInbound":"refuse"}' --disallowed-tools "SendMessage" "ListAgents" --effort medium --add-dir '<HOME>/.tars' -- 'Message from Slack: 
 Measure the Usage page'
 ",
     },

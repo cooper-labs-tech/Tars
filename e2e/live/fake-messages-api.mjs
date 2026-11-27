@@ -12,8 +12,9 @@
 // knows a turn reached the model (`full`: the whole last user turn, 8000
 // characters at most, for messages Claude Code joins into one turn), with the effort Claude Code asked for
 // (`output_config.effort`) and the credential it presented, by its role
-// (`auth`, against FAKE_KEY when a spec sets one). Adapted from the Frontend's
-// #132 proof.
+// (`auth`, against FAKE_KEY when a spec sets one), and the names of the tools the
+// request offered the model (`tools`) and of those it only listed for the model
+// to load (`deferred`). Adapted from the Frontend's #132 proof.
 import http from 'node:http';
 import fs from 'node:fs';
 
@@ -30,6 +31,18 @@ const authOf = headers => ({
   xApiKey: roleOf(headers['x-api-key']),
 });
 const sse = (res, type, data) => res.write(`event: ${type}\ndata: ${JSON.stringify({ type, ...data })}\n\n`);
+// The tools Claude Code lists for the model to load with ToolSearch rather than offering them (2.1.332:
+// "...load tool schemas before calling them:" in a system reminder, then the names, one per line in the TUI and on
+// one line in print mode).
+const DEFERRED = 'load tool schemas before calling them:';
+const deferredOf = json => {
+  const s = JSON.stringify(json);
+  const at = s.indexOf(DEFERRED);
+  if (at < 0) return [];
+  // Up to the end of the reminder, or the blank line that ends the list.
+  const rest = s.slice(at + DEFERRED.length).split(/<\/system-reminder>|"/)[0].replace(/^(?:\\n|\s)+/, '').split('\\n\\n')[0];
+  return rest.split(/\\n|\s+/).filter(word => /^[A-Za-z0-9_]+$/.test(word));
+};
 
 function textOf(message) {
   if (!message) return '';
@@ -123,7 +136,7 @@ http.createServer((req, res) => {
     // own: logging the end of the turn would lose it. And the end as well: the
     // caveat of a local command run just before (`/effort low`, claude 2.1.300)
     // can open the turn, ahead of what was typed after it.
-    log({ url: req.url, model, stream: !!json.stream, side, effort: json.output_config?.effort ?? null, last: (last.match(/LINES \d+ \w+/) || [last.slice(0, 200)])[0], tail: last.slice(-200), full: last.slice(0, 8000), auth: authOf(req.headers) });
+    log({ url: req.url, model, stream: !!json.stream, side, effort: json.output_config?.effort ?? null, last: (last.match(/LINES \d+ \w+/) || [last.slice(0, 200)])[0], tail: last.slice(-200), full: last.slice(0, 8000), auth: authOf(req.headers), tools: Array.isArray(json.tools) ? json.tools.map(t => t?.name).filter(Boolean) : [], deferred: deferredOf(json) });
     if (!json.stream) {
       res.writeHead(200, { 'content-type': 'application/json' });
       return res.end(JSON.stringify({

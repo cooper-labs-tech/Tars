@@ -9,7 +9,7 @@ import type {
   ProviderModel,
   HookConfig,
 } from './cli-provider';
-import { servedPathMatches, readAppSettingsFromDisk, orchestratorToolFlags, promptOperand, effortFlag, resumeFlags, shellQuote, keyProviderEnv } from './cli-provider';
+import { servedPathMatches, readAppSettingsFromDisk, roleToolFlags, promptOperand, effortFlag, resumeFlags, shellQuote, keyProviderEnv } from './cli-provider';
 import { DATA_DIR } from '../constants';
 import { addMcpServerToJson, removeMcpServerFromJson } from '../utils/mcp-json';
 
@@ -78,7 +78,7 @@ export class MiniMaxProvider implements CLIProvider {
       command += ' --permission-mode bypassPermissions';
     }
 
-    command += orchestratorToolFlags(params.orchestratorMode);
+    command += roleToolFlags(params.orchestratorMode);
 
     command += effortFlag(params.effort);
 

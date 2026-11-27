@@ -10,7 +10,7 @@ import type {
   ProviderModel,
   HookConfig,
 } from './cli-provider';
-import { servedPathMatches, orchestratorToolFlags, promptOperand, effortFlag, resumeFlags, shellQuote } from './cli-provider';
+import { servedPathMatches, roleToolFlags, workerPeerFlags, promptOperand, effortFlag, resumeFlags, shellQuote } from './cli-provider';
 import { DATA_DIR } from '../constants';
 import { handedSecondaryFolder } from '../utils/handed-folder';
 import { updateSharedJsonSync } from '../utils/shared-file';
@@ -78,10 +78,11 @@ export class ClaudeProvider implements CLIProvider {
       command += ' --dangerously-skip-permissions';
     }
 
-    // Orchestrator mode. The list lives in cli-provider.ts so this and the
-    // thirteen providers that re-point the same binary cannot drift apart:
-    // they had, and none of them restricted anything at all.
-    command += orchestratorToolFlags(params.orchestratorMode);
+    // The role: an orchestrator's editing tools away, or a worker's door to the
+    // other sessions shut. In cli-provider.ts so this and the thirteen
+    // providers that re-point the same binary cannot drift apart: they had,
+    // and none of them restricted anything at all.
+    command += roleToolFlags(params.orchestratorMode);
 
     // Effort level
     command += effortFlag(params.effort);
@@ -132,8 +133,12 @@ export class ClaudeProvider implements CLIProvider {
       command += ` --model ${params.model}`;
     }
 
-    const escaped = params.prompt.replace(/'/g, "'\\''");
-    command += ` '${escaped}'`;
+    // Tars's own one-shot run is no session's peer: print mode offers
+    // ListAgents too (measured on 2.1.332). `--` before the prompt, as in an
+    // agent's line (promptOperand): the flag that lists the tools taken away
+    // reads every word after it, and would take the prompt for a tool's name.
+    command += workerPeerFlags(false);
+    command += ` -- ${shellQuote(params.prompt)}`;
 
     return command;
   }

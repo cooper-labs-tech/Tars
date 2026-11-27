@@ -231,8 +231,15 @@ function administratorSettings(file: string): Record<string, unknown> | null {
  * again at each launch, goes over Tars's, their keys winning
  * (underAdministrator); one that cannot be read stops the agent from starting,
  * and says why. qwen 0.25.2 docs. `systemFile` is for tests.
+ *
+ * A worker's file turns qwen's cross-session messaging off
+ * (`agents.crossSessionMessaging`): its session then lists itself with no
+ * inbox, so no other session can post to it, and its own send_message reaches
+ * no other session. An orchestrator's file says nothing of it, and the user's
+ * settings decide. Measured on 0.25.2: a post from another yolo session was
+ * delivered to the default session unreviewed. No role said is a worker.
  */
-export function writeQwenAgentSettings(agentId: string, opts: { effort?: string; systemFile?: string } = {}, dataDir?: string): string {
+export function writeQwenAgentSettings(agentId: string, opts: { effort?: string; systemFile?: string; orchestratorMode?: boolean } = {}, dataDir?: string): string {
   const name = SAFE_ID.test(agentId) ? agentId : agentId.replace(/[^A-Za-z0-9_-]/g, '_').slice(0, 80) || 'agent';
   const file = path.join(qwenDataDir(dataDir), 'agents', `${name}.json`);
   const admin = administratorSettings(opts.systemFile ?? qwenSystemSettingsFile(process.platform, process.env, dataDir));
@@ -242,6 +249,7 @@ export function writeQwenAgentSettings(agentId: string, opts: { effort?: string;
     mcpServers: qwenMcpServers(dataDir),
     ...(effort ? { model: { reasoningEffort: effort } } : {}),
     general: { enableAutoUpdate: false },
+    ...(opts.orchestratorMode === true ? {} : { agents: { crossSessionMessaging: false } }),
   };
   writeJson(file, admin ? underAdministrator(tars, admin) : tars);
   return file;

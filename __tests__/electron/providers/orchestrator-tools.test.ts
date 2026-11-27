@@ -85,7 +85,12 @@ describe('every provider that runs the claude binary applies it', () => {
 
       expect(orchestrator, `${provider.id} launches an orchestrator with its editing tools`)
         .toContain(orchestratorToolFlags(true).trim());
-      expect(worker, `${provider.id} takes a worker's editing tools away`).not.toContain('--disallowed-tools');
+      // A worker has a --disallowed-tools of its own since 2026-11-27, the tools that reach other sessions
+      // (worker-peer-channels.test.ts); never the orchestrator's list.
+      expect(worker, `${provider.id} takes a worker's editing tools away`).not.toContain(orchestratorToolFlags(true).trim());
+      for (const tool of ['"Edit"', '"Write"', '"NotebookEdit"', '"Task"']) {
+        expect(worker, `${provider.id} takes a worker's ${tool}`).not.toContain(tool);
+      }
     }
   });
 
