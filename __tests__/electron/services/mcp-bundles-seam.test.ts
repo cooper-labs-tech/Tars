@@ -30,6 +30,11 @@ import * as path from 'path';
  * 8. A CLI home the registration reaches is left off the list: claude's own CLAUDE_CONFIG_DIR and
  *    CLAUDE_SECURESTORAGE_CONFIG_DIR, which `claude mcp remove -s user` inherits (execCliSync hands it no env of its own
  *    on macOS and Linux), pointing at the account's ~/.claude from a sandbox HOME.
+ * 9. A path is compared as written, not as the system reaches it: HOME a link to the account's home or into it; a CLI
+ *    home in the sandbox a link to the account's own folder, there already or not yet (a link leading nowhere yet: the
+ *    CLI would make the folder at its end), or a folder below such a link, or '..' climbing from where a link leads;
+ *    the account's home itself a link to its real folder; on a disk that ignores case, the account's home written in
+ *    another case. And the other way: a sandbox reached through a link (/tmp is /private/tmp on macOS) refused.
  */
 
 type Var = 'DOROTHY_E2E' | 'DOROTHY_E2E_MCP_BUNDLES' | 'CODEX_HOME' | 'XDG_CONFIG_HOME' | 'GEMINI_CLI_HOME' | 'GROK_HOME' | 'PI_CODING_AGENT_DIR'
@@ -47,12 +52,13 @@ vi.mock('electron', () => ({
 const RESOURCES = '/opt/tars/Contents/Resources';
 const resourcesBefore = Object.getOwnPropertyDescriptor(process, 'resourcesPath');
 
+let root: string;
 let tree: string;
 let sandbox: string;
 const account = '/Users/someone';
 beforeEach(() => {
   Object.defineProperty(process, 'resourcesPath', { value: RESOURCES, configurable: true, writable: true });
-  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'tars-mcp-seam-'));
+  root = fs.mkdtempSync(path.join(os.tmpdir(), 'tars-mcp-seam-'));
   tree = path.join(root, 'tree');
   sandbox = path.join(root, 'home');
   for (const dir of ['mcp-orchestrator', 'mcp-memory']) fs.mkdirSync(path.join(tree, dir, 'dist'), { recursive: true });
@@ -135,6 +141,49 @@ describe('the E2E seam naming a tree\'s own bundles', () => {
     expect(e2eMcpBundlesDir(env({ CLAUDE_SECURESTORAGE_CONFIG_DIR: '/Users/acct/.claude' }), false, { home: sandbox, account: acct })).toBeNull();
     // Inside the sandbox they are taken.
     expect(e2eMcpBundlesDir(env({ CLAUDE_CONFIG_DIR: path.join(sandbox, '.claude') }), false, { home: sandbox, account: acct })).toBe(tree);
+    warn.mockRestore();
+  });
+
+  it('9. a link is the folder it leads to: HOME, a CLI home or the account\'s home through a link', async () => {
+    const { e2eMcpBundlesDir } = await seam();
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const acct = path.join(root, 'acct');
+    fs.mkdirSync(path.join(acct, '.codex'), { recursive: true });
+    fs.mkdirSync(path.join(acct, 'inside'));
+    // A directory link: a junction on Windows, which needs no privilege; the type is ignored elsewhere.
+    const link = (at: string, to: string) => { fs.symlinkSync(to, at, 'junction'); return at; };
+    // HOME a link to the account's home, or into it.
+    expect(e2eMcpBundlesDir(env(), false, { home: link(path.join(root, 'home-is-acct'), acct), account: acct }), 'HOME links to it').toBeNull();
+    expect(e2eMcpBundlesDir(env(), false, { home: link(path.join(root, 'home-in-acct'), path.join(acct, 'inside')), account: acct }), 'HOME links into it').toBeNull();
+    // CODEX_HOME in the sandbox, a link to the account's own folder: there already, or not yet.
+    const codex = link(path.join(sandbox, '.codex'), path.join(acct, '.codex'));
+    const later = link(path.join(sandbox, '.codex-later'), path.join(acct, '.codex-later'));
+    const sandboxed = (value: string) => e2eMcpBundlesDir(env({ CODEX_HOME: value }), false, { home: sandbox, account: acct });
+    expect(sandboxed(codex), 'CODEX_HOME links to the real one').toBeNull();
+    expect(sandboxed(later), 'CODEX_HOME links to one not made yet').toBeNull();
+    expect(sandboxed(path.join(codex, 'deeper')), 'a folder not made yet below the link').toBeNull();
+    expect(sandboxed(`${codex}${path.sep}..${path.sep}elsewhere`), '\'..\' climbs from where the link leads').toBeNull();
+    // The account's home itself a link to its real folder: HOME in that real folder is still the account's.
+    const realAcct = path.join(root, 'real-acct');
+    fs.mkdirSync(path.join(realAcct, 'sandbox'), { recursive: true });
+    const acctLink = link(path.join(root, 'acct-link'), realAcct);
+    expect(e2eMcpBundlesDir(env(), false, { home: path.join(realAcct, 'sandbox'), account: acctLink }), 'the account\'s home is a link').toBeNull();
+    // A sandbox reached through a link is still the sandbox, whichever way each path is written.
+    const sandboxLink = link(path.join(root, 'sandbox-link'), sandbox);
+    fs.mkdirSync(path.join(sandbox, 'own-codex'));
+    expect(e2eMcpBundlesDir(env({ CODEX_HOME: path.join(sandbox, 'own-codex') }), false, { home: sandboxLink, account: acct }), 'HOME by its link').toBe(tree);
+    expect(e2eMcpBundlesDir(env({ CODEX_HOME: path.join(sandboxLink, 'own-codex') }), false, { home: sandbox, account: acct }), 'CODEX_HOME by the link').toBe(tree);
+    warn.mockRestore();
+  });
+
+  it('9. on a disk that ignores case, the account\'s home written in another case is the account\'s home', async (ctx) => {
+    const acct = path.join(root, 'acct');
+    fs.mkdirSync(acct);
+    const otherCase = acct.toUpperCase();
+    if (otherCase === acct || !fs.existsSync(otherCase)) ctx.skip();
+    const { e2eMcpBundlesDir } = await seam();
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    expect(e2eMcpBundlesDir(env(), false, { home: otherCase, account: acct })).toBeNull();
     warn.mockRestore();
   });
 
