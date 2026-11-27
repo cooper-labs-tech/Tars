@@ -12,7 +12,7 @@ import { opencodeToolPartOf, qwenToolPartOf, type ToolCallPart } from './tool-ca
  * a traced session of theirs runs and for ENDED_GRACE_MS after its end (what a harness writes as it exits).
  *
  * - **Qwen Code** writes its chat to ~/.qwen/projects/<folder>/chats/<session>.jsonl (`qwenTranscriptPath`), the
- *   session the agent's hooks named. Each byte is read once, at most QWEN_PASS_BYTES_MAX a file a pass; a last line
+ *   session the agent's hooks named, the folder its real working folder. Each byte is read once, at most QWEN_PASS_BYTES_MAX a file a pass; a last line
  *   still being written waits for its end.
  * - **opencode** keeps its sessions in SQLite, <XDG data home, else ~/.local/share>/opencode/opencode.db (the same
  *   rule on every system: it uses xdg-basedir; measured on macOS only). It is opened read-only, and only the parts of
@@ -80,7 +80,11 @@ export class HarnessToolLogs {
   private readQwen(s: FollowedSession): void {
     const sessionId = this.deps.sessionIdOf(s.agentId);
     if (!sessionId) return;
-    const file = qwenTranscriptPath(s.folder, sessionId, (this.deps.homeDir ?? os.homedir)());
+    // Qwen Code names its chat folder after its real working folder: under it first (macOS's /tmp is /private/tmp),
+    // then under the folder as Tars names it.
+    const homeDir = (this.deps.homeDir ?? os.homedir)();
+    const file = [...new Set([realpathOr(s.folder), s.folder])].map(f => qwenTranscriptPath(f, sessionId, homeDir)).find(f => fs.existsSync(f));
+    if (!file) return;
     let size: number;
     try { size = fs.statSync(file).size; } catch { return; }
     const state = this.files.get(file) ?? { offset: 0, partial: '' };
