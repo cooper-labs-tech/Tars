@@ -905269,7 +905269,17 @@
                                               "fontWeight": "normal"
                                             }
                                           ]
-                                        },
+                                        }
+                                      ]
+                                    },
+                                    {
+                                      "type": "frame",
+                                      "id": "U9dU3t",
+                                      "name": "column 2",
+                                      "width": 338,
+                                      "layout": "vertical",
+                                      "gap": 4,
+                                      "children": [
                                         {
                                           "type": "frame",
                                           "id": "m8H4jj",
@@ -905302,17 +905312,7 @@
                                               "fontWeight": "normal"
                                             }
                                           ]
-                                        }
-                                      ]
-                                    },
-                                    {
-                                      "type": "frame",
-                                      "id": "U9dU3t",
-                                      "name": "column 2",
-                                      "width": 338,
-                                      "layout": "vertical",
-                                      "gap": 4,
-                                      "children": [
+                                        },
                                         {
                                           "type": "frame",
                                           "id": "q76on",
@@ -911042,7 +911042,17 @@
                                               "fontWeight": "normal"
                                             }
                                           ]
-                                        },
+                                        }
+                                      ]
+                                    },
+                                    {
+                                      "type": "frame",
+                                      "id": "iiPYU",
+                                      "name": "column 2",
+                                      "width": 338,
+                                      "layout": "vertical",
+                                      "gap": 4,
+                                      "children": [
                                         {
                                           "type": "frame",
                                           "id": "uKFNy",
@@ -911075,17 +911085,7 @@
                                               "fontWeight": "normal"
                                             }
                                           ]
-                                        }
-                                      ]
-                                    },
-                                    {
-                                      "type": "frame",
-                                      "id": "iiPYU",
-                                      "name": "column 2",
-                                      "width": 338,
-                                      "layout": "vertical",
-                                      "gap": 4,
-                                      "children": [
+                                        },
                                         {
                                           "type": "frame",
                                           "id": "gcQZg",
