@@ -24,16 +24,24 @@ import { tarsInstanceId } from '../core/agent-tokens';
 
 // ============== Helper Functions ==============
 
-/** The CLI homes the registration writes into besides HOME: each must lie inside the sandbox for the seam below. */
-const CLI_HOME_VARS = ['CODEX_HOME', 'XDG_CONFIG_HOME', 'GEMINI_CLI_HOME', 'GROK_HOME', 'PI_CODING_AGENT_DIR'] as const;
+/**
+ * The CLI homes the registration reaches besides HOME: the folders it writes into (codex, opencode, gemini, grok, pi),
+ * and claude's own, which the `claude mcp` it runs inherits (execCliSync hands it no env of its own on macOS and Linux).
+ * Each must lie inside the sandbox, and none inside the account's home, for the seam below. A provider whose home a
+ * variable moves, and which the registration writes into, adds that variable here.
+ */
+const CLI_HOME_VARS = [
+  'CODEX_HOME', 'XDG_CONFIG_HOME', 'GEMINI_CLI_HOME', 'GROK_HOME', 'PI_CODING_AGENT_DIR',
+  'CLAUDE_CONFIG_DIR', 'CLAUDE_SECURESTORAGE_CONFIG_DIR',
+] as const;
 
 /**
  * An E2E spec's own built bundles (DOROTHY_E2E_MCP_BUNDLES), for the start-up registration to register as a packaged
  * Tars registers the app's: read under DOROTHY_E2E only, never by a packaged build, and only as an absolute folder that
- * holds the orchestrator's bundle. Null as well while HOME is the account's own home or inside it, or while a CLI home
- * the registration writes into (CLI_HOME_VARS) lies outside HOME: a dev run would write the tree's paths into the real
- * home's CLI configs, the #201 incident. Without it a dev or E2E Tars finds no bundle under process.resourcesPath
- * (Electron's own folder) and registers nothing, by design.
+ * holds the orchestrator's bundle. Null as well while HOME is the account's own home, inside it or above it (HOME=/Users,
+ * or /, holds it), or while a CLI home the registration reaches (CLI_HOME_VARS) lies inside the account's home or
+ * outside HOME: a dev run would write the tree's paths into the real home's CLI configs, the #201 incident. Without it
+ * a dev or E2E Tars finds no bundle under process.resourcesPath (Electron's own folder) and registers nothing, by design.
  */
 export function e2eMcpBundlesDir(
   env: NodeJS.ProcessEnv,
@@ -50,9 +58,12 @@ export function e2eMcpBundlesDir(
   if (!path.isAbsolute(dir)) return refuse('not an absolute folder');
   if (!fs.existsSync(path.join(dir, 'mcp-orchestrator', 'dist', 'bundle.js'))) return refuse(`no mcp-orchestrator/dist/bundle.js under ${dir}`);
   if (inside(homes.account, homes.home)) return refuse('HOME is the account\'s own home, not a sandbox');
+  if (inside(homes.home, homes.account)) return refuse('HOME holds the account\'s own home, not a sandbox');
   for (const name of CLI_HOME_VARS) {
     const value = env[name];
-    if (value && !inside(homes.home, value)) return refuse(`${name} lies outside the sandbox's HOME`);
+    if (!value) continue;
+    if (inside(homes.account, value)) return refuse(`${name} lies inside the account's own home`);
+    if (!inside(homes.home, value)) return refuse(`${name} lies outside the sandbox's HOME`);
   }
   return dir;
 }
