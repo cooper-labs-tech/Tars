@@ -8,6 +8,21 @@ import { sessionDocument } from './trace-export';
 import { partsOf, type TraceStore } from './trace-store';
 import { scrubValue, SCRUB_VERSION, type ScrubContext } from './trace-scrub';
 
+/** The longest branch the back-office takes, in bytes (UTF-8). */
+export const MAX_BRANCH_BYTES = 255;
+
+/**
+ * A session's start as it leaves: a branch over what the back-office takes is left out, never cut (a cut branch names
+ * another one), or every batch of the session would be refused and hold the upload back (the Audit of #678).
+ */
+function startWithin(start: unknown): unknown {
+  const s = start as { branch?: unknown } | null;
+  if (!s || typeof s !== 'object' || typeof s.branch !== 'string' || Buffer.byteLength(s.branch) <= MAX_BRANCH_BYTES) return start;
+  const rest: Record<string, unknown> = { ...s };
+  delete rest.branch;
+  return rest;
+}
+
 /**
  * Uploading opted-in traces to a back-office (the trace back-office's HTTP API v1: register, blobs, batches,
  * delete). The address is the user's setting, empty until they set one, and nothing goes before they have read what
@@ -390,7 +405,7 @@ export class TraceUploader {
       mixed: t.mixed === true, unknownTurns: Number(t.unknown_turns ?? 0), outcome: t.outcome ? scrub(t.outcome) : undefined,
       // What started it (its trigger by kind, never who), its task's queue times and the commit it started from; and
       // the tasks that left its agent's queue never to start, by their kind. Each has its line in the notice.
-      start: t.start ? scrub(t.start) : undefined,
+      start: t.start ? startWithin(scrub(t.start)) : undefined,
       lostDemand: Array.isArray(t.lost_demand) && t.lost_demand.length ? scrub(t.lost_demand) : undefined,
       lostDemandOmitted: Number(t.lost_demand_omitted ?? 0) > 0 ? Number(t.lost_demand_omitted) : undefined,
     };
