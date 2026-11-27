@@ -86,6 +86,7 @@ const SITES: Site[] = [
   // core/
   { file: 'electron/core/agent-manager.ts', line: 'const conversing = …;', is: 'powers', why: 'no desktop notification for the turns of the user\'s own conversations' },
   { file: 'electron/core/agent-restart.ts', line: 'orchestrator: …,', is: 'powers', why: 'the launch flag a restart compares: the instructions and the denied tools' },
+  { file: 'electron/core/hermes-terminals.ts', line: 'const orchestrator = !!agent && …;', is: 'powers', why: 'a Hermes profile\'s MCP servers (the orchestrator\'s own two), and whether a worker may start Hermes (SECURITY.md § 10)' },
   { file: 'electron/services/api-routes/heavy-slot-routes.ts', line: 'orchestrator: …, terminalPid: terminal?.pid,', is: 'powers', why: 'the heavy-run slot: who may ask for a release gate, ahead of ordinary work' },
   { file: 'electron/services/api-routes/owner-words-routes.ts', line: 'id: agent.id, name: agent.name, projectPath: agent.projectPath, orchestrator: …,', is: 'powers', why: 'who may relay the owner\'s words, and receive them under Tars\'s mark (2.0.6): a chat\'s runner too, within its own chat (the Audit\'s M2 on #569)' },
   { file: 'electron/services/api-routes/owner-words-routes.ts', line: 'if (!… || !caller.projectPath) {', is: 'powers', why: 'who reads the owner\'s words of its project (2.0.6)' },

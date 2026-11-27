@@ -26,6 +26,14 @@ import { EventEmitter } from 'events';
  *  6. Over-correction: the ids the CLIs actually send stop working. A lowercase
  *     UUID (what claude writes) and an uppercase one must still register.
  *  7. Over-correction: an ordinary status post from the owner is refused.
+ *  8. Over-correction (27/11): Hermes Agent names a session `local-` and 64
+ *     lowercase hex digits (0.23.4, measured in its state.db), and Tars posts a
+ *     Hermes agent's turns with that id (services/hermes-agent-turns.ts). Refused
+ *     as not a UUID, every turn of a Hermes agent was lost: its status stayed
+ *     running and its answer never arrived (the first run of
+ *     e2e/hermes-agent.spec.ts).
+ *  9. That shape opens a door: `local-` with a separator, another length, an
+ *     uppercase prefix or digit, or anything after it is registered.
  *
  * The negative witness for 1 to 5 is the product before this change, which
  * registers every one of them.
@@ -178,6 +186,31 @@ describe('the ids the CLIs actually send', () => {
     const b = agent({ currentSessionId: undefined });
     await sessionStart(NEXT.toUpperCase());
     expect(b.currentSessionId).toBe(NEXT.toUpperCase());
+  });
+
+  it('8. a Hermes Agent session id registers, and its owner drives its status', async () => {
+    const hermes = `local-${'0123456789abcdef'.repeat(4)}`;
+    const a = agent({ currentSessionId: undefined });
+    await sessionStart(hermes);
+    expect(a.currentSessionId).toBe(hermes);
+    const fromOwner = await status({ agent_id: 'a1', session_id: hermes, status: 'idle' });
+    expect(fromOwner).not.toHaveBeenCalledWith(expect.anything(), 400);
+    expect(a.status).toBe('idle');
+  });
+
+  it.each([
+    ['a separator', `local-${'ab'.repeat(31)}/x`],
+    ['a climb', 'local-../../../../tmp/x'],
+    ['63 digits', `local-${'a'.repeat(63)}`],
+    ['65 digits', `local-${'a'.repeat(65)}`],
+    ['an uppercase prefix', `LOCAL-${'a'.repeat(64)}`],
+    ['an uppercase digit', `local-${'A'.repeat(64)}`],
+    ['a suffix', `local-${'a'.repeat(64)}.jsonl`],
+  ])('9. a Hermes-like id with %s is not registered', async (_what, forged) => {
+    const a = agent({ currentSessionId: undefined });
+    const reply = await sessionStart(forged);
+    expect(reply).toHaveBeenCalledWith(expect.objectContaining({ error: expect.any(String) }), 400);
+    expect(a.currentSessionId).toBeUndefined();
   });
 
   it('7. the owner still drives its status, and another UUID is still stale', async () => {

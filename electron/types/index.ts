@@ -14,6 +14,8 @@ export type AgentProvider =
   | 'grok'
   | 'opencode'
   | 'pi'
+  /** Hermes Agent (Nous Research), on an inference endpoint only, in Tars's own Hermes home (services/hermes-home.ts). */
+  | 'hermes'
   | 'local'
   | 'openrouter'
   | 'deepseek'

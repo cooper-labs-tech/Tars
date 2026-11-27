@@ -9,7 +9,7 @@ import { posixWords, PosixWordsError } from '../../../electron/platform/posix-wo
  * The provider's POSIX command line, read back into argv, to start the CLI
  * without a shell on Windows.
  *
- * The grammar is closed, pinned by what the 21 providers emit (read on
+ * The grammar is closed, pinned by what the 22 providers emit (read on
  * 2026-09-25 from every buildInteractiveCommand and the helpers in
  * cli-provider.ts, and held by exec-into-cli.test.ts): words separated by
  * spaces; a word is a run of single-quoted text (anything but ', newlines
@@ -35,6 +35,15 @@ import { posixWords, PosixWordsError } from '../../../electron/platform/posix-wo
  */
 
 let tmpDir: string;
+// Hermes builds its line only for an agent on an inference endpoint (providers/hermes-provider.ts): one, for it
+// alone. Every other provider reads no endpoint here, as before.
+vi.mock('../../../electron/services/traces-runtime', async (importOriginal) => ({
+  ...(await importOriginal<object>()),
+  endpointLaunchForAgent: (agentId: string | undefined, harness: string) => (harness === 'hermes' && agentId
+    ? { args: [], env: {}, tokenVars: [], profile: { baseUrl: 'http://127.0.0.1:31417/v1', model: 'open-coder-1' } }
+    : null),
+}));
+
 vi.mock('os', async (importOriginal) => {
   const mod = await importOriginal<typeof import('os')>();
   return { ...mod, homedir: () => tmpDir };
@@ -176,9 +185,21 @@ function bashWords(command: string): string[] {
   return out.split('\0').slice(0, -1);
 }
 
+/** A line's words after `env`'s own: its `-u <name>` removals and its `NAME=value` assignments. */
+function envStripped(words: string[]): string[] {
+  let i = 1;
+  while (i < words.length) {
+    if (words[i] === '-u') i += 2;
+    else if (/^[A-Za-z_][A-Za-z0-9_]*=/.test(words[i])) i += 1;
+    else break;
+  }
+  return words.slice(i);
+}
+
 async function commandOf(providerId: string, prompt: string, binaryPath: string): Promise<string> {
   const { getProvider } = await import('../../../electron/providers');
   return getProvider(providerId as never).buildInteractiveCommand({
+    agentId: 'agent-1',
     binaryPath,
     prompt,
     model: 'some-model',
@@ -200,9 +221,9 @@ async function commandOf(providerId: string, prompt: string, binaryPath: string)
 }
 
 describe('9. every provider round-trips', () => {
-  it('covers the 21 providers', async () => {
+  it('covers the 22 providers', async () => {
     const { getAllProviders } = await import('../../../electron/providers');
-    expect(getAllProviders()).toHaveLength(21);
+    expect(getAllProviders()).toHaveLength(22);
   });
 
   it('first word the binary, last word the prompt, the rest from the grammar, for every adversarial prompt', async () => {
@@ -211,8 +232,10 @@ describe('9. every provider round-trips', () => {
     for (const provider of getAllProviders()) {
       for (const [label, prompt] of ADVERSARIAL) {
         const all = posixWords(await commandOf(provider.id, prompt, bin));
-        // codex's line hands it Tars's home first, on macOS and Linux (`env CODEX_HOME=<home>`, the Audit's L4 on #465).
-        const words = all[0] === 'env' && all[1]?.startsWith('CODEX_HOME=') ? all.slice(2) : all;
+        // codex's and Hermes's lines hand them their home first, on macOS and Linux (`env CODEX_HOME=<home>`, the Audit's L4
+        // on #465; `env -u OPENAI_API_KEY -u OPENAI_BASE_URL HERMES_HOME=<profile>`, providers/hermes-provider.ts): `env`, its
+        // removals and its assignments go before the binary.
+        const words = all[0] === 'env' ? envStripped(all) : all;
         if (provider.taskTypedAfterLaunch) {
           // Amp's line never carries the task: it is typed in once its TUI runs (core/typed-task.ts, 2.0.4).
           expect([provider.id, label, words[0], words.includes(prompt)]).toEqual([provider.id, label, bin, false]);

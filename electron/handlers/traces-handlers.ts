@@ -39,6 +39,7 @@ export const HARNESS_SUPPORT: Array<{ harness: string; toolCalls: ToolCallSuppor
   { harness: 'qwen-code', toolCalls: 'works', api: 'chat', measuredOn: '0.25.2' },
   { harness: 'pi', toolCalls: 'works', api: 'chat', measuredOn: '1.5.2' },
   { harness: 'opencode', toolCalls: 'works', api: 'chat', measuredOn: '1.19.6' },
+  { harness: 'hermes', toolCalls: 'works', api: 'chat', measuredOn: '0.23.4', note: 'Runs in a home of Tars\'s own, whose packages are downloaded once at its first start.' },
 ];
 
 export const harnessSupportMap = (): Record<string, ToolCallSupport> =>

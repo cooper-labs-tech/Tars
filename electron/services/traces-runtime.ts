@@ -541,6 +541,12 @@ export function endpointLaunchForAgent(agentId: string | undefined, harness: str
   return launch;
 }
 
+/** The agent, when it runs its harness on an endpoint (a Hermes agent's profile reads its mode and role from it). */
+export function endpointAgentOf(agentId: string): AgentStatus | undefined {
+  const agent = deps ? agentOf(agentId) : undefined;
+  return onEndpoint(agent) ? agent : undefined;
+}
+
 /**
  * At an agent terminal's spawn: its endpoint session, minted, and the variables that carry its token. Empty for an
  * agent on no endpoint. The token is revoked by closeEndpointSession when the terminal exits.

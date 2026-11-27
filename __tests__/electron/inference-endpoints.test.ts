@@ -458,7 +458,7 @@ describe('choosing an endpoint for an agent', () => {
     const s = { ...r.settings, inferenceEndpoints: r.settings.inferenceEndpoints!.map(e => ({ ...e, models: ['GLM', 'Qwen'] })) };
     expect(validateEndpointChoice(s, { endpointId: r.endpoint.id, provider: 'qwen-code', model: 'GLM' })).toBeNull();
     expect(validateEndpointChoice(s, { endpointId: 'ep-ffffff', provider: 'qwen-code', model: 'GLM' })).toMatch(/no such endpoint/i);
-    expect(validateEndpointChoice(s, { endpointId: r.endpoint.id, provider: 'claude', model: 'GLM' })).toMatch(/codex, pi, qwen-code or opencode/);
+    expect(validateEndpointChoice(s, { endpointId: r.endpoint.id, provider: 'claude', model: 'GLM' })).toMatch(/codex, pi, qwen-code, opencode or hermes/);
     expect(validateEndpointChoice(s, { endpointId: r.endpoint.id, provider: 'qwen-code', model: 'Mistral' })).toMatch(/does not list/);
     expect(validateEndpointChoice(s, { endpointId: r.endpoint.id, provider: 'codex', model: 'GLM' }, { codex: 'failed' })).toMatch(/tool calls/);
     const unapproved = { ...s, inferenceEndpoints: s.inferenceEndpoints!.map(e => ({ ...e, approved: false })) };

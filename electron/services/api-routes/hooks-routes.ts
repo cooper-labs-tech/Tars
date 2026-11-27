@@ -113,7 +113,9 @@ function usableSessionId(sessionId?: string): string | undefined {
  * directory. An id on disk from before the check reads as no owner at all, so
  * the next real session adopts the agent.
  */
-const SESSION_ID_SHAPE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+// And Hermes Agent's, `local-` and 64 lowercase hex digits (0.23.4, measured 27/11), which Tars posts a Hermes
+// agent's turns with (services/hermes-agent-turns.ts): as safe a file name and argument as a UUID.
+const SESSION_ID_SHAPE = /^(?:[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}|local-[0-9a-f]{64})$/;
 
 /** The id of a session that was killed. Checked on its own before
  *  registration, where the full staleness test cannot run: a SessionStart

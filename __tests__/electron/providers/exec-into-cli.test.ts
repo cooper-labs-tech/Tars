@@ -23,6 +23,15 @@ import { skipOnWindows } from '../../setup/platform-limits';
 
 let tmpDir: string;
 
+// Hermes builds its line only for an agent on an inference endpoint (providers/hermes-provider.ts): one, for it
+// alone. Every other provider reads no endpoint here, as before.
+vi.mock('../../../electron/services/traces-runtime', async (importOriginal) => ({
+  ...(await importOriginal<object>()),
+  endpointLaunchForAgent: (agentId: string | undefined, harness: string) => (harness === 'hermes' && agentId
+    ? { args: [], env: {}, tokenVars: [], profile: { baseUrl: 'http://127.0.0.1:31417/v1', model: 'open-coder-1' } }
+    : null),
+}));
+
 vi.mock('os', async (importOriginal) => {
   const mod = await importOriginal<typeof import('os')>();
   return { ...mod, homedir: () => tmpDir };
@@ -43,6 +52,7 @@ afterAll(() => {
 async function commandOf(providerId: string): Promise<string> {
   const { getProvider } = await import('../../../electron/providers');
   return getProvider(providerId as never).buildInteractiveCommand({
+    agentId: 'agent-1',
     binaryPath: fakeCli,
     prompt: "Rebase onto main, and say what fell; don't stop at the first failure",
     model: 'some-model',

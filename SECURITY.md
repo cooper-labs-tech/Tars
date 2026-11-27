@@ -1043,7 +1043,7 @@ as that kind of word", and no more.
 
 ## 9. Inference endpoints and traces
 
-Written with the code (19/11/2026). An agent running codex, pi, qwen-code or opencode can run on an
+Written with the code (19/11/2026). An agent running codex, pi, qwen-code, opencode or Hermes (§ 10) can run on an
 OpenAI-compatible inference endpoint the user adds in Settings, a remote inference host. Its sessions can be kept as
 traces, opt-in, for an external trace reader. This adds one outbound flow, two credentials and one store.
 
@@ -1242,3 +1242,174 @@ Measured by:
 - `trace-gate.test.ts`;
 - `trace-scrub.test.ts` and `trace-upload.test.ts` (the upload, against a stand-in back-office);
 - `e2e/traces-native.spec.ts` (the whole chain against a stand-in endpoint on loopback).
+
+## 10. Hermes agents: two tokens in a file
+
+Written with the code (27/11/2026), measured on Hermes Agent 0.23.4 on this Mac. A Hermes agent runs on an inference
+endpoint only (§ 9), in a Hermes home of Tars's own, `~/.tars/hermes`, never the user's `~/.hermes`. Each agent is a
+profile of that home, `~/.tars/hermes/profiles/<agent id>` (`services/hermes-home.ts`, `core/hermes-terminals.ts`).
+
+**Why a file, where every other CLI gets its tokens in its terminal's environment.**
+- One Hermes gateway per home runs the sessions of every profile. Left to Hermes, whichever terminal comes first
+  starts it, with that terminal's environment; Tars starts it itself instead (below).
+- A chat hands the gateway only allowlisted, non-secret variables of its own terminal. A session's provider key, and
+  its MCP servers' `${VAR}`, come from the gateway's environment or from the profile's `.env`, Hermes's secret scope
+  for that profile.
+- Measured with two agents whose tokens were in their terminals only: both turns got HTTP 401 from the endpoint and
+  both MCP servers got an empty token. A terminal's token in the environment would reach no session, or else every
+  Hermes agent's, through the gateway started from it.
+- Measured with each token in its own profile's `.env` instead: every model call carried its own agent's proxy token
+  (six for one agent, three for the other, none crossed), and each MCP server got its own agent's Tars token.
+- So Tars puts no token in a Hermes terminal at all, and writes each agent's tokens into its profile's `.env`.
+- The rest of the gateway's environment is the first terminal's too. Measured on the real binary (27/11): agent B's
+  tool ran in B's folder, but with A's `CLAUDE_AGENT_ID` and A's `TMPDIR`. Each profile's config now lists Tars's
+  per-terminal variables that are no secret (the agent's identity, its project, its temporary folders) in
+  `terminal.client_env_passthrough`, so a session's tools take them from its own chat's terminal and drop the ones it
+  does not hold (measured on the bench: B's own values with it, A's without).
+- Started from a terminal, the gateway process itself kept that terminal's environment, its agent id and Tars token
+  included. Tars's stop ends what an agent started outside its terminal by that id (`core/born-processes.ts`), so
+  stopping that agent ended the gateway the other Hermes agents shared (measured on the real binary), and the token
+  it held died with that terminal.
+
+**The gateway Tars starts** (`core/hermes-gateway.ts`, the maintainer's decision of 27/11).
+- Tars starts it at the first Hermes terminal, as `hermes gateway run --quiet` (the agent's own binary), and that
+  terminal's chat waits until the gateway's record names the pid Tars started (or, for one a chat started, until the
+  stop's checks find it): a chat that finds a gateway starting or running attaches to it and never starts another
+  (Hermes's own rule). A wait longer than a moment is said in the agent's terminal (a first start syncs Hermes's
+  packages). Measured on the bench with Hermes's own code: the chats attached to it, A's stop left it and B (B
+  answered a second task after it), and each session's detached tools carried their own agent's id, so A's stop
+  ended A's and nothing else.
+- Its environment, exactly (`hermesGatewayEnv`), which every Hermes agent's tools start from (Hermes 0.23.4's
+  `tools/environments/local.py`):
+  - Tars's PATH, so the MCP servers a session starts and its tools are found;
+  - the user's home, name, shell and locale; the user's network proxy when Tars has one, for the first package sync;
+  - the user's session the tools need: the SSH agent's socket (`SSH_AUTH_SOCK`: git over SSH with a key the agent
+    holds; Hermes takes any name holding AUTH for a secret, so the per-session passthrough cannot carry it; measured
+    on the bench, a tool's `ssh-add -l` reached the agent through it), the terminal's type, the display (`DISPLAY`,
+    `WAYLAND_DISPLAY`), and on Linux the D-Bus session and the runtime folder (keyrings);
+  - on Windows, Hermes's own list of the system's essential variables (`SYSTEMROOT`, `WINDIR`, `COMSPEC`, `PATHEXT`,
+    `USERPROFILE`, `APPDATA`, `LOCALAPPDATA`, `PROGRAMDATA`, `HOMEDRIVE`, `HOMEPATH`, `USERNAME`, `SYSTEMDRIVE`,
+    `PROGRAMFILES` and its `(X86)` and `W6432` forms, `PROCESSOR_ARCHITECTURE`, `NUMBER_OF_PROCESSORS`, `OS`,
+    `ALLUSERSPROFILE`, `PUBLIC`, `USERDOMAIN`, `COMPUTERNAME`);
+  - `HERMES_HOME`, Tars's Hermes home; a temporary folder of its own there (`TMPDIR`, or `TEMP` and `TMP` on
+    Windows); `AWS_EC2_METADATA_DISABLED=true`.
+  No agent's id, name, project or token, no Tars address or instance, no endpoint token, no provider key (macOS adds
+  `__CF_USER_TEXT_ENCODING` to any process it starts; the E2E reads the names it got). A cloud region, a cluster's
+  config or a Docker daemon's address (`AWS_REGION`, `KUBECONFIG`, `DOCKER_HOST`) are not passed: the maintainer's to
+  decide.
+- It needs no way into Tars: each session's model calls carry its own profile's proxy token, and the MCP servers it
+  starts for a session get that agent's Tars address and token from its profile (the token by `${...}` from the
+  `.env`), so they reach Tars as that agent, with that agent's token, and no other.
+- Detached on every system: on macOS and Linux a session of its own (no terminal's tree or session reaches it), on
+  Windows a process with no console, in a group of its own. Stopped by the rule of the stop below (its record, then
+  its own `HERMES_HOME` on macOS and Linux, its start time on Windows), its tree with it on Windows (`taskkill /T`),
+  at the last Hermes terminal, at quit and at the next start. The user's own gateway (`~/.hermes`) and a second
+  Tars's never pass that rule.
+- If it dies while a Hermes terminal is open and Tars did not stop it, Tars starts it again, three times a minute at
+  most (then the next terminal does). A chat that needs a gateway in the moment between finds none and starts its own,
+  with its terminal's environment, as Hermes does; the same stop rule stops that one.
+
+**What the `.env` is.**
+- It holds exactly three variables: that terminal's endpoint proxy token (`OPENAI_API_KEY`), the proxy's loopback
+  address (`OPENAI_BASE_URL`) and that terminal's Tars token (`CLAUDE_MGR_API_TOKEN`). Any other name is refused by the
+  writer.
+- **Never the endpoint's real key**, which stays in `~/.tars-private/settings-secrets.json` and goes onto the request
+  in the proxy only (§ 9). Never a credential of the user's.
+- Both tokens are minted for that terminal in memory, revoked when it exits, and die with it whatever the file says.
+- Mode 0600, written as every secret of Tars is (`writeSecretFileSync`, no readable temporary copy left). It is
+  written when the terminal starts and removed when it ends. A newer terminal's file is never removed by an older
+  terminal's exit. At quit, and at the next start after a crash, every profile's `.env` is swept.
+- The profile's `config.yaml` names the token as `${CLAUDE_MGR_API_TOKEN}`, never its value. The home's root, shared by
+  every profile, holds no token.
+
+**What it is not: a secret from the other agents.**
+- Every agent runs as the same user. A same-user process can read a terminal's environment today, which is where every
+  other CLI's tokens are (§ 3). Measured again on 27/11 with fake values in processes started for it: `ps -E` and
+  `sysctl KERN_PROCARGS2` show the environment of a `node` process and of Hermes's own Python 3.14 (ad hoc signed) to
+  any process of the user. They do not show that of Apple's platform binaries (`/bin/zsh`, `/bin/sleep`).
+- **And `~/.tars` is in every agent's `--add-dir`.** So a Hermes agent's `.env` is also readable through any agent's
+  file tools, not only by a process that knows where to look. A file in a folder every agent is handed is no more
+  secret than an environment.
+- What it changes against the environment: a token in a file outlives a process that is killed with no exit heard.
+  The sweep at the next start bounds that, and the token itself is revoked when its terminal exits.
+
+**The gateway socket: an open door into every Hermes agent, workers included.**
+- Every `hermes chat` reaches its home's gateway through `$HERMES_HOME/gateway.sock`, a Unix socket that any process
+  of the user can open; the root's gateway serves every profile (`gateway.multiplex_profiles: true`, which Tars sets
+  and Hermes needs).
+- So any process of the user can run `HERMES_HOME=~/.tars/hermes/profiles/<agent id> hermes chat -q "..."`. That is a
+  turn in that agent's profile: its model calls carry that agent's proxy token, so the endpoint bills them to it and
+  its traces record them as its, and its MCP servers start with that agent's Tars token, so Tars takes their calls as
+  that agent's.
+- Measured on 27/11 with the installed Hermes 0.23.4: a chat started by a script with no token in its environment,
+  `HERMES_HOME` set to a profile, sent that profile's proxy token on every model call and handed that profile's Tars
+  token to its MCP server.
+- Every other CLI's worker refuses what other sessions of the machine send it (the cross-session rule). Hermes 0.23.4
+  has no way to refuse: no per-session or per-profile setting closes the socket to other processes, and the socket is
+  how the agent's own terminal talks to its gateway.
+- **The owner chooses**, and either is one setting in `services/hermes-home.ts` (`HERMES_WORKER_POLICY`):
+  - `stated-exception`: Hermes workers run, this exception stated here, until Hermes can refuse. What PR #654 ran with.
+  - `orchestrators-only`: only an agent with the orchestrator's powers starts Hermes until then; a worker's Hermes
+    terminal is refused before anything is written.
+- If Hermes takes a per-session or per-profile refuse, every worker's profile sets it.
+- A same-user process could already read the profile's `.env` and use its tokens directly (above): the socket is the
+  same reach without reading anything.
+
+**What Hermes reaches besides the endpoint, and what Tars turns off.**
+- The profile's config answers the telemetry question (no), turns off `auth.adopt_external_logins` and update checks.
+  `adopt_external_logins` would borrow, and refresh, the Codex CLI's and Claude Code's logins; their refresh tokens are
+  single use. It also answers the question Hermes asks at a start once the disk is low, whether to prune its session
+  history (`sessions.auto_prune: false`, its own default): nobody answers in an agent's terminal, and a restarted agent
+  waited on it (measured on the real binary).
+- Measured through a logging proxy: with update checks off, a chat still reached for `hermes-agent.nousresearch.com`
+  (its plugin catalog), `raw.githubusercontent.com` (its model catalog) and `openrouter.ai` (a model capability list).
+- With `model_catalog.enabled: false` and `plugins.auto_update_check_hours: 0` as well, a chat and a minute of the
+  gateway idling reached no host but the proxy, on the bench.
+- Through the real app (27/11, a logging proxy refusing every host but PyPI), an interactive first start still asked
+  for three more, each traced to its caller on the bench (Hermes's own code, its packages cloned, no download):
+  - `169.254.169.254`, the cloud metadata address, six times: the gateway resolves its own home's provider as it
+    starts, and Tars's root config named none, so it walked Hermes's auto chain down to the AWS SDK. The root now names
+    the custom provider at the proxy, and `AWS_EC2_METADATA_DISABLED=true` is set for Hermes on the line (and in the
+    terminal's environment on Windows);
+  - `models.dev`: the model picker's warm-up fetches its registry at every interactive start, and no setting turns the
+    warm-up off. Its URL can be changed (`models_dev.url`), so both configs point it at the proxy's own address, which
+    answers 401 and forwards nothing;
+  - `hermes-agent.nousresearch.com`, then `github.com`: the default plugins step fetches the plugin catalog, then the
+    plugins. `security.allow_lazy_installs: false` stops it; the home's first package sync still runs (measured on the
+    installed binary, both ways, with no network).
+- With those, the bench's interactive start, a task with a tool call, and the gateway idling reached no host but the
+  endpoint. A configuration naming any other address than the loopback for the proxy is refused.
+- A provider key in the user's own environment (an rc file's `OPENROUTER_API_KEY`, measured with a fake one) made
+  the picker's warm-up list that provider's models, with that key. Every variable Hermes reads to find a provider is
+  taken out of a Hermes agent's line (`env -u`) and terminal (Windows), as `ANTHROPIC_API_KEY` is blanked for every
+  alternative provider: 75 names in 0.23.4, read from its source by `scripts/hermes-provider-keys.mjs` (the
+  `_REGISTRY_ROWS` of `hermes_cli/auth.py`, the provider profiles' `env_vars` in `providers/` and
+  `plugins/model-providers/`, `hermes_cli/providers.py`'s overlays, `agent/bedrock_adapter.py`'s AWS chain), the
+  same 75 as its runtime registry. Given a Hermes checkout, a test fails when Hermes reads one more.
+- Its first start downloads its Python packages once, from `pypi.org` and `files.pythonhosted.org` only (about 135 MB,
+  measured), into Tars's Hermes home.
+
+**The stop of its gateway.** Tars stops it when the last Hermes terminal ends, at quit, and at the next start, by the
+pid the record in Tars's own home names. The record is not believed on its own word: a
+crash can leave it while the pid goes to another process, and any agent can write it. The process must run a Hermes
+gateway, in either form its command line takes (`python3 -m hermes_cli.main ... gateway run`, which Hermes gives the
+gateways it starts, and the relaunch of its `hermes` launcher, `python3 -I -c "...; sys.argv = ['-c', 'gateway',
+'run', ...]; ... from hermes_cli.main import main ..."`, which is how the one Tars starts runs). The user's own gateway
+runs the same command line. So the process itself decides: on macOS and Linux its own `HERMES_HOME`, read from its environment
+(`ps -E`, `/proc/<pid>/environ`), must be Tars's home or one of its profiles; on Windows, where another process's
+environment cannot be read, it must have started within two minutes of the record's writing. Anything else stops
+nothing, and an environment that cannot be read stops nothing either. Paths are compared resolved, as Hermes resolves
+its home (under a symlinked folder, macOS's `/tmp` among them, its gateway names the real path: the first run on the
+real binary left Tars's gateway running for that reason), and a home that is itself a symlink stops nothing, nor does
+a profile that resolves outside it.
+
+Measured by:
+- `__tests__/electron/services/hermes-home.test.ts` (the `.env`'s names and mode, two agents' files, the sweep, the
+  configs' guards, the gateway's environment, the gateway stop);
+- `core/hermes-gateway.test.ts` (one gateway, started before the chat, started again when it dies and not after a
+  stop, detached, its environment, stopped by the rule);
+- `providers/hermes-provider.test.ts` (no token on the line or in the terminal, the home on the line, the provider
+  variables taken out);
+- `services/hermes-agent-turns.test.ts` (each agent reads its own profile);
+- `e2e/hermes-agent.spec.ts` (two agents through the real app, each call's token, each MCP identity, the files at stop
+  and at quit).

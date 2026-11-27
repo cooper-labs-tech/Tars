@@ -7,6 +7,7 @@ import { GeminiProvider } from './gemini-provider';
 import { GrokProvider } from './grok-provider';
 import { OpenCodeProvider } from './opencode-provider';
 import { PiProvider } from './pi-provider';
+import { HermesProvider } from './hermes-provider';
 import { OpenRouterProvider } from './openrouter-provider';
 import { DeepSeekProvider } from './deepseek-provider';
 import { MiMoProvider } from './mimo-provider';
@@ -39,6 +40,7 @@ const providers: Record<string, CLIProvider> = {
   grok: new GrokProvider(),
   opencode: new OpenCodeProvider(),
   pi: new PiProvider(),
+  hermes: new HermesProvider(),
   openrouter: new OpenRouterProvider(),
   deepseek: new DeepSeekProvider(),
   mimo: new MiMoProvider(),

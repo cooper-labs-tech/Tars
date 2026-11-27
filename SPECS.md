@@ -144,7 +144,7 @@ Next.js 16.4 App Router, static-exported (`ELECTRON_BUILD=1 next build` with `sr
 
 `safeEffort()` is exported from the same module and validates reasoning effort against `{low, medium, high, xhigh, max}` before it lands unquoted in a shell string. The value arrives over IPC, so it is validated at the point of use, not trusted from the caller. `effortFlag()` turns it into ` --effort <level>` for the fourteen providers on the claude binary, medium included: without the flag Claude Code starts at the effort it last saved for that model from any terminal (`/effort` writes `modelSettings.<model>.effortLevel` into `~/.claude/settings.json`), not at medium. An agent with no effort gets no flag, which is the one case that means the CLI's own.
 
-### The registry (21 providers)
+### The registry (22 providers)
 
 | id | Display name | Binary | Config dir | Reaches the model via |
 |---|---|---|---|---|
@@ -156,6 +156,7 @@ Next.js 16.4 App Router, static-exported (`ELECTRON_BUILD=1 next build` with `sr
 | `pi` | Pi Terminal | `pi` | `~/.pi` | native |
 | `amp` | Amp | `amp` | `~/.config/amp` | native |
 | `qwen-code` | Qwen Code | `qwen` | `~/.qwen` | native, on the models of the user's own `~/.qwen/settings.json` (2.0.4, below) |
+| `hermes` | Hermes Agent | `hermes` | `~/.tars/hermes` (a profile per agent) | an inference endpoint only, through Tars's proxy (below) |
 | `openrouter` | OpenRouter | `claude` | `~/.claude` | `https://openrouter.ai/api` |
 | `deepseek` | DeepSeek | `claude` | `~/.claude` | `https://api.deepseek.com/anthropic`, else OpenRouter |
 | `moonshot` | MoonshotAI (Kimi) | `claude` | `~/.claude` | `https://api.moonshot.ai/anthropic`, else OpenRouter |
@@ -217,7 +218,7 @@ Measured on codex-cli 0.163.0 (standalone install, ChatGPT account), the version
 
 ### Inference endpoints and native traces (`services/inference-endpoints.ts`, `endpoint-proxy.ts`, `trace-store.ts`)
 
-An agent running codex, pi, qwen-code or opencode can run on an OpenAI-compatible inference endpoint, chosen per
+An agent running codex, pi, qwen-code, opencode or Hermes Agent can run on an OpenAI-compatible inference endpoint, chosen per
 agent (`endpointId`, with `model` one of the endpoint's own `/v1/models`).
 
 **The proxy.** Tars writes everything the harness needs, through one adapter per harness (`endpoint-harness.ts`).
@@ -229,6 +230,19 @@ token as its key. Measured on 19/11 against a stand-in endpoint, a tool call eac
   `OPENAI_API_KEY`.
 - **pi 1.5.2:** one provider of Tars's in its `models.json`, named with `--provider`.
 - **opencode 1.19.6:** an inline provider in `OPENCODE_CONFIG_CONTENT`, and `--model tars-endpoint/<model>`.
+- **Hermes Agent 0.23.4** (27/11), on an endpoint only:
+  - It runs in a Hermes home of Tars's own, `~/.tars/hermes`, never the user's `~/.hermes`. Each agent is a profile
+    of it, `profiles/<agent id>`, its `HERMES_HOME` (`services/hermes-home.ts`, `core/hermes-terminals.ts`).
+  - One gateway per home runs every profile's sessions and takes no credential from the terminal that typed the task.
+    So the endpoint and the token go into the profile: the proxy and the model in its `config.yaml`, the terminal's
+    two tokens in its 0600 `.env`, removed when the terminal ends (SECURITY.md § 10).
+  - Tars starts that gateway itself at the first Hermes terminal, with no agent's identity, and each chat waits until
+    it holds its home; Tars stops it at the last terminal and at quit (`core/hermes-gateway.ts`). Each session's tools
+    take its own agent's variables from its terminal (`terminal.client_env_passthrough`).
+  - Its line: `hermes chat --source tool -m <model>`, `--yolo` in bypass, with every variable Hermes reads to find a
+    provider of its own taken out (`providers/hermes-provider-keys.ts`, generated from its source). Its turns are read
+    from the profile's `state.db` (`services/hermes-agent-turns.ts`).
+  - Its first start downloads its Python packages once, about 135 MB from PyPI, about 1.2 GB on disk.
 
 The proxy:
 - swaps the token for the endpoint's key;

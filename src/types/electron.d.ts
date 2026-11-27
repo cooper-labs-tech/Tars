@@ -472,6 +472,7 @@ export type AgentProvider =
   | 'grok'
   | 'opencode'
   | 'pi'
+  | 'hermes'
   | 'local'
   | 'openrouter'
   | 'deepseek'
@@ -2975,7 +2976,7 @@ export interface ElectronAPI {
   platform: string;
 }
 
-export type HarnessId = 'codex' | 'pi' | 'qwen-code' | 'opencode';
+export type HarnessId = 'codex' | 'pi' | 'qwen-code' | 'opencode' | 'hermes';
 
 export interface EndpointHealth { ok: boolean; status?: number; latencyMs?: number; at: string; error?: string }
 

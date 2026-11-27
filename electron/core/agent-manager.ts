@@ -23,6 +23,8 @@ import { keptSender } from '../services/agent-queues';
 import { dialogOpen, dialogShown } from './agent-launch';
 import type * as pty from 'node-pty';
 import { cliStoppedIn, spawnAgentPty, agentShell, codexLaunching } from './agent-pty';
+import { hermesGatewayReady } from './hermes-terminals';
+import { writeIntoMirror } from './terminal-mirror';
 import { killPty } from './pty-kill';
 import { withPath, type DirectLaunch, type Launch } from '../platform';
 import { buildFullPath } from '../utils/path-builder';
@@ -392,6 +394,19 @@ const KEY_FRAGMENTS_GONE_SINCE = 4;
  */
 const OUTPUT_CHUNK_CAP = 600;
 const OUTPUT_RETAIN = 400;
+
+/**
+ * A line of Tars's own in an agent's terminal while no program there writes (a Hermes chat waiting for the gateway
+ * its agents share, the Audit's L2): dim, on a line of its own, into the terminal's mirror, the agent's output and the
+ * windows, as the terminal's own output goes.
+ */
+export function sayInTerminal(agent: AgentStatus, ptyProcess: pty.IPty, text: string): void {
+  const chunk = `\r\n\x1b[2m${text}\x1b[0m\r\n`;
+  writeIntoMirror(ptyProcess, chunk);
+  const live = agents.get(agent.id);
+  if (live) appendAgentOutput(live, chunk);
+  broadcastToAllWindows('agent:output', { type: 'output', agentId: agent.id, ptyId: agent.ptyId, data: chunk, timestamp: new Date().toISOString() });
+}
 
 /**
  * Appends a terminal chunk and keeps the buffer bounded.
@@ -1219,6 +1234,9 @@ export async function launchIntoTerminal(
   // message gave it again, with the memory as it was then (the Audit's L-B and
   // QA's L1 on #448). A launch that owes it says so after (startAgentCli).
   oweToFirstMessage(ptyProcess, '');
+  // A Hermes agent's chat attaches to the gateway Tars started for every Hermes agent (core/hermes-gateway.ts), once it
+  // holds its home: a chat that finds none starts its own, with its terminal's environment.
+  if (getProvider(agent.provider).binaryName === 'hermes') await hermesGatewayReady(line => sayInTerminal(agent, ptyProcess, line));
   if (start.platform === 'win32') return startCliInTerminal(agent, start, opts);
   if (opts.ready) await opts.ready(ptyProcess);
   // codex typed into a shell already there, one reused too: noted as it starts (core/agent-pty.ts).

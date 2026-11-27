@@ -17,6 +17,7 @@ import { chatsReadEnv } from './chat-inbox';
 import { cliLaunchExit, reportHandledError } from '../services/error-reports/handled';
 import { noteCodexLaunch } from '../services/codex-sessions';
 import { piSessionWatch } from '../services/pi-sessions';
+import { closeHermesTerminal, openHermesTerminal } from './hermes-terminals';
 import { ensureCodexProjectTrusted } from '../providers/codex-cli';
 import { slotEnv } from '../services/heavy-slot-cli';
 
@@ -151,6 +152,23 @@ export function spawnAgentPty(opts: {
   // core/account-env.ts): here for the reason this module exists, since an
   // account a caller forgot would be a CLI billed to the wrong subscription.
   const env = { ...withAccountEnv(opts.env, accountEnvFor(agentId, opts.cwd)) };
+  // A Hermes agent (core/hermes-terminals.ts): its two tokens go into its profile's .env, and none into its
+  // terminal, whose environment the gateway every Hermes agent shares may have been started with.
+  const hermes = !!agentId && opts.binaryName === 'hermes';
+  if (hermes) {
+    for (const name of ['CLAUDE_MGR_API_TOKEN', 'TARS_ENDPOINT_TOKEN', 'OPENAI_API_KEY', 'OPENAI_BASE_URL']) delete env[name];
+    try {
+      openHermesTerminal(agentId, {
+        apiToken: token,
+        endpointToken: endpointSession.token,
+        env: { ...env, CLAUDE_MGR_API_URL: `http://127.0.0.1:${API_PORT}`, TARS_INSTANCE_ID: tarsInstanceId(), ...chatsReadEnv(agentId) },
+      });
+    } catch (err) {
+      if (token) revokeTerminalToken(agentId, token);
+      closeEndpointSession(endpointSession.token);
+      throw err;
+    }
+  }
   // The pid of a claude that started Tars itself (a dev run, an e2e from an
   // agent): the state mod reads CLAUDE_PID as "another claude started this
   // CLI" and says nothing to Tars then (gate of #380). Never handed on.
@@ -194,7 +212,8 @@ export function spawnAgentPty(opts: {
       // a secret that has to reach every agent process cannot depend on each
       // of them remembering. Minted per spawn, so a restart invalidates the
       // token the previous process ran with.
-      ...(token ? { CLAUDE_MGR_API_TOKEN: token } : {}),
+      // Never for Hermes, whose token is in its profile (above).
+      ...(token && !hermes ? { CLAUDE_MGR_API_TOKEN: token } : {}),
       // What a hook checks the port with before it sends that token (#11).
       TARS_INSTANCE_ID: tarsInstanceId(),
       // Its own temporary folder, which a boot does not empty (services/agent-tmp.ts):
@@ -233,6 +252,8 @@ export function spawnAgentPty(opts: {
     if (agentId && token) revokeTerminalToken(agentId, token);
     // And its endpoint token, with the trace it recorded.
     closeEndpointSession(endpointSession.token);
+    // And a Hermes agent's .env, unless a newer terminal of it wrote its own.
+    if (hermes) closeHermesTerminal(agentId, endpointSession.token);
     // An agent's CLI that failed to start, where the terminal is the CLI (the API's sessions everywhere, every
     // terminal on Windows): it exited on its own with a failure code at its launch (2.0.4, F1). A CLI typed into
     // a shell leaves the shell behind, and its code with it.
