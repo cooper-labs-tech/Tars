@@ -52,17 +52,19 @@ IMPORTANT: Respond with ONLY the JSON object, no markdown, no explanation, just 
   });
 
   try {
-    // win32: no shell. The provider's command line is read back into argv
-    // (the closed grammar of platform/posix-words.ts) and the binary resolved
-    // (an npm claude.cmd) by probeCli, hidden. Through `exec` it went to
-    // cmd.exe, where `'claude'` is no command, and the request and the project
-    // names, which are user text, split at a newline and ran what followed an
-    // `&`. darwin/linux: the line /bin/sh has always run, as `exec` ran it.
-    // Started by probeCli (core/cli-probe.ts), so that its 30 s give-up and the
-    // quit end it with what it started (27/11): `exec` signalled the shell
-    // alone at its time, and nothing ended it at the quit.
+    // No shell, on any system: the provider's command line is read back into
+    // argv (the closed grammar of platform/posix-words.ts) and the binary
+    // resolved (an npm claude.cmd on win32) by probeCli. Through `exec` it
+    // went to cmd.exe on win32, where `'claude'` is no command, and the request
+    // and the project names, which are user text, split at a newline and ran
+    // what followed an `&`; on darwin and linux to /bin/sh, which the Audit
+    // measured handing claude the same four arguments posixWords gives (its L2
+    // on #661), so the shell bought nothing. Started by probeCli
+    // (core/cli-probe.ts), so that its 30 s give-up and the quit end it with
+    // what it started (27/11): `exec` signalled the shell alone at its time,
+    // and nothing ended it at the quit.
     const env = withPath(process.env, fullPath, process.platform) as NodeJS.ProcessEnv;
-    const [file, ...args] = process.platform === 'win32' ? posixWords(command) : ['/bin/sh', '-c', command];
+    const [file, ...args] = posixWords(command);
     let claudeResult: string;
     try {
       claudeResult = (await probeCli(file, args, { env, timeoutMs: 30_000, maxBuffer: 1024 * 1024 })).stdout.trim();
