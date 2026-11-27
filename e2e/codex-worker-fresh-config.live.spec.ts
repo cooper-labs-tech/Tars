@@ -114,9 +114,13 @@ test('a codex worker on a codex config without the Telegram server starts and ta
       recordValues(values);
       await expect.poll(async () => (await agentOf()).cliRunning === true, { timeout: 90_000, message: 'the worker\'s codex runs' }).toBe(true);
       await expect.poll(async () => (await screen()).join('\n'), { timeout: 90_000, message: 'the worker\'s codex at its prompt' }).toMatch(/›/);
-      const line = execFileSync('ps', ['-axo', 'command=']).toString().split('\n').find((l) => l.includes(home) && l.includes('--dangerously-bypass-approvals-and-sandbox')) ?? '';
+      // The worker's codex by its own argv: the stand-in's model and bypass (its CODEX_HOME is in its environment, not
+      // its argv, so the sandbox's path is not there to find it by).
+      const line = execFileSync('ps', ['-axo', 'command=']).toString().split('\n')
+        .find((l) => l.includes(`--model ${MODEL}`) && l.includes('--dangerously-bypass-approvals-and-sandbox')) ?? '';
       values.workerCommand = line.replace(new RegExp(home.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'g'), '<home>');
       recordValues(values);
+      expect(line, 'the worker\'s codex not found among the processes').not.toBe('');
       for (const name of ['claude-mgr-telegram', 'dorothy-x']) {
         if (!(values.serversInConfig as string[]).includes(name)) expect(line, `a switch for ${name}, which the config does not hold`).not.toContain(`mcp_servers.${name}.`);
       }
