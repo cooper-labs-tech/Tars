@@ -46,6 +46,14 @@ test('the start-up registration of the MCP servers ends, and how long it takes, 
       const app = await launchSandboxed(electron, home, {
         env: { NODE_ENV: 'development', DOROTHY_DEV_URL: DEV_URL, DOROTHY_E2E: '1', DOROTHY_API_PORT: apiPort(31447), CODEX_HOME: path.join(home, '.codex') },
       });
+      // What the main process says about the registration, for the record of what it did.
+      const said: string[] = [];
+      for (const stream of [app.process().stdout, app.process().stderr]) {
+        stream?.on('data', (chunk: Buffer) => {
+          for (const line of String(chunk).split('\n')) if (/mcp|register/i.test(line)) said.push(line.replace(home, '<home>').slice(0, 240));
+        });
+      }
+      values[`${start}Said`] = said;
       try {
         await app.firstWindow();
         values[start] = await app.evaluate(async (_e, [dist]) => {
