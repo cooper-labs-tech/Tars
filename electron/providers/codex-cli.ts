@@ -1,9 +1,9 @@
 import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
-import { spawn } from 'child_process';
 import { parse as parseToml } from 'smol-toml';
-import { cliEnv, execCli } from './cli-exec';
+import { cliEnv } from './cli-exec';
+import { probeCli } from '../core/cli-probe';
 import { defaultShell } from '../utils/default-shell';
 import { trustsTooMuch } from '../utils/trust-too-much';
 import { updateSharedTextSync } from '../utils/shared-file';
@@ -25,14 +25,13 @@ export function codexHome(env: NodeJS.ProcessEnv = process.env, homeDir: string 
  * default, else codex's own `codex login status` run on that home, which reads its keyring too (measured on 0.163:
  * exit 0 "Logged in using ChatGPT", exit 1 "Not logged in"). undefined when codex could not say: not there, hung past
  * its time, or ended otherwise, a config it cannot read among them. Signed in, its answer names the account: it is
- * looked at for "Not logged in" only, never kept or logged.
+ * looked at for "Not logged in" only, never kept or logged. A CLI probe (core/cli-probe.ts): ended with what it
+ * started at its time and at the quit (the Audit's P2 on probe orphans).
  */
 export async function codexSignedIn(binaryPath: string, home: string, timeoutMs = 10_000): Promise<boolean | undefined> {
   if (fs.existsSync(path.join(home, 'auth.json'))) return true;
   try {
-    await execCli(binaryPath, ['login', 'status'], {
-      encoding: 'utf-8', timeout: timeoutMs, env: { ...((cliEnv() as NodeJS.ProcessEnv | undefined) ?? process.env), CODEX_HOME: home },
-    });
+    await probeCli(binaryPath, ['login', 'status'], { timeoutMs, env: { ...((cliEnv() as NodeJS.ProcessEnv | undefined) ?? process.env), CODEX_HOME: home } });
     return true;
   } catch (err) {
     const { code, stdout, stderr } = err as { code?: unknown; stdout?: unknown; stderr?: unknown };
@@ -61,33 +60,19 @@ const shellHomes = new Map<string, Promise<string | undefined>>();
  * that failed or hung past `timeoutMs` is asked again next time. Waited for to 20 s: a login zsh with its rc files
  * answered in 7.6 s under a load average of 150 (measured on 19/10). undefined when it sets none, and on Windows,
  * which runs no rc file.
+ *
+ * A CLI probe (core/cli-probe.ts): the shell leads a process group of its own, ended whole at its time, at its answer
+ * and at the quit (the Audit's P3 on probe orphans): interactive, it ignores SIGTERM (macOS's zsh, measured), and what
+ * its rc files start can hold its output open after it. Its answer is its marked line, whatever comes after. An rc
+ * file that asks something (compinit's insecure folders) reads no answer from its input, and no terminal: not a wait.
  */
 export function loginShellCodexHome(shell: string = defaultShell(), platform: NodeJS.Platform = process.platform, timeoutMs = 20_000): Promise<string | undefined> {
   if (platform === 'win32') return Promise.resolve(undefined);
   let asked = shellHomes.get(shell);
   if (!asked) {
-    asked = new Promise<string | undefined>((resolve, reject) => {
-      // The shell leads a process group of its own, ended whole at its time, and is given up on then: interactive,
-      // it ignores SIGTERM (macOS's zsh, measured), and what its rc files start can hold its output open after it.
-      // Its answer is its marked line, whatever comes after. An rc file that asks something (compinit's insecure
-      // folders) reads no answer from its input, and no terminal: it is not a wait.
-      const child = spawn(shell, ['-ilc', `printf '\\n%s%s\\n' '${SHELL_MARK}' "$CODEX_HOME"`], { detached: true, stdio: ['ignore', 'pipe', 'ignore'] });
-      let out = '';
-      let settled = false;
-      const settle = (done: () => void) => { if (!settled) { settled = true; clearTimeout(timer); done(); } };
-      const timer = setTimeout(() => settle(() => {
-        try { if (child.pid) process.kill(-child.pid, 'SIGKILL'); } catch { /* ended already */ }
-        reject(new Error(`${shell} gave no answer in ${timeoutMs} ms`));
-      }), timeoutMs);
-      child.stdout?.setEncoding('utf8');
-      child.stdout?.on('data', (chunk: string) => {
-        out = (out + chunk).slice(-65_536);
-        const at = out.lastIndexOf(SHELL_MARK);
-        if (at >= 0 && out.includes('\n', at)) settle(() => resolve(codexHomeFromShell(out)));
-      });
-      child.on('error', (err) => settle(() => reject(err)));
-      child.on('close', (code) => settle(() => (code === 0 ? resolve(codexHomeFromShell(out)) : reject(new Error(`${shell} exited with ${code}`)))));
-    });
+    const marked = (out: string) => { const at = out.lastIndexOf(SHELL_MARK); return at >= 0 && out.includes('\n', at); };
+    asked = probeCli(shell, ['-ilc', `printf '\\n%s%s\\n' '${SHELL_MARK}' "$CODEX_HOME"`], { timeoutMs, until: marked })
+      .then(({ stdout }) => codexHomeFromShell(stdout));
     const kept = asked;
     shellHomes.set(shell, kept);
     kept.catch(() => { if (shellHomes.get(shell) === kept) shellHomes.delete(shell); });
@@ -182,9 +167,10 @@ export function codexFlagsFromHelp(help: string): Set<string> {
   return new Set(help.match(/--[a-z][a-z0-9-]*/g) ?? []);
 }
 
-/** The flags each codex binary listed, by binaryKey; and the asks of --help still running. */
+/** The flags each codex binary listed, by binaryKey; the asks of --help still running; the binaries whose last read failed. */
 const flagsByBinary = new Map<string, Set<string>>();
 const asking = new Map<string, Promise<Set<string> | undefined>>();
+const failedRead = new Set<string>();
 
 /** A binary and its version, as its flags are kept: its real path, size and time of change, which an update changes. */
 function binaryKey(binaryPath: string): string {
@@ -203,7 +189,8 @@ function binaryKey(binaryPath: string): string {
  * made while codex answers share that one codex. Waited for as long as it takes, to `timeoutMs`: under a heavy load (a
  * load average of 170, measured at #465's gate) a slow answer given up on at 2 s handed every launch of the run the
  * stable flags. undefined when codex could not answer (not there, failed, hung past its time): that is not kept, and
- * the next launch asks again.
+ * the next launch asks again. A CLI probe (core/cli-probe.ts): ended with what it started at its time and at the
+ * quit (the Audit's P1 on probe orphans).
  */
 export function readCodexFlags(binaryPath: string, timeoutMs = 10_000): Promise<Set<string> | undefined> {
   const key = binaryKey(binaryPath);
@@ -211,12 +198,16 @@ export function readCodexFlags(binaryPath: string, timeoutMs = 10_000): Promise<
   if (known) return Promise.resolve(known);
   let ask = asking.get(key);
   if (!ask) {
-    ask = execCli(binaryPath, ['--help'], { encoding: 'utf-8', timeout: timeoutMs, maxBuffer: 4 * 1024 * 1024 })
+    ask = probeCli(binaryPath, ['--help'], { timeoutMs, maxBuffer: 4 * 1024 * 1024 })
       .then(({ stdout }) => {
         const flags = codexFlagsFromHelp(stdout);
         flagsByBinary.set(key, flags);
+        failedRead.delete(key);
         return flags;
-      }, () => undefined)
+      }, () => {
+        failedRead.add(key);
+        return undefined;
+      })
       .finally(() => asking.delete(key));
     asking.set(key, ask);
   }
@@ -226,16 +217,18 @@ export function readCodexFlags(binaryPath: string, timeoutMs = 10_000): Promise<
 /**
  * Whether the codex at `binaryPath` has a flag, from the answer readCodexFlags kept for it (only auto needs one): never
  * codex run on the main thread. A launch reads the flags before it builds its line (CodexProvider.prepareLaunch); a
- * line built without that answer, or for a codex that could not answer, has the stable flags only, and the flags are
- * read for the next.
+ * line built without that answer, or for a codex that could not answer, has the stable flags only. The flags are read
+ * for the next only when no read of that binary has failed: a codex that did not answer the launch's own read is not
+ * asked again in the background, a second probe per launch (the Audit's P1 on probe orphans); the next launch asks it.
  */
 export function codexAccepts(binaryPath: string): (flag: string) => boolean {
   let known: Set<string> | undefined;
   return (flag: string) => {
     if (!known) {
-      known = flagsByBinary.get(binaryKey(binaryPath));
+      const key = binaryKey(binaryPath);
+      known = flagsByBinary.get(key);
       if (!known) {
-        void readCodexFlags(binaryPath);
+        if (!failedRead.has(key)) void readCodexFlags(binaryPath);
         known = new Set();
       }
     }

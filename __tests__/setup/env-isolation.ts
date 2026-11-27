@@ -85,6 +85,7 @@ const KEPT: Record<string, string> = {
   // The suite's own opt-ins, set by whoever runs it, in the TARS_ namespace swept above.
   TARS_STRESS: 'the opt-in for the measurements on the real disk',
   TARS_REAL_CLAUDE: 'the opt-in, or the path, for the tests that start a real claude',
+  TARS_TEST_REAL_CLIS: 'the CLIs a test may run for real, comma separated (codex, for its own parser): no-real-cli.ts lets those through',
   TARS_HERMES_TREE: 'with TARS_HERMES_PYTHON, where the live Hermes kanban test finds a Hermes checkout',
   TARS_HERMES_PYTHON: 'with TARS_HERMES_TREE, the python the live Hermes kanban test runs it with',
 };

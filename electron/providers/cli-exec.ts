@@ -60,9 +60,21 @@ function prepare<O extends { env?: NodeJS.ProcessEnv }>(name: string, args: read
   return { ...invocation, options: env === options.env ? options : { ...options, env } };
 }
 
+/**
+ * How long a synchronous CLI call (`mcp add`, `mcp remove`) is waited for when its caller names no time. It blocks the
+ * main thread, which paints the window and pumps every terminal, so a CLI that hangs froze Tars for good (27/11). A
+ * `claude mcp add` takes about a second; past this, the child is ended and the call throws, as on any failure.
+ * Ended with SIGKILL unless the caller names a signal, as the probes are (the Audit's L1 on #661): execFileSync
+ * returns only once its child has exited, so a CLI deaf to SIGTERM held the thread until it ended by itself. What the
+ * child started, a grandchild holding its output say, is reached by nothing: a synchronous call has no process group.
+ */
+const SYNC_CLI_TIMEOUT_MS = 20_000;
+
 /** execFileSync for a CLI named or configured by the user. Throws CliNotRunnableError before any spawn. */
 export function execCliSync(name: string, args: readonly string[], options: ExecFileSyncOptionsWithStringEncoding): string {
-  const run = prepare(name, args, options);
+  const bounded = options.timeout !== undefined && options.killSignal !== undefined ? options
+    : { ...options, timeout: options.timeout ?? SYNC_CLI_TIMEOUT_MS, killSignal: options.killSignal ?? 'SIGKILL' };
+  const run = prepare(name, args, bounded);
   return execFileSync(run.file, run.args, run.options);
 }
 

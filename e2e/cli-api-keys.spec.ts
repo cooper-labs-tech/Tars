@@ -35,8 +35,9 @@ const STAND_IN = String.raw`
 const fs = require('fs'), path = require('path'), crypto = require('crypto');
 const name = path.basename(process.argv[1]);
 const argv = process.argv.slice(2);
-// Registration calls (mcp add, --version...) answer and leave: only a session records.
-if (['mcp', '--version', 'version', 'login', 'auth', 'config'].includes(argv[0])) { process.stdout.write('ok\n'); process.exit(0); }
+// Registration calls (mcp add, --version...) and the --help Tars reads before a codex launch (#608) answer and leave: only
+// a session records. A --help recorded as a session counted as one more agent, and the wait for every stand-in ended early.
+if (['mcp', '--version', 'version', '--help', 'login', 'auth', 'config'].includes(argv[0])) { process.stdout.write('ok\n'); process.exit(0); }
 const keys = Object.keys(process.env).filter((k) => /_(API_KEY|KEY)$/.test(k)).sort();
 const hashes = Object.fromEntries(keys.map((k) => [k, crypto.createHash('sha256').update(process.env[k]).digest('hex')]));
 fs.appendFileSync(path.join(process.env.HOME, 'stand-in.jsonl'), JSON.stringify({ name, pid: process.pid, agent: process.env.CLAUDE_AGENT_ID || null, argv, keys, hashes }) + '\n');

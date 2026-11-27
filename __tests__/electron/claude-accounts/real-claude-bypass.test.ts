@@ -17,9 +17,10 @@
  *   from a ~/.claude.json without the flag, must show the dialog in the same run;
  * - a claude left running: each is killed by the PID this test started.
  *
- * Needs the claude binary (~/.local/bin/claude of the account running the
- * suite, or TARS_REAL_CLAUDE) and python3 for a real terminal (node-pty here
- * is built for Electron). Skipped where there is none, as on CI.
+ * Runs only when asked, with TARS_REAL_CLAUDE=1 (~/.local/bin/claude of the
+ * account running the suite) or TARS_REAL_CLAUDE=<path>, and python3 for a real
+ * terminal (node-pty here is built for Electron). Skipped otherwise, as on CI:
+ * a unit test runs no real CLI by default (the Audit's I-4 on #616).
  */
 import { describe, it, expect } from 'vitest';
 import * as fs from 'fs';
@@ -27,9 +28,14 @@ import * as os from 'os';
 import * as path from 'path';
 import { execFileSync } from 'child_process';
 import { provisionAccountDir } from '../../../electron/services/claude-accounts/provision';
+import { realCliOptIn } from '../../setup/real-cli-opt-in';
 
 function realClaude(): string | null {
-  const candidates = [process.env.TARS_REAL_CLAUDE, path.join(os.userInfo().homedir, '.local', 'bin', 'claude')];
+  // Only when asked (TARS_REAL_CLAUDE=1, or a path): a unit test runs no real CLI by default (the Audit's I-4 on #616;
+  // __tests__/setup/no-real-cli.ts cannot see this one, started through python3's terminal).
+  const asked = realCliOptIn('claude');
+  if (!asked) return null;
+  const candidates = [asked === 'any' ? undefined : asked, path.join(os.userInfo().homedir, '.local', 'bin', 'claude')];
   for (const c of candidates) {
     if (!c) continue;
     try {

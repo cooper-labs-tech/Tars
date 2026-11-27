@@ -3,15 +3,15 @@ import { defaultShell } from '../utils/default-shell';
 import * as path from 'path';
 import * as fs from 'fs';
 import * as os from 'os';
-import { exec, execFile } from 'child_process';
+import { exec } from 'child_process';
 import { promisify } from 'util';
 import type { AppSettings, CLIPaths } from '../types';
 import { dataPath } from '../constants';
 import { getPath, joinPathEntries, pathEntries, realFs, type Env, type FsProbe } from '../platform';
 import { findWindowsCli, windowsCliDirs, windowsCliFile, windowsGcloudDirs, type CliLookup } from '../providers/cli-exec';
+import { probeCli } from '../core/cli-probe';
 
 const execAsync = promisify(exec);
-const execFileAsync = promisify(execFile);
 
 // Shared config file path that MCP can read
 const CLI_PATHS_CONFIG_FILE = dataPath('cli-paths.json');
@@ -50,9 +50,11 @@ async function detectCLIPaths(savedPaths?: Partial<CLIPaths>): Promise<DetectedP
   let shellPath = process.env.PATH || '';
   try {
     // The user's shell as a file and its script as an argument: $SHELL is
-    // never parsed by another shell.
+    // never parsed by another shell. A CLI probe (core/cli-probe.ts): an
+    // interactive zsh ignores SIGTERM, so it is ended whole, with what its rc
+    // files started, at its time and at the quit (the Audit's P3 on probe orphans).
     const shell = defaultShell();
-    const { stdout } = await execFileAsync(shell, ['-ilc', 'echo $PATH'], { timeout: 5000 });
+    const { stdout } = await probeCli(shell, ['-ilc', 'echo $PATH'], { timeoutMs: 5000 });
     if (stdout.trim()) {
       shellPath = stdout.trim();
     }

@@ -50,6 +50,18 @@ vi.mock('child_process', async importOriginal => ({
   },
 }));
 
+// tailscale's `status` and `serve status` are CLI probes since 20/11 (core/cli-probe.ts, the Audit's P3 on probe
+// orphans): recorded and answered here as their execFile was, and no tailscale is started.
+vi.mock('../../../electron/core/cli-probe', () => ({
+  probeCli: async (file: string, args: string[]) => {
+    ran.push(`${file} ${args.join(' ')}`);
+    if (file === '/sandbox/fake-tailscale' && args[0] === 'status') {
+      return { stdout: JSON.stringify({ BackendState: 'Running', Self: { DNSName: 'tars-sandbox.example.ts.net.', TailscaleIPs: ['100.64.0.1'] } }), stderr: '' };
+    }
+    throw Object.assign(new Error('not installed'), { code: 'ENOENT' });
+  },
+}));
+
 interface Info { tailscale?: { installed: boolean; dnsName?: string } ; webhookTailnetUrl?: string }
 
 async function info(): Promise<Info> {

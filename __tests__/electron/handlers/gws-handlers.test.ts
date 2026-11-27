@@ -23,6 +23,13 @@ const mockExec = vi.fn();
 vi.mock('child_process', () => ({
   exec: (...args: unknown[]) => mockExec(...args),
 }));
+// `gws auth status` is a CLI probe since 20/11 (core/cli-probe.ts, the Audit's P3 on probe orphans): its argv,
+// answered here by mockExec as the shell line it replaced was.
+vi.mock('../../../electron/core/cli-probe', () => ({
+  probeCli: (binary: string, args: string[], opts: unknown) => new Promise((resolve, reject) => {
+    mockExec(`"${binary}" ${args.join(' ')}`, opts, (err: Error | null, result?: { stdout: string; stderr: string }) => (err ? reject(err) : resolve(result)));
+  }),
+}));
 
 // Mock os.homedir to use temp directory
 vi.mock('os', async (importOriginal) => {

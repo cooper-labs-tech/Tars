@@ -1,6 +1,6 @@
 import { safeGit } from '../utils/safe-git';
 import * as fs from 'fs';
-import { execFile } from 'child_process';
+import { probeCli } from '../core/cli-probe';
 import { privatePath } from '../constants';
 import { writeSecretFileSync } from '../utils/secret-file';
 import { reportEvent, type ReportEvent } from './event-reports';
@@ -89,10 +89,10 @@ export function githubRepoOf(url: string | undefined): string | undefined {
  * /opt/homebrew/bin, so every poll failed there, silently (the Audit's gate
  * of #234).
  */
-const run = (file: string, args: string[], cwd?: string) => new Promise<string>((resolve, reject) => {
-  execFile(file, args, { cwd, timeout: 20_000, maxBuffer: 4 * 1024 * 1024, env: { ...process.env, PATH: buildFullPath() } },
-    (err, stdout) => (err ? reject(err) : resolve(String(stdout))));
-});
+const run = async (file: string, args: string[]): Promise<string> =>
+  // Through probeCli (core/cli-probe.ts), so that its 20 s give-up and the quit end it with what it started; a plain
+  // execFile signalled gh alone at its time, and nothing ended a poll still running at the quit (the Audit's I-1 on #661).
+  (await probeCli(file, args, { env: { ...process.env, PATH: buildFullPath() }, timeoutMs: 20_000, maxBuffer: 4 * 1024 * 1024 })).stdout;
 
 /**
  * One poll of the GitHub repositories of these projects. Each event goes under

@@ -21,6 +21,16 @@ import { CMD_SHIM_NODE, SH_SHIM, pinPlatform } from '../providers/win-fake-disk'
  * 4. win32: claude.cmd (npm) is not found, or started through cmd.exe.
  * 5. A CLI that cannot be started is not said: the log must carry the
  *    resolver's reason, and the request still becomes a task (the fallback).
+ * Since 27/11 the call is started by probeCli (core/cli-probe.ts), so that its
+ * give-up and the quit end it with what it started (cli-probe-gaps.test.ts),
+ * and with no shell on any system (the Audit's L2 on #661): the provider's
+ * line read back into argv by posixWords, as on win32 already, in a group of
+ * its own. Measured by the Audit: posixWords hands claude the same four
+ * arguments as /bin/sh for quotes, $(...), backticks, &, |, ;, a line break,
+ * a backslash, a `--model` in the request, and $HOME, " and ' in a project's
+ * path, and no side effect runs.
+ * 6. The shell comes back: the line goes through /bin/sh or exec, or a
+ *    command in the request runs.
  */
 
 let root: string;
@@ -31,6 +41,7 @@ let savedLog: string | undefined;
 let unpin: (() => void) | undefined;
 const execCalls: string[] = [];
 const execFileOptions: Array<Record<string, unknown>> = [];
+const spawned: Array<{ file: string; args: string[]; options: Record<string, unknown> }> = [];
 let captureExecFile: ((file: string, args: string[], opts: { env: Record<string, string> }) => string) | null = null;
 let captureExec: ((cmd: string, opts: { env: Record<string, string> }) => string) | null = null;
 
@@ -40,6 +51,10 @@ vi.mock('child_process', async (importOriginal) => {
   const actual = await importOriginal<typeof import('child_process')>();
   return {
     ...actual,
+    spawn: (file: string, args: string[], options: Record<string, unknown>) => {
+      spawned.push({ file, args, options });
+      return actual.spawn(file, args, options);
+    },
     exec: (...args: Parameters<typeof actual.exec>) => {
       execCalls.push(String(args[0]));
       if (captureExec) {
@@ -90,13 +105,17 @@ async function generate(prompt: string, projects: Array<{ path: string; name: st
   return generateTaskFromPrompt(prompt, projects);
 }
 
-const HOSTILE = `Fix it's "quoted" bug\nsecond line $(whoami) \`id\` %PATH% & echo pwned ^ !x! 'end`;
-const PROJECTS = [{ path: path.join('a b (x)', 'pro\'j'), name: 'pro"ject\'s & %USERNAME%' }];
+/** What a command in the request would make, were it ever run. */
+const PWNED = path.join(os.tmpdir(), `tars-kanban-pwned-${process.pid}`);
+const HOSTILE = `Fix it's "quoted" bug\nsecond line $(whoami) \`id\` %PATH% & echo pwned ^ !x! 'end`
+  + ` | cat ; ls \\ back\\slash --model opus $(touch ${PWNED}) \`touch ${PWNED}\``;
+const PROJECTS = [{ path: path.join('a b (x)', '$HOME', 'pro\'j "q"'), name: 'pro"ject\'s & %USERNAME%' }];
 
 beforeEach(() => {
   vi.resetModules();
   execCalls.length = 0;
   execFileOptions.length = 0;
+  spawned.length = 0;
   captureExecFile = null;
   captureExec = null;
   root = fs.mkdtempSync(path.join(os.tmpdir(), 'tars-kanban-gen-'));
@@ -131,16 +150,17 @@ describe('generateTaskFromPrompt', () => {
     expect(argv[3]).toContain(`- "${PROJECTS[0].name}" (${PROJECTS[0].path})`);
     expect(task.title).toBe('from the fake');
     expect(task.priority).toBe('high');
-    // darwin/linux: through /bin/sh, as before, which reads the quoted line back to the same argv.
-    expect(execCalls).toHaveLength(process.platform === 'win32' ? 0 : 1);
+    // darwin/linux: through /bin/sh, as before, which reads the quoted line back to the same argv; started by probeCli,
+    // never by exec, so that its group ends with its give-up and the quit.
+    expect(execCalls).toHaveLength(0);
+    expect(spawned).toHaveLength(1);
     // win32: and with no console window, Tars being a GUI program.
-    if (process.platform === 'win32') expect(execFileOptions).toEqual([expect.objectContaining({ windowsHide: true })]);
+    if (process.platform === 'win32') expect(spawned[0].options).toMatchObject({ windowsHide: true });
   });
 
-  it('darwin/linux: the provider\'s command line handed to /bin/sh as before, the env { ...process.env, PATH }', async () => {
+  it.skipIf(process.platform === 'win32')('6. darwin/linux: no shell: the provider\'s line read back into argv, the env { ...process.env, PATH }, in a group of its own, and nothing in the request runs', async () => {
     unpin = pinPlatform('darwin');
-    const seen: Array<{ cmd: string; env: Record<string, string> }> = [];
-    captureExec = (cmd, opts) => { seen.push({ cmd, env: opts.env }); return TASK_JSON; };
+    installFakeClaude();
     const { getProvider } = await import('../../../electron/providers');
     const built = vi.spyOn(getProvider('claude'), 'buildOneShotCommand');
 
@@ -149,7 +169,15 @@ describe('generateTaskFromPrompt', () => {
     expect(built).toHaveBeenCalledTimes(1);
     expect(built.mock.calls[0][0]).toMatchObject({ binaryPath: 'claude', model: 'haiku' });
     expect(built.mock.calls[0][0].prompt).toContain(`User's request:\n${HOSTILE}\n`);
-    expect(seen).toEqual([{ cmd: built.mock.results[0].value, env: { ...process.env, PATH: fakePath } }]);
+    expect(spawned).toHaveLength(1);
+    expect(spawned[0].file).not.toBe('/bin/sh');
+    expect(path.basename(spawned[0].file)).toBe('claude');
+    expect(spawned[0].args.slice(0, 3)).toEqual(['-p', '--model', 'haiku']);
+    expect(spawned[0].args).toHaveLength(4);
+    expect(spawned[0].args[3]).toBe(built.mock.calls[0][0].prompt);
+    expect(spawned[0].options).toMatchObject({ env: { ...process.env, PATH: fakePath }, detached: true });
+    expect(execCalls).toEqual([]);
+    expect(fs.existsSync(PWNED), 'a command in the request ran').toBe(false);
     expect(task.title).toBe('from the fake');
   });
 
