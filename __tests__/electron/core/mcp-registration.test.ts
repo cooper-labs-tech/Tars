@@ -47,12 +47,21 @@ describe('a launch and the start-up registration', () => {
     expect(released.sort()).toEqual(['first:registered', 'second:registered']);
   });
 
-  it('2. once the registration ended, a launch goes on at once, and a later begin holds nothing', async () => {
+  it('2. once the registration ended, a launch goes on at once', async () => {
     const { mcpRegistrationBegins, mcpRegistrationEnds, untilMcpRegistered } = await gate();
     mcpRegistrationBegins();
     mcpRegistrationEnds();
     await expect(untilMcpRegistered()).resolves.toBe('open');
+  });
+
+  it('5. a begin while one is under way is that one: its one end releases every launch', async () => {
+    const { mcpRegistrationBegins, mcpRegistrationEnds, untilMcpRegistered } = await gate();
     mcpRegistrationBegins();
+    const first = untilMcpRegistered();
+    mcpRegistrationBegins();
+    const second = untilMcpRegistered();
+    mcpRegistrationEnds();
+    await expect(Promise.all([first, second])).resolves.toEqual(['registered', 'registered']);
     await expect(untilMcpRegistered()).resolves.toBe('open');
   });
 

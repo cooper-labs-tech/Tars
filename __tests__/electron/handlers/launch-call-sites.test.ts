@@ -563,23 +563,28 @@ describe.each(['darwin', 'linux'] as const)('1. on %s, what each call site start
     agents.set(bot.id, bot);
     const fleet: BotFleet = { agents, ptyProcesses, settings: () => settings, saveAgents: vi.fn(), initAgentPty: (a) => initAgentPty(a, null, vi.fn(), vi.fn()) };
     const shells = spawned.length;
+    // A launch line, wherever a path puts it: typed (directly or through a launch script) or in the spawn's own argv
+    // (the API). A bot opens its agent's shell first, which builds no line: only lines are counted.
+    const launched = () => spawned.slice(shells - 2).filter((t) => launchedLine(typed(t)).includes("'claude'") || JSON.stringify(t.args).includes("'claude'"));
     mcpRegistrationBegins();
-    const starts = [
-      handlers.get('agent:start')!({}, { id: fromWindow.id, prompt: TASK }),
-      launchAgent(resumed.id, TASK),
-      startWithTask(fleet, bot, TASK, 'Telegram', { resume: false, reply: vi.fn() }),
-      apiCall({}, () => undefined),
-    ];
-    await pause(150);
-    expect(typed(spawned[shells - 2]), 'the window\'s start typed its line while the registration ran').toBe('');
-    expect(typed(spawned[shells - 1]), 'a resume typed its line while the registration ran').toBe('');
-    expect(spawned.length, 'a bot or the API started a terminal while the registration ran').toBe(shells);
-    mcpRegistrationEnds();
-    await Promise.all(starts);
-    await pause(50);
-    expect(typed(spawned[shells - 2])).toBe(`cd ${q(project)} && ${claudeCommand(TASK)}\r`);
-    expect(typed(spawned[shells - 1])).toContain(`cd ${q(project)} && 'claude'`);
-    expect(spawned.length, 'the bot and the API each started theirs once it ended').toBe(shells + 2);
+    try {
+      const starts = [
+        handlers.get('agent:start')!({}, { id: fromWindow.id, prompt: TASK }),
+        launchAgent(resumed.id, TASK),
+        startWithTask(fleet, bot, TASK, 'Telegram', { resume: false, reply: vi.fn() }),
+        apiCall({}, () => undefined),
+      ];
+      await pause(150);
+      expect(launched(), 'a launch built its line while the registration ran').toEqual([]);
+      mcpRegistrationEnds();
+      await Promise.all(starts);
+      await pause(50);
+      expect(typed(spawned[shells - 2])).toBe(`cd ${q(project)} && ${claudeCommand(TASK)}\r`);
+      expect(launched(), 'the window, the resume, the bot and the API each built theirs once it ended').toHaveLength(4);
+    } finally {
+      // Never left under way for the tests after this one, whatever happened here.
+      mcpRegistrationEnds();
+    }
   });
 });
 
