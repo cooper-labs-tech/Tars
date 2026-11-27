@@ -38,13 +38,14 @@ const Q = 'eeee5555-0000-4000-8000-0000000000a3';
 const EP = 'ep-0e2ea3';
 const REPO_URL = 'https://github.com/e2e-owner/e2e-probe.git';
 const NEW_NOTICE_LINES = [
-  'what started each session: you, a task, a channel, a restart, a wake from sleep or a task handed on again, by its kind and never by who',
+  'what started each session: you, a task, a channel, a restart, a wake from sleep or a task handed on again, by its kind, and the id of the agent that asked when one did',
   'the tasks each session ran: their ids, where they came from (you, an agent, a channel, Tars), the task they were part of, the agent that asked, and how they ended',
   'the task each turn served, by its reference',
   'when each task reached Tars, was handed to the agent, and sent its first request to the model',
   'the commit and branch each session started from',
-  'whether the pull request of a session\'s branch was merged or closed, and when',
+  'whether the pull request of a session\'s branch was merged or closed, its number, and when',
   'the tasks taken out of an agent\'s queue before they started, with when and why, by its kind',
+  'past the last 50, how many more tasks a session ran and how many more were taken out of its queue',
   'the requests a harness gave up while Tars held them for a paused endpoint',
 ];
 
