@@ -329,6 +329,21 @@ function refused(status: number, error: string) {
   return { success: false as const, error, needsSignIn: status === 401 || status === 403 };
 }
 
+/**
+ * A 2xx answer whose body is not the JSON a reader needs: a proxy's sign-in
+ * page, a web server on the gateway's port. hermesRequest keeps such a body as
+ * its raw text, and the readers of the pages took it for an answer with nothing
+ * in it, a success with no rows (#660). `what` is what Tars was reading.
+ */
+function unexpectedAnswer(what: string) {
+  return { success: false as const, error: `Tars could not read ${what} Hermes sent: its answer is not what Tars expected.` };
+}
+
+/** A body a list or a record can be read from: JSON's object or array, never raw text or null. */
+function readable(body: unknown): body is object {
+  return typeof body === 'object' && body !== null;
+}
+
 /** A read the gateway refused: the sign-in prompt when that is the reason,
  *  the status otherwise. */
 function failedRead(status: number, signInPrompt: string) {
@@ -474,12 +489,14 @@ export async function fetchHermesBoard(conn: HermesConnection, board?: string, t
   const query = params.size ? `?${params.toString()}` : '';
   const { status, body } = await gatewayCall(conn, `${KANBAN}/board${query}`);
   if (status !== 200) return refused(status, errorDetail(status, body));
+  if (!readable(body)) return unexpectedAnswer('the board');
   return { success: true as const, board: body };
 }
 
 export async function getHermesTask(conn: HermesConnection, taskId: string) {
   const { status, body } = await gatewayCall(conn, `${KANBAN}/tasks/${encodeURIComponent(taskId)}`);
   if (status !== 200) return refused(status, errorDetail(status, body));
+  if (!readable(body)) return unexpectedAnswer('the task');
   return { success: true as const, detail: body };
 }
 
@@ -511,6 +528,7 @@ export async function addHermesTaskComment(conn: HermesConnection, taskId: strin
 export async function fetchHermesCrons(conn: HermesConnection) {
   const { status, body } = await gatewayCall(conn, '/api/cron/jobs?profile=all');
   if (status !== 200) return refused(status, errorDetail(status, body));
+  if (!readable(body)) return unexpectedAnswer('the schedules');
   return { success: true as const, jobs: body };
 }
 
@@ -597,6 +615,7 @@ export async function fetchHermesModelOptions(
 > {
   const { status, body } = await gatewayCall(conn, '/api/model/options');
   if (status >= 300) return failedRead(status, 'Sign in to Hermes to list its models');
+  if (!readable(body)) return unexpectedAnswer('the models');
 
   const b = (body ?? {}) as Record<string, unknown>;
   const raw = Array.isArray(b.providers) ? b.providers : [];
@@ -958,6 +977,7 @@ export async function fetchHermesMcpServers(
 ): Promise<{ success: true; servers: HermesMcpServer[] } | { success: false; error: string; needsSignIn?: boolean }> {
   const { status, body } = await gatewayCall(conn, '/api/mcp/servers');
   if (status >= 300) return failedRead(status, 'Sign in to Hermes to list its MCP servers');
+  if (!readable(body)) return unexpectedAnswer('the MCP servers');
 
   const raw = (body as { servers?: unknown[] } | null)?.servers;
   if (!Array.isArray(raw)) return { success: true, servers: [] };
@@ -1001,6 +1021,7 @@ export async function fetchHermesMemoryProviders(
 > {
   const { status, body } = await gatewayCall(conn, '/api/memory');
   if (status >= 300) return failedRead(status, 'Sign in to Hermes to read its memory settings');
+  if (!readable(body)) return unexpectedAnswer('the memory providers');
 
   const b = (body ?? {}) as Record<string, unknown>;
   const raw = Array.isArray(b.providers) ? b.providers : [];
@@ -1058,6 +1079,7 @@ export async function searchHermesSessions(
   const q = `?q=${encodeURIComponent(query)}&limit=${Math.min(Math.max(limit, 1), 100)}`;
   const { status, body } = await gatewayCall(conn, `/api/sessions/search${q}`);
   if (status >= 300) return failedRead(status, 'Sign in to Hermes to search its history');
+  if (!readable(body)) return unexpectedAnswer('the search results');
 
   const payload = body as Record<string, unknown> | null;
   const raw = Array.isArray(payload)
@@ -1107,5 +1129,6 @@ export async function fetchHermesSessionParent(
 export async function fetchHermesMemoryState(conn: HermesConnection) {
   const { status, body } = await gatewayCall(conn, '/api/memory');
   if (status >= 300) return failedRead(status, 'Sign in to Hermes');
+  if (!readable(body)) return unexpectedAnswer('the memory settings');
   return { success: true as const, state: body as Record<string, unknown> };
 }
