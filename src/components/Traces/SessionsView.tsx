@@ -8,7 +8,7 @@ import type { HarnessId, TraceFilter, TraceSessionSummary, TraceSettingsView } f
 import { bytes } from '@/components/Resources/format';
 import { Notice, Unread } from '@/components/Resources/bits';
 import { fmtTokens } from '@/lib/usage-format';
-import { dayClockOf, dayOf, marksOf, outcomeOf, projectNameOf, reasonOf, sizeOf } from '@/lib/traces-format';
+import { BACK_OFFICE_COPY_MANY, BACK_OFFICE_COPY_ONE, dayClockOf, dayOf, marksOf, outcomeOf, projectNameOf, reasonOf, sizeOf } from '@/lib/traces-format';
 import { useEndpoints } from '@/hooks/useEndpoints';
 import { useElectronAgents } from '@/hooks/useElectron';
 import { Meter, Stat, StateLine } from './bits';
@@ -116,7 +116,7 @@ export function SessionsView({ onOpen }: { onOpen: (traceId: string) => void }) 
   const shown = total?.sessions ?? loaded;
   const deleteBody = (n: number) => {
     const where = [project ? projectNameOf(project) : 'every project', rangeWords[range]].join(', ');
-    return `Every session the filters show: ${where}, ${n} in all. The reader can no longer read them. This cannot be undone.`;
+    return `Every session the filters show: ${where}, ${n} in all. The reader can no longer read them. ${BACK_OFFICE_COPY_MANY} This cannot be undone.`;
   };
 
   return (
@@ -202,7 +202,7 @@ export function SessionsView({ onOpen }: { onOpen: (traceId: string) => void }) 
                   <Button size="sm" variant="ghost" className="font-mono" onClick={e => { e.stopPropagation(); setExporting({ one: s }); }}>export</Button>
                   <Button size="sm" variant="ghost" className="font-mono" onClick={e => {
                     e.stopPropagation();
-                    setDeleting({ traceIds: [s.traceId], label: 'Delete', body: `${s.agentName ?? s.agentId}, ${dayClockOf(s.startedAt)}: ${s.turnCount} turns, ${s.requestCount} requests, ${sizeOf(s.bytes)}. The reader can no longer read it. This cannot be undone.` });
+                    setDeleting({ traceIds: [s.traceId], label: 'Delete', body: `${s.agentName ?? s.agentId}, ${dayClockOf(s.startedAt)}: ${s.turnCount} turns, ${s.requestCount} requests, ${sizeOf(s.bytes)}. The reader can no longer read it. ${BACK_OFFICE_COPY_ONE} This cannot be undone.` });
                   }}>delete</Button>
                 </span>
               </div>
