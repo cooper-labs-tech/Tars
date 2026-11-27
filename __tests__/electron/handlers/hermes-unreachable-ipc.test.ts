@@ -45,6 +45,11 @@ import * as http from 'node:http';
  *    answers, and an overseer question awaiting it holds the turn for good:
  *    every later question is "busy" until Tars restarts (the Audit's M1 on
  *    #660, measured on main too). Added after the fix of 1 to 10.
+ * 12. A gateway that trickles its answer, a byte at a time, each one within the
+ *    idle timeout, holds a call for good: hermesRequest's timeout is an idle
+ *    one, and nothing bounds the whole request (the Audit's I-2 on #660). A
+ *    whole-request deadline settles it, marked, in words, and leaves an answer
+ *    that ends in time alone. Added after the fix of 1 to 11.
  */
 
 const handlers = vi.hoisted(() => new Map<string, (...args: unknown[]) => Promise<unknown>>());
@@ -281,6 +286,52 @@ describe('a gateway that cuts its answer off once it has begun (11)', () => {
       expect((answer as Refusal).error).toMatch(new RegExp(`^Tars could not reach Hermes at http://127\\.0\\.0\\.1:${port}: \\S`));
     }
   }, 30_000);
+});
+
+/** A gateway that answers 200 and then one byte every `everyMs`, of a body of `length`; ends it once all are sent. */
+async function trickles(everyMs: number, length = 1000): Promise<number> {
+  const timers = new Set<NodeJS.Timeout>();
+  const server = http.createServer((_req, res) => {
+    res.writeHead(200, { 'Content-Type': 'application/json', 'Content-Length': String(length) });
+    let sent = 0;
+    const timer = setInterval(() => {
+      if (res.destroyed) { clearInterval(timer); return; }
+      sent += 1;
+      if (sent < length) res.write(' ');
+      else { clearInterval(timer); res.end(' '); }
+    }, everyMs);
+    timers.add(timer);
+  });
+  await new Promise<void>(resolve => server.listen(0, '127.0.0.1', resolve));
+  open.push(() => new Promise<void>(resolve => { for (const t of timers) clearInterval(t); server.closeAllConnections(); server.close(() => resolve()); }));
+  return (server.address() as net.AddressInfo).port;
+}
+
+describe('a gateway that trickles its answer, each byte within the idle timeout (12)', () => {
+  it('hermes:crons:list refuses at its 30 s deadline, and says so', async () => {
+    const port = await trickles(2_000);
+    gatewayAt(`http://127.0.0.1:${port}`);
+
+    const answer = await within(call('hermes:crons:list'), 40_000);
+
+    expect(answer).toEqual({ success: false, error: `Tars could not reach Hermes at http://127.0.0.1:${port}: its answer did not end within 30 s` });
+  }, 50_000);
+
+  it('a request given a deadline is settled at it, marked, in words', async () => {
+    const { hermesRequest, noAnswerSentence } = await import('../../../electron/services/hermes-client');
+    const port = await trickles(300);
+
+    const settled = await within(hermesRequest(`http://127.0.0.1:${port}`, '/api/cron/jobs', { timeoutMs: 1_000, deadlineMs: 2_000 } as never).then(() => 'resolved', err => err), 5_000);
+
+    expect(noAnswerSentence(settled)).toBe(`Tars could not reach Hermes at http://127.0.0.1:${port}: its answer did not end within 2 s`);
+  }, 10_000);
+
+  it('an answer that is slow but ends before its deadline is read', async () => {
+    const { hermesRequest } = await import('../../../electron/services/hermes-client');
+    const port = await trickles(100, 5);
+
+    await expect(hermesRequest(`http://127.0.0.1:${port}`, '/api/cron/jobs', { timeoutMs: 1_000, deadlineMs: 2_000 } as never)).resolves.toMatchObject({ status: 200 });
+  }, 10_000);
 });
 
 describe('the Kanban board keeps its contract (9)', () => {
