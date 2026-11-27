@@ -97,6 +97,8 @@ const patterns = entries.map(entry => ({
 
 /** An X11 colour spec, as a terminal's OSC 10/11 reply writes one: `rgb:` and three hex channels split by `/`. */
 const RGB_SPEC = /rgba?:[0-9a-f]{1,4}\/[0-9a-f]{1,4}\/[0-9a-f]{1,4}(?:\/[0-9a-f]{1,4})?/giu;
+/** A UUID, any of whose groups may happen to be the number. */
+const UUID = /[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/giu;
 const ALNUM = /[0-9A-Za-z]/;
 
 /**
@@ -104,10 +106,11 @@ const ALNUM = /[0-9A-Za-z]/;
  * letters and digits decides (the Audit's M1 on #670): a run of hex digits only (`ff`, `deadbeef` around it) or one
  * behind `#` is a colour or a hash, and so is a hex literal (`0x`) or a code point (`\u`, `\u{`, `U+`); a run with any
  * other letter is a word, and the number in it matches (a handle without its dot, a word ending on it). Last, it is no
- * channel of an `rgb:` colour spec.
+ * decimal fraction's digits (`0.` before it), no channel of an `rgb:` colour spec and no group of a UUID.
  */
 function standsAsNumber(line, i, j) {
   if (/\d/.test(line[i - 1] ?? '') || /\d/.test(line[j] ?? '')) return false;
+  if (line[i - 1] === '.' && /\d/.test(line[i - 2] ?? '')) return false;
   let a = i;
   while (a > 0 && ALNUM.test(line[a - 1])) a--;
   let b = j;
@@ -119,7 +122,9 @@ function standsAsNumber(line, i, j) {
   if (/^0x[0-9a-f]+$/i.test(run)) return false;
   if (/^u[0-9a-f]+$/i.test(run) && before.endsWith('\\')) return false;
   if (before.endsWith('\\u{') || before.toUpperCase().endsWith('U+')) return false;
-  for (const m of line.matchAll(RGB_SPEC)) if (i >= m.index && j <= m.index + m[0].length) return false;
+  for (const rx of [RGB_SPEC, UUID]) {
+    for (const m of line.matchAll(rx)) if (i >= m.index && j <= m.index + m[0].length) return false;
+  }
   return true;
 }
 
