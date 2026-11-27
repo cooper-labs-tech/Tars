@@ -10,12 +10,19 @@ import {
 import { ChatList } from './ChatList';
 import { Brand, BrandMark } from '@/components/Brand';
 import { Button } from '@/components/ui';
-import { useWhatsNewBadge } from '@/components/Sidebar';
+import { useWhatsNewBadge } from '@/hooks/useWhatsNewBadge';
 import { useAppPathname } from '@/hooks/useAppPathname';
 import { useElectronAgents } from '@/hooks/useElectron';
 import { shellPlaceFor, type ShellPlace } from '@/lib/new-shell';
 import { useStore } from '@/store';
 import { MORE_PAGES, type MorePageId } from './more-pages';
+import { hoverEnd, hoverStart } from '@/lib/prefetch-on-hover';
+
+/** The route each page of More shows, for what prefetch-on-hover starts reading while the pointer rests on it. */
+const ROUTE_OF: Record<MorePageId, string> = {
+  agents: '/agents', review: '/review', logs: '/logs', vault: '/vault', extensions: '/skills', usage: '/usage',
+  resources: '/resources', brain: '/memory', settings: '/settings', 'whats-new': '/whats-new',
+};
 
 /** The main menu of `Shell · chats · empty`: Chat and Projects, then the three pages kept for now. */
 const MAIN: Array<{ place: ShellPlace; href: string; label: string; icon: typeof MessageSquare }> = [
@@ -113,7 +120,11 @@ export default function NewSidebar({ onOpenPage }: { onOpenPage: (id: MorePageId
 
       <nav aria-label="Main menu" className="px-2 pt-1 pb-1 space-y-px shrink-0">
         {MAIN.map((item, index) => {
-          const current = place === item.place;
+          const page = place === item.place;
+          // Tars, all projects is a chat too, the first of Chat's: on /chat the Chat row is boxed beside it, as
+          // `Chat · chats · Tars, all projects` (hongt) draws it, the page itself being Tars's own entry.
+          const section = item.place === 'chat' && place === 'tars';
+          const current = page || section;
           return (
             <Fragment key={item.href}>
               {index === 2 && (
@@ -121,7 +132,8 @@ export default function NewSidebar({ onOpenPage }: { onOpenPage: (id: MorePageId
                   <div className="h-px bg-border" />
                 </div>
               )}
-              <Link href={hrefOf(item)} aria-current={current ? 'page' : undefined} className={rowClass(current)}>
+              <Link href={hrefOf(item)} aria-current={page ? 'page' : section ? 'true' : undefined} className={rowClass(current)}
+                onPointerEnter={() => hoverStart(item.href)} onPointerLeave={hoverEnd}>
                 <item.icon className={iconClass(current)} />
                 <span className={labelClass(current)}>{item.label}</span>
               </Link>
@@ -197,6 +209,8 @@ export default function NewSidebar({ onOpenPage }: { onOpenPage: (id: MorePageId
                 <button
                   type="button"
                   role="menuitem"
+                  onPointerEnter={() => hoverStart(ROUTE_OF[page.id])}
+                  onPointerLeave={hoverEnd}
                   onClick={() => {
                     setMoreOpen(false);
                     onOpenPage(page.id);

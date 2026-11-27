@@ -114,103 +114,101 @@ async function clickWhereItIs(page: Page, button: Locator, label: string, seen: 
   await page.mouse.click(at.x, at.y);
 }
 
-for (const newInterface of [false, true]) {
-  test(`a question opened whole in the smallest cell of the board keeps allow and deny in reach, its details scrolling${newInterface ? ' (new interface)' : ''}`, async () => {
-    test.setTimeout(240_000);
-    const home = fs.mkdtempSync(path.join(os.tmpdir(), 'dorothy-e2e-ask-small-cell-'));
-    seedSandbox(home);
-    const project = path.join(home, 'projects', 'tars');
-    const cli = standIn(home);
-    const dir = path.join(home, '.tars');
-    fs.writeFileSync(path.join(dir, 'agents.json'), JSON.stringify(NAMES.map((name, i) => ({
-      id: i === 0 ? ASKER : `peer-${i}`, name, character: 'robot', provider: 'claude', status: 'idle', role: 'worker',
-      projectPath: project, skills: [], cliPath: cli,
-      createdAt: '2026-10-22T08:00:00.000Z', lastActivity: '2026-10-22T08:00:00.000Z',
-    })), null, 2));
-    fs.writeFileSync(path.join(dir, 'app-settings.json'), JSON.stringify({ ollamaBaseUrl: 'http://127.0.0.1:9', newInterface }, null, 2));
+test(`a question opened whole in the smallest cell of the board keeps allow and deny in reach, its details scrolling`, async () => {
+  test.setTimeout(240_000);
+  const home = fs.mkdtempSync(path.join(os.tmpdir(), 'dorothy-e2e-ask-small-cell-'));
+  seedSandbox(home);
+  const project = path.join(home, 'projects', 'tars');
+  const cli = standIn(home);
+  const dir = path.join(home, '.tars');
+  fs.writeFileSync(path.join(dir, 'agents.json'), JSON.stringify(NAMES.map((name, i) => ({
+    id: i === 0 ? ASKER : `peer-${i}`, name, character: 'robot', provider: 'claude', status: 'idle', role: 'worker',
+    projectPath: project, skills: [], cliPath: cli,
+    createdAt: '2026-10-22T08:00:00.000Z', lastActivity: '2026-10-22T08:00:00.000Z',
+  })), null, 2));
+  fs.writeFileSync(path.join(dir, 'app-settings.json'), JSON.stringify({ ollamaBaseUrl: 'http://127.0.0.1:9' }, null, 2));
 
-    const app = await launchSandboxed(electron, home, {
-      env: { NODE_ENV: 'development', DOROTHY_DEV_URL: DEV_URL, DOROTHY_API_PORT: apiPort(newInterface ? 31542 : 31541), DOROTHY_E2E: '1' },
-    });
-    const seen: Record<string, unknown> = { newInterface };
-    const tag = newInterface ? 'new' : 'old';
-    const pageErrors: string[] = [];
-    try {
-      const page = await app.firstWindow();
-      page.on('pageerror', (e) => pageErrors.push(e.message));
-      await page.waitForLoadState('domcontentloaded');
-      await page.goto(`${DEV_URL}/`, { waitUntil: 'domcontentloaded' });
-
-      // The board: eight panels, in the window at the size it opens at.
-      await expect(page.locator('[data-agent-panel]')).toHaveCount(8, { timeout: 90_000 });
-      seen.window = await page.evaluate(() => ({ width: window.innerWidth, height: window.innerHeight }));
-      const panel = page.locator(`[data-agent-panel="${ASKER}"]`);
-      const ask = page.locator(`[data-permission-ask="${ASKER}"]`);
-
-      for (const [i, call] of CALLS.entries()) {
-        const step = call.tool_use_id === 'toolu_deny' ? 'deny' : 'allow';
-        // The line cuts the command: show all opens it whole, in the panel.
-        await expect(ask).toContainText('Asks to use Bash:', { timeout: 60_000 });
-        await expect(ask).toContainText(call.command.slice(0, 60));
-        seen[`cell-${step}`] = await panel.evaluate((el) => { const r = el.getBoundingClientRect(); return { width: Math.round(r.width), height: Math.round(r.height) }; });
-        await clickWhereItIs(page, ask.getByRole('button', { name: 'show all', exact: true }), `${step}-show-all`, seen);
-        await expect(ask).toContainText(call.command);
-        await stepShot(page, `${tag}-0${i + 1}a-shown-whole`);
-
-        // Allow and deny, in the panel and on top at their own point.
-        seen[`${step}-allow-reach`] = await reach(ask.getByRole('button', { name: 'allow', exact: true }));
-        seen[`${step}-deny-reach`] = await reach(ask.getByRole('button', { name: 'deny', exact: true }));
-        for (const name of ['allow', 'deny']) {
-          const at = seen[`${step}-${name}-reach`] as Awaited<ReturnType<typeof reach>>;
-          expect(at.inPanel, `${name} inside its panel, ${step} (${JSON.stringify(at)})`).toBe(true);
-          expect(at.onTop, `${name} on top at its point, ${step}`).toBe(true);
-        }
-
-        // The details are taller than what the cell holds, and scroll inside
-        // the ask to why Claude Code asks and the rule that asked.
-        const details = ask.locator('[data-ask-details]');
-        const before = await details.evaluate((el) => ({ scrollHeight: el.scrollHeight, clientHeight: el.clientHeight, scrollTop: el.scrollTop }));
-        seen[`${step}-details`] = before;
-        expect(before.scrollHeight, 'the details are taller than their box').toBeGreaterThan(before.clientHeight);
-        const box = (await details.boundingBox())!;
-        await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
-        await page.mouse.wheel(0, before.scrollHeight);
-        await expect.poll(() => details.evaluate((el) => Math.ceil(el.scrollTop + el.clientHeight) >= el.scrollHeight - 1)).toBe(true);
-        const rule = ask.getByRole('definition').last();
-        await expect(rule).toHaveText(RULE);
-        seen[`${step}-rule-reach`] = await rule.evaluate((el) => {
-          const r = el.getBoundingClientRect(); const d = el.closest('[data-ask-details]')!.getBoundingClientRect();
-          return { inDetails: r.top >= d.top - 0.5 && r.bottom <= d.bottom + 0.5 };
-        });
-        expect((seen[`${step}-rule-reach`] as { inDetails: boolean }).inDetails, 'the rule, scrolled to, is in view').toBe(true);
-        expect(await clippedScroll(ask), 'no box but the details was scrolled').toBe(0);
-        await stepShot(page, `${tag}-0${i + 1}b-details-scrolled`);
-
-        if (step === 'deny') {
-          // Deny opens its reason field in place; its own deny stays in reach.
-          await clickWhereItIs(page, ask.getByRole('button', { name: 'deny', exact: true }), 'deny-open-reason', seen);
-          await ask.getByRole('textbox').fill(DENY_REASON);
-          await stepShot(page, `${tag}-01c-deny-reason`);
-          await clickWhereItIs(page, ask.getByRole('button', { name: 'deny', exact: true }), 'deny-send', seen);
-        } else {
-          await clickWhereItIs(page, ask.getByRole('button', { name: 'allow', exact: true }), 'allow-send', seen);
-        }
-        await expect.poll(() => answersOf(home).length, { timeout: 15_000 }).toBe(i + 1);
-      }
-      await expect(ask).toHaveCount(0, { timeout: 15_000 });
-      await stepShot(page, `${tag}-03-answered`);
-
-      const answers = answersOf(home);
-      recordValues({ ...seen, answers, pageErrors });
-      expect(answers.map(({ call, decision, reason }) => ({ call, decision, reason }))).toEqual([
-        { call: 'toolu_deny', decision: 'deny', reason: `the user refused it in Tars: ${DENY_REASON}` },
-        { call: 'toolu_allow', decision: 'allow', reason: 'the user allowed it in Tars' },
-      ]);
-      expect(pageErrors).toEqual([]);
-    } finally {
-      recordValues(seen);
-      await app.close();
-      await removeHome(home);
-    }
+  const app = await launchSandboxed(electron, home, {
+    env: { NODE_ENV: 'development', DOROTHY_DEV_URL: DEV_URL, DOROTHY_API_PORT: apiPort(31542), DOROTHY_E2E: '1' },
   });
-}
+  const seen: Record<string, unknown> = {};
+  const tag = 'new';
+  const pageErrors: string[] = [];
+  try {
+    const page = await app.firstWindow();
+    page.on('pageerror', (e) => pageErrors.push(e.message));
+    await page.waitForLoadState('domcontentloaded');
+    await page.goto(`${DEV_URL}/`, { waitUntil: 'domcontentloaded' });
+
+    // The board: eight panels, in the window at the size it opens at.
+    await expect(page.locator('[data-agent-panel]')).toHaveCount(8, { timeout: 90_000 });
+    seen.window = await page.evaluate(() => ({ width: window.innerWidth, height: window.innerHeight }));
+    const panel = page.locator(`[data-agent-panel="${ASKER}"]`);
+    const ask = page.locator(`[data-permission-ask="${ASKER}"]`);
+
+    for (const [i, call] of CALLS.entries()) {
+      const step = call.tool_use_id === 'toolu_deny' ? 'deny' : 'allow';
+      // The line cuts the command: show all opens it whole, in the panel.
+      await expect(ask).toContainText('Asks to use Bash:', { timeout: 60_000 });
+      await expect(ask).toContainText(call.command.slice(0, 60));
+      seen[`cell-${step}`] = await panel.evaluate((el) => { const r = el.getBoundingClientRect(); return { width: Math.round(r.width), height: Math.round(r.height) }; });
+      await clickWhereItIs(page, ask.getByRole('button', { name: 'show all', exact: true }), `${step}-show-all`, seen);
+      await expect(ask).toContainText(call.command);
+      await stepShot(page, `${tag}-0${i + 1}a-shown-whole`);
+
+      // Allow and deny, in the panel and on top at their own point.
+      seen[`${step}-allow-reach`] = await reach(ask.getByRole('button', { name: 'allow', exact: true }));
+      seen[`${step}-deny-reach`] = await reach(ask.getByRole('button', { name: 'deny', exact: true }));
+      for (const name of ['allow', 'deny']) {
+        const at = seen[`${step}-${name}-reach`] as Awaited<ReturnType<typeof reach>>;
+        expect(at.inPanel, `${name} inside its panel, ${step} (${JSON.stringify(at)})`).toBe(true);
+        expect(at.onTop, `${name} on top at its point, ${step}`).toBe(true);
+      }
+
+      // The details are taller than what the cell holds, and scroll inside
+      // the ask to why Claude Code asks and the rule that asked.
+      const details = ask.locator('[data-ask-details]');
+      const before = await details.evaluate((el) => ({ scrollHeight: el.scrollHeight, clientHeight: el.clientHeight, scrollTop: el.scrollTop }));
+      seen[`${step}-details`] = before;
+      expect(before.scrollHeight, 'the details are taller than their box').toBeGreaterThan(before.clientHeight);
+      const box = (await details.boundingBox())!;
+      await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
+      await page.mouse.wheel(0, before.scrollHeight);
+      await expect.poll(() => details.evaluate((el) => Math.ceil(el.scrollTop + el.clientHeight) >= el.scrollHeight - 1)).toBe(true);
+      const rule = ask.getByRole('definition').last();
+      await expect(rule).toHaveText(RULE);
+      seen[`${step}-rule-reach`] = await rule.evaluate((el) => {
+        const r = el.getBoundingClientRect(); const d = el.closest('[data-ask-details]')!.getBoundingClientRect();
+        return { inDetails: r.top >= d.top - 0.5 && r.bottom <= d.bottom + 0.5 };
+      });
+      expect((seen[`${step}-rule-reach`] as { inDetails: boolean }).inDetails, 'the rule, scrolled to, is in view').toBe(true);
+      expect(await clippedScroll(ask), 'no box but the details was scrolled').toBe(0);
+      await stepShot(page, `${tag}-0${i + 1}b-details-scrolled`);
+
+      if (step === 'deny') {
+        // Deny opens its reason field in place; its own deny stays in reach.
+        await clickWhereItIs(page, ask.getByRole('button', { name: 'deny', exact: true }), 'deny-open-reason', seen);
+        await ask.getByRole('textbox').fill(DENY_REASON);
+        await stepShot(page, `${tag}-01c-deny-reason`);
+        await clickWhereItIs(page, ask.getByRole('button', { name: 'deny', exact: true }), 'deny-send', seen);
+      } else {
+        await clickWhereItIs(page, ask.getByRole('button', { name: 'allow', exact: true }), 'allow-send', seen);
+      }
+      await expect.poll(() => answersOf(home).length, { timeout: 15_000 }).toBe(i + 1);
+    }
+    await expect(ask).toHaveCount(0, { timeout: 15_000 });
+    await stepShot(page, `${tag}-03-answered`);
+
+    const answers = answersOf(home);
+    recordValues({ ...seen, answers, pageErrors });
+    expect(answers.map(({ call, decision, reason }) => ({ call, decision, reason }))).toEqual([
+      { call: 'toolu_deny', decision: 'deny', reason: `the user refused it in Tars: ${DENY_REASON}` },
+      { call: 'toolu_allow', decision: 'allow', reason: 'the user allowed it in Tars' },
+    ]);
+    expect(pageErrors).toEqual([]);
+  } finally {
+    recordValues(seen);
+    await app.close();
+    await removeHome(home);
+  }
+});

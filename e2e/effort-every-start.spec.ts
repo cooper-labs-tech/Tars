@@ -139,14 +139,12 @@ test('every start of an agent\'s CLI runs at that agent\'s own effort: window, r
   fs.writeFileSync(path.join(dir, 'app-settings.json'), JSON.stringify({
     autoStartAgentsOnLaunch: false, ollamaBaseUrl: 'http://127.0.0.1:9', cliPaths: { additionalPaths: [bin] },
     hermesRelayEnabled: true,
-    // E2E_NEW_INTERFACE=1: the same run in the new interface's shell.
-    newInterface: process.env.E2E_NEW_INTERFACE === '1',
   }));
   const launchesFile = path.join(home, 'launches.jsonl');
   const launchesOf = (id: string) => lines<Launch>(launchesFile).filter((l) => l.id === id);
   const port = apiPort(31438);
   const dist = path.resolve('electron', 'dist');
-  const values: Record<string, unknown> = { home, newInterface: process.env.E2E_NEW_INTERFACE === '1' };
+  const values: Record<string, unknown> = { home };
   /** What each path started, with the effort the CLI received and the agent's own. */
   const seen: Array<{ path: string; agent: string; received: string | null; own: string }> = [];
   const keep = () => { values.seen = seen; recordValues(values); };
@@ -163,8 +161,8 @@ test('every start of an agent\'s CLI runs at that agent\'s own effort: window, r
     const page: Page = await app.firstWindow();
     await page.goto(`${DEV_URL}/agents`, { waitUntil: 'domcontentloaded' });
     await page.waitForFunction(() => !!(window as unknown as { electronAPI?: unknown }).electronAPI);
-    // The shell this run is in (E2E_NEW_INTERFACE=1: the new interface's).
-    await expect(page.getByRole('navigation', { name: 'Main menu' })).toHaveCount(process.env.E2E_NEW_INTERFACE === '1' ? 1 : 0, { timeout: 30_000 });
+    // The new shell, the only one since 2.1.0.
+    await expect(page.getByRole('navigation', { name: 'Main menu' })).toHaveCount(1, { timeout: 30_000 });
     const call = (ns: string, name: string, ...args: unknown[]) => page.evaluate(([ns, name, args]) => {
       const api = (window as unknown as { electronAPI: Record<string, Record<string, (...a: unknown[]) => Promise<Answer>>> }).electronAPI;
       return api[ns as string][name as string](...(args as unknown[]));

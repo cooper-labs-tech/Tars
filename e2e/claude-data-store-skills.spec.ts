@@ -12,7 +12,7 @@ import { DEV_URL, apiPort } from './ports.mjs';
  * which spares an idle poll a render, used to ignore the skills, so the list
  * kept the old count for as long as the window lived.
  *
- * The app is moved through by sidebar clicks only: a page load builds the
+ * The app is moved through by the sidebar only: a page load builds the
  * store again from nothing and hides what it keeps. On #233's head before the
  * fix (7be275fa) the count stays at 1: the negative witness.
  */
@@ -41,11 +41,15 @@ test('claude data store: a skill added since the last read shows when Settings i
     await toSkills();
     await expect(count()).toContainText('1', { timeout: 20_000 });
     fs.mkdirSync(path.join(home, '.claude', 'skills', 'beta'), { recursive: true });
-    await page.locator('a[href^="/agents"]').first().click();
-    await page.waitForURL(/\/agents/);
+    // Away by the main menu, the Settings route unmounted, then back to Settings as More's card: client-side all the
+    // way (until 2.1.0, the classic sidebar's Agents and Settings links).
+    const sidebar = page.getByRole('complementary', { name: 'Sidebar' });
+    await sidebar.getByRole('navigation', { name: 'Main menu' }).getByRole('link', { name: 'Kanban', exact: true }).click();
+    await page.waitForURL(/\/kanban/);
     await page.waitForTimeout(11_000);
-    await page.locator('a[href^="/settings"]').first().click();
-    await page.waitForURL(/\/settings/);
+    await sidebar.getByRole('button', { name: 'More' }).click();
+    await page.getByRole('menu', { name: 'More' }).getByRole('menuitem', { name: 'Settings', exact: true }).click();
+    await expect(page.getByRole('dialog', { name: 'Settings' })).toBeVisible({ timeout: 30_000 });
     await toSkills();
     await page.waitForTimeout(3_000);
     const text = await count().innerText();

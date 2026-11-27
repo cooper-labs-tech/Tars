@@ -19,7 +19,7 @@ import { DEV_URL, apiPort } from './ports.mjs';
  * are opencode workers started from the window. `w` is a claude worker, whose terminal reads its identity from the bootstrap route
  * (hooks/session-start.sh, tars-hook.mjs): read here with w's own token, as its hook does.
  *
- * Asserted, once with the classic shell and once with the new interface:
+ * Asserted:
  * 1. tars_guide without a topic lists the topics, stamped with the version; with one it returns it, with lead's
  *    project folder; an unknown topic is an error that lists them;
  * 2. the bootstrap of a claude worker and of the orchestrator carry the "How Tars works" section for their role,
@@ -60,197 +60,195 @@ process.stdout.write('opencode ready\r\n');
 
 const SECTION = '## How Tars works';
 
-for (const newInterface of [false, true]) {
-  test(`every agent gets how Tars works, its project folder and tars_guide${newInterface ? ' (new interface)' : ''}`, async () => {
-    test.setTimeout(240_000);
-    const home = fs.mkdtempSync(path.join(os.tmpdir(), 'dorothy-e2e-agent-guide-'));
-    const project = path.join(home, 'projects', 'demo');
-    const dir = path.join(home, '.tars');
-    const bin = path.join(home, 'bin');
-    for (const d of [project, dir, bin]) fs.mkdirSync(d, { recursive: true });
-    const standInLog = path.join(home, 'stand-in.jsonl');
-    const opencode = path.join(bin, 'opencode');
-    fs.writeFileSync(opencode, `#!${process.execPath}\nprocess.env.STAND_IN_LOG = ${JSON.stringify(standInLog)};\n${STAND_IN}`, { mode: 0o755 });
-    const agent = (id: string, name: string, role: string, provider: string) => ({
-      id, name, character: 'robot', provider, status: 'idle', role, projectPath: project, skills: [], permissionMode: 'normal',
-      createdAt: '2026-10-18T08:00:00.000Z', lastActivity: '2026-10-18T08:00:00.000Z',
-    });
-    fs.writeFileSync(path.join(dir, 'agents.json'), JSON.stringify([
-      agent('lead', 'Project Lead', 'orchestrator', 'claude'), agent('w', 'Writer', 'worker', 'claude'),
-      agent('oc', 'Terminal Worker', 'worker', 'opencode'), agent('dl', 'Delegated Worker', 'worker', 'opencode'),
-      agent('win', 'Window Worker', 'worker', 'opencode'), agent('dash', 'Dashboard Worker', 'worker', 'opencode'),
-    ], null, 2));
-    fs.writeFileSync(path.join(dir, 'projects.json'), JSON.stringify([project]));
-    fs.writeFileSync(path.join(dir, 'hermes-connection.json'), JSON.stringify({ mode: 'local', localPort: 9, authMode: 'token' }));
-    fs.writeFileSync(path.join(dir, 'app-settings.json'), JSON.stringify({
-      autoStartAgentsOnLaunch: false, ollamaBaseUrl: 'http://127.0.0.1:9', cliPaths: { opencode, additionalPaths: [bin] }, newInterface,
-    }));
-    const port = apiPort(newInterface ? 31427 : 31431);
-    const dist = path.resolve('electron', 'dist');
-    const values: Record<string, unknown> = { newInterface, home, project };
-    const keep = (more: Record<string, unknown>) => { Object.assign(values, more); recordValues(values); };
-    const once = (text: string) => text.split(SECTION).length - 1;
-    const entries = () => (fs.existsSync(standInLog) ? fs.readFileSync(standInLog, 'utf8').trim().split('\n').filter(Boolean).map((l) => JSON.parse(l)) : []);
-
-    const app: ElectronApplication = await launchSandboxed(electron, home, {
-      env: { NODE_ENV: 'development', DOROTHY_DEV_URL: DEV_URL, DOROTHY_API_PORT: port, DOROTHY_E2E: '1' },
-    });
-    let mcp: ChildProcessWithoutNullStreams | undefined;
-    try {
-      const page = await app.firstWindow();
-      await page.goto(`${DEV_URL}/agents`, { waitUntil: 'domcontentloaded' });
-      await expect(page.getByRole('navigation', { name: 'Main menu' })).toHaveCount(newInterface ? 1 : 0, { timeout: 30_000 });
-      const version = await app.evaluate(({ app }) => app.getVersion());
-
-      const identity = await app.evaluate((_e, { dist }) => {
-        const tokens = process.mainModule!.require(`${dist}/core/agent-tokens.js`);
-        return { lead: tokens.mintRunToken('lead').token as string, w: tokens.mintRunToken('w').token as string, instance: tokens.tarsInstanceId() as string };
-      }, { dist });
-      mcp = spawn(process.execPath, [path.resolve('mcp-orchestrator', 'dist', 'bundle.js')], {
-        env: {
-          PATH: process.env.PATH ?? '', HOME: home, CLAUDE_MGR_API_URL: `http://127.0.0.1:${port}`, CLAUDE_MGR_API_TOKEN: identity.lead,
-          CLAUDE_AGENT_ID: 'lead', CLAUDE_PROJECT_PATH: project, TARS_INSTANCE_ID: identity.instance,
-        },
-      });
-      const replies = new Map<number, (msg: { result?: { content?: Array<{ text?: string }>; isError?: boolean }; error?: unknown }) => void>();
-      let buffered = '';
-      mcp.stdout.on('data', (chunk) => {
-        buffered += chunk;
-        for (let at = buffered.indexOf('\n'); at >= 0; at = buffered.indexOf('\n')) {
-          const line = buffered.slice(0, at);
-          buffered = buffered.slice(at + 1);
-          if (!line.trim()) continue;
-          const msg = JSON.parse(line);
-          if (typeof msg.id === 'number') replies.get(msg.id)?.(msg);
-        }
-      });
-      let nextId = 1;
-      const rpc = (method: string, params: unknown) => new Promise<Parameters<NonNullable<ReturnType<typeof replies.get>>>[0]>((resolve) => {
-        const id = nextId++;
-        replies.set(id, resolve);
-        mcp!.stdin.write(`${JSON.stringify({ jsonrpc: '2.0', id, method, params })}\n`);
-      });
-      await rpc('initialize', { protocolVersion: '2024-11-05', capabilities: {}, clientInfo: { name: 'e2e', version: '1' } });
-      mcp.stdin.write(`${JSON.stringify({ jsonrpc: '2.0', method: 'notifications/initialized' })}\n`);
-      const tool = async (name: string, args: Record<string, unknown>) => {
-        const reply = await rpc('tools/call', { name, arguments: args });
-        return { text: reply.result?.content?.map((c) => c.text ?? '').join('\n') ?? JSON.stringify(reply.error), isError: !!reply.result?.isError || !!reply.error };
-      };
-      const bootstrap = async (id: string, token: string) => {
-        const r = await fetch(`http://127.0.0.1:${port}/api/agents/${id}/bootstrap`, { headers: { Authorization: `Bearer ${token}`, 'X-Tars-Caller-Id': id } });
-        return ((await r.json()) as { context?: string }).context ?? '';
-      };
-
-      // 1. tars_guide.
-      const index = await tool('tars_guide', {});
-      const folderTopic = await tool('tars_guide', { topic: 'project-folder' });
-      const kanbanTopic = await tool('tars_guide', { topic: 'kanban' });
-      const unknown = await tool('tars_guide', { topic: 'no-such-topic' });
-      keep({ version, index, folderTopic, kanbanTopic, unknown });
-      expect.soft(index.isError, index.text).toBe(false);
-      expect.soft(index.text).toMatch(new RegExp(`^Tars ${version.replace(/\./g, '\\.')}, `));
-      for (const id of ['delegation', 'messages', 'held-and-refused', 'kanban', 'project-folder', 'asking-the-user', 'limits']) expect.soft(index.text).toContain(`- ${id}: `);
-      expect.soft(kanbanTopic.text).toContain('assign_task');
-      expect.soft(unknown.isError).toBe(true);
-      expect.soft(unknown.text).toContain('- kanban: ');
-      const folder = /(\/\S+\/\.tars\/project-files\/demo-[0-9a-f]{10})/.exec(folderTopic.text)?.[1];
-      keep({ folder });
-      expect(folder, folderTopic.text).toBeTruthy();
-      expect(fs.realpathSync(path.dirname(path.dirname(folder!)))).toBe(fs.realpathSync(dir));
-
-      // 2. The bootstrap of a claude worker and of the orchestrator.
-      const workerBoot = await bootstrap('w', identity.w);
-      const leadBoot = await bootstrap('lead', identity.lead);
-      keep({ workerBoot, leadBoot });
-      for (const boot of [workerBoot, leadBoot]) {
-        expect.soft(boot).toContain(SECTION);
-        expect.soft(boot).toContain(folder!);
-        expect.soft(boot).toContain('tars_guide');
-      }
-      const workerSection = workerBoot.slice(workerBoot.indexOf(SECTION));
-      const leadSection = leadBoot.slice(leadBoot.indexOf(SECTION));
-      expect.soft(workerSection).toContain('assign_task');
-      expect.soft(workerSection).not.toContain('delegate_task');
-      expect.soft(leadSection).toContain('delegate_task');
-      expect.soft(leadSection).toContain('task_status');
-
-      // 3. An opencode worker started in a terminal.
-      const started = await tool('start_agent', { id: 'oc', prompt: 'TERMINAL>> read the guide' });
-      keep({ started });
-      expect.soft(started.isError, started.text).toBe(false);
-      await expect.poll(() => entries().filter((e) => e.terminal && e.agent === 'oc').length, { timeout: 30_000 }).toBe(1);
-      const terminalArgv = (entries().find((e) => e.terminal && e.agent === 'oc')!.terminal as string[]).join(' ');
-      expect.soft(terminalArgv).toContain('TERMINAL>> read the guide');
-      expect.soft(once(terminalArgv), terminalArgv).toBe(1);
-      expect.soft(terminalArgv).toContain(folder!);
-
-      // 4. A task delegated to an opencode worker: into its own terminal, its TUI started with the task.
-      const delegated = await tool('delegate_task', { id: 'dl', prompt: 'DELEGATED>> read the guide', timeoutSeconds: 120, clientRequestId: `e2e-agent-guide-${newInterface}` });
-      keep({ delegated });
-      expect.soft(delegated.isError, delegated.text).toBe(false);
-      // opencode gives Tars no hook: delivered, and nothing invented.
-      expect.soft(delegated.text).toContain("The task went into Delegated Worker's terminal");
-      await expect.poll(() => entries().filter((e) => e.terminal && e.agent === 'dl').length, { timeout: 30_000 }).toBe(1);
-      const delegatedArgv = entries().find((e) => e.terminal && e.agent === 'dl')!.terminal as string[];
-      keep({ standIn: entries() });
-      const delegatedPrompt = delegatedArgv[delegatedArgv.indexOf('--prompt') + 1] ?? '';
-      expect.soft(delegatedArgv, 'the TUI with the task as --prompt').toContain('--prompt');
-      expect.soft(delegatedArgv, '`opencode run` exits after the task').not.toContain('run');
-      expect.soft(delegatedPrompt).toContain('DELEGATED>> read the guide');
-      expect.soft(once(delegatedPrompt), delegatedPrompt).toBe(1);
-      expect.soft(delegatedPrompt).toContain(folder!);
-
-      // 6. Opencode workers started from the window, with a task and without one.
-      type Api = { electronAPI: { agent: { start: (p: { id: string; prompt: string }) => Promise<unknown> } } };
-      const fromWindow: Record<string, unknown> = {};
-      for (const [id, prompt] of [['win', 'WINDOW>> read the guide'], ['dash', '']] as const) {
-        fromWindow[id] = await page.evaluate((p) => (window as unknown as Api).electronAPI.agent.start(p), { id, prompt });
-        await expect.poll(() => entries().filter((e) => e.terminal && e.agent === id).length, { timeout: 30_000 }).toBe(1);
-      }
-      const argvOf = (id: string) => (entries().find((e) => e.terminal && e.agent === id)!.terminal as string[]).join(' ');
-      keep({ fromWindow, windowArgv: argvOf('win'), dashboardArgv: argvOf('dash') });
-      expect.soft(once(argvOf('win')), argvOf('win')).toBe(1);
-      expect.soft(argvOf('win')).toContain(folder!);
-      expect.soft(argvOf('win')).toContain('assign_task');
-      expect.soft(argvOf('win')).toContain('WINDOW>> read the guide');
-      expect.soft(entries().find((e) => e.terminal && e.agent === 'win')!.terminal as string[], 'opencode run exits after the task').not.toContain('run');
-      // Without a task, no prompt: `opencode run '<prompt>'` runs once and exits (the Audit's N1 on #448).
-      const dashArgv = entries().find((e) => e.terminal && e.agent === 'dash')!.terminal as string[];
-      expect.soft(dashArgv, argvOf('dash')).not.toContain('run');
-      expect.soft(once(argvOf('dash')), argvOf('dash')).toBe(0);
-      // The section goes in with the first task Tars types into that session, and with that one only.
-      // What reaches the CLI's field: since #507 Tars types every piece inside bracket paste markers, which the CLI drops.
-      const typedTo = (id: string) => entries().filter((e) => typeof e.typed === 'string' && e.agent === id)
-        .map((e) => (e.typed as string).replace(/\x1b\[20[01]~/g, ''));
-      const firstSent = await tool('send_message', { id: 'dash', message: 'DASH>> first task' });
-      await expect.poll(() => typedTo('dash').length, { timeout: 30_000 }).toBe(1);
-      const secondSent = await tool('send_message', { id: 'dash', message: 'DASH>> second task' });
-      await expect.poll(() => typedTo('dash').length, { timeout: 30_000 }).toBe(2);
-      const [dashFirst = '', dashSecond = ''] = typedTo('dash');
-      keep({ firstSent, secondSent, dashFirst, dashSecond });
-      expect.soft(firstSent.isError, firstSent.text).toBe(false);
-      expect.soft(dashFirst).toContain('DASH>> first task');
-      expect.soft(once(dashFirst), dashFirst).toBe(1);
-      expect.soft(dashFirst).toContain(folder!);
-      expect.soft(dashFirst).toContain('assign_task');
-      // The sender's line opens the prompt, so a CLI's hook reports whose task it is; Tars's words follow, under Tars's line.
-      expect.soft(dashFirst.indexOf('Message from agent '), dashFirst).toBe(0);
-      expect.soft(dashFirst.indexOf('Message from Tars: ')).toBeGreaterThan(dashFirst.indexOf('DASH>> first task'));
-      expect.soft(dashFirst.indexOf(SECTION)).toBeGreaterThan(dashFirst.indexOf('Message from Tars: '));
-      expect.soft(dashSecond).toContain('DASH>> second task');
-      expect.soft(once(dashSecond), dashSecond).toBe(0);
-
-      // 5. The folder, outside the project.
-      const listing = fs.readdirSync(folder!).sort();
-      keep({ listing });
-      expect.soft(listing).toEqual(['reports', 'tools']);
-      expect.soft(fs.realpathSync(folder!).startsWith(fs.realpathSync(project))).toBe(false);
-      await stepShot(page, newInterface ? 'agents-new-interface' : 'agents');
-    } finally {
-      mcp?.kill();
-      await app.close();
-      if (fs.existsSync(standInLog)) fs.copyFileSync(standInLog, test.info().outputPath('stand-in.jsonl'));
-      await removeHome(home);
-    }
+test(`every agent gets how Tars works, its project folder and tars_guide`, async () => {
+  test.setTimeout(240_000);
+  const home = fs.mkdtempSync(path.join(os.tmpdir(), 'dorothy-e2e-agent-guide-'));
+  const project = path.join(home, 'projects', 'demo');
+  const dir = path.join(home, '.tars');
+  const bin = path.join(home, 'bin');
+  for (const d of [project, dir, bin]) fs.mkdirSync(d, { recursive: true });
+  const standInLog = path.join(home, 'stand-in.jsonl');
+  const opencode = path.join(bin, 'opencode');
+  fs.writeFileSync(opencode, `#!${process.execPath}\nprocess.env.STAND_IN_LOG = ${JSON.stringify(standInLog)};\n${STAND_IN}`, { mode: 0o755 });
+  const agent = (id: string, name: string, role: string, provider: string) => ({
+    id, name, character: 'robot', provider, status: 'idle', role, projectPath: project, skills: [], permissionMode: 'normal',
+    createdAt: '2026-10-18T08:00:00.000Z', lastActivity: '2026-10-18T08:00:00.000Z',
   });
-}
+  fs.writeFileSync(path.join(dir, 'agents.json'), JSON.stringify([
+    agent('lead', 'Project Lead', 'orchestrator', 'claude'), agent('w', 'Writer', 'worker', 'claude'),
+    agent('oc', 'Terminal Worker', 'worker', 'opencode'), agent('dl', 'Delegated Worker', 'worker', 'opencode'),
+    agent('win', 'Window Worker', 'worker', 'opencode'), agent('dash', 'Dashboard Worker', 'worker', 'opencode'),
+  ], null, 2));
+  fs.writeFileSync(path.join(dir, 'projects.json'), JSON.stringify([project]));
+  fs.writeFileSync(path.join(dir, 'hermes-connection.json'), JSON.stringify({ mode: 'local', localPort: 9, authMode: 'token' }));
+  fs.writeFileSync(path.join(dir, 'app-settings.json'), JSON.stringify({
+    autoStartAgentsOnLaunch: false, ollamaBaseUrl: 'http://127.0.0.1:9', cliPaths: { opencode, additionalPaths: [bin] },
+  }));
+  const port = apiPort(31427);
+  const dist = path.resolve('electron', 'dist');
+  const values: Record<string, unknown> = { home, project };
+  const keep = (more: Record<string, unknown>) => { Object.assign(values, more); recordValues(values); };
+  const once = (text: string) => text.split(SECTION).length - 1;
+  const entries = () => (fs.existsSync(standInLog) ? fs.readFileSync(standInLog, 'utf8').trim().split('\n').filter(Boolean).map((l) => JSON.parse(l)) : []);
+
+  const app: ElectronApplication = await launchSandboxed(electron, home, {
+    env: { NODE_ENV: 'development', DOROTHY_DEV_URL: DEV_URL, DOROTHY_API_PORT: port, DOROTHY_E2E: '1' },
+  });
+  let mcp: ChildProcessWithoutNullStreams | undefined;
+  try {
+    const page = await app.firstWindow();
+    await page.goto(`${DEV_URL}/agents`, { waitUntil: 'domcontentloaded' });
+    await expect(page.getByRole('navigation', { name: 'Main menu' })).toHaveCount(1, { timeout: 30_000 });
+    const version = await app.evaluate(({ app }) => app.getVersion());
+
+    const identity = await app.evaluate((_e, { dist }) => {
+      const tokens = process.mainModule!.require(`${dist}/core/agent-tokens.js`);
+      return { lead: tokens.mintRunToken('lead').token as string, w: tokens.mintRunToken('w').token as string, instance: tokens.tarsInstanceId() as string };
+    }, { dist });
+    mcp = spawn(process.execPath, [path.resolve('mcp-orchestrator', 'dist', 'bundle.js')], {
+      env: {
+        PATH: process.env.PATH ?? '', HOME: home, CLAUDE_MGR_API_URL: `http://127.0.0.1:${port}`, CLAUDE_MGR_API_TOKEN: identity.lead,
+        CLAUDE_AGENT_ID: 'lead', CLAUDE_PROJECT_PATH: project, TARS_INSTANCE_ID: identity.instance,
+      },
+    });
+    const replies = new Map<number, (msg: { result?: { content?: Array<{ text?: string }>; isError?: boolean }; error?: unknown }) => void>();
+    let buffered = '';
+    mcp.stdout.on('data', (chunk) => {
+      buffered += chunk;
+      for (let at = buffered.indexOf('\n'); at >= 0; at = buffered.indexOf('\n')) {
+        const line = buffered.slice(0, at);
+        buffered = buffered.slice(at + 1);
+        if (!line.trim()) continue;
+        const msg = JSON.parse(line);
+        if (typeof msg.id === 'number') replies.get(msg.id)?.(msg);
+      }
+    });
+    let nextId = 1;
+    const rpc = (method: string, params: unknown) => new Promise<Parameters<NonNullable<ReturnType<typeof replies.get>>>[0]>((resolve) => {
+      const id = nextId++;
+      replies.set(id, resolve);
+      mcp!.stdin.write(`${JSON.stringify({ jsonrpc: '2.0', id, method, params })}\n`);
+    });
+    await rpc('initialize', { protocolVersion: '2024-11-05', capabilities: {}, clientInfo: { name: 'e2e', version: '1' } });
+    mcp.stdin.write(`${JSON.stringify({ jsonrpc: '2.0', method: 'notifications/initialized' })}\n`);
+    const tool = async (name: string, args: Record<string, unknown>) => {
+      const reply = await rpc('tools/call', { name, arguments: args });
+      return { text: reply.result?.content?.map((c) => c.text ?? '').join('\n') ?? JSON.stringify(reply.error), isError: !!reply.result?.isError || !!reply.error };
+    };
+    const bootstrap = async (id: string, token: string) => {
+      const r = await fetch(`http://127.0.0.1:${port}/api/agents/${id}/bootstrap`, { headers: { Authorization: `Bearer ${token}`, 'X-Tars-Caller-Id': id } });
+      return ((await r.json()) as { context?: string }).context ?? '';
+    };
+
+    // 1. tars_guide.
+    const index = await tool('tars_guide', {});
+    const folderTopic = await tool('tars_guide', { topic: 'project-folder' });
+    const kanbanTopic = await tool('tars_guide', { topic: 'kanban' });
+    const unknown = await tool('tars_guide', { topic: 'no-such-topic' });
+    keep({ version, index, folderTopic, kanbanTopic, unknown });
+    expect.soft(index.isError, index.text).toBe(false);
+    expect.soft(index.text).toMatch(new RegExp(`^Tars ${version.replace(/\./g, '\\.')}, `));
+    for (const id of ['delegation', 'messages', 'held-and-refused', 'kanban', 'project-folder', 'asking-the-user', 'limits']) expect.soft(index.text).toContain(`- ${id}: `);
+    expect.soft(kanbanTopic.text).toContain('assign_task');
+    expect.soft(unknown.isError).toBe(true);
+    expect.soft(unknown.text).toContain('- kanban: ');
+    const folder = /(\/\S+\/\.tars\/project-files\/demo-[0-9a-f]{10})/.exec(folderTopic.text)?.[1];
+    keep({ folder });
+    expect(folder, folderTopic.text).toBeTruthy();
+    expect(fs.realpathSync(path.dirname(path.dirname(folder!)))).toBe(fs.realpathSync(dir));
+
+    // 2. The bootstrap of a claude worker and of the orchestrator.
+    const workerBoot = await bootstrap('w', identity.w);
+    const leadBoot = await bootstrap('lead', identity.lead);
+    keep({ workerBoot, leadBoot });
+    for (const boot of [workerBoot, leadBoot]) {
+      expect.soft(boot).toContain(SECTION);
+      expect.soft(boot).toContain(folder!);
+      expect.soft(boot).toContain('tars_guide');
+    }
+    const workerSection = workerBoot.slice(workerBoot.indexOf(SECTION));
+    const leadSection = leadBoot.slice(leadBoot.indexOf(SECTION));
+    expect.soft(workerSection).toContain('assign_task');
+    expect.soft(workerSection).not.toContain('delegate_task');
+    expect.soft(leadSection).toContain('delegate_task');
+    expect.soft(leadSection).toContain('task_status');
+
+    // 3. An opencode worker started in a terminal.
+    const started = await tool('start_agent', { id: 'oc', prompt: 'TERMINAL>> read the guide' });
+    keep({ started });
+    expect.soft(started.isError, started.text).toBe(false);
+    await expect.poll(() => entries().filter((e) => e.terminal && e.agent === 'oc').length, { timeout: 30_000 }).toBe(1);
+    const terminalArgv = (entries().find((e) => e.terminal && e.agent === 'oc')!.terminal as string[]).join(' ');
+    expect.soft(terminalArgv).toContain('TERMINAL>> read the guide');
+    expect.soft(once(terminalArgv), terminalArgv).toBe(1);
+    expect.soft(terminalArgv).toContain(folder!);
+
+    // 4. A task delegated to an opencode worker: into its own terminal, its TUI started with the task.
+    const delegated = await tool('delegate_task', { id: 'dl', prompt: 'DELEGATED>> read the guide', timeoutSeconds: 120, clientRequestId: `e2e-agent-guide` });
+    keep({ delegated });
+    expect.soft(delegated.isError, delegated.text).toBe(false);
+    // opencode gives Tars no hook: delivered, and nothing invented.
+    expect.soft(delegated.text).toContain("The task went into Delegated Worker's terminal");
+    await expect.poll(() => entries().filter((e) => e.terminal && e.agent === 'dl').length, { timeout: 30_000 }).toBe(1);
+    const delegatedArgv = entries().find((e) => e.terminal && e.agent === 'dl')!.terminal as string[];
+    keep({ standIn: entries() });
+    const delegatedPrompt = delegatedArgv[delegatedArgv.indexOf('--prompt') + 1] ?? '';
+    expect.soft(delegatedArgv, 'the TUI with the task as --prompt').toContain('--prompt');
+    expect.soft(delegatedArgv, '`opencode run` exits after the task').not.toContain('run');
+    expect.soft(delegatedPrompt).toContain('DELEGATED>> read the guide');
+    expect.soft(once(delegatedPrompt), delegatedPrompt).toBe(1);
+    expect.soft(delegatedPrompt).toContain(folder!);
+
+    // 6. Opencode workers started from the window, with a task and without one.
+    type Api = { electronAPI: { agent: { start: (p: { id: string; prompt: string }) => Promise<unknown> } } };
+    const fromWindow: Record<string, unknown> = {};
+    for (const [id, prompt] of [['win', 'WINDOW>> read the guide'], ['dash', '']] as const) {
+      fromWindow[id] = await page.evaluate((p) => (window as unknown as Api).electronAPI.agent.start(p), { id, prompt });
+      await expect.poll(() => entries().filter((e) => e.terminal && e.agent === id).length, { timeout: 30_000 }).toBe(1);
+    }
+    const argvOf = (id: string) => (entries().find((e) => e.terminal && e.agent === id)!.terminal as string[]).join(' ');
+    keep({ fromWindow, windowArgv: argvOf('win'), dashboardArgv: argvOf('dash') });
+    expect.soft(once(argvOf('win')), argvOf('win')).toBe(1);
+    expect.soft(argvOf('win')).toContain(folder!);
+    expect.soft(argvOf('win')).toContain('assign_task');
+    expect.soft(argvOf('win')).toContain('WINDOW>> read the guide');
+    expect.soft(entries().find((e) => e.terminal && e.agent === 'win')!.terminal as string[], 'opencode run exits after the task').not.toContain('run');
+    // Without a task, no prompt: `opencode run '<prompt>'` runs once and exits (the Audit's N1 on #448).
+    const dashArgv = entries().find((e) => e.terminal && e.agent === 'dash')!.terminal as string[];
+    expect.soft(dashArgv, argvOf('dash')).not.toContain('run');
+    expect.soft(once(argvOf('dash')), argvOf('dash')).toBe(0);
+    // The section goes in with the first task Tars types into that session, and with that one only.
+    // What reaches the CLI's field: since #507 Tars types every piece inside bracket paste markers, which the CLI drops.
+    const typedTo = (id: string) => entries().filter((e) => typeof e.typed === 'string' && e.agent === id)
+      .map((e) => (e.typed as string).replace(/\x1b\[20[01]~/g, ''));
+    const firstSent = await tool('send_message', { id: 'dash', message: 'DASH>> first task' });
+    await expect.poll(() => typedTo('dash').length, { timeout: 30_000 }).toBe(1);
+    const secondSent = await tool('send_message', { id: 'dash', message: 'DASH>> second task' });
+    await expect.poll(() => typedTo('dash').length, { timeout: 30_000 }).toBe(2);
+    const [dashFirst = '', dashSecond = ''] = typedTo('dash');
+    keep({ firstSent, secondSent, dashFirst, dashSecond });
+    expect.soft(firstSent.isError, firstSent.text).toBe(false);
+    expect.soft(dashFirst).toContain('DASH>> first task');
+    expect.soft(once(dashFirst), dashFirst).toBe(1);
+    expect.soft(dashFirst).toContain(folder!);
+    expect.soft(dashFirst).toContain('assign_task');
+    // The sender's line opens the prompt, so a CLI's hook reports whose task it is; Tars's words follow, under Tars's line.
+    expect.soft(dashFirst.indexOf('Message from agent '), dashFirst).toBe(0);
+    expect.soft(dashFirst.indexOf('Message from Tars: ')).toBeGreaterThan(dashFirst.indexOf('DASH>> first task'));
+    expect.soft(dashFirst.indexOf(SECTION)).toBeGreaterThan(dashFirst.indexOf('Message from Tars: '));
+    expect.soft(dashSecond).toContain('DASH>> second task');
+    expect.soft(once(dashSecond), dashSecond).toBe(0);
+
+    // 5. The folder, outside the project.
+    const listing = fs.readdirSync(folder!).sort();
+    keep({ listing });
+    expect.soft(listing).toEqual(['reports', 'tools']);
+    expect.soft(fs.realpathSync(folder!).startsWith(fs.realpathSync(project))).toBe(false);
+    await stepShot(page, 'agents-new-interface');
+  } finally {
+    mcp?.kill();
+    await app.close();
+    if (fs.existsSync(standInLog)) fs.copyFileSync(standInLog, test.info().outputPath('stand-in.jsonl'));
+    await removeHome(home);
+  }
+});

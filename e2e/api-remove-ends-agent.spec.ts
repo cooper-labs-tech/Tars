@@ -15,8 +15,7 @@ import { DEV_URL, apiPort } from './ports.mjs';
  *
  * Here the agent's CLI is a stand-in deaf to SIGHUP and SIGTERM, with a child that is too. The project's orchestrator
  * deletes it through the API with its own token. Then the stand-in and its child must be gone, and the agent gone from
- * the fleet. Once with the classic shell and once with the new interface (the QA's gate of 6ed478b4), each on its
- * own API port. Red on main dc623b59: the deaf CLI and its child outlive the delete.
+ * the fleet. Red on main dc623b59: the deaf CLI and its child outlive the delete.
  *
  * The artefact: values.json with the answer, the timings and the fleet after, and the page errors, if any.
  */
@@ -30,10 +29,9 @@ const alive = (pid: number) => {
 
 test.skip(process.platform === 'win32', 'the whole tree of a CLI deaf to the hangup is ended through ps and process groups, which Windows has neither of (the ConPTY console is ended through killPty there); this runs on macOS and Linux');
 
-for (const newInterface of [false, true]) {
-test(`deleting an agent through the api ends its cli deaf to the hangup, and its child${newInterface ? ' (new interface)' : ''}`, async () => {
+test(`deleting an agent through the api ends its cli deaf to the hangup, and its child`, async () => {
   test.setTimeout(240_000);
-  const home = fs.mkdtempSync(path.join(os.tmpdir(), `dorothy-e2e-api-remove-${newInterface ? 'ni' : 'classic'}-`));
+  const home = fs.mkdtempSync(path.join(os.tmpdir(), `dorothy-e2e-api-remove-ni-`));
   const project = path.join(home, 'projects', 'demo');
   const dir = path.join(home, '.tars');
   fs.mkdirSync(project, { recursive: true });
@@ -59,8 +57,8 @@ test(`deleting an agent through the api ends its cli deaf to the hangup, and its
   fs.writeFileSync(path.join(dir, 'agents.json'), JSON.stringify([agent('s1', 'Frozen Worker'), agent('o1', 'Project Lead', 'orchestrator')], null, 2));
   fs.writeFileSync(path.join(dir, 'projects.json'), JSON.stringify([project]));
   fs.writeFileSync(path.join(dir, 'hermes-connection.json'), JSON.stringify({ mode: 'local', localPort: 9, authMode: 'token' }));
-  fs.writeFileSync(path.join(dir, 'app-settings.json'), JSON.stringify({ autoStartAgentsOnLaunch: false, ollamaBaseUrl: 'http://127.0.0.1:9', newInterface }));
-  const port = apiPort(newInterface ? 31346 : 31345);
+  fs.writeFileSync(path.join(dir, 'app-settings.json'), JSON.stringify({ autoStartAgentsOnLaunch: false, ollamaBaseUrl: 'http://127.0.0.1:9' }));
+  const port = apiPort(31346);
   const dist = path.resolve('electron', 'dist');
   const readPids = () => (fs.existsSync(pidsFile) ? fs.readFileSync(pidsFile, 'utf8').split('\n').filter(Boolean).map(Number) : []);
 
@@ -73,7 +71,7 @@ test(`deleting an agent through the api ends its cli deaf to the hangup, and its
     page.on('pageerror', e => pageErrors.push(String(e)));
     await page.goto(`${DEV_URL}/agents`, { waitUntil: 'domcontentloaded' });
     await page.waitForFunction(() => !!(window as unknown as Partial<Api>).electronAPI);
-    await expect(page.getByRole('navigation', { name: 'Main menu' })).toHaveCount(newInterface ? 1 : 0, { timeout: 30_000 });
+    await expect(page.getByRole('navigation', { name: 'Main menu' })).toHaveCount(1, { timeout: 30_000 });
     const list = () => page.evaluate(() => (window as unknown as Api).electronAPI.agent.list());
     await page.evaluate(() => (window as unknown as Api).electronAPI.agent.start({ id: 's1', prompt: '' }));
     await expect.poll(async () => (await list()).find(a => a.id === 's1')?.cliRunning ?? false, { timeout: 30_000 }).toBe(true);
@@ -97,7 +95,7 @@ test(`deleting an agent through the api ends its cli deaf to the hangup, and its
     }
     const fleet = (await list()).map(a => a.id);
 
-    recordValues({ newInterface, removed, answeredMs, goneMs, fleet, pageErrors });
+    recordValues({ removed, answeredMs, goneMs, fleet, pageErrors });
 
     expect(removed.status).toBe(200);
     expect(removed.body).toMatchObject({ success: true });
@@ -109,4 +107,3 @@ test(`deleting an agent through the api ends its cli deaf to the hangup, and its
     await app.close().catch(() => { /* gone */ });
   }
 });
-}

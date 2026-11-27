@@ -101,151 +101,149 @@ type Tool = (name: string, args: Record<string, unknown>) => Promise<{ text: str
 
 const lines = (file: string) => (fs.existsSync(file) ? fs.readFileSync(file, 'utf8').trim().split('\n').filter(Boolean).map((l) => JSON.parse(l)) : []);
 
-for (const newInterface of [false, true]) {
-  test(`a second task delegated into a claude agent is its own asker's, after a first from another${newInterface ? ' (new interface)' : ''}`, async () => {
-    test.setTimeout(300_000);
-    const home = fs.mkdtempSync(path.join(os.tmpdir(), 'dorothy-e2e-second-delegation-'));
-    const project = path.join(home, 'projects', 'demo');
-    const dir = path.join(home, '.tars');
-    const bin = path.join(home, 'bin');
-    for (const d of [project, dir, bin]) fs.mkdirSync(d, { recursive: true });
-    const claude = path.join(bin, 'claude');
-    fs.writeFileSync(claude, `#!${process.execPath}\nconst HOOKS = ${JSON.stringify(HOOKS)};\n${STAND_IN}`, { mode: 0o755 });
-    const opencode = path.join(bin, 'opencode');
-    fs.writeFileSync(opencode, `#!${process.execPath}\n${NO_HOOK_CLI}`, { mode: 0o755 });
-    const amp = path.join(bin, 'amp');
-    fs.writeFileSync(amp, `#!${process.execPath}\n${NO_HOOK_CLI}`, { mode: 0o755 });
-    const agent = (id: string, name: string, role: string, provider: string, cliPath: string) => ({
-      id, name, character: 'robot', provider, status: 'idle', role, projectPath: project, skills: [], permissionMode: 'normal', cliPath,
-      createdAt: '2026-10-18T08:00:00.000Z', lastActivity: '2026-10-18T08:00:00.000Z',
-    });
-    fs.writeFileSync(path.join(dir, 'agents.json'), JSON.stringify([
-      agent('dev', 'Claude Agent', 'orchestrator', 'claude', claude),
-      agent('oc', 'Opencode Agent', 'worker', 'opencode', opencode),
-      agent('ap', 'Amp Agent', 'worker', 'amp', amp),
-    ], null, 2));
-    fs.writeFileSync(path.join(dir, 'projects.json'), JSON.stringify([project]));
-    fs.writeFileSync(path.join(dir, 'hermes-connection.json'), JSON.stringify({ mode: 'local', localPort: 9, authMode: 'token' }));
-    fs.writeFileSync(path.join(dir, 'app-settings.json'), JSON.stringify({
-      autoStartAgentsOnLaunch: false, ollamaBaseUrl: 'http://127.0.0.1:9', cliPaths: { additionalPaths: [bin] }, newInterface,
-    }));
-    const port = apiPort(newInterface ? 31409 : 31410);
-    const dist = path.resolve('electron', 'dist');
-    const values: Record<string, unknown> = { newInterface };
-    const keep = (more: Record<string, unknown>) => { Object.assign(values, more); recordValues(values); };
-
-    const app: ElectronApplication = await launchSandboxed(electron, home, {
-      env: { NODE_ENV: 'development', DOROTHY_DEV_URL: DEV_URL, DOROTHY_API_PORT: port, DOROTHY_E2E: '1' },
-    });
-    const servers: ChildProcessWithoutNullStreams[] = [];
-    try {
-      const page = await app.firstWindow();
-      await page.goto(`${DEV_URL}/usage`, { waitUntil: 'domcontentloaded' });
-      await page.waitForFunction(() => !!(window as unknown as Partial<Api>).electronAPI);
-      await expect(page.getByRole('navigation', { name: 'Main menu' })).toHaveCount(newInterface ? 1 : 0, { timeout: 30_000 });
-      const get = (id: string) => page.evaluate((i) => (window as unknown as Api).electronAPI.agent.get(i), id);
-
-      // dev's permanent session, started from the window, as its card shows it.
-      await page.evaluate(() => (window as unknown as Api).electronAPI.agent.start({ id: 'dev', prompt: '' }));
-      await expect.poll(async () => { const a = await get('dev'); return !!(a?.cliRunning && a.currentSessionId); }, { timeout: 60_000 }).toBe(true);
-
-      /** The orchestrator MCP server as `agentId`'s CLI runs it, with the token Tars hands that agent. */
-      const mcpAs = async (agentId: string): Promise<Tool> => {
-        const identity = await app.evaluate((_e, { dist, agentId }) => {
-          const tokens = process.mainModule!.require(`${dist}/core/agent-tokens.js`);
-          return { token: tokens.mintRunToken(agentId).token as string, instance: tokens.tarsInstanceId() as string };
-        }, { dist, agentId });
-        const mcp = spawn(process.execPath, [path.resolve('mcp-orchestrator', 'dist', 'bundle.js')], {
-          env: {
-            PATH: process.env.PATH ?? '', HOME: home, CLAUDE_MGR_API_URL: `http://127.0.0.1:${port}`, CLAUDE_MGR_API_TOKEN: identity.token,
-            CLAUDE_AGENT_ID: agentId, CLAUDE_PROJECT_PATH: project, TARS_INSTANCE_ID: identity.instance,
-          },
-        });
-        servers.push(mcp);
-        const replies = new Map<number, (msg: { result?: { content?: Array<{ text?: string }>; isError?: boolean }; error?: unknown }) => void>();
-        let buffered = '';
-        mcp.stdout.on('data', (chunk) => {
-          buffered += chunk;
-          for (let at = buffered.indexOf('\n'); at >= 0; at = buffered.indexOf('\n')) {
-            const line = buffered.slice(0, at);
-            buffered = buffered.slice(at + 1);
-            if (!line.trim()) continue;
-            const msg = JSON.parse(line);
-            if (typeof msg.id === 'number') replies.get(msg.id)?.(msg);
-          }
-        });
-        let nextId = 1;
-        const rpc = (method: string, params: unknown) => new Promise<Parameters<NonNullable<ReturnType<typeof replies.get>>>[0]>((resolve) => {
-          const id = nextId++;
-          replies.set(id, resolve);
-          mcp.stdin.write(`${JSON.stringify({ jsonrpc: '2.0', id, method, params })}\n`);
-        });
-        await rpc('initialize', { protocolVersion: '2024-11-05', capabilities: {}, clientInfo: { name: 'e2e', version: '1' } });
-        mcp.stdin.write(`${JSON.stringify({ jsonrpc: '2.0', method: 'notifications/initialized' })}\n`);
-        return async (name, args) => {
-          const reply = await rpc('tools/call', { name, arguments: args });
-          return { text: reply.result?.content?.map((c) => c.text ?? '').join('\n') ?? JSON.stringify(reply.error), isError: !!reply.result?.isError || !!reply.error };
-        };
-      };
-      /** The project's orchestrator from now on, as the window's role switch makes it (the previous one demoted). */
-      const orchestrator = (id: string) => app.evaluate((_e, { dist, id }) => {
-        const req = process.mainModule!.require;
-        const manager = req(`${dist}/core/agent-manager.js`);
-        req(`${dist}/core/agent-role.js`).assignRole(manager.agents.get(id), 'orchestrator', manager.agents.values());
-      }, { dist, id });
-      const links = () => app.evaluate((_e, { dist }) => {
-        const manager = process.mainModule!.require(`${dist}/core/agent-manager.js`);
-        return Object.fromEntries(['oc', 'ap'].map((id) => [id, manager.agents.get(id)?.requestedBy?.agentId ?? null]));
-      }, { dist });
-
-      // 1. dev, the orchestrator, hands oc and ap a task each: CLIs with no hook, whose turns Tars never sees end.
-      const asDev = await mcpAs('dev');
-      const toOc = await asDev('delegate_task', { id: 'oc', prompt: 'NOHOOK look at the logs', timeoutSeconds: 60 });
-      const toAp = await asDev('delegate_task', { id: 'ap', prompt: 'AMPTASK sort the inbox', timeoutSeconds: 60 });
-      await expect.poll(() => JSON.stringify(lines(path.join(home, 'amp.jsonl')).filter((e) => e.typed)), { timeout: 30_000 }).toContain('AMPTASK sort the inbox');
-      const linksBefore = await links();
-      keep({ toOc, toAp, linksBefore });
-
-      // 2. ap, now the orchestrator, delegates to dev.
-      await orchestrator('ap');
-      const asAp = await mcpAs('ap');
-      const first = await asAp('delegate_task', { id: 'dev', prompt: 'ECHO FIRSTDELEG', timeoutSeconds: 90 });
-      keep({ first });
-
-      // 3. oc, the orchestrator in turn, delegates the second task to dev.
-      await orchestrator('oc');
-      const asOc = await mcpAs('oc');
-      const second = await asOc('delegate_task', { id: 'dev', prompt: 'ECHO SECONDDELEG', timeoutSeconds: 90 });
-
-      const devTurns = lines(path.join(home, 'stand-in.jsonl')).filter((e) => e.id === 'dev' && typeof e.turn === 'string').map((e) => e.turn as string);
-      const report = await page.evaluate(() => (window as unknown as Api).electronAPI.usage.tasks({ sinceDays: 1 }));
-      const devTasks = report.tasks.filter((t) => t.agentId === 'dev').map((t) => ({ requesterAgentId: t.requesterAgentId, source: t.source, outcome: t.outcome }));
-      keep({ second, devTurns, devTasks, linksAfter: await links() });
-      await page.goto(`${DEV_URL}/usage`, { waitUntil: 'domcontentloaded' });
-      await page.waitForTimeout(1500);
-      await stepShot(page, newInterface ? 'usage-new-interface' : 'usage');
-
-      // 1. The links the matrix had: oc's and ap's still name dev.
-      expect.soft(toOc.isError, toOc.text.slice(0, 300)).toBe(false);
-      expect.soft(toAp.isError, toAp.text.slice(0, 300)).toBe(false);
-      expect.soft(linksBefore, 'oc\'s and ap\'s links to dev, up since their turns never end').toEqual({ oc: 'dev', ap: 'dev' });
-      // 2 and 3. Each task under its asker's line with its id, each asker its own answer.
-      expect.soft(devTurns, 'dev\'s turns').toHaveLength(2);
-      // Since #569 the sender line ends its own line, and the task is the line under it.
-      expect.soft(devTurns[0]).toMatch(/^Message from agent "Amp Agent" \("ap"\), task t-[0-9a-f]{8}: \nECHO FIRSTDELEG$/);
-      expect.soft(devTurns[1]).toMatch(/^Message from agent "Opencode Agent" \("oc"\), task t-[0-9a-f]{8}: \nECHO SECONDDELEG$/);
-      expect.soft(first.isError, first.text.slice(0, 300)).toBe(false);
-      expect.soft(first.text).toContain('ANSWER FIRSTDELEG');
-      expect.soft(second.isError, second.text.slice(0, 300)).toBe(false);
-      expect.soft(second.text).not.toContain('never started');
-      expect.soft(second.text).toContain('ANSWER SECONDDELEG');
-      // 4. Each turn filed under its own asker.
-      expect.soft(devTasks.map((t) => t.requesterAgentId).sort(), 'the askers of dev\'s tasks in the ledger').toEqual(['ap', 'oc']);
-    } finally {
-      for (const s of servers) s.kill();
-      await app.close();
-      for (const f of ['stand-in.jsonl', 'opencode.jsonl', 'amp.jsonl']) if (fs.existsSync(path.join(home, f))) fs.copyFileSync(path.join(home, f), test.info().outputPath(f));
-      await removeHome(home);
-    }
+test(`a second task delegated into a claude agent is its own asker's, after a first from another`, async () => {
+  test.setTimeout(300_000);
+  const home = fs.mkdtempSync(path.join(os.tmpdir(), 'dorothy-e2e-second-delegation-'));
+  const project = path.join(home, 'projects', 'demo');
+  const dir = path.join(home, '.tars');
+  const bin = path.join(home, 'bin');
+  for (const d of [project, dir, bin]) fs.mkdirSync(d, { recursive: true });
+  const claude = path.join(bin, 'claude');
+  fs.writeFileSync(claude, `#!${process.execPath}\nconst HOOKS = ${JSON.stringify(HOOKS)};\n${STAND_IN}`, { mode: 0o755 });
+  const opencode = path.join(bin, 'opencode');
+  fs.writeFileSync(opencode, `#!${process.execPath}\n${NO_HOOK_CLI}`, { mode: 0o755 });
+  const amp = path.join(bin, 'amp');
+  fs.writeFileSync(amp, `#!${process.execPath}\n${NO_HOOK_CLI}`, { mode: 0o755 });
+  const agent = (id: string, name: string, role: string, provider: string, cliPath: string) => ({
+    id, name, character: 'robot', provider, status: 'idle', role, projectPath: project, skills: [], permissionMode: 'normal', cliPath,
+    createdAt: '2026-10-18T08:00:00.000Z', lastActivity: '2026-10-18T08:00:00.000Z',
   });
-}
+  fs.writeFileSync(path.join(dir, 'agents.json'), JSON.stringify([
+    agent('dev', 'Claude Agent', 'orchestrator', 'claude', claude),
+    agent('oc', 'Opencode Agent', 'worker', 'opencode', opencode),
+    agent('ap', 'Amp Agent', 'worker', 'amp', amp),
+  ], null, 2));
+  fs.writeFileSync(path.join(dir, 'projects.json'), JSON.stringify([project]));
+  fs.writeFileSync(path.join(dir, 'hermes-connection.json'), JSON.stringify({ mode: 'local', localPort: 9, authMode: 'token' }));
+  fs.writeFileSync(path.join(dir, 'app-settings.json'), JSON.stringify({
+    autoStartAgentsOnLaunch: false, ollamaBaseUrl: 'http://127.0.0.1:9', cliPaths: { additionalPaths: [bin] },
+  }));
+  const port = apiPort(31409);
+  const dist = path.resolve('electron', 'dist');
+  const values: Record<string, unknown> = {};
+  const keep = (more: Record<string, unknown>) => { Object.assign(values, more); recordValues(values); };
+
+  const app: ElectronApplication = await launchSandboxed(electron, home, {
+    env: { NODE_ENV: 'development', DOROTHY_DEV_URL: DEV_URL, DOROTHY_API_PORT: port, DOROTHY_E2E: '1' },
+  });
+  const servers: ChildProcessWithoutNullStreams[] = [];
+  try {
+    const page = await app.firstWindow();
+    await page.goto(`${DEV_URL}/usage`, { waitUntil: 'domcontentloaded' });
+    await page.waitForFunction(() => !!(window as unknown as Partial<Api>).electronAPI);
+    await expect(page.getByRole('navigation', { name: 'Main menu' })).toHaveCount(1, { timeout: 30_000 });
+    const get = (id: string) => page.evaluate((i) => (window as unknown as Api).electronAPI.agent.get(i), id);
+
+    // dev's permanent session, started from the window, as its card shows it.
+    await page.evaluate(() => (window as unknown as Api).electronAPI.agent.start({ id: 'dev', prompt: '' }));
+    await expect.poll(async () => { const a = await get('dev'); return !!(a?.cliRunning && a.currentSessionId); }, { timeout: 60_000 }).toBe(true);
+
+    /** The orchestrator MCP server as `agentId`'s CLI runs it, with the token Tars hands that agent. */
+    const mcpAs = async (agentId: string): Promise<Tool> => {
+      const identity = await app.evaluate((_e, { dist, agentId }) => {
+        const tokens = process.mainModule!.require(`${dist}/core/agent-tokens.js`);
+        return { token: tokens.mintRunToken(agentId).token as string, instance: tokens.tarsInstanceId() as string };
+      }, { dist, agentId });
+      const mcp = spawn(process.execPath, [path.resolve('mcp-orchestrator', 'dist', 'bundle.js')], {
+        env: {
+          PATH: process.env.PATH ?? '', HOME: home, CLAUDE_MGR_API_URL: `http://127.0.0.1:${port}`, CLAUDE_MGR_API_TOKEN: identity.token,
+          CLAUDE_AGENT_ID: agentId, CLAUDE_PROJECT_PATH: project, TARS_INSTANCE_ID: identity.instance,
+        },
+      });
+      servers.push(mcp);
+      const replies = new Map<number, (msg: { result?: { content?: Array<{ text?: string }>; isError?: boolean }; error?: unknown }) => void>();
+      let buffered = '';
+      mcp.stdout.on('data', (chunk) => {
+        buffered += chunk;
+        for (let at = buffered.indexOf('\n'); at >= 0; at = buffered.indexOf('\n')) {
+          const line = buffered.slice(0, at);
+          buffered = buffered.slice(at + 1);
+          if (!line.trim()) continue;
+          const msg = JSON.parse(line);
+          if (typeof msg.id === 'number') replies.get(msg.id)?.(msg);
+        }
+      });
+      let nextId = 1;
+      const rpc = (method: string, params: unknown) => new Promise<Parameters<NonNullable<ReturnType<typeof replies.get>>>[0]>((resolve) => {
+        const id = nextId++;
+        replies.set(id, resolve);
+        mcp.stdin.write(`${JSON.stringify({ jsonrpc: '2.0', id, method, params })}\n`);
+      });
+      await rpc('initialize', { protocolVersion: '2024-11-05', capabilities: {}, clientInfo: { name: 'e2e', version: '1' } });
+      mcp.stdin.write(`${JSON.stringify({ jsonrpc: '2.0', method: 'notifications/initialized' })}\n`);
+      return async (name, args) => {
+        const reply = await rpc('tools/call', { name, arguments: args });
+        return { text: reply.result?.content?.map((c) => c.text ?? '').join('\n') ?? JSON.stringify(reply.error), isError: !!reply.result?.isError || !!reply.error };
+      };
+    };
+    /** The project's orchestrator from now on, as the window's role switch makes it (the previous one demoted). */
+    const orchestrator = (id: string) => app.evaluate((_e, { dist, id }) => {
+      const req = process.mainModule!.require;
+      const manager = req(`${dist}/core/agent-manager.js`);
+      req(`${dist}/core/agent-role.js`).assignRole(manager.agents.get(id), 'orchestrator', manager.agents.values());
+    }, { dist, id });
+    const links = () => app.evaluate((_e, { dist }) => {
+      const manager = process.mainModule!.require(`${dist}/core/agent-manager.js`);
+      return Object.fromEntries(['oc', 'ap'].map((id) => [id, manager.agents.get(id)?.requestedBy?.agentId ?? null]));
+    }, { dist });
+
+    // 1. dev, the orchestrator, hands oc and ap a task each: CLIs with no hook, whose turns Tars never sees end.
+    const asDev = await mcpAs('dev');
+    const toOc = await asDev('delegate_task', { id: 'oc', prompt: 'NOHOOK look at the logs', timeoutSeconds: 60 });
+    const toAp = await asDev('delegate_task', { id: 'ap', prompt: 'AMPTASK sort the inbox', timeoutSeconds: 60 });
+    await expect.poll(() => JSON.stringify(lines(path.join(home, 'amp.jsonl')).filter((e) => e.typed)), { timeout: 30_000 }).toContain('AMPTASK sort the inbox');
+    const linksBefore = await links();
+    keep({ toOc, toAp, linksBefore });
+
+    // 2. ap, now the orchestrator, delegates to dev.
+    await orchestrator('ap');
+    const asAp = await mcpAs('ap');
+    const first = await asAp('delegate_task', { id: 'dev', prompt: 'ECHO FIRSTDELEG', timeoutSeconds: 90 });
+    keep({ first });
+
+    // 3. oc, the orchestrator in turn, delegates the second task to dev.
+    await orchestrator('oc');
+    const asOc = await mcpAs('oc');
+    const second = await asOc('delegate_task', { id: 'dev', prompt: 'ECHO SECONDDELEG', timeoutSeconds: 90 });
+
+    const devTurns = lines(path.join(home, 'stand-in.jsonl')).filter((e) => e.id === 'dev' && typeof e.turn === 'string').map((e) => e.turn as string);
+    const report = await page.evaluate(() => (window as unknown as Api).electronAPI.usage.tasks({ sinceDays: 1 }));
+    const devTasks = report.tasks.filter((t) => t.agentId === 'dev').map((t) => ({ requesterAgentId: t.requesterAgentId, source: t.source, outcome: t.outcome }));
+    keep({ second, devTurns, devTasks, linksAfter: await links() });
+    await page.goto(`${DEV_URL}/usage`, { waitUntil: 'domcontentloaded' });
+    await page.waitForTimeout(1500);
+    await stepShot(page, 'usage-new-interface');
+
+    // 1. The links the matrix had: oc's and ap's still name dev.
+    expect.soft(toOc.isError, toOc.text.slice(0, 300)).toBe(false);
+    expect.soft(toAp.isError, toAp.text.slice(0, 300)).toBe(false);
+    expect.soft(linksBefore, 'oc\'s and ap\'s links to dev, up since their turns never end').toEqual({ oc: 'dev', ap: 'dev' });
+    // 2 and 3. Each task under its asker's line with its id, each asker its own answer.
+    expect.soft(devTurns, 'dev\'s turns').toHaveLength(2);
+    // Since #569 the sender line ends its own line, and the task is the line under it.
+    expect.soft(devTurns[0]).toMatch(/^Message from agent "Amp Agent" \("ap"\), task t-[0-9a-f]{8}: \nECHO FIRSTDELEG$/);
+    expect.soft(devTurns[1]).toMatch(/^Message from agent "Opencode Agent" \("oc"\), task t-[0-9a-f]{8}: \nECHO SECONDDELEG$/);
+    expect.soft(first.isError, first.text.slice(0, 300)).toBe(false);
+    expect.soft(first.text).toContain('ANSWER FIRSTDELEG');
+    expect.soft(second.isError, second.text.slice(0, 300)).toBe(false);
+    expect.soft(second.text).not.toContain('never started');
+    expect.soft(second.text).toContain('ANSWER SECONDDELEG');
+    // 4. Each turn filed under its own asker.
+    expect.soft(devTasks.map((t) => t.requesterAgentId).sort(), 'the askers of dev\'s tasks in the ledger').toEqual(['ap', 'oc']);
+  } finally {
+    for (const s of servers) s.kill();
+    await app.close();
+    for (const f of ['stand-in.jsonl', 'opencode.jsonl', 'amp.jsonl']) if (fs.existsSync(path.join(home, f))) fs.copyFileSync(path.join(home, f), test.info().outputPath(f));
+    await removeHome(home);
+  }
+});

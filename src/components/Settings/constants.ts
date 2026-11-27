@@ -144,7 +144,6 @@ export const DEFAULT_APP_SETTINGS = {
   autoCheckUpdates: true,
   errorReportsEnabled: false,
   autoStartAgentsOnLaunch: true,
-  newInterface: false,
   opencodeEnabled: false,
   opencodeDefaultModel: '',
   openRouterEnabled: false,

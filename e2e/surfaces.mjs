@@ -26,16 +26,15 @@ export const PAGES = [
   // than masking the list: a masked panel is a pink rectangle in the baseline
   // and no coverage at all.
   { name: 'chat', route: '/chat', settle: 3000 },
-  // The new shell's chats page, photographed here with the switch off, as
-  // everything in this sweep: the seed's orchestrator makes the tars project's
+  // The chats page: the seed's orchestrator makes the tars project's
   // chat #1, Main, which the page opens on its conversation, read from its
   // transcripts (Chat · chats · from its transcripts, in chat-redesign-a.pen).
   // e2e/new-interface-shell.spec.ts, e2e/new-interface-chats.spec.ts and
-  // e2e/new-interface-chat-page.spec.ts walk it with the switch on.
+  // e2e/new-interface-chat-page.spec.ts walk it too.
   { name: 'chats', route: '/chats' },
   // A project's page in the new shell (Shell · chats · project page, from the
-  // records), without ?path=: the first project by name. With the switch off,
-  // as `chats`; e2e/new-interface-chats.spec.ts walks it with the switch on.
+  // records), without ?path=: the first project by name. e2e/new-interface-chats.spec.ts
+  // walks it too.
   { name: 'project', route: '/project' },
   { name: 'agents', route: '/agents' },
   { name: 'kanban', route: '/kanban' },

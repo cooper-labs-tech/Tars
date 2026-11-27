@@ -7,8 +7,8 @@
  *   live from its orchestrator's transcript, words in its composer while the
  *   orchestrator works, and the chat list with N of M working;
  * - screenshots/new-interface-project.png: a project's page;
- * - screenshots/new-interface-settings.png: Settings, Preferences, its New
- *   interface row on, as a card above the app;
+ * - screenshots/new-interface-settings.png: Settings, Preferences, its
+ *   Appearance row first (Dark, Light), as a card above the app;
  * - landing/src/assets/new-interface.png: the chat's page again, at twice the
  *   pixels, as the landing's Preview section draws it (design/landing.pen,
  *   Landing · desktop). The landing is dark only, and so is this.
@@ -31,7 +31,7 @@
  *   harbor-billing, its orchestrator and one worker;
  * - chats in every section: both Mains pinned, two chats whose orchestrators
  *   work, two open, one snoozed until tomorrow, three settled;
- * - the new interface on, and the E2E's RAM figure, 15 GB: three chats at once,
+ * - the new shell, the only one since 2.1.0, and the E2E's RAM figure, 15 GB: three chats at once,
  *   so the list reads 2 of 3 working;
  * - the CLIs are stand-ins named claude, as the chat specs write them: they run
  *   Tars's hooks, and write their transcript where Claude Code keeps it. Each
@@ -225,7 +225,7 @@ function seed(cli) {
   ];
   writeFileSync(join(dir, 'chats.json'), JSON.stringify({ version: 1, numbers: { [TARS]: 7, [HARBOR]: 3 }, chats }, null, 2));
   writeFileSync(join(dir, 'hermes-connection.json'), JSON.stringify({ mode: 'local', localPort: 9, authMode: 'token' }));
-  writeFileSync(join(dir, 'app-settings.json'), JSON.stringify({ autoStartAgentsOnLaunch: false, ollamaBaseUrl: 'http://127.0.0.1:9', newInterface: true }));
+  writeFileSync(join(dir, 'app-settings.json'), JSON.stringify({ autoStartAgentsOnLaunch: false, ollamaBaseUrl: 'http://127.0.0.1:9' }));
   return chats;
 }
 
@@ -334,14 +334,15 @@ try {
   await guard(page, 'the project');
   await page.screenshot({ path: join(stage, 'project.png'), animations: 'disabled' });
 
-  // 3. Settings, as a card above the scroll lock's chat: Preferences, its New interface row on.
+  // 3. Settings, as a card above the scroll lock's chat: Preferences, its Appearance row first (the theme since
+  // 2.1.0, where the New interface switch was).
   await page.goto(`${DEV_URL}/chats?chat=${encodeURIComponent(scroll.id)}`, { waitUntil: 'domcontentloaded' });
   await thread.getByText('Both are in.', { exact: false }).waitFor({ timeout: 60_000 });
   await page.getByRole('complementary', { name: 'Sidebar' }).getByRole('button', { name: 'More' }).click();
   await page.getByRole('menu', { name: 'More' }).getByRole('menuitem', { name: 'Settings' }).click();
   const settings = page.getByRole('dialog', { name: 'Settings' });
-  const row = settings.locator('[data-settings-row]', { hasText: 'New interface' });
-  await row.getByRole('switch', { name: 'New interface', checked: true }).waitFor({ timeout: 60_000 });
+  const row = settings.locator('[data-settings-row]', { hasText: 'Appearance' });
+  await row.getByRole('radiogroup', { name: 'Appearance' }).getByRole('radio', { name: 'Dark', checked: true }).waitFor({ timeout: 60_000 });
   await settings.getByText('Opening the page').waitFor({ state: 'detached', timeout: 60_000 }).catch(() => {});
   await row.scrollIntoViewIfNeeded();
   await page.mouse.move(SIZE.width - 2, SIZE.height - 2);

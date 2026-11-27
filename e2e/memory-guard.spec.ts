@@ -37,8 +37,7 @@ function probeFile(count: number, width: number): string {
 
 test.skip(process.platform === 'win32', 'the stand-in orchestrator starts through ConPTY there; the guard itself is held by its unit on every platform');
 
-for (const newInterface of [false, true]) {
-test(`a MEMORY.md past what Claude Code loads is told to its orchestrator once, again when it grows, and shown${newInterface ? ' (new interface)' : ''}`, async () => {
+test(`a MEMORY.md past what Claude Code loads is told to its orchestrator once, again when it grows, and shown`, async () => {
   test.setTimeout(240_000);
   const home = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'dorothy-e2e-memory-guard-')));
   const project = path.join(home, 'projects', 'harbor');
@@ -87,14 +86,14 @@ test(`a MEMORY.md past what Claude Code loads is told to its orchestrator once, 
     skills: [], cliPath: cli, createdAt: '2026-10-29T08:00:00.000Z', lastActivity: '2026-10-29T08:00:00.000Z',
   }], null, 2));
   fs.writeFileSync(path.join(dir, 'projects.json'), JSON.stringify([project]));
-  fs.writeFileSync(path.join(dir, 'app-settings.json'), JSON.stringify({ autoStartAgentsOnLaunch: false, ollamaBaseUrl: 'http://127.0.0.1:9', newInterface }));
-  const values: Record<string, unknown> = { newInterface };
+  fs.writeFileSync(path.join(dir, 'app-settings.json'), JSON.stringify({ autoStartAgentsOnLaunch: false, ollamaBaseUrl: 'http://127.0.0.1:9' }));
+  const values: Record<string, unknown> = {};
   const notes = () => (fs.existsSync(typed) ? fs.readFileSync(typed, 'utf8').trim().split('\n').filter(Boolean).map(l => JSON.parse(l) as string) : [])
     .join('').split('Message from Tars').slice(1);
 
   const app = await launchSandboxed(electron, home, {
     env: {
-      NODE_ENV: 'development', DOROTHY_DEV_URL: DEV_URL, DOROTHY_API_PORT: apiPort(newInterface ? 31574 : 31573),
+      NODE_ENV: 'development', DOROTHY_DEV_URL: DEV_URL, DOROTHY_API_PORT: apiPort(31574),
       DOROTHY_E2E: '1', DOROTHY_MEMORY_GUARD_EVERY_MS: '500',
     },
   });
@@ -138,4 +137,3 @@ test(`a MEMORY.md past what Claude Code loads is told to its orchestrator once, 
     await removeHome(home);
   }
 });
-}

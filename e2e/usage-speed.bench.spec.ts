@@ -19,8 +19,8 @@ import { DEV_URL, apiPort } from './ports.mjs';
  *
  * Recorded into values.json, times and sizes only, never what the data says:
  * - when each card first showed, from the page's load: cold (the app starts on the Usage page, nothing read yet),
- *   reload (the window's store gone, the main process's one-minute caches warm), back (the Usage link clicked from
- *   Agents, everything warm);
+ *   reload (the window's store gone, the main process's one-minute caches warm), back (Usage's card opened from
+ *   More over Kanban, everything warm; the Usage link clicked from Agents in the classic sidebar until 2.1.0);
  * - every IPC call the Usage page made meanwhile: channel, milliseconds in the main process, bytes returned;
  * - each of the page's calls made again from the window and timed there (the main process plus the transfer);
  * - how many agents, tasks and models the data holds over the default timeframe.
@@ -73,9 +73,12 @@ async function watch(page: Page, t0: number): Promise<Record<Card, number | null
 
 type Call = { channel: string; at: number; ms: number; bytes: number | null; failed: boolean; page: string };
 
-/** The Usage page's calls between two moments: the timer's log, and what a late timer kept in the main process. */
-function callsBetween(logged: Call[], from: number, to: number): Call[] {
-  return logged.filter((c) => c.at >= from && c.at <= to && c.page.startsWith('/usage')).map((c) => ({ ...c, at: c.at - from }));
+/**
+ * The Usage page's calls between two moments: the timer's log, and what a late timer kept in the main process. `under`
+ * is the route they are filed under: the Usage route's own, or the page a card of Usage opened over.
+ */
+function callsBetween(logged: Call[], from: number, to: number, under = '/usage'): Call[] {
+  return logged.filter((c) => c.at >= from && c.at <= to && c.page.startsWith(under)).map((c) => ({ ...c, at: c.at - from }));
 }
 
 test('the Usage page on real data: when each card shows, and every call it makes', async () => {
@@ -147,11 +150,15 @@ test('the Usage page on real data: when each card shows, and every call it makes
       const t1 = await page.evaluate(() => performance.timeOrigin);
       scenarios.reload = { shown: await watch(page, t1), calls: callsBetween(await logged(), t1, Date.now()) };
 
-      await page.getByRole('link', { name: 'Agents', exact: true }).first().click();
+      // Back, as 2.1.0 goes there: away to Kanban, a page of the main menu (the Usage route unmounts), then Usage's card
+      // from More. A card has no route of its own: its calls are filed under the page beneath it, Kanban.
+      const sidebar = page.getByRole('complementary', { name: 'Sidebar' });
+      await sidebar.getByRole('navigation', { name: 'Main menu' }).getByRole('link', { name: 'Kanban', exact: true }).click();
       await page.waitForTimeout(3_000);
       const t2 = Date.now();
-      await page.getByRole('link', { name: 'Usage', exact: true }).first().click();
-      scenarios.back = { shown: await watch(page, t2), calls: callsBetween(await logged(), t2, Date.now()) };
+      await sidebar.getByRole('button', { name: 'More' }).click();
+      await page.getByRole('menu', { name: 'More' }).getByRole('menuitem', { name: 'Usage', exact: true }).click();
+      scenarios.back = { shown: await watch(page, t2), calls: callsBetween(await logged(), t2, Date.now(), '/kanban') };
 
       // Each of the page's calls again, timed from the window: twice, the second warm.
       scenarios.fromWindow = await page.evaluate(async () => {

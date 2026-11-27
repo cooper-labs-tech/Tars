@@ -31,7 +31,7 @@ import { DEV_URL, apiPort } from './ports.mjs';
  *    --effort low, --resume <its session> and --fork-session;
  * 8. refused, and nothing written: the worker changing it (worker_may_not_update), the orchestrator changing an agent
  *    of another project (other_project), and the orchestrator changing itself (orchestrator_settings).
- * Run in the classic shell and in the new interface's. The artefact: values.json (every tool answer, the records,
+ * The artefact: values.json (every tool answer, the records,
  * every launch), launches.jsonl.
  */
 
@@ -103,200 +103,198 @@ const alive = (pid: number) => {
   }
 };
 
-for (const newInterface of [false, true]) {
-  test(`an orchestrator makes a codex agent, changes its model and effort, then moves it to claude${newInterface ? ' (new interface)' : ''}`, async () => {
-    test.setTimeout(300_000);
-    const home = fs.mkdtempSync(path.join(os.tmpdir(), 'dorothy-e2e-update-agent-'));
-    const project = path.join(home, 'projects', 'demo');
-    const elsewhere = path.join(home, 'projects', 'elsewhere');
-    const dir = path.join(home, '.tars');
-    const bin = path.join(home, 'bin');
-    for (const d of [project, elsewhere, dir, bin]) fs.mkdirSync(d, { recursive: true });
-    const launchesFile = path.join(home, 'launches.jsonl');
-    const codexCli = path.join(bin, 'codex');
-    fs.writeFileSync(codexCli, `#!${process.execPath}
+test(`an orchestrator makes a codex agent, changes its model and effort, then moves it to claude`, async () => {
+  test.setTimeout(300_000);
+  const home = fs.mkdtempSync(path.join(os.tmpdir(), 'dorothy-e2e-update-agent-'));
+  const project = path.join(home, 'projects', 'demo');
+  const elsewhere = path.join(home, 'projects', 'elsewhere');
+  const dir = path.join(home, '.tars');
+  const bin = path.join(home, 'bin');
+  for (const d of [project, elsewhere, dir, bin]) fs.mkdirSync(d, { recursive: true });
+  const launchesFile = path.join(home, 'launches.jsonl');
+  const codexCli = path.join(bin, 'codex');
+  fs.writeFileSync(codexCli, `#!${process.execPath}
 require('fs').appendFileSync(${JSON.stringify(launchesFile)}, JSON.stringify({ bin: 'codex', agent: process.env.CLAUDE_AGENT_ID || null, pid: process.pid, argv: process.argv.slice(2) }) + '\\n');
 process.stdout.write('codex ready\\r\\n');
 setInterval(() => {}, 1 << 30);
 `, { mode: 0o755 });
-    const claudeCli = path.join(bin, 'claude');
-    fs.writeFileSync(claudeCli, `#!${process.execPath}\nconst HOOKS = ${JSON.stringify(HOOKS)};\nconst LAUNCHES = ${JSON.stringify(launchesFile)};\n${CLAUDE_STAND_IN}`, { mode: 0o755 });
-    const seeded = (id: string, name: string, role: string, projectPath: string) => ({
-      id, name, character: 'robot', provider: 'claude', status: 'idle', role, permissionMode: 'bypass',
-      projectPath, skills: [], createdAt: '2026-10-19T08:00:00.000Z', lastActivity: '2026-10-19T08:00:00.000Z',
-    });
-    fs.writeFileSync(path.join(dir, 'agents.json'), JSON.stringify([
-      seeded('o1', 'Lead', 'orchestrator', project), seeded('w9', 'Helper', 'worker', project), seeded('far', 'Far', 'worker', elsewhere),
-    ], null, 2));
-    fs.writeFileSync(path.join(dir, 'projects.json'), JSON.stringify([project, elsewhere]));
-    fs.writeFileSync(path.join(dir, 'app-settings.json'), JSON.stringify({ autoStartAgentsOnLaunch: false, cliPaths: { codex: codexCli }, newInterface }));
-    fs.writeFileSync(path.join(dir, 'hermes-connection.json'), JSON.stringify({ mode: 'local', localPort: 9, authMode: 'token' }));
-    const port = apiPort(31447);
-    const dist = path.resolve('electron', 'dist');
-    const values: Record<string, unknown> = { home, project, newInterface };
-    const keep = (more: Record<string, unknown>) => { Object.assign(values, more); recordValues(values); };
-
-    const app: ElectronApplication = await launchSandboxed(electron, home, {
-      env: { NODE_ENV: 'development', DOROTHY_DEV_URL: DEV_URL, DOROTHY_API_PORT: port, DOROTHY_E2E: '1' },
-    });
-    const servers: ChildProcessWithoutNullStreams[] = [];
-    try {
-      const page = await app.firstWindow();
-      await page.goto(`${DEV_URL}/agents`, { waitUntil: 'domcontentloaded' });
-      await page.waitForFunction(() => !!(window as unknown as { electronAPI?: unknown }).electronAPI);
-      // The shell this run is in.
-      await expect(page.getByRole('navigation', { name: 'Main menu' })).toHaveCount(newInterface ? 1 : 0, { timeout: 30_000 });
-
-      /** The orchestrator MCP server, run as `agentId` with the identity Tars hands it. */
-      const mcpAs = async (agentId: string) => {
-        const identity = await app.evaluate((_e, { dist, agentId }) => {
-          const tokens = process.mainModule!.require(`${dist}/core/agent-tokens.js`);
-          return { token: tokens.mintRunToken(agentId).token as string, instance: tokens.tarsInstanceId() as string };
-        }, { dist, agentId });
-        const server = spawn(process.execPath, [path.resolve('mcp-orchestrator', 'dist', 'bundle.js')], {
-          env: {
-            PATH: process.env.PATH ?? '', HOME: home, CLAUDE_MGR_API_URL: `http://127.0.0.1:${port}`, CLAUDE_MGR_API_TOKEN: identity.token,
-            CLAUDE_AGENT_ID: agentId, CLAUDE_PROJECT_PATH: project, TARS_INSTANCE_ID: identity.instance,
-          },
-        });
-        servers.push(server);
-        // A server that dies or never answers fails the call with what it said, rather than the test's timeout.
-        let said = '';
-        server.stderr.on('data', (chunk) => { said = (said + chunk).slice(-2000); });
-        const replies = new Map<number, (msg: { result?: { content?: Array<{ text?: string }>; isError?: boolean }; error?: unknown }) => void>();
-        let buffered = '';
-        server.stdout.on('data', (chunk) => {
-          buffered += chunk;
-          for (let at = buffered.indexOf('\n'); at >= 0; at = buffered.indexOf('\n')) {
-            const line = buffered.slice(0, at);
-            buffered = buffered.slice(at + 1);
-            if (!line.trim()) continue;
-            const msg = JSON.parse(line);
-            if (typeof msg.id === 'number') replies.get(msg.id)?.(msg);
-          }
-        });
-        let nextId = 1;
-        const rpc = (method: string, params: unknown) => new Promise<Parameters<NonNullable<ReturnType<typeof replies.get>>>[0]>((resolve, reject) => {
-          const id = nextId++;
-          const late = setTimeout(() => reject(new Error(`the orchestrator MCP server of ${agentId} did not answer ${method} in 60 s; it said: ${said}`)), 60_000);
-          replies.set(id, (msg) => { clearTimeout(late); resolve(msg); });
-          server.stdin.write(`${JSON.stringify({ jsonrpc: '2.0', id, method, params })}\n`);
-        });
-        await rpc('initialize', { protocolVersion: '2024-11-05', capabilities: {}, clientInfo: { name: 'e2e', version: '1' } });
-        server.stdin.write(`${JSON.stringify({ jsonrpc: '2.0', method: 'notifications/initialized' })}\n`);
-        return async (name: string, args: Record<string, unknown>): Promise<Said> => {
-          const reply = await rpc('tools/call', { name, arguments: args });
-          return { text: reply.result?.content?.map((c) => c.text ?? '').join('\n') ?? JSON.stringify(reply.error), isError: !!reply.result?.isError || !!reply.error };
-        };
-      };
-      const lead = await mcpAs('o1');
-      const worker = await mcpAs('w9');
-
-      const launches = () => (fs.existsSync(launchesFile) ? fs.readFileSync(launchesFile, 'utf8').trim().split('\n').filter(Boolean).map((l) => JSON.parse(l) as Launch) : []);
-      const records = () => {
-        const saved = JSON.parse(fs.readFileSync(path.join(dir, 'agents.json'), 'utf8')) as { agents?: Array<Record<string, unknown>> } | Array<Record<string, unknown>>;
-        return Array.isArray(saved) ? saved : saved.agents ?? [];
-      };
-      const recordOf = (id: string) => records().find((a) => a.id === id);
-      const agentNow = (id: string) => page.evaluate(async (id) => {
-        const api = (window as unknown as { electronAPI: { agent: { list(): Promise<Array<Record<string, unknown>>> } } }).electronAPI;
-        return (await api.agent.list()).find((a) => a.id === id);
-      }, id);
-      const launchesOf = (id: string, cli: string) => launches().filter((l) => l.agent === id && l.bin === cli);
-
-      // ── 1. A codex agent, started on model-a ──
-      const made = await lead('create_agent', { name: 'Mover', provider: 'codex', model: 'model-a', effort: 'low', permissionMode: 'bypass' });
-      keep({ made });
-      expect(made.isError).toBe(false);
-      const id = /with ID: ([0-9a-f-]{36})/.exec(made.text)![1];
-      const started = await lead('start_agent', { id, prompt: 'CODEX>> first task' });
-      keep({ started });
-      expect(started.isError).toBe(false);
-      await expect.poll(() => launchesOf(id, 'codex').length, { timeout: 30_000 }).toBe(1);
-      const first = launchesOf(id, 'codex')[0];
-      expect(first.argv.join(' ')).toContain('--model model-a');
-
-      // ── 2. Model and effort changed while codex works: at its next start, codex untouched ──
-      const tuned = await lead('update_agent', { id, model: 'model-b', effort: 'high' });
-      keep({ tuned, afterTuned: recordOf(id) });
-      expect(tuned.isError, tuned.text).toBe(false);
-      expect(tuned.text).toMatch(/next start/);
-      expect(tuned.text).toMatch(/new conversation/);
-      await expect.poll(() => recordOf(id), { timeout: 10_000 }).toMatchObject({ provider: 'codex', model: 'model-b', effort: 'high' });
-      expect(alive(first.pid)).toBe(true);
-      expect(launchesOf(id, 'codex')).toHaveLength(1);
-
-      // ── 3. A move to claude while codex runs: refused, nothing written ──
-      const tooSoon = await lead('update_agent', { id, provider: 'claude' });
-      keep({ tooSoon, afterTooSoon: recordOf(id) });
-      expect(tooSoon.isError).toBe(true);
-      expect(tooSoon.text).toContain('cli_running');
-      expect(tooSoon.text).toContain('stop_agent');
-      expect(recordOf(id)).toMatchObject({ provider: 'codex', model: 'model-b' });
-      expect(alive(first.pid)).toBe(true);
-
-      // ── 4. Stopped and started again: codex runs on model-b ──
-      expect((await lead('stop_agent', { id, reason: 'restart it on its new model' })).isError).toBe(false);
-      await expect.poll(() => alive(first.pid), { timeout: 30_000 }).toBe(false);
-      expect((await lead('start_agent', { id, prompt: 'CODEX>> second task' })).isError).toBe(false);
-      await expect.poll(() => launchesOf(id, 'codex').length, { timeout: 30_000 }).toBe(2);
-      const second = launchesOf(id, 'codex')[1];
-      keep({ codexLaunches: launchesOf(id, 'codex') });
-      expect(second.argv.join(' ')).toContain('--model model-b');
-      expect((await lead('stop_agent', { id, reason: 'moving it to claude' })).isError).toBe(false);
-      await expect.poll(() => alive(second.pid), { timeout: 30_000 }).toBe(false);
-
-      // ── 5. Moved to claude, stopped: at its next start, a new conversation ──
-      const moved = await lead('update_agent', { id, provider: 'claude', model: 'opus', effort: 'max', cliPath: claudeCli });
-      keep({ moved, afterMove: recordOf(id) });
-      expect(moved.isError, moved.text).toBe(false);
-      expect(moved.text).toMatch(/next start/);
-      expect(moved.text).toMatch(/new conversation/);
-      await expect.poll(() => recordOf(id), { timeout: 10_000 }).toMatchObject({ provider: 'claude', model: 'opus', effort: 'max', cliPath: claudeCli });
-
-      // ── 6. Started: claude on opus at max, a new session ──
-      expect((await lead('start_agent', { id, prompt: 'CLAUDE>> third task' })).isError).toBe(false);
-      await expect.poll(() => launchesOf(id, 'claude').length, { timeout: 60_000 }).toBe(1);
-      const onClaude = launchesOf(id, 'claude')[0];
-      expect(onClaude).toMatchObject({ model: 'opus', effort: 'max', resume: null });
-      await expect.poll(async () => (await agentNow(id))?.currentSessionId ?? null, { timeout: 60_000 }).toBe(onClaude.sid);
-      await expect.poll(async () => (await agentNow(id))?.status, { timeout: 60_000 }).toMatch(/^(idle|completed|waiting)$/);
-
-      // ── 7. Its effort changed at rest: restarted on low, on its conversation ──
-      const lowered = await lead('update_agent', { id, effort: 'low' });
-      keep({ lowered });
-      expect(lowered.isError, lowered.text).toBe(false);
-      expect(lowered.text).toMatch(/same conversation/);
-      await expect.poll(() => launchesOf(id, 'claude').length, { timeout: 60_000 }).toBe(2);
-      const restarted = launchesOf(id, 'claude')[1];
-      keep({ claudeLaunches: launchesOf(id, 'claude') });
-      expect(restarted).toMatchObject({ effort: 'low', model: 'opus', resume: onClaude.sid, fork: true });
-
-      // ── 8. Refused, and nothing written ──
-      const before = { o1: recordOf('o1'), far: recordOf('far'), mover: recordOf(id) };
-      const byWorker = await worker('update_agent', { id, model: 'haiku' });
-      const otherProject = await lead('update_agent', { id: 'far', model: 'haiku' });
-      const itself = await lead('update_agent', { id: 'o1', model: 'haiku' });
-      keep({ byWorker, otherProject, itself });
-      expect(byWorker.isError).toBe(true);
-      expect(byWorker.text).toContain('worker_may_not_update');
-      expect(otherProject.isError).toBe(true);
-      expect(otherProject.text).toContain('other_project');
-      expect(itself.isError).toBe(true);
-      expect(itself.text).toContain('orchestrator_settings');
-      const strip = (r: Record<string, unknown> | undefined) => ({ model: r?.model, effort: r?.effort, provider: r?.provider, role: r?.role, cliPath: r?.cliPath });
-      expect(strip(recordOf('o1'))).toEqual(strip(before.o1));
-      expect(strip(recordOf('far'))).toEqual(strip(before.far));
-      expect(strip(recordOf(id))).toEqual(strip(before.mover));
-      keep({ finalRecords: records().map((a) => ({ id: a.id, provider: a.provider, model: a.model, effort: a.effort, cliPath: a.cliPath, role: a.role })) });
-    } finally {
-      for (const server of servers) server.kill();
-      await app.close();
-      if (fs.existsSync(launchesFile)) fs.copyFileSync(launchesFile, test.info().outputPath('launches.jsonl'));
-      for (const l of fs.existsSync(launchesFile) ? fs.readFileSync(launchesFile, 'utf8').trim().split('\n').filter(Boolean).map((x) => JSON.parse(x) as Launch) : []) {
-        if (alive(l.pid)) process.kill(l.pid, 'SIGKILL');
-      }
-      await removeHome(home);
-    }
+  const claudeCli = path.join(bin, 'claude');
+  fs.writeFileSync(claudeCli, `#!${process.execPath}\nconst HOOKS = ${JSON.stringify(HOOKS)};\nconst LAUNCHES = ${JSON.stringify(launchesFile)};\n${CLAUDE_STAND_IN}`, { mode: 0o755 });
+  const seeded = (id: string, name: string, role: string, projectPath: string) => ({
+    id, name, character: 'robot', provider: 'claude', status: 'idle', role, permissionMode: 'bypass',
+    projectPath, skills: [], createdAt: '2026-10-19T08:00:00.000Z', lastActivity: '2026-10-19T08:00:00.000Z',
   });
-}
+  fs.writeFileSync(path.join(dir, 'agents.json'), JSON.stringify([
+    seeded('o1', 'Lead', 'orchestrator', project), seeded('w9', 'Helper', 'worker', project), seeded('far', 'Far', 'worker', elsewhere),
+  ], null, 2));
+  fs.writeFileSync(path.join(dir, 'projects.json'), JSON.stringify([project, elsewhere]));
+  fs.writeFileSync(path.join(dir, 'app-settings.json'), JSON.stringify({ autoStartAgentsOnLaunch: false, cliPaths: { codex: codexCli } }));
+  fs.writeFileSync(path.join(dir, 'hermes-connection.json'), JSON.stringify({ mode: 'local', localPort: 9, authMode: 'token' }));
+  const port = apiPort(31447);
+  const dist = path.resolve('electron', 'dist');
+  const values: Record<string, unknown> = { home, project };
+  const keep = (more: Record<string, unknown>) => { Object.assign(values, more); recordValues(values); };
+
+  const app: ElectronApplication = await launchSandboxed(electron, home, {
+    env: { NODE_ENV: 'development', DOROTHY_DEV_URL: DEV_URL, DOROTHY_API_PORT: port, DOROTHY_E2E: '1' },
+  });
+  const servers: ChildProcessWithoutNullStreams[] = [];
+  try {
+    const page = await app.firstWindow();
+    await page.goto(`${DEV_URL}/agents`, { waitUntil: 'domcontentloaded' });
+    await page.waitForFunction(() => !!(window as unknown as { electronAPI?: unknown }).electronAPI);
+    // The shell this run is in.
+    await expect(page.getByRole('navigation', { name: 'Main menu' })).toHaveCount(1, { timeout: 30_000 });
+
+    /** The orchestrator MCP server, run as `agentId` with the identity Tars hands it. */
+    const mcpAs = async (agentId: string) => {
+      const identity = await app.evaluate((_e, { dist, agentId }) => {
+        const tokens = process.mainModule!.require(`${dist}/core/agent-tokens.js`);
+        return { token: tokens.mintRunToken(agentId).token as string, instance: tokens.tarsInstanceId() as string };
+      }, { dist, agentId });
+      const server = spawn(process.execPath, [path.resolve('mcp-orchestrator', 'dist', 'bundle.js')], {
+        env: {
+          PATH: process.env.PATH ?? '', HOME: home, CLAUDE_MGR_API_URL: `http://127.0.0.1:${port}`, CLAUDE_MGR_API_TOKEN: identity.token,
+          CLAUDE_AGENT_ID: agentId, CLAUDE_PROJECT_PATH: project, TARS_INSTANCE_ID: identity.instance,
+        },
+      });
+      servers.push(server);
+      // A server that dies or never answers fails the call with what it said, rather than the test's timeout.
+      let said = '';
+      server.stderr.on('data', (chunk) => { said = (said + chunk).slice(-2000); });
+      const replies = new Map<number, (msg: { result?: { content?: Array<{ text?: string }>; isError?: boolean }; error?: unknown }) => void>();
+      let buffered = '';
+      server.stdout.on('data', (chunk) => {
+        buffered += chunk;
+        for (let at = buffered.indexOf('\n'); at >= 0; at = buffered.indexOf('\n')) {
+          const line = buffered.slice(0, at);
+          buffered = buffered.slice(at + 1);
+          if (!line.trim()) continue;
+          const msg = JSON.parse(line);
+          if (typeof msg.id === 'number') replies.get(msg.id)?.(msg);
+        }
+      });
+      let nextId = 1;
+      const rpc = (method: string, params: unknown) => new Promise<Parameters<NonNullable<ReturnType<typeof replies.get>>>[0]>((resolve, reject) => {
+        const id = nextId++;
+        const late = setTimeout(() => reject(new Error(`the orchestrator MCP server of ${agentId} did not answer ${method} in 60 s; it said: ${said}`)), 60_000);
+        replies.set(id, (msg) => { clearTimeout(late); resolve(msg); });
+        server.stdin.write(`${JSON.stringify({ jsonrpc: '2.0', id, method, params })}\n`);
+      });
+      await rpc('initialize', { protocolVersion: '2024-11-05', capabilities: {}, clientInfo: { name: 'e2e', version: '1' } });
+      server.stdin.write(`${JSON.stringify({ jsonrpc: '2.0', method: 'notifications/initialized' })}\n`);
+      return async (name: string, args: Record<string, unknown>): Promise<Said> => {
+        const reply = await rpc('tools/call', { name, arguments: args });
+        return { text: reply.result?.content?.map((c) => c.text ?? '').join('\n') ?? JSON.stringify(reply.error), isError: !!reply.result?.isError || !!reply.error };
+      };
+    };
+    const lead = await mcpAs('o1');
+    const worker = await mcpAs('w9');
+
+    const launches = () => (fs.existsSync(launchesFile) ? fs.readFileSync(launchesFile, 'utf8').trim().split('\n').filter(Boolean).map((l) => JSON.parse(l) as Launch) : []);
+    const records = () => {
+      const saved = JSON.parse(fs.readFileSync(path.join(dir, 'agents.json'), 'utf8')) as { agents?: Array<Record<string, unknown>> } | Array<Record<string, unknown>>;
+      return Array.isArray(saved) ? saved : saved.agents ?? [];
+    };
+    const recordOf = (id: string) => records().find((a) => a.id === id);
+    const agentNow = (id: string) => page.evaluate(async (id) => {
+      const api = (window as unknown as { electronAPI: { agent: { list(): Promise<Array<Record<string, unknown>>> } } }).electronAPI;
+      return (await api.agent.list()).find((a) => a.id === id);
+    }, id);
+    const launchesOf = (id: string, cli: string) => launches().filter((l) => l.agent === id && l.bin === cli);
+
+    // ── 1. A codex agent, started on model-a ──
+    const made = await lead('create_agent', { name: 'Mover', provider: 'codex', model: 'model-a', effort: 'low', permissionMode: 'bypass' });
+    keep({ made });
+    expect(made.isError).toBe(false);
+    const id = /with ID: ([0-9a-f-]{36})/.exec(made.text)![1];
+    const started = await lead('start_agent', { id, prompt: 'CODEX>> first task' });
+    keep({ started });
+    expect(started.isError).toBe(false);
+    await expect.poll(() => launchesOf(id, 'codex').length, { timeout: 30_000 }).toBe(1);
+    const first = launchesOf(id, 'codex')[0];
+    expect(first.argv.join(' ')).toContain('--model model-a');
+
+    // ── 2. Model and effort changed while codex works: at its next start, codex untouched ──
+    const tuned = await lead('update_agent', { id, model: 'model-b', effort: 'high' });
+    keep({ tuned, afterTuned: recordOf(id) });
+    expect(tuned.isError, tuned.text).toBe(false);
+    expect(tuned.text).toMatch(/next start/);
+    expect(tuned.text).toMatch(/new conversation/);
+    await expect.poll(() => recordOf(id), { timeout: 10_000 }).toMatchObject({ provider: 'codex', model: 'model-b', effort: 'high' });
+    expect(alive(first.pid)).toBe(true);
+    expect(launchesOf(id, 'codex')).toHaveLength(1);
+
+    // ── 3. A move to claude while codex runs: refused, nothing written ──
+    const tooSoon = await lead('update_agent', { id, provider: 'claude' });
+    keep({ tooSoon, afterTooSoon: recordOf(id) });
+    expect(tooSoon.isError).toBe(true);
+    expect(tooSoon.text).toContain('cli_running');
+    expect(tooSoon.text).toContain('stop_agent');
+    expect(recordOf(id)).toMatchObject({ provider: 'codex', model: 'model-b' });
+    expect(alive(first.pid)).toBe(true);
+
+    // ── 4. Stopped and started again: codex runs on model-b ──
+    expect((await lead('stop_agent', { id, reason: 'restart it on its new model' })).isError).toBe(false);
+    await expect.poll(() => alive(first.pid), { timeout: 30_000 }).toBe(false);
+    expect((await lead('start_agent', { id, prompt: 'CODEX>> second task' })).isError).toBe(false);
+    await expect.poll(() => launchesOf(id, 'codex').length, { timeout: 30_000 }).toBe(2);
+    const second = launchesOf(id, 'codex')[1];
+    keep({ codexLaunches: launchesOf(id, 'codex') });
+    expect(second.argv.join(' ')).toContain('--model model-b');
+    expect((await lead('stop_agent', { id, reason: 'moving it to claude' })).isError).toBe(false);
+    await expect.poll(() => alive(second.pid), { timeout: 30_000 }).toBe(false);
+
+    // ── 5. Moved to claude, stopped: at its next start, a new conversation ──
+    const moved = await lead('update_agent', { id, provider: 'claude', model: 'opus', effort: 'max', cliPath: claudeCli });
+    keep({ moved, afterMove: recordOf(id) });
+    expect(moved.isError, moved.text).toBe(false);
+    expect(moved.text).toMatch(/next start/);
+    expect(moved.text).toMatch(/new conversation/);
+    await expect.poll(() => recordOf(id), { timeout: 10_000 }).toMatchObject({ provider: 'claude', model: 'opus', effort: 'max', cliPath: claudeCli });
+
+    // ── 6. Started: claude on opus at max, a new session ──
+    expect((await lead('start_agent', { id, prompt: 'CLAUDE>> third task' })).isError).toBe(false);
+    await expect.poll(() => launchesOf(id, 'claude').length, { timeout: 60_000 }).toBe(1);
+    const onClaude = launchesOf(id, 'claude')[0];
+    expect(onClaude).toMatchObject({ model: 'opus', effort: 'max', resume: null });
+    await expect.poll(async () => (await agentNow(id))?.currentSessionId ?? null, { timeout: 60_000 }).toBe(onClaude.sid);
+    await expect.poll(async () => (await agentNow(id))?.status, { timeout: 60_000 }).toMatch(/^(idle|completed|waiting)$/);
+
+    // ── 7. Its effort changed at rest: restarted on low, on its conversation ──
+    const lowered = await lead('update_agent', { id, effort: 'low' });
+    keep({ lowered });
+    expect(lowered.isError, lowered.text).toBe(false);
+    expect(lowered.text).toMatch(/same conversation/);
+    await expect.poll(() => launchesOf(id, 'claude').length, { timeout: 60_000 }).toBe(2);
+    const restarted = launchesOf(id, 'claude')[1];
+    keep({ claudeLaunches: launchesOf(id, 'claude') });
+    expect(restarted).toMatchObject({ effort: 'low', model: 'opus', resume: onClaude.sid, fork: true });
+
+    // ── 8. Refused, and nothing written ──
+    const before = { o1: recordOf('o1'), far: recordOf('far'), mover: recordOf(id) };
+    const byWorker = await worker('update_agent', { id, model: 'haiku' });
+    const otherProject = await lead('update_agent', { id: 'far', model: 'haiku' });
+    const itself = await lead('update_agent', { id: 'o1', model: 'haiku' });
+    keep({ byWorker, otherProject, itself });
+    expect(byWorker.isError).toBe(true);
+    expect(byWorker.text).toContain('worker_may_not_update');
+    expect(otherProject.isError).toBe(true);
+    expect(otherProject.text).toContain('other_project');
+    expect(itself.isError).toBe(true);
+    expect(itself.text).toContain('orchestrator_settings');
+    const strip = (r: Record<string, unknown> | undefined) => ({ model: r?.model, effort: r?.effort, provider: r?.provider, role: r?.role, cliPath: r?.cliPath });
+    expect(strip(recordOf('o1'))).toEqual(strip(before.o1));
+    expect(strip(recordOf('far'))).toEqual(strip(before.far));
+    expect(strip(recordOf(id))).toEqual(strip(before.mover));
+    keep({ finalRecords: records().map((a) => ({ id: a.id, provider: a.provider, model: a.model, effort: a.effort, cliPath: a.cliPath, role: a.role })) });
+  } finally {
+    for (const server of servers) server.kill();
+    await app.close();
+    if (fs.existsSync(launchesFile)) fs.copyFileSync(launchesFile, test.info().outputPath('launches.jsonl'));
+    for (const l of fs.existsSync(launchesFile) ? fs.readFileSync(launchesFile, 'utf8').trim().split('\n').filter(Boolean).map((x) => JSON.parse(x) as Launch) : []) {
+      if (alive(l.pid)) process.kill(l.pid, 'SIGKILL');
+    }
+    await removeHome(home);
+  }
+});

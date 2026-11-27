@@ -18,8 +18,7 @@ import { DEV_URL, apiPort } from './ports.mjs';
  * the path this spec takes through the real app. The providers' path is the unit test's (cli-config-files.test.ts).
  *
  * The real app on a sandbox HOME whose ~/.codex/config.toml holds that shape: the user's server, a server right after
- * it with no blank line, codex's [tui] right after that. Asserted, once with the classic shell and once with the new
- * interface:
+ * it with no blank line, codex's [tui] right after that. Asserted:
  * 1. mcp.delete of the middle server from the window: the file parses, the user's server and [tui]
  *    whole, and it ends with a newline; a table codex adds of its own at the end still parses;
  * 2. mcp.update of a server whose command holds a quote and a Windows path: the file still parses, and the command
@@ -50,54 +49,52 @@ type Api = { electronAPI: { mcp: {
 
 const parses = (text: string): string | undefined => { try { parseToml(text); return undefined; } catch (err) { return String(err); } };
 
-for (const newInterface of [false, true]) {
-  test(`the mcp page leaves codex's config.toml parsing, the user's servers and codex's own tables whole${newInterface ? ' (new interface)' : ''}`, async () => {
-    test.setTimeout(180_000);
-    const home = fs.mkdtempSync(path.join(os.tmpdir(), 'dorothy-e2e-cli-config-'));
-    const dir = path.join(home, '.tars');
-    fs.mkdirSync(dir, { recursive: true });
-    fs.writeFileSync(path.join(dir, 'app-settings.json'), JSON.stringify({ autoStartAgentsOnLaunch: false, ollamaBaseUrl: 'http://127.0.0.1:9', newInterface }));
-    const config = path.join(home, '.codex', 'config.toml');
-    fs.mkdirSync(path.dirname(config), { recursive: true });
-    fs.writeFileSync(config, BEFORE);
-    const port = apiPort(newInterface ? 31344 : 31343);
-    const values: Record<string, unknown> = { newInterface, before: BEFORE };
-    const keep = (more: Record<string, unknown>) => { Object.assign(values, more); recordValues(values); };
+test(`the mcp page leaves codex's config.toml parsing, the user's servers and codex's own tables whole`, async () => {
+  test.setTimeout(180_000);
+  const home = fs.mkdtempSync(path.join(os.tmpdir(), 'dorothy-e2e-cli-config-'));
+  const dir = path.join(home, '.tars');
+  fs.mkdirSync(dir, { recursive: true });
+  fs.writeFileSync(path.join(dir, 'app-settings.json'), JSON.stringify({ autoStartAgentsOnLaunch: false, ollamaBaseUrl: 'http://127.0.0.1:9' }));
+  const config = path.join(home, '.codex', 'config.toml');
+  fs.mkdirSync(path.dirname(config), { recursive: true });
+  fs.writeFileSync(config, BEFORE);
+  const port = apiPort(31344);
+  const values: Record<string, unknown> = { before: BEFORE };
+  const keep = (more: Record<string, unknown>) => { Object.assign(values, more); recordValues(values); };
 
-    const app: ElectronApplication = await launchSandboxed(electron, home, {
-      env: { NODE_ENV: 'development', DOROTHY_DEV_URL: DEV_URL, DOROTHY_API_PORT: port, DOROTHY_E2E: '1' },
-    });
-    try {
-      const page = await app.firstWindow();
-      await page.goto(`${DEV_URL}/settings`, { waitUntil: 'domcontentloaded' });
-      await page.waitForFunction(() => !!(window as unknown as Partial<Api>).electronAPI);
-      await expect(page.getByRole('navigation', { name: 'Main menu' })).toHaveCount(newInterface ? 1 : 0, { timeout: 30_000 });
-
-      // 1. The middle server deleted from the window.
-      const deleted = await page.evaluate(() => (window as unknown as Api).electronAPI.mcp.delete({ provider: 'codex', name: 'docs' }));
-      const afterDelete = fs.readFileSync(config, 'utf8');
-      keep({ deleted, afterDelete, afterDeleteParse: parses(afterDelete) });
-      expect(parses(afterDelete), 'config.toml does not parse after the delete').toBeUndefined();
-      const parsed = parseToml(afterDelete) as { mcp_servers?: Record<string, { args?: string[] }>; tui?: unknown };
-      expect.soft(parsed.mcp_servers?.['dorothy-world']?.args).toEqual(['/Users/someone/mcp-world/dist/bundle.js']);
-      expect.soft(parsed.mcp_servers?.docs).toBeUndefined();
-      expect.soft(parsed.tui).toEqual({ notice: true });
-      expect.soft(afterDelete.endsWith('\n')).toBe(true);
-      fs.appendFileSync(config, '[notice]\nhide_full_access_warning = true\n');
-      expect.soft(parses(fs.readFileSync(config, 'utf8')), 'a table codex adds at the end').toBeUndefined();
-
-      // 2. A server whose command holds a quote and a Windows path, saved from the window.
-      const command = 'C:\\Program Files\\a "b"\\node.exe';
-      const saved = await page.evaluate((c) => (window as unknown as Api).electronAPI.mcp.update({ provider: 'codex', name: 'docs', command: c, args: ['C:\\Users\\x\\d.js'], env: {} }), command);
-      const afterSave = fs.readFileSync(config, 'utf8');
-      keep({ saved, afterSave, afterSaveParse: parses(afterSave) });
-      expect(parses(afterSave), 'config.toml does not parse after the save').toBeUndefined();
-      expect.soft(saved.success).toBe(true);
-      expect.soft((parseToml(afterSave) as { mcp_servers: Record<string, { command: string }> }).mcp_servers.docs.command).toBe(command);
-      await stepShot(page, newInterface ? 'cli-config-new-interface' : 'cli-config');
-    } finally {
-      await app.close().catch(() => undefined);
-      await removeHome(home);
-    }
+  const app: ElectronApplication = await launchSandboxed(electron, home, {
+    env: { NODE_ENV: 'development', DOROTHY_DEV_URL: DEV_URL, DOROTHY_API_PORT: port, DOROTHY_E2E: '1' },
   });
-}
+  try {
+    const page = await app.firstWindow();
+    await page.goto(`${DEV_URL}/settings`, { waitUntil: 'domcontentloaded' });
+    await page.waitForFunction(() => !!(window as unknown as Partial<Api>).electronAPI);
+    await expect(page.getByRole('navigation', { name: 'Main menu' })).toHaveCount(1, { timeout: 30_000 });
+
+    // 1. The middle server deleted from the window.
+    const deleted = await page.evaluate(() => (window as unknown as Api).electronAPI.mcp.delete({ provider: 'codex', name: 'docs' }));
+    const afterDelete = fs.readFileSync(config, 'utf8');
+    keep({ deleted, afterDelete, afterDeleteParse: parses(afterDelete) });
+    expect(parses(afterDelete), 'config.toml does not parse after the delete').toBeUndefined();
+    const parsed = parseToml(afterDelete) as { mcp_servers?: Record<string, { args?: string[] }>; tui?: unknown };
+    expect.soft(parsed.mcp_servers?.['dorothy-world']?.args).toEqual(['/Users/someone/mcp-world/dist/bundle.js']);
+    expect.soft(parsed.mcp_servers?.docs).toBeUndefined();
+    expect.soft(parsed.tui).toEqual({ notice: true });
+    expect.soft(afterDelete.endsWith('\n')).toBe(true);
+    fs.appendFileSync(config, '[notice]\nhide_full_access_warning = true\n');
+    expect.soft(parses(fs.readFileSync(config, 'utf8')), 'a table codex adds at the end').toBeUndefined();
+
+    // 2. A server whose command holds a quote and a Windows path, saved from the window.
+    const command = 'C:\\Program Files\\a "b"\\node.exe';
+    const saved = await page.evaluate((c) => (window as unknown as Api).electronAPI.mcp.update({ provider: 'codex', name: 'docs', command: c, args: ['C:\\Users\\x\\d.js'], env: {} }), command);
+    const afterSave = fs.readFileSync(config, 'utf8');
+    keep({ saved, afterSave, afterSaveParse: parses(afterSave) });
+    expect(parses(afterSave), 'config.toml does not parse after the save').toBeUndefined();
+    expect.soft(saved.success).toBe(true);
+    expect.soft((parseToml(afterSave) as { mcp_servers: Record<string, { command: string }> }).mcp_servers.docs.command).toBe(command);
+    await stepShot(page, 'cli-config-new-interface');
+  } finally {
+    await app.close().catch(() => undefined);
+    await removeHome(home);
+  }
+});

@@ -8,7 +8,7 @@ import { launchSandboxed, recordValues, removeHome, stepShot } from './fixture.m
 import { DEV_URL, apiPort } from './ports.mjs';
 
 /**
- * Sending from a chat's page (PR D's chat:send; PLAN-2.0.0, step 5), with the new interface on.
+ * Sending from a chat's page (PR D's chat:send; PLAN-2.0.0, step 5).
  * Frames: `Chat · chats · a new chat, its first message`, `· the composer, sending` and
  * `· every slot working`, in chat-redesign-a.pen.
  *
@@ -144,7 +144,7 @@ test("a chat's page sends: Main and a new chat start with the words written ther
     sessionIds: [], pinned: false, snoozedUntil: null, settledAt: null, inbox: true, createdAt: at, updatedAt: at, lastActivityAt: at,
   }] }, null, 2));
   fs.writeFileSync(path.join(dir, 'hermes-connection.json'), JSON.stringify({ mode: 'local', localPort: 9, authMode: 'token' }));
-  fs.writeFileSync(path.join(dir, 'app-settings.json'), JSON.stringify({ autoStartAgentsOnLaunch: false, ollamaBaseUrl: 'http://127.0.0.1:9', newInterface: true }));
+  fs.writeFileSync(path.join(dir, 'app-settings.json'), JSON.stringify({ autoStartAgentsOnLaunch: false, ollamaBaseUrl: 'http://127.0.0.1:9' }));
   const launchesFile = path.join(home, 'launches.jsonl');
   const promptsFile = path.join(home, 'prompts.jsonl');
   const release = (id: string) => fs.writeFileSync(path.join(home, `release-${id}`), '');

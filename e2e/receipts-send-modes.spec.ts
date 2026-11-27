@@ -139,8 +139,7 @@ function sandbox(prefix: string) {
     fs.writeFileSync(path.join(dir, 'projects.json'), JSON.stringify([project]));
     fs.writeFileSync(path.join(dir, 'hermes-connection.json'), JSON.stringify({ mode: 'local', localPort: 9, authMode: 'token' }));
     fs.writeFileSync(path.join(dir, 'app-settings.json'), JSON.stringify({
-      // E2E_NEW_INTERFACE=1: the same run in the new interface's shell.
-      autoStartAgentsOnLaunch: false, ollamaBaseUrl: 'http://127.0.0.1:9', newInterface: process.env.E2E_NEW_INTERFACE === '1', ...settings,
+      autoStartAgentsOnLaunch: false, ollamaBaseUrl: 'http://127.0.0.1:9', ...settings,
     }));
   };
   return { home, project, dir, bin, read, agent, runner, seed };
@@ -155,8 +154,8 @@ async function open(home: string, port: string, ids: string[]) {
   const page = await app.firstWindow();
   await page.goto(`${DEV_URL}/agents`, { waitUntil: 'domcontentloaded' });
   await page.waitForFunction(() => !!(window as unknown as Partial<Api>).electronAPI);
-  // The shell this run is in (E2E_NEW_INTERFACE=1: the new interface's).
-  await expect(page.getByRole('navigation', { name: 'Main menu' })).toHaveCount(process.env.E2E_NEW_INTERFACE === '1' ? 1 : 0, { timeout: 30_000 });
+  // The new shell, the only one since 2.1.0.
+  await expect(page.getByRole('navigation', { name: 'Main menu' })).toHaveCount(1, { timeout: 30_000 });
   const list = () => page.evaluate(() => (window as unknown as Api).electronAPI.agent.list());
   for (const id of ids) {
     await page.evaluate((id) => (window as unknown as Api).electronAPI.agent.start({ id, prompt: '' }), id);
@@ -204,7 +203,7 @@ test('a retried request is sent once, a reused id with another text is refused, 
   const step = (name: string) => { times[name] = Date.now() - t0; };
   const { app, tokensFor, tasks } = await open(s.home, port, ['w1', 'o1', 'b1', 'cx']);
   step('opened');
-  const values: Record<string, unknown> = { times, newInterface: process.env.E2E_NEW_INTERFACE === '1' };
+  const values: Record<string, unknown> = { times };
   try {
     const tokens = await tokensFor(['w1', 'o1', 'b1', 'cx']);
     const { post } = client(port, () => tokens);
@@ -306,7 +305,7 @@ test('a task delegated from plan mode is marked so in the target\'s terminal, a 
     s.agent('oc', 'Review Agent', { permissionMode: 'bypass', cliPath: ocCli }),
   ]);
   const port = apiPort(31454);
-  const values: Record<string, unknown> = { newInterface: process.env.E2E_NEW_INTERFACE === '1' };
+  const values: Record<string, unknown> = {};
   // Since #507 the sender line and the body are two pastes into one field: the markers go before the lines are cut.
   const ocLines = () => (fs.existsSync(ocReceived) ? fs.readFileSync(ocReceived, 'utf8') : '').replace(/\x1b\[20[01]~/g, '').split(/\r|\n/).filter(Boolean);
   // The line holding a word, and the sender line just before it.

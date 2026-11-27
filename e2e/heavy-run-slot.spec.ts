@@ -13,7 +13,7 @@ import { DEV_URL, apiPort } from './ports.mjs';
  * runs `tars-slot run` from its terminal (the shim in ~/.tars/bin, on the terminal's PATH), whose command writes a
  * file with its pid once it runs.
  *
- * Asserted, once with the classic shell and once with the new interface:
+ * Asserted:
  * 1. a holds the slot (its ceiling set to 1: #573 made it 3 when unset); b, of another project, waits, and the window
  *    reads why: held by a, at most 1 run at once;
  * 2. o asks for a release gate after b: o waits first, b second (priority before arrival);
@@ -73,14 +73,14 @@ function standIn(home: string, name: string, slotArgs: string[], holdMs?: number
   return cli;
 }
 
-async function launch(home: string, port: string, newInterface: boolean): Promise<{ app: ElectronApplication; page: Page }> {
+async function launch(home: string, port: string): Promise<{ app: ElectronApplication; page: Page }> {
   const app = await launchSandboxed(electron, home, {
     env: { NODE_ENV: 'development', DOROTHY_DEV_URL: DEV_URL, DOROTHY_API_PORT: port, DOROTHY_E2E: '1' },
   });
   const page = await app.firstWindow();
   await page.goto(`${DEV_URL}/agents`, { waitUntil: 'domcontentloaded' });
   await page.waitForFunction(() => !!(window as unknown as Partial<Api>).electronAPI);
-  await expect(page.getByRole('navigation', { name: 'Main menu' })).toHaveCount(newInterface ? 1 : 0, { timeout: 30_000 });
+  await expect(page.getByRole('navigation', { name: 'Main menu' })).toHaveCount(1, { timeout: 30_000 });
   return { app, page };
 }
 
@@ -118,7 +118,7 @@ function turnHolder(home: string, label: string): string {
   return cli;
 }
 
-function seed(home: string, newInterface: boolean, agents: Array<{ id: string; name: string; role: string; project: string; cli: string }>, settings: Record<string, unknown> = {}) {
+function seed(home: string, agents: Array<{ id: string; name: string; role: string; project: string; cli: string }>, settings: Record<string, unknown> = {}) {
   const dir = path.join(home, '.tars');
   fs.mkdirSync(dir, { recursive: true });
   const projects = [...new Set(agents.map(a => a.project))];
@@ -130,163 +130,161 @@ function seed(home: string, newInterface: boolean, agents: Array<{ id: string; n
   })), null, 2));
   fs.writeFileSync(path.join(dir, 'projects.json'), JSON.stringify(projects));
   fs.writeFileSync(path.join(dir, 'hermes-connection.json'), JSON.stringify({ mode: 'local', localPort: 9, authMode: 'token' }));
-  fs.writeFileSync(path.join(dir, 'app-settings.json'), JSON.stringify({ autoStartAgentsOnLaunch: false, ollamaBaseUrl: 'http://127.0.0.1:9', newInterface, ...settings }));
+  fs.writeFileSync(path.join(dir, 'app-settings.json'), JSON.stringify({ autoStartAgentsOnLaunch: false, ollamaBaseUrl: 'http://127.0.0.1:9', ...settings }));
 }
 
 test.skip(process.platform === 'win32', 'the stand-ins start `tars-slot` through the POSIX shim; the Windows shim (tars-slot.cmd) is written and unit-read, not driven here');
 
-for (const newInterface of [false, true]) {
-  test(`agents of two projects take the heavy-run slot in turn: priority, and a killed holder gives it back${newInterface ? ' (new interface)' : ''}`, async () => {
-    test.setTimeout(240_000);
-    const home = fs.mkdtempSync(path.join(os.tmpdir(), `dorothy-e2e-heavy-${newInterface ? 'ni' : 'classic'}-`));
-    const harbor = path.join(home, 'projects', 'harbor');
-    const meridian = path.join(home, 'projects', 'meridian');
-    seed(home, newInterface, [
-      { id: 'a', name: 'Harbor Worker', role: 'worker', project: harbor, cli: standIn(home, 'a', ['--label', 'harbor e2e suite']) },
-      { id: 'b', name: 'Meridian Worker', role: 'worker', project: meridian, cli: standIn(home, 'b', ['--label', 'meridian build']) },
-      { id: 'o', name: 'Harbor Lead', role: 'orchestrator', project: harbor, cli: standIn(home, 'o', ['--priority', 'gate', '--label', 'harbor release gate'], 1_500) },
-    // Since #573 heavySlots is a ceiling, 3 when unset, and a further run waits for the last one to settle: the order
-    // and the hand-over asked here are those of a full slot, so the ceiling is 1.
-    ], { heavySlots: 1 });
-    const values: Record<string, unknown> = { newInterface };
-    const keep = (more: Record<string, unknown>) => { Object.assign(values, more); recordValues(values); };
-    const started = (name: string) => fs.existsSync(path.join(home, `started-${name}`));
-    const pidOf = (file: string) => Number(fs.readFileSync(path.join(home, file), 'utf8'));
-    const { app, page } = await launch(home, apiPort(newInterface ? 31348 : 31347), newInterface);
-    const status = () => page.evaluate(() => (window as unknown as Api).electronAPI.heavySlot.status());
-    const start = (id: string) => page.evaluate(i => (window as unknown as Api).electronAPI.agent.start({ id: i, prompt: '' }), id);
-    try {
-      // 1. a holds it; b, of another project, waits behind it.
-      await start('a');
-      await expect.poll(() => started('a'), { timeout: 30_000 }).toBe(true);
-      await start('b');
-      await expect.poll(async () => (await status()).waiting.map(t => t.agentId), { timeout: 30_000 }).toEqual(['b']);
-      const one = await status();
-      keep({ one });
-      expect.soft(one.holders.map(t => [t.agentId, t.label])).toEqual([['a', 'harbor e2e suite']]);
-      expect.soft(one.waiting[0].why).toMatch(/^held by Harbor Worker \(harbor e2e suite\).*; at most 1 run at once$/);
-      // What the window's Resources page reads in one call (the Frontend's notes of #535): the settings, the machine,
-      // each holder's pid and its tree, the day's alerts.
-      expect.soft([one.slots, one.floors]).toEqual([1, { diskGb: 15, memFreePct: 20 }]);
-      expect.soft(one.machine?.at).toMatch(/^\d{4}-\d{2}-\d{2}T/);
-      expect.soft(one.holders[0].pid).toBe(pidOf('slot-a.pid'));
-      // Its tree: tars-slot and the command under it, read from ps (at most every 2 s, so polled).
-      await expect.poll(async () => (await status()).holders[0]?.tree?.processes ?? 0, { timeout: 10_000 }).toBeGreaterThanOrEqual(2);
-      expect.soft((await status()).holders[0].tree?.memoryMb ?? 0).toBeGreaterThan(0);
-      expect.soft(one.alerts).toEqual([]);
+test(`agents of two projects take the heavy-run slot in turn: priority, and a killed holder gives it back`, async () => {
+  test.setTimeout(240_000);
+  const home = fs.mkdtempSync(path.join(os.tmpdir(), `dorothy-e2e-heavy-ni-`));
+  const harbor = path.join(home, 'projects', 'harbor');
+  const meridian = path.join(home, 'projects', 'meridian');
+  seed(home, [
+    { id: 'a', name: 'Harbor Worker', role: 'worker', project: harbor, cli: standIn(home, 'a', ['--label', 'harbor e2e suite']) },
+    { id: 'b', name: 'Meridian Worker', role: 'worker', project: meridian, cli: standIn(home, 'b', ['--label', 'meridian build']) },
+    { id: 'o', name: 'Harbor Lead', role: 'orchestrator', project: harbor, cli: standIn(home, 'o', ['--priority', 'gate', '--label', 'harbor release gate'], 1_500) },
+  // Since #573 heavySlots is a ceiling, 3 when unset, and a further run waits for the last one to settle: the order
+  // and the hand-over asked here are those of a full slot, so the ceiling is 1.
+  ], { heavySlots: 1 });
+  const values: Record<string, unknown> = {};
+  const keep = (more: Record<string, unknown>) => { Object.assign(values, more); recordValues(values); };
+  const started = (name: string) => fs.existsSync(path.join(home, `started-${name}`));
+  const pidOf = (file: string) => Number(fs.readFileSync(path.join(home, file), 'utf8'));
+  const { app, page } = await launch(home, apiPort(31348));
+  const status = () => page.evaluate(() => (window as unknown as Api).electronAPI.heavySlot.status());
+  const start = (id: string) => page.evaluate(i => (window as unknown as Api).electronAPI.agent.start({ id: i, prompt: '' }), id);
+  try {
+    // 1. a holds it; b, of another project, waits behind it.
+    await start('a');
+    await expect.poll(() => started('a'), { timeout: 30_000 }).toBe(true);
+    await start('b');
+    await expect.poll(async () => (await status()).waiting.map(t => t.agentId), { timeout: 30_000 }).toEqual(['b']);
+    const one = await status();
+    keep({ one });
+    expect.soft(one.holders.map(t => [t.agentId, t.label])).toEqual([['a', 'harbor e2e suite']]);
+    expect.soft(one.waiting[0].why).toMatch(/^held by Harbor Worker \(harbor e2e suite\).*; at most 1 run at once$/);
+    // What the window's Resources page reads in one call (the Frontend's notes of #535): the settings, the machine,
+    // each holder's pid and its tree, the day's alerts.
+    expect.soft([one.slots, one.floors]).toEqual([1, { diskGb: 15, memFreePct: 20 }]);
+    expect.soft(one.machine?.at).toMatch(/^\d{4}-\d{2}-\d{2}T/);
+    expect.soft(one.holders[0].pid).toBe(pidOf('slot-a.pid'));
+    // Its tree: tars-slot and the command under it, read from ps (at most every 2 s, so polled).
+    await expect.poll(async () => (await status()).holders[0]?.tree?.processes ?? 0, { timeout: 10_000 }).toBeGreaterThanOrEqual(2);
+    expect.soft((await status()).holders[0].tree?.memoryMb ?? 0).toBeGreaterThan(0);
+    expect.soft(one.alerts).toEqual([]);
 
-      // 2. o asks for a release gate after b: o first.
-      await start('o');
-      await expect.poll(async () => (await status()).waiting.map(t => t.agentId), { timeout: 30_000 }).toEqual(['o', 'b']);
-      const two = await status();
-      keep({ two });
-      expect.soft(two.waiting.map(t => [t.agentId, t.priority, t.position])).toEqual([['o', 'gate', 1], ['b', 'normal', 2]]);
-      await stepShot(page, newInterface ? 'heavy-slot-queue-new-interface' : 'heavy-slot-queue');
+    // 2. o asks for a release gate after b: o first.
+    await start('o');
+    await expect.poll(async () => (await status()).waiting.map(t => t.agentId), { timeout: 30_000 }).toEqual(['o', 'b']);
+    const two = await status();
+    keep({ two });
+    expect.soft(two.waiting.map(t => [t.agentId, t.priority, t.position])).toEqual([['o', 'gate', 1], ['b', 'normal', 2]]);
+    await stepShot(page, 'heavy-slot-queue-new-interface');
 
-      // 3. a's tars-slot killed, no give-back: the lease goes with it, and o is granted, not b.
-      process.kill(pidOf('slot-a.pid'), 'SIGKILL');
-      await expect.poll(() => started('o'), { timeout: 15_000 }).toBe(true);
-      const three = await status();
-      keep({ three, bStartedWithO: started('b') });
-      expect.soft(three.holders.map(t => t.agentId)).toEqual(['o']);
-      expect.soft(started('b'), 'b ran beside o').toBe(false);
+    // 3. a's tars-slot killed, no give-back: the lease goes with it, and o is granted, not b.
+    process.kill(pidOf('slot-a.pid'), 'SIGKILL');
+    await expect.poll(() => started('o'), { timeout: 15_000 }).toBe(true);
+    const three = await status();
+    keep({ three, bStartedWithO: started('b') });
+    expect.soft(three.holders.map(t => t.agentId)).toEqual(['o']);
+    expect.soft(started('b'), 'b ran beside o').toBe(false);
 
-      // 4. o's command ends: its tars-slot gives the slot back, and b is granted.
-      await expect.poll(() => started('b'), { timeout: 15_000 }).toBe(true);
-      const four = await status();
-      keep({ four, logs: Object.fromEntries(['a', 'b', 'o'].map(n => [n, fs.existsSync(path.join(home, `slot-${n}.log`)) ? fs.readFileSync(path.join(home, `slot-${n}.log`), 'utf8') : ''])) });
-      expect.soft(four.holders.map(t => t.agentId)).toEqual(['b']);
-      expect.soft(four.waiting).toEqual([]);
-    } finally {
-      for (const name of ['a', 'b', 'o']) {
-        for (const file of [`started-${name}`, `slot-${name}.pid`]) {
-          try { const pid = pidOf(file); if (alive(pid)) process.kill(pid, 'SIGKILL'); } catch { /* none */ }
-        }
+    // 4. o's command ends: its tars-slot gives the slot back, and b is granted.
+    await expect.poll(() => started('b'), { timeout: 15_000 }).toBe(true);
+    const four = await status();
+    keep({ four, logs: Object.fromEntries(['a', 'b', 'o'].map(n => [n, fs.existsSync(path.join(home, `slot-${n}.log`)) ? fs.readFileSync(path.join(home, `slot-${n}.log`), 'utf8') : ''])) });
+    expect.soft(four.holders.map(t => t.agentId)).toEqual(['b']);
+    expect.soft(four.waiting).toEqual([]);
+  } finally {
+    for (const name of ['a', 'b', 'o']) {
+      for (const file of [`started-${name}`, `slot-${name}.pid`]) {
+        try { const pid = pidOf(file); if (alive(pid)) process.kill(pid, 'SIGKILL'); } catch { /* none */ }
       }
-      await app.close().catch(() => undefined);
-      await removeHome(home);
     }
-  });
+    await app.close().catch(() => undefined);
+    await removeHome(home);
+  }
+});
 
-  test(`a heavy run waits under the disk floor, and says the floor and the figure${newInterface ? ' (new interface)' : ''}`, async () => {
-    test.setTimeout(180_000);
-    const home = fs.mkdtempSync(path.join(os.tmpdir(), `dorothy-e2e-heavy-floor-${newInterface ? 'ni' : 'classic'}-`));
-    const harbor = path.join(home, 'projects', 'harbor');
-    seed(home, newInterface, [
-      { id: 'a', name: 'Harbor Worker', role: 'worker', project: harbor, cli: standIn(home, 'a', ['--label', 'harbor e2e suite']) },
-    ], { heavySlotMinDiskGb: 1_000_000 });
-    const { app, page } = await launch(home, apiPort(newInterface ? 31350 : 31349), newInterface);
-    const status = () => page.evaluate(() => (window as unknown as Api).electronAPI.heavySlot.status());
-    try {
-      await page.evaluate(() => (window as unknown as Api).electronAPI.agent.start({ id: 'a', prompt: '' }));
-      await expect.poll(async () => (await status()).waiting[0]?.why ?? '', { timeout: 30_000 }).toMatch(/^waiting for free disk: [\d.]+ GB free, the floor is 1000000 GB$/);
-      await page.waitForTimeout(2_000);
-      const waited = await status();
-      recordValues({ newInterface, waited, started: fs.existsSync(path.join(home, 'started-a')) });
-      expect.soft(waited.holders).toEqual([]);
-      expect.soft(fs.existsSync(path.join(home, 'started-a')), 'the command ran under the floor').toBe(false);
-    } finally {
-      try { const pid = Number(fs.readFileSync(path.join(home, 'slot-a.pid'), 'utf8')); if (alive(pid)) process.kill(pid, 'SIGKILL'); } catch { /* none */ }
-      await app.close().catch(() => undefined);
-      await removeHome(home);
+test(`a heavy run waits under the disk floor, and says the floor and the figure`, async () => {
+  test.setTimeout(180_000);
+  const home = fs.mkdtempSync(path.join(os.tmpdir(), `dorothy-e2e-heavy-floor-ni-`));
+  const harbor = path.join(home, 'projects', 'harbor');
+  seed(home, [
+    { id: 'a', name: 'Harbor Worker', role: 'worker', project: harbor, cli: standIn(home, 'a', ['--label', 'harbor e2e suite']) },
+  ], { heavySlotMinDiskGb: 1_000_000 });
+  const { app, page } = await launch(home, apiPort(31350));
+  const status = () => page.evaluate(() => (window as unknown as Api).electronAPI.heavySlot.status());
+  try {
+    await page.evaluate(() => (window as unknown as Api).electronAPI.agent.start({ id: 'a', prompt: '' }));
+    await expect.poll(async () => (await status()).waiting[0]?.why ?? '', { timeout: 30_000 }).toMatch(/^waiting for free disk: [\d.]+ GB free, the floor is 1000000 GB$/);
+    await page.waitForTimeout(2_000);
+    const waited = await status();
+    recordValues({ waited, started: fs.existsSync(path.join(home, 'started-a')) });
+    expect.soft(waited.holders).toEqual([]);
+    expect.soft(fs.existsSync(path.join(home, 'started-a')), 'the command ran under the floor').toBe(false);
+  } finally {
+    try { const pid = Number(fs.readFileSync(path.join(home, 'slot-a.pid'), 'utf8')); if (alive(pid)) process.kill(pid, 'SIGKILL'); } catch { /* none */ }
+    await app.close().catch(() => undefined);
+    await removeHome(home);
+  }
+});
+
+test(`a lease taken for the turn goes back when the turn ends, the window gives one back, and the label is masked`, async () => {
+  test.setTimeout(180_000);
+  const home = fs.mkdtempSync(path.join(os.tmpdir(), `dorothy-e2e-heavy-turn-ni-`));
+  const harbor = path.join(home, 'projects', 'harbor');
+  const token = ['ghp_', 'E'.repeat(12), 'F'.repeat(12)].join('');
+  seed(home, [
+    { id: 't', name: 'Harbor Worker', role: 'worker', project: harbor, cli: turnHolder(home, `pytest -k smoke --token ${token}`) },
+    { id: 'w', name: 'Harbor Tester', role: 'worker', project: harbor, cli: standIn(home, 'w', ['--label', 'harbor e2e suite']) },
+  ]);
+  const { app, page } = await launch(home, apiPort(31352));
+  const status = () => page.evaluate(() => (window as unknown as Api).electronAPI.heavySlot.status());
+  const start = (id: string) => page.evaluate(i => (window as unknown as Api).electronAPI.agent.start({ id: i, prompt: '' }), id);
+  const values: Record<string, unknown> = {};
+  const keep = (more: Record<string, unknown>) => { Object.assign(values, more); recordValues(values); };
+  try {
+    // 6. The terminal's PATH: ~/.tars/bin last; TARS_SLOT names the shim.
+    await start('t');
+    await expect.poll(async () => (await status()).holders.map(h => h.agentId), { timeout: 30_000 }).toEqual(['t']);
+    const env = JSON.parse(fs.readFileSync(path.join(home, 'env-turn.json'), 'utf8')) as { PATH: string; TARS_SLOT: string };
+    const bin = path.join(home, '.tars', 'bin');
+    const parts = env.PATH.split(':');
+    keep({ env, ask: JSON.parse(fs.readFileSync(path.join(home, 'ask-turn.json'), 'utf8')) });
+    expect.soft(parts.indexOf(bin), 'bin on the PATH').toBeGreaterThan(0);
+    expect.soft(parts.indexOf(bin), 'bin last').toBe(parts.length - 1);
+    expect.soft(env.TARS_SLOT).toBe(path.join(bin, 'tars-slot'));
+
+    // 8. The label every agent reads is masked.
+    const held = await status();
+    keep({ held });
+    expect.soft(held.holders[0].label).not.toContain(token);
+    expect.soft(held.holders[0].label).toMatch(/^pytest -k smoke --token ghp_/);
+
+    // 7. w waits behind t; t's turn ends: its lease goes back, and w is granted.
+    await start('w');
+    await expect.poll(async () => (await status()).waiting.map(t => t.agentId), { timeout: 30_000 }).toEqual(['w']);
+    fs.writeFileSync(path.join(home, 'end-turn'), '1');
+    await expect.poll(() => fs.existsSync(path.join(home, 'started-w')), { timeout: 15_000 }).toBe(true);
+    const after = await status();
+    keep({ after });
+    expect.soft(after.holders.map(h => h.agentId)).toEqual(['w']);
+    expect.soft(after.alerts.map(a => a.text)).toEqual([expect.stringMatching(/^The heavy-run slot: Harbor Worker's lease .* was given back: its turn ended/)]);
+
+    // The owner gives w's lease back from the window: the queue is empty, and the alert says so.
+    expect(await page.evaluate(id => (window as unknown as Api).electronAPI.heavySlot.giveBack(id), after.holders[0].id)).toBe(true);
+    await expect.poll(async () => (await status()).holders.length, { timeout: 10_000 }).toBe(0);
+    const given = await status();
+    keep({ given });
+    expect.soft(given.alerts.at(-1)?.text).toMatch(/Harbor Tester's lease \(harbor e2e suite\) was given back: the owner gave it back from the window/);
+    await stepShot(page, 'heavy-slot-turn-new-interface');
+  } finally {
+    for (const file of ['started-w', 'slot-w.pid']) {
+      try { const pid = Number(fs.readFileSync(path.join(home, file), 'utf8')); if (alive(pid)) process.kill(pid, 'SIGKILL'); } catch { /* none */ }
     }
-  });
-
-  test(`a lease taken for the turn goes back when the turn ends, the window gives one back, and the label is masked${newInterface ? ' (new interface)' : ''}`, async () => {
-    test.setTimeout(180_000);
-    const home = fs.mkdtempSync(path.join(os.tmpdir(), `dorothy-e2e-heavy-turn-${newInterface ? 'ni' : 'classic'}-`));
-    const harbor = path.join(home, 'projects', 'harbor');
-    const token = ['ghp_', 'E'.repeat(12), 'F'.repeat(12)].join('');
-    seed(home, newInterface, [
-      { id: 't', name: 'Harbor Worker', role: 'worker', project: harbor, cli: turnHolder(home, `pytest -k smoke --token ${token}`) },
-      { id: 'w', name: 'Harbor Tester', role: 'worker', project: harbor, cli: standIn(home, 'w', ['--label', 'harbor e2e suite']) },
-    ]);
-    const { app, page } = await launch(home, apiPort(newInterface ? 31352 : 31351), newInterface);
-    const status = () => page.evaluate(() => (window as unknown as Api).electronAPI.heavySlot.status());
-    const start = (id: string) => page.evaluate(i => (window as unknown as Api).electronAPI.agent.start({ id: i, prompt: '' }), id);
-    const values: Record<string, unknown> = { newInterface };
-    const keep = (more: Record<string, unknown>) => { Object.assign(values, more); recordValues(values); };
-    try {
-      // 6. The terminal's PATH: ~/.tars/bin last; TARS_SLOT names the shim.
-      await start('t');
-      await expect.poll(async () => (await status()).holders.map(h => h.agentId), { timeout: 30_000 }).toEqual(['t']);
-      const env = JSON.parse(fs.readFileSync(path.join(home, 'env-turn.json'), 'utf8')) as { PATH: string; TARS_SLOT: string };
-      const bin = path.join(home, '.tars', 'bin');
-      const parts = env.PATH.split(':');
-      keep({ env, ask: JSON.parse(fs.readFileSync(path.join(home, 'ask-turn.json'), 'utf8')) });
-      expect.soft(parts.indexOf(bin), 'bin on the PATH').toBeGreaterThan(0);
-      expect.soft(parts.indexOf(bin), 'bin last').toBe(parts.length - 1);
-      expect.soft(env.TARS_SLOT).toBe(path.join(bin, 'tars-slot'));
-
-      // 8. The label every agent reads is masked.
-      const held = await status();
-      keep({ held });
-      expect.soft(held.holders[0].label).not.toContain(token);
-      expect.soft(held.holders[0].label).toMatch(/^pytest -k smoke --token ghp_/);
-
-      // 7. w waits behind t; t's turn ends: its lease goes back, and w is granted.
-      await start('w');
-      await expect.poll(async () => (await status()).waiting.map(t => t.agentId), { timeout: 30_000 }).toEqual(['w']);
-      fs.writeFileSync(path.join(home, 'end-turn'), '1');
-      await expect.poll(() => fs.existsSync(path.join(home, 'started-w')), { timeout: 15_000 }).toBe(true);
-      const after = await status();
-      keep({ after });
-      expect.soft(after.holders.map(h => h.agentId)).toEqual(['w']);
-      expect.soft(after.alerts.map(a => a.text)).toEqual([expect.stringMatching(/^The heavy-run slot: Harbor Worker's lease .* was given back: its turn ended/)]);
-
-      // The owner gives w's lease back from the window: the queue is empty, and the alert says so.
-      expect(await page.evaluate(id => (window as unknown as Api).electronAPI.heavySlot.giveBack(id), after.holders[0].id)).toBe(true);
-      await expect.poll(async () => (await status()).holders.length, { timeout: 10_000 }).toBe(0);
-      const given = await status();
-      keep({ given });
-      expect.soft(given.alerts.at(-1)?.text).toMatch(/Harbor Tester's lease \(harbor e2e suite\) was given back: the owner gave it back from the window/);
-      await stepShot(page, newInterface ? 'heavy-slot-turn-new-interface' : 'heavy-slot-turn');
-    } finally {
-      for (const file of ['started-w', 'slot-w.pid']) {
-        try { const pid = Number(fs.readFileSync(path.join(home, file), 'utf8')); if (alive(pid)) process.kill(pid, 'SIGKILL'); } catch { /* none */ }
-      }
-      await app.close().catch(() => undefined);
-      await removeHome(home);
-    }
-  });
-}
+    await app.close().catch(() => undefined);
+    await removeHome(home);
+  }
+});

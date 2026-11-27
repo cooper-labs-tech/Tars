@@ -22,8 +22,7 @@ import { DEV_URL, apiPort } from './ports.mjs';
  * 5. in the agent window, allow is offered, or ask in terminal does not hand it to Claude Code's own dialog, or its
  *    title does not say that dialog has no delay; a command too long to show whole is not said withheld, or its why
  *    (PR 538's withheldWhy) is not shown beside it;
- * 6. an uncaught error in the page.
- * Once with the classic shell and once with the new interface: on the Dashboard's panel (1 to 4), and in the agent
+ * 6. an uncaught error in the page.: on the Dashboard's panel (1 to 4), and in the agent
  * window from the Agents page (5).
  * Red on PR 538's head with the frames (the commit before the spec): allow and show all are offered.
  * The artefact: values.json (the panel's line and buttons, the answer), screenshots.
@@ -59,8 +58,8 @@ function worker(home: string, project: string, long: boolean): string {
   ].join('\n'));
 }
 
-for (const newInterface of [false, true]) for (const where of ['panel', 'window'] as const) {
-  test(`a withheld file question shows its path alone and offers deny and ask in terminal, never allow, in the ${where}${newInterface ? ' (new interface)' : ''}`, async () => {
+for (const where of ['panel', 'window'] as const) {
+  test(`a withheld file question shows its path alone and offers deny and ask in terminal, never allow, in the ${where}`, async () => {
     test.setTimeout(240_000);
     const home = fs.mkdtempSync(path.join(os.tmpdir(), 'dorothy-e2e-permission-withheld-'));
     const project = path.join(home, 'projects', 'harbor');
@@ -73,13 +72,13 @@ for (const newInterface of [false, true]) for (const where of ['panel', 'window'
     }], null, 2));
     fs.writeFileSync(path.join(dir, 'projects.json'), JSON.stringify([project]));
     fs.writeFileSync(path.join(dir, 'hermes-connection.json'), JSON.stringify({ mode: 'local', localPort: 9, authMode: 'token' }));
-    fs.writeFileSync(path.join(dir, 'app-settings.json'), JSON.stringify({ autoStartAgentsOnLaunch: false, ollamaBaseUrl: 'http://127.0.0.1:9', newInterface }));
-    const seen: Record<string, unknown> = { newInterface, where };
-    const tag = `${newInterface ? 'new-' : ''}${where}-`;
+    fs.writeFileSync(path.join(dir, 'app-settings.json'), JSON.stringify({ autoStartAgentsOnLaunch: false, ollamaBaseUrl: 'http://127.0.0.1:9' }));
+    const seen: Record<string, unknown> = { where };
+    const tag = `new-${where}-`;
     const errors: string[] = [];
 
     const app = await launchSandboxed(electron, home, {
-      env: { NODE_ENV: 'development', DOROTHY_DEV_URL: DEV_URL, DOROTHY_API_PORT: apiPort((newInterface ? 31570 : 31569) + (where === 'window' ? 2 : 0)), DOROTHY_E2E: '1' },
+      env: { NODE_ENV: 'development', DOROTHY_DEV_URL: DEV_URL, DOROTHY_API_PORT: apiPort(31570 + (where === 'window' ? 2 : 0)), DOROTHY_E2E: '1' },
     });
     try {
       const page = await app.firstWindow();

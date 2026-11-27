@@ -95,9 +95,6 @@
      DESIGN.md has claimed this binding shipped for a while; now it has. */
   --status-idle: var(--text-muted);
 
-  /* Layout */
-  --sidebar-w: 216px;
-
   /* Accent colors */
   --accent-green: #1A7F37;
   --accent-green-dim: #166B2E;

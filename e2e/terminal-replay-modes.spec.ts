@@ -152,10 +152,12 @@ test('a panel remounted after a long turn, and the agent window, still send the 
     // Change page and come back: a new terminal, written by the replay alone.
     await live.evaluate(screen => screen.closest('.xterm')!.setAttribute('data-qa-mounted-before', ''));
     const resizedBefore = fs.readFileSync(resizes, 'utf8').length;
-    const sidebar = page.locator('aside');
-    await sidebar.getByRole('link', { name: 'Settings', exact: true }).click();
+    // Another page of the main menu: a page of More opens as a card, and the Dashboard would stay mounted under it.
+    const sidebar = page.getByRole('complementary', { name: 'Sidebar' });
+    const menu = sidebar.getByRole('navigation', { name: 'Main menu' });
+    await menu.getByRole('link', { name: 'Kanban', exact: true }).click();
     await expect(page.locator('.xterm')).toHaveCount(0, { timeout: 15_000 });
-    await sidebar.getByRole('link', { name: 'Dashboard', exact: true }).click();
+    await menu.getByRole('link', { name: 'Dashboard', exact: true }).click();
     const remounted = await screenOf(page, AGENT.name);
     await expect(remounted.locator('.xterm-rows')).toContainText('turn over', { timeout: 30_000 });
     expect(await page.locator('.xterm[data-qa-mounted-before]').count(), 'the panel on screen is a new terminal').toBe(0);
@@ -173,9 +175,11 @@ test('a panel remounted after a long turn, and the agent window, still send the 
 
     // The other window that replays the same output: the agent's own, opened
     // from its card on the Agents page. The Kanban page is the Hermes board and
-    // opens no agent terminal.
-    await sidebar.getByRole('link', { name: 'Agents', exact: true }).click();
+    // opens no agent terminal: the Agents page, More's card, opens over it.
+    await menu.getByRole('link', { name: 'Kanban', exact: true }).click();
     await expect(page.locator('.xterm')).toHaveCount(0, { timeout: 15_000 });
+    await sidebar.getByRole('button', { name: 'More' }).click();
+    await page.getByRole('menu', { name: 'More' }).getByRole('menuitem', { name: 'Agents', exact: true }).click();
     await page.getByText(AGENT.name, { exact: true }).first().click();
     await expect(page.locator('.xterm')).toHaveCount(1, { timeout: 15_000 });
     const agentWindow = page.locator('.xterm .xterm-screen');

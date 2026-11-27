@@ -7,7 +7,7 @@ import { DEV_URL, apiPort } from './ports.mjs';
 
 /**
  * A chat's page in the new shell, read from its runner's transcripts and
- * followed live (#371's chat:history and chat:events), with the switch on.
+ * followed live (#371's chat:history and chat:events).
  * Frames: `Chat · chats · from its transcripts, working` and `· waiting on
  * you` in chat-redesign-a.pen.
  *
@@ -115,7 +115,7 @@ test('a chat\'s page reads its conversation from the transcripts, follows it liv
   ], null, 2));
   fs.writeFileSync(path.join(dir, 'projects.json'), JSON.stringify([project]));
   fs.writeFileSync(path.join(dir, 'hermes-connection.json'), JSON.stringify({ mode: 'local', localPort: 9, authMode: 'token' }));
-  fs.writeFileSync(path.join(dir, 'app-settings.json'), JSON.stringify({ autoStartAgentsOnLaunch: false, ollamaBaseUrl: 'http://127.0.0.1:9', newInterface: true }));
+  fs.writeFileSync(path.join(dir, 'app-settings.json'), JSON.stringify({ autoStartAgentsOnLaunch: false, ollamaBaseUrl: 'http://127.0.0.1:9' }));
 
   const app = await launchSandboxed(electron, home, {
     env: { NODE_ENV: 'development', DOROTHY_DEV_URL: DEV_URL, DOROTHY_API_PORT: apiPort(31449), DOROTHY_E2E: '1' },

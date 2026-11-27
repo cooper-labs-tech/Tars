@@ -115,144 +115,142 @@ const lines = (file: string) => (fs.existsSync(file) ? fs.readFileSync(file, 'ut
 
 test.skip(process.platform === 'win32', 'the stand-ins are typed into a POSIX shell; the queue itself is platform-free and its unit tests (agent-queue-line.test.ts, agent-queue-store.test.ts) run everywhere');
 
-for (const newInterface of [false, true]) {
-  test(`an agent's queue is seen, paused, reordered, cancelled, and kept across a stop and a restart${newInterface ? ' (new interface)' : ''}`, async () => {
-    test.setTimeout(420_000);
-    const home = fs.mkdtempSync(path.join(os.tmpdir(), `dorothy-e2e-queue-${newInterface ? 'ni' : 'classic'}-`));
-    const project = path.join(home, 'projects', 'demo');
-    const dir = path.join(home, '.tars');
-    const bin = path.join(home, 'bin');
-    for (const d of [project, dir, bin]) fs.mkdirSync(d, { recursive: true });
-    const cli = path.join(bin, 'claude');
-    fs.writeFileSync(cli, `#!${process.execPath}\nconst HOOKS = ${JSON.stringify(HOOKS)};\n${STAND_IN}`, { mode: 0o755 });
-    const agent = (id: string, name: string, role = 'worker') => ({
-      id, name, character: 'robot', provider: 'claude', status: 'idle', role, permissionMode: 'normal',
-      projectPath: project, skills: [], cliPath: cli, createdAt: '2026-10-28T08:00:00.000Z', lastActivity: '2026-10-28T08:00:00.000Z',
-    });
-    fs.writeFileSync(path.join(dir, 'agents.json'), JSON.stringify([agent('lead', 'Project Lead', 'orchestrator'), agent('worker', 'Build Worker'), agent('other', 'Other Worker')], null, 2));
-    fs.writeFileSync(path.join(dir, 'projects.json'), JSON.stringify([project]));
-    fs.writeFileSync(path.join(dir, 'hermes-connection.json'), JSON.stringify({ mode: 'local', localPort: 9, authMode: 'token' }));
-    fs.writeFileSync(path.join(dir, 'app-settings.json'), JSON.stringify({ autoStartAgentsOnLaunch: false, ollamaBaseUrl: 'http://127.0.0.1:9', newInterface }));
-    const port = apiPort(31508 + (newInterface ? 1 : 0));
-    const seen: Record<string, unknown> = { newInterface };
-    const soft = expect.soft;
-    const callsOf = (who: string) => lines(path.join(home, 'calls.jsonl')).filter((c) => c.id === who);
-    const promptsOf = (who: string) => lines(path.join(home, 'prompts.jsonl')).filter((p) => p.id === who).map((p) => String(p.prompt));
-
-    const boot = async () => {
-      const app = await launchSandboxed(electron, home, {
-        env: { NODE_ENV: 'development', DOROTHY_DEV_URL: DEV_URL, DOROTHY_API_PORT: port, DOROTHY_E2E: '1' },
-      });
-      const page = await app.firstWindow();
-      await page.goto(`${DEV_URL}/agents`, { waitUntil: 'domcontentloaded' });
-      await page.waitForFunction(() => !!(window as unknown as Partial<Api>).electronAPI);
-      return { app, page };
-    };
-    let { app, page } = await boot();
-    try {
-      const list = () => page.evaluate(() => (window as unknown as Api).electronAPI.agent.list());
-      const type = (id: string, input: string) => page.evaluate((p) => (window as unknown as Api).electronAPI.agent.sendInput(p), { id, input });
-      const start = (id: string) => page.evaluate((i) => (window as unknown as Api).electronAPI.agent.start({ id: i, prompt: '' }), id);
-      const up = (ids: string[]) => expect.poll(async () => (await list()).filter((a) => ids.includes(a.id) && a.cliRunning && a.currentSessionId).length, { timeout: 90_000 }).toBe(ids.length);
-      /** An agent's call through its own terminal, and its recorded answer. */
-      const call = async (who: string, method: string, route: string, body?: unknown) => {
-        const before = callsOf(who).length;
-        await type(who, `CALL>> ${method} ${route}${body === undefined ? '' : ` ${JSON.stringify(body)}`}\r`);
-        await expect.poll(() => callsOf(who).length, { timeout: 30_000, message: `${who}'s call ${method} ${route}` }).toBe(before + 1);
-        return callsOf(who)[before] as { status: number; body: Record<string, unknown> };
-      };
-
-      for (const id of ['lead', 'worker', 'other']) await start(id);
-      await up(['lead', 'worker', 'other']);
-
-      // The worker, held in a turn.
-      await type('worker', 'WORK>> hold\r');
-      await expect.poll(() => promptsOf('worker').some((p) => p.includes('WORK>>')), { timeout: 20_000 }).toBe(true);
-
-      // What waits for it: two tasks and a message from the lead, a note from the other worker.
-      const a = await call('lead', 'POST', '/api/agents/worker/run-task', { task: 'TASK-A the first task', answer: 'started' });
-      const b = await call('lead', 'POST', '/api/agents/worker/dispatch', { message: 'MSG-B a queued message', mode: 'queue' });
-      const c = await call('lead', 'POST', '/api/agents/worker/run-task', { task: 'TASK-C the third task', answer: 'started' });
-      const d = await call('other', 'POST', '/api/agents/worker/dispatch', { message: 'NOTE-D a note from the other worker' });
-      const refA = String(a.body.taskId), refC = String(c.body.taskId);
-      const refB = String(b.body.queuedTask ?? b.body.taskRef), refD = String(d.body.queuedTask ?? d.body.taskRef);
-      seen.handed = { a: a.body, b: b.body, c: c.body, d: d.body };
-
-      // ── F1: the queue, in order, with what each item is ──
-      const byLead = await call('lead', 'GET', '/api/agents/worker/queue');
-      const items = ((byLead.body?.items ?? []) as QueueItem[]);
-      seen.queueByLead = byLead.body;
-      soft(byLead.status, 'F1: the queue can be read').toBe(200);
-      soft(items.map((i) => i.ref), 'F1: in the order it was handed, the note no item of it').toEqual([refA, refB, refC]);
-      soft(items.map((i) => i.how), 'F1: how each goes in').toEqual(['task', 'message', 'task']);
-      soft(items.map((i) => i.from), 'F1: who sent each').toEqual(['Project Lead', 'Project Lead', 'Project Lead']);
-      soft(items.every((i) => !Number.isNaN(Date.parse(i.queuedAt))), 'F1: since when').toBe(true);
-      soft(items[0]?.title, 'F1: its first line').toBe('TASK-A the first task');
-      const byOther = await call('other', 'GET', '/api/agents/worker/queue');
-      soft(byOther.status, 'F1: a worker may read it').toBe(200);
-      soft(((byOther.body?.items ?? []) as QueueItem[]).map((i) => i.ref), 'F1: a worker sees only what it sent').toEqual([]);
-
-      // ── F2: paused, nothing goes in at the end of the turn; the turn itself is not cut ──
-      const paused = await call('lead', 'POST', '/api/agents/worker/queue/pause', { reason: 'hold everything' });
-      soft(paused.status, 'F2: the queue can be paused').toBe(200);
-      fs.writeFileSync(path.join(home, 'release-worker'), '');
-      await expect.poll(() => lines(path.join(home, 'prompts.jsonl')).filter((p) => p.id === 'worker').length, { timeout: 5_000 }).toBeGreaterThanOrEqual(1);
-      await new Promise((r) => setTimeout(r, 5_000));
-      seen.workerPromptsWhilePaused = promptsOf('worker');
-      soft(promptsOf('worker').filter((p) => /TASK-A|MSG-B|TASK-C/.test(p)), 'F2: nothing went in while paused').toEqual([]);
-
-      // ── F3: a worker acts on what it sent, and only on that ──
-      const otherCancelsA = await call('other', 'POST', `/api/tasks/${refA}/cancel`, {});
-      const otherMovesA = await call('other', 'POST', `/api/tasks/${refA}/move`, {});
-      const otherPauses = await call('other', 'POST', '/api/agents/worker/queue/resume', {});
-      seen.workerRights = { otherCancelsA: otherCancelsA.status, otherMovesA: otherMovesA.status, otherPauses: otherPauses.status, refD };
-      soft(otherCancelsA.status, 'F3: a worker cannot cancel what it did not send').toBe(403);
-      soft(otherMovesA.status, 'F3: nor move it').toBe(403);
-      soft(otherPauses.status, 'F3: nor resume the queue').toBe(403);
-
-      // ── F4: the third task to the head; the message cancelled ──
-      const moved = await call('lead', 'POST', `/api/tasks/${refC}/move`, {});
-      soft(moved.status, 'F4: an item moves to the head').toBe(200);
-      const cancelB = await call('lead', 'POST', `/api/tasks/${refB}/cancel`, {});
-      soft(cancelB.status, 'the lead cancels its own message').toBe(200);
-      const afterMove = await call('lead', 'GET', '/api/agents/worker/queue');
-      soft(((afterMove.body?.items ?? []) as QueueItem[]).map((i) => i.ref), 'F4: the order holds').toEqual([refC, refA]);
-
-      // ── F5: task_status knows every id it gave ──
-      const statusB = await call('lead', 'GET', `/api/tasks/${refB}`);
-      const statusA = await call('lead', 'GET', `/api/tasks/${refA}`);
-      seen.status = { a: statusA.body, b: statusB.body };
-      soft(statusB.status, 'F5: task_status knows a queued message').toBe(200);
-      soft((statusA.body?.task as { outcome?: string } | undefined)?.outcome, 'F5: a queued task reads queued').toBe('queued');
-
-      // ── F6: a stop keeps the queue, paused, and says so ──
-      const stop = await call('lead', 'POST', '/api/agents/worker/stop', { reason: 'saving memory' });
-      seen.stop = stop.body;
-      soft(stop.body?.queueKept, 'F6: the stop says what it kept').toBe(2);
-      const afterStop = await call('lead', 'GET', '/api/agents/worker/queue');
-      soft(((afterStop.body?.items ?? []) as QueueItem[]).map((i) => i.ref), 'F6: the queue is kept').toEqual([refC, refA]);
-      soft((afterStop.body as QueueView | undefined)?.paused?.why, 'F6: paused').toBeTruthy();
-
-      // ── F7: a restart of Tars keeps it, paused, and tells the orchestrator ──
-      await app.close();
-      ({ app, page } = await boot());
-      const view = await page.evaluate(async () => (window as unknown as Api).electronAPI.agentQueue?.get('worker'));
-      seen.afterRestart = view;
-      soft(view?.items.map((i) => i.ref), 'F7 and F8: kept across the restart, read by the window').toEqual([refC, refA]);
-      soft(view?.paused, 'F7: paused').toBeTruthy();
-      await page.evaluate(() => (window as unknown as Api).electronAPI.agent.start({ id: 'lead', prompt: '' }));
-      await expect.poll(async () => (await page.evaluate(() => (window as unknown as Api).electronAPI.agent.list())).some((x) => x.id === 'lead' && x.cliRunning), { timeout: 90_000 }).toBe(true);
-      await soft.poll(() => promptsOf('lead').some((p) => p.includes(refC) && p.includes(refA) && /paused/i.test(p)), { timeout: 30_000, message: 'F7: the orchestrator is told what waits' }).toBe(true);
-
-      // ── F9: resumed, they go in one at a time, in the queue's order ──
-      const resumed = await page.evaluate(async () => (window as unknown as Api).electronAPI.agentQueue?.resume('worker'));
-      soft(resumed?.success, 'F8: the window resumes it').toBe(true);
-      await soft.poll(() => promptsOf('worker').filter((p) => /TASK-A|TASK-C/.test(p)).map((p) => (p.includes('TASK-C') ? 'C' : 'A')), { timeout: 60_000, message: 'F9: in the queue\'s order' }).toEqual(['C', 'A']);
-      seen.workerPrompts = promptsOf('worker');
-      seen.leadPrompts = promptsOf('lead');
-    } finally {
-      recordValues(seen);
-      await app.close().catch(() => { /* gone */ });
-    }
+test(`an agent's queue is seen, paused, reordered, cancelled, and kept across a stop and a restart`, async () => {
+  test.setTimeout(420_000);
+  const home = fs.mkdtempSync(path.join(os.tmpdir(), `dorothy-e2e-queue-ni-`));
+  const project = path.join(home, 'projects', 'demo');
+  const dir = path.join(home, '.tars');
+  const bin = path.join(home, 'bin');
+  for (const d of [project, dir, bin]) fs.mkdirSync(d, { recursive: true });
+  const cli = path.join(bin, 'claude');
+  fs.writeFileSync(cli, `#!${process.execPath}\nconst HOOKS = ${JSON.stringify(HOOKS)};\n${STAND_IN}`, { mode: 0o755 });
+  const agent = (id: string, name: string, role = 'worker') => ({
+    id, name, character: 'robot', provider: 'claude', status: 'idle', role, permissionMode: 'normal',
+    projectPath: project, skills: [], cliPath: cli, createdAt: '2026-10-28T08:00:00.000Z', lastActivity: '2026-10-28T08:00:00.000Z',
   });
-}
+  fs.writeFileSync(path.join(dir, 'agents.json'), JSON.stringify([agent('lead', 'Project Lead', 'orchestrator'), agent('worker', 'Build Worker'), agent('other', 'Other Worker')], null, 2));
+  fs.writeFileSync(path.join(dir, 'projects.json'), JSON.stringify([project]));
+  fs.writeFileSync(path.join(dir, 'hermes-connection.json'), JSON.stringify({ mode: 'local', localPort: 9, authMode: 'token' }));
+  fs.writeFileSync(path.join(dir, 'app-settings.json'), JSON.stringify({ autoStartAgentsOnLaunch: false, ollamaBaseUrl: 'http://127.0.0.1:9' }));
+  const port = apiPort(31508 + 1);
+  const seen: Record<string, unknown> = {};
+  const soft = expect.soft;
+  const callsOf = (who: string) => lines(path.join(home, 'calls.jsonl')).filter((c) => c.id === who);
+  const promptsOf = (who: string) => lines(path.join(home, 'prompts.jsonl')).filter((p) => p.id === who).map((p) => String(p.prompt));
+
+  const boot = async () => {
+    const app = await launchSandboxed(electron, home, {
+      env: { NODE_ENV: 'development', DOROTHY_DEV_URL: DEV_URL, DOROTHY_API_PORT: port, DOROTHY_E2E: '1' },
+    });
+    const page = await app.firstWindow();
+    await page.goto(`${DEV_URL}/agents`, { waitUntil: 'domcontentloaded' });
+    await page.waitForFunction(() => !!(window as unknown as Partial<Api>).electronAPI);
+    return { app, page };
+  };
+  let { app, page } = await boot();
+  try {
+    const list = () => page.evaluate(() => (window as unknown as Api).electronAPI.agent.list());
+    const type = (id: string, input: string) => page.evaluate((p) => (window as unknown as Api).electronAPI.agent.sendInput(p), { id, input });
+    const start = (id: string) => page.evaluate((i) => (window as unknown as Api).electronAPI.agent.start({ id: i, prompt: '' }), id);
+    const up = (ids: string[]) => expect.poll(async () => (await list()).filter((a) => ids.includes(a.id) && a.cliRunning && a.currentSessionId).length, { timeout: 90_000 }).toBe(ids.length);
+    /** An agent's call through its own terminal, and its recorded answer. */
+    const call = async (who: string, method: string, route: string, body?: unknown) => {
+      const before = callsOf(who).length;
+      await type(who, `CALL>> ${method} ${route}${body === undefined ? '' : ` ${JSON.stringify(body)}`}\r`);
+      await expect.poll(() => callsOf(who).length, { timeout: 30_000, message: `${who}'s call ${method} ${route}` }).toBe(before + 1);
+      return callsOf(who)[before] as { status: number; body: Record<string, unknown> };
+    };
+
+    for (const id of ['lead', 'worker', 'other']) await start(id);
+    await up(['lead', 'worker', 'other']);
+
+    // The worker, held in a turn.
+    await type('worker', 'WORK>> hold\r');
+    await expect.poll(() => promptsOf('worker').some((p) => p.includes('WORK>>')), { timeout: 20_000 }).toBe(true);
+
+    // What waits for it: two tasks and a message from the lead, a note from the other worker.
+    const a = await call('lead', 'POST', '/api/agents/worker/run-task', { task: 'TASK-A the first task', answer: 'started' });
+    const b = await call('lead', 'POST', '/api/agents/worker/dispatch', { message: 'MSG-B a queued message', mode: 'queue' });
+    const c = await call('lead', 'POST', '/api/agents/worker/run-task', { task: 'TASK-C the third task', answer: 'started' });
+    const d = await call('other', 'POST', '/api/agents/worker/dispatch', { message: 'NOTE-D a note from the other worker' });
+    const refA = String(a.body.taskId), refC = String(c.body.taskId);
+    const refB = String(b.body.queuedTask ?? b.body.taskRef), refD = String(d.body.queuedTask ?? d.body.taskRef);
+    seen.handed = { a: a.body, b: b.body, c: c.body, d: d.body };
+
+    // ── F1: the queue, in order, with what each item is ──
+    const byLead = await call('lead', 'GET', '/api/agents/worker/queue');
+    const items = ((byLead.body?.items ?? []) as QueueItem[]);
+    seen.queueByLead = byLead.body;
+    soft(byLead.status, 'F1: the queue can be read').toBe(200);
+    soft(items.map((i) => i.ref), 'F1: in the order it was handed, the note no item of it').toEqual([refA, refB, refC]);
+    soft(items.map((i) => i.how), 'F1: how each goes in').toEqual(['task', 'message', 'task']);
+    soft(items.map((i) => i.from), 'F1: who sent each').toEqual(['Project Lead', 'Project Lead', 'Project Lead']);
+    soft(items.every((i) => !Number.isNaN(Date.parse(i.queuedAt))), 'F1: since when').toBe(true);
+    soft(items[0]?.title, 'F1: its first line').toBe('TASK-A the first task');
+    const byOther = await call('other', 'GET', '/api/agents/worker/queue');
+    soft(byOther.status, 'F1: a worker may read it').toBe(200);
+    soft(((byOther.body?.items ?? []) as QueueItem[]).map((i) => i.ref), 'F1: a worker sees only what it sent').toEqual([]);
+
+    // ── F2: paused, nothing goes in at the end of the turn; the turn itself is not cut ──
+    const paused = await call('lead', 'POST', '/api/agents/worker/queue/pause', { reason: 'hold everything' });
+    soft(paused.status, 'F2: the queue can be paused').toBe(200);
+    fs.writeFileSync(path.join(home, 'release-worker'), '');
+    await expect.poll(() => lines(path.join(home, 'prompts.jsonl')).filter((p) => p.id === 'worker').length, { timeout: 5_000 }).toBeGreaterThanOrEqual(1);
+    await new Promise((r) => setTimeout(r, 5_000));
+    seen.workerPromptsWhilePaused = promptsOf('worker');
+    soft(promptsOf('worker').filter((p) => /TASK-A|MSG-B|TASK-C/.test(p)), 'F2: nothing went in while paused').toEqual([]);
+
+    // ── F3: a worker acts on what it sent, and only on that ──
+    const otherCancelsA = await call('other', 'POST', `/api/tasks/${refA}/cancel`, {});
+    const otherMovesA = await call('other', 'POST', `/api/tasks/${refA}/move`, {});
+    const otherPauses = await call('other', 'POST', '/api/agents/worker/queue/resume', {});
+    seen.workerRights = { otherCancelsA: otherCancelsA.status, otherMovesA: otherMovesA.status, otherPauses: otherPauses.status, refD };
+    soft(otherCancelsA.status, 'F3: a worker cannot cancel what it did not send').toBe(403);
+    soft(otherMovesA.status, 'F3: nor move it').toBe(403);
+    soft(otherPauses.status, 'F3: nor resume the queue').toBe(403);
+
+    // ── F4: the third task to the head; the message cancelled ──
+    const moved = await call('lead', 'POST', `/api/tasks/${refC}/move`, {});
+    soft(moved.status, 'F4: an item moves to the head').toBe(200);
+    const cancelB = await call('lead', 'POST', `/api/tasks/${refB}/cancel`, {});
+    soft(cancelB.status, 'the lead cancels its own message').toBe(200);
+    const afterMove = await call('lead', 'GET', '/api/agents/worker/queue');
+    soft(((afterMove.body?.items ?? []) as QueueItem[]).map((i) => i.ref), 'F4: the order holds').toEqual([refC, refA]);
+
+    // ── F5: task_status knows every id it gave ──
+    const statusB = await call('lead', 'GET', `/api/tasks/${refB}`);
+    const statusA = await call('lead', 'GET', `/api/tasks/${refA}`);
+    seen.status = { a: statusA.body, b: statusB.body };
+    soft(statusB.status, 'F5: task_status knows a queued message').toBe(200);
+    soft((statusA.body?.task as { outcome?: string } | undefined)?.outcome, 'F5: a queued task reads queued').toBe('queued');
+
+    // ── F6: a stop keeps the queue, paused, and says so ──
+    const stop = await call('lead', 'POST', '/api/agents/worker/stop', { reason: 'saving memory' });
+    seen.stop = stop.body;
+    soft(stop.body?.queueKept, 'F6: the stop says what it kept').toBe(2);
+    const afterStop = await call('lead', 'GET', '/api/agents/worker/queue');
+    soft(((afterStop.body?.items ?? []) as QueueItem[]).map((i) => i.ref), 'F6: the queue is kept').toEqual([refC, refA]);
+    soft((afterStop.body as QueueView | undefined)?.paused?.why, 'F6: paused').toBeTruthy();
+
+    // ── F7: a restart of Tars keeps it, paused, and tells the orchestrator ──
+    await app.close();
+    ({ app, page } = await boot());
+    const view = await page.evaluate(async () => (window as unknown as Api).electronAPI.agentQueue?.get('worker'));
+    seen.afterRestart = view;
+    soft(view?.items.map((i) => i.ref), 'F7 and F8: kept across the restart, read by the window').toEqual([refC, refA]);
+    soft(view?.paused, 'F7: paused').toBeTruthy();
+    await page.evaluate(() => (window as unknown as Api).electronAPI.agent.start({ id: 'lead', prompt: '' }));
+    await expect.poll(async () => (await page.evaluate(() => (window as unknown as Api).electronAPI.agent.list())).some((x) => x.id === 'lead' && x.cliRunning), { timeout: 90_000 }).toBe(true);
+    await soft.poll(() => promptsOf('lead').some((p) => p.includes(refC) && p.includes(refA) && /paused/i.test(p)), { timeout: 30_000, message: 'F7: the orchestrator is told what waits' }).toBe(true);
+
+    // ── F9: resumed, they go in one at a time, in the queue's order ──
+    const resumed = await page.evaluate(async () => (window as unknown as Api).electronAPI.agentQueue?.resume('worker'));
+    soft(resumed?.success, 'F8: the window resumes it').toBe(true);
+    await soft.poll(() => promptsOf('worker').filter((p) => /TASK-A|TASK-C/.test(p)).map((p) => (p.includes('TASK-C') ? 'C' : 'A')), { timeout: 60_000, message: 'F9: in the queue\'s order' }).toEqual(['C', 'A']);
+    seen.workerPrompts = promptsOf('worker');
+    seen.leadPrompts = promptsOf('lead');
+  } finally {
+    recordValues(seen);
+    await app.close().catch(() => { /* gone */ });
+  }
+});

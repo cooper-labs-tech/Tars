@@ -7,7 +7,7 @@ import { create } from 'zustand';
  * tasks, projects, skills, entities, chats, their CRUD actions and four
  * selectors - seeded with sample data ("E-Commerce Platform", "Dashboard
  * Analytics", eight invented skills). None of it was ever read. Every
- * `useStore()` call site in the app destructures from the eight members below,
+ * `useStore()` call site in the app destructures from the members below,
  * and the real data comes from IPC hooks in `src/hooks/`, not from here.
  *
  * The sample data shipped in the bundle, which is the part worth avoiding: a
@@ -18,9 +18,8 @@ import { create } from 'zustand';
  * screen; state that comes from the main process belongs in a hook over IPC.
  */
 interface UiState {
-  /** Mobile drawer. The desktop sidebar is always open. */
-  mobileMenuOpen: boolean;
-  /** Dark is the launch default; ClientLayout persists this to `tars-theme`. */
+  /** Dark is the launch default; ClientLayout persists this to `tars-theme`. Settings, Preferences,
+   *  Appearance sets it. */
   darkMode: boolean;
   /** Badge on the Vault nav row, kept live by a main-process event so it is
    *  correct even when VaultView is not mounted. */
@@ -33,26 +32,19 @@ interface UiState {
    *  always a way back to it. */
   updateBannerDismissed: boolean;
 
-  setMobileMenuOpen: (open: boolean) => void;
-  toggleMobileMenu: () => void;
   setDarkMode: (dark: boolean) => void;
-  toggleDarkMode: () => void;
   setVaultUnreadCount: (count: number) => void;
   setPendingUpdateVersion: (version: string | null) => void;
   setUpdateBannerDismissed: (dismissed: boolean) => void;
 }
 
 export const useStore = create<UiState>((set) => ({
-  mobileMenuOpen: false,
   darkMode: true,
   vaultUnreadCount: 0,
   pendingUpdateVersion: null,
   updateBannerDismissed: false,
 
-  setMobileMenuOpen: (open) => set({ mobileMenuOpen: open }),
-  toggleMobileMenu: () => set((state) => ({ mobileMenuOpen: !state.mobileMenuOpen })),
   setDarkMode: (dark) => set({ darkMode: dark }),
-  toggleDarkMode: () => set((state) => ({ darkMode: !state.darkMode })),
   setVaultUnreadCount: (count) => set({ vaultUnreadCount: count }),
   setPendingUpdateVersion: (version) => set({ pendingUpdateVersion: version }),
   setUpdateBannerDismissed: (dismissed) => set({ updateBannerDismissed: dismissed }),

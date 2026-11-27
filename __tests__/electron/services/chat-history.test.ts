@@ -20,8 +20,11 @@
  *  4. The first read of a large transcript holds the main thread from its
  *     first byte to its last: nothing else runs until it is parsed.
  *  5. A chat no window asked chat:history for is read at every tick.
- *  6. With the new interface off (no window shows chats), anything is read
- *     or sent.
+ *  6. (2.1.0, the new interface the only one, the owner's decision of 26/11)
+ *     The follower still waits on a switch, which nothing turns on any more:
+ *     the chats of everyone who never turned the preview on stay silent.
+ *     Until 2.1.0 it was the opposite: nothing read or sent while the new
+ *     interface was off.
  *  7. (M1) A session whose transcript does not exist yet (Claude Code writes
  *     it lazily) reads as "gone"; once written, the items shift and the
  *     follower, counting by position, never sends one of them.
@@ -166,12 +169,12 @@ describe('one transcript, read as it grows', () => {
 });
 
 describe('a chat, followed', () => {
-  const follow = (over: { enabled?: () => boolean; chats?: Chat[]; runner?: AgentStatus } = {}) => {
+  const follow = (over: { chats?: Chat[]; runner?: AgentStatus } = {}) => {
     const chats = over.chats ?? [chatOf()];
     const runner = over.runner ?? runnerOf();
     return followChats({
       chats: () => chats, runnerOf: () => runner, isLive: () => true, nameOf: () => undefined, homeDir: home,
-      enabled: over.enabled ?? (() => true), everyMs: 3_600_000,
+      everyMs: 3_600_000,
     });
   };
   const itemsSent = () => sent.filter((e) => e.type === 'item').map((e) => e.item!.text);
@@ -189,22 +192,16 @@ describe('a chat, followed', () => {
     spy.mockRestore();
   });
 
-  it('6. reads and sends nothing while the new interface is off', async () => {
+  it('6. follows with no switch at all: a chat\'s new line is sent at the next tick', async () => {
     write(S('a'), userLine('hello'));
     const chat = chatOf();
     noteChatSnapshot(chat.id, await readChatItems(chat, { runner: runnerOf(), homeDir: home }));
-    const spy = vi.spyOn(fs.promises, 'open');
-    let on = false;
-    const f = follow({ enabled: () => on, chats: [chat] });
-    append(S('a'), userLine('while off'));
-    await f.tick();
-    expect(spy).not.toHaveBeenCalled();
-    expect(sent).toEqual([]);
-    on = true;
+    // Appended before the follower starts, as in 9: its first tick starts with it, and a tick joins the one in flight.
+    append(S('a'), userLine('with no setting'));
+    const f = follow({ chats: [chat] });
     await f.tick();
     f.stop();
-    expect(itemsSent()).toEqual(['while off']);
-    spy.mockRestore();
+    expect(itemsSent()).toEqual(['with no setting']);
   });
 
   it('7. sends every item of a session whose transcript is written after the snapshot', async () => {

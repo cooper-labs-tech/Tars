@@ -7,6 +7,17 @@ export interface Release {
 
 export const CHANGELOG: Release[] = [
   {
+    id: 65,
+    version: '2.1.0',
+    date: '2026-11-27',
+    updates: [
+      'The new interface is now the only one: the sidebar lists your chats, with Chat, Projects, Dashboard, Kanban and Schedules above them, and every other page opens from More as a card above the app. The classic interface and its New interface switch are gone.',
+      'The theme is in Settings, Preferences, Appearance: Dark or Light, kept across restarts.',
+      'Cmd and a digit (Ctrl on Windows) work as before: 1 Dashboard, 3 Kanban, 4 Schedules and 8 Projects open their page, and 2 Agents, 5 Review, 6 Logs, 7 Vault, 9 Extensions and 0 Usage open their card.',
+      'On Windows, the caption band works over the new interface: the window drags by its top, and the caption buttons follow the theme.',
+    ],
+  },
+  {
     id: 63,
     version: '2.0.6',
     date: '2026-10-29',

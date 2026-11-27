@@ -63,7 +63,7 @@ test('the chat list from the records: sections, a new chat, rename, pin, snooze,
   ], null, 2));
   fs.writeFileSync(path.join(dir, 'projects.json'), JSON.stringify([tars, harbor, docs]));
   fs.writeFileSync(path.join(dir, 'hermes-connection.json'), JSON.stringify({ mode: 'local', localPort: 9, authMode: 'token' }));
-  fs.writeFileSync(path.join(dir, 'app-settings.json'), JSON.stringify({ autoStartAgentsOnLaunch: false, ollamaBaseUrl: 'http://127.0.0.1:9', newInterface: true }));
+  fs.writeFileSync(path.join(dir, 'app-settings.json'), JSON.stringify({ autoStartAgentsOnLaunch: false, ollamaBaseUrl: 'http://127.0.0.1:9' }));
   const chatsFile = path.join(dir, 'chats.json');
   const onDisk = () => JSON.parse(fs.readFileSync(chatsFile, 'utf8')).chats as Array<Record<string, unknown>>;
 

@@ -91,111 +91,109 @@ process.stdin.resume();
 
 const lines = (file: string) => (fs.existsSync(file) ? fs.readFileSync(file, 'utf8').trim().split('\n').filter(Boolean).map((l) => JSON.parse(l)) : []);
 
-for (const newInterface of [false, true]) {
-  test(`a dashboard terminal starts, stops and wakes from its menu, with no such button in its header${newInterface ? ' (new interface)' : ''}`, async () => {
-    test.setTimeout(300_000);
-    const home = fs.mkdtempSync(path.join(os.tmpdir(), 'dorothy-e2e-header-menu-'));
-    const project = path.join(fs.realpathSync(home), 'projects', 'demo');
-    const dir = path.join(home, '.tars');
-    const bin = path.join(home, 'bin');
-    for (const d of [project, dir, bin]) fs.mkdirSync(d, { recursive: true });
-    const cli = writeNodeCli(path.join(bin, process.platform === 'win32' ? 'claude.cjs' : 'claude'), `const HOOKS = ${JSON.stringify(HOOKS)};\n${STAND_IN}`);
-    const agent = (id: string, name: string, role = 'worker') => ({
-      id, name, character: 'robot', provider: 'claude', status: 'idle', role, permissionMode: 'normal',
-      projectPath: project, skills: [], cliPath: cli, createdAt: '2026-10-22T08:00:00.000Z', lastActivity: '2026-10-22T08:00:00.000Z',
-    });
-    fs.writeFileSync(path.join(dir, 'agents.json'), JSON.stringify([agent('lead', 'Project Lead', 'orchestrator'), agent('worker', 'Build Worker')], null, 2));
-    fs.writeFileSync(path.join(dir, 'projects.json'), JSON.stringify([project]));
-    fs.writeFileSync(path.join(dir, 'hermes-connection.json'), JSON.stringify({ mode: 'local', localPort: 9, authMode: 'token' }));
-    fs.writeFileSync(path.join(dir, 'app-settings.json'), JSON.stringify({ autoStartAgentsOnLaunch: false, ollamaBaseUrl: 'http://127.0.0.1:9', newInterface }));
-    const launchesFile = path.join(home, 'launches.jsonl');
-    const dist = path.resolve('electron', 'dist');
-    const seen: Record<string, unknown> = { newInterface };
-    const tag = newInterface ? 'new' : 'old';
-
-    const app = await launchSandboxed(electron, home, {
-      env: { NODE_ENV: 'development', DOROTHY_DEV_URL: DEV_URL, DOROTHY_API_PORT: apiPort(newInterface ? 31544 : 31543), DOROTHY_E2E: '1' },
-    });
-    try {
-      const page = await app.firstWindow();
-      await page.setViewportSize({ width: 1440, height: 900 });
-      await page.goto(`${DEV_URL}/`, { waitUntil: 'domcontentloaded' });
-      await page.waitForFunction(() => !!(window as unknown as Partial<Api>).electronAPI);
-      const get = (id: string) => page.evaluate((i) => (window as unknown as Api).electronAPI.agent.get(i), id);
-      const panel = page.locator('[data-agent-panel="worker"]');
-      const actions = /^(start|stop|wake)\b/;
-      const menu = async (step: string) => {
-        await panel.getByRole('button', { name: 'Panel actions', exact: true }).click();
-        const items = await panel.locator('[aria-label="Panel actions"] + div button').allInnerTexts();
-        seen[`menu-${step}`] = items;
-        return items;
-      };
-      const pick = (name: string | RegExp) => panel.getByRole('button', { name, exact: typeof name === 'string' }).click();
-
-    /** Every agent rested 40 minutes, and the pass that runs every minute, until it puts the worker to sleep. */
-    const sleepWorker = async () => {
-      await expect.poll(async () => {
-        const checked = await app.evaluate(async (_e, { dist, windows }) => {
-          const req = process.mainModule!.require;
-          const { agents } = req(`${dist}/core/agent-manager.js`);
-          const fortyMinutesAgo = new Date(Date.now() - 40 * 60_000).toISOString();
-          for (const a of agents.values()) { a.statusSince = fortyMinutesAgo; a.lastTurnStartedAt = undefined; a.workHandedAt = undefined; }
-          // Windows has no process table for the pass to read (agent-sleep.ts
-          // reads ps: there it refuses every agent). It is
-          // handed the one ps shows on macOS for these stand-ins, each CLI its
-          // terminal's own process with nothing under it, so that what this spec
-          // is about, an asleep agent's window and its wakes through the
-          // Windows launch, is proven there too.
-          const { ptyProcesses } = req(`${dist}/core/pty-manager.js`);
-          const read = windows ? {
-            procs: async () => [...agents.values()].filter((a) => a.ptyId && ptyProcesses.has(a.ptyId))
-              .map((a) => ({ pid: ptyProcesses.get(a.ptyId).pid, ppid: process.pid, stat: 'S', age: 2400, command: 'node claude' })),
-          } : undefined;
-          return req(`${dist}/services/agent-sleep.js`).checkSleep(undefined, read) as Promise<Array<{ agentId: string; slept: boolean }>>;
-        }, { dist, windows: process.platform === 'win32' });
-        return checked.find((o) => o.agentId === 'worker')?.slept ?? (await get('worker')).status;
-      }, { timeout: 30_000, intervals: [500] }).toBe(true);
-      await expect.poll(async () => (await get('worker')).status).toBe('asleep');
-    };
-
-      // The header: no start, wake or stop button, the menu closed.
-      await expect(panel).toBeVisible({ timeout: 90_000 });
-      await expect(panel.getByRole('button', { name: actions }), 'no start, wake or stop in the header').toHaveCount(0);
-      await stepShot(page, `${tag}-01-header`);
-
-      // Start, from the menu.
-      expect((await menu('idle'))[0]).toBe('start claude');
-      await stepShot(page, `${tag}-02-menu-start`);
-      await pick('start claude');
-      await expect.poll(async () => { const a = await get('worker'); return !!(a.cliRunning && a.currentSessionId); }, { timeout: 60_000 }).toBe(true);
-      const firstSid = lines(launchesFile).find((l) => l.id === 'worker')!.sid as string;
-
-      // Stop, from the menu.
-      expect((await menu('running'))[0]).toBe('stop');
-      await pick('stop');
-      await expect.poll(async () => (await get('worker')).cliRunning === true, { timeout: 30_000 }).toBe(false);
-      seen.afterStop = await get('worker');
-
-      // Start again, then asleep: wake, from the menu, on its own conversation.
-      expect((await menu('stopped'))[0]).toBe('start claude');
-      await pick('start claude');
-      await expect.poll(async () => { const a = await get('worker'); return !!(a.cliRunning && a.currentSessionId); }, { timeout: 60_000 }).toBe(true);
-      await sleepWorker();
-      await expect(panel.getByRole('button', { name: actions }), 'asleep, still no button in the header').toHaveCount(0);
-      expect((await menu('asleep'))[0]).toBe('wake');
-      await stepShot(page, `${tag}-03-menu-wake`);
-      const launches = lines(launchesFile).filter((l) => l.id === 'worker').length;
-      await pick('wake');
-      await expect.poll(() => lines(launchesFile).filter((l) => l.id === 'worker').length, { timeout: 30_000 }).toBe(launches + 1);
-      await expect.poll(async () => { const w = await get('worker'); return `${w.status} ${w.cliRunning} ${!!w.waking}`; }, { timeout: 60_000 }).toMatch(/^(idle|waiting|completed) true false$/);
-      seen.wokeOn = lines(launchesFile).filter((l) => l.id === 'worker').at(-1)!.resume;
-      seen.firstSid = firstSid;
-      await stepShot(page, `${tag}-04-awake`);
-      recordValues(seen);
-    } finally {
-      recordValues(seen);
-      await app.close();
-      await removeHome(home);
-    }
+test(`a dashboard terminal starts, stops and wakes from its menu, with no such button in its header`, async () => {
+  test.setTimeout(300_000);
+  const home = fs.mkdtempSync(path.join(os.tmpdir(), 'dorothy-e2e-header-menu-'));
+  const project = path.join(fs.realpathSync(home), 'projects', 'demo');
+  const dir = path.join(home, '.tars');
+  const bin = path.join(home, 'bin');
+  for (const d of [project, dir, bin]) fs.mkdirSync(d, { recursive: true });
+  const cli = writeNodeCli(path.join(bin, process.platform === 'win32' ? 'claude.cjs' : 'claude'), `const HOOKS = ${JSON.stringify(HOOKS)};\n${STAND_IN}`);
+  const agent = (id: string, name: string, role = 'worker') => ({
+    id, name, character: 'robot', provider: 'claude', status: 'idle', role, permissionMode: 'normal',
+    projectPath: project, skills: [], cliPath: cli, createdAt: '2026-10-22T08:00:00.000Z', lastActivity: '2026-10-22T08:00:00.000Z',
   });
-}
+  fs.writeFileSync(path.join(dir, 'agents.json'), JSON.stringify([agent('lead', 'Project Lead', 'orchestrator'), agent('worker', 'Build Worker')], null, 2));
+  fs.writeFileSync(path.join(dir, 'projects.json'), JSON.stringify([project]));
+  fs.writeFileSync(path.join(dir, 'hermes-connection.json'), JSON.stringify({ mode: 'local', localPort: 9, authMode: 'token' }));
+  fs.writeFileSync(path.join(dir, 'app-settings.json'), JSON.stringify({ autoStartAgentsOnLaunch: false, ollamaBaseUrl: 'http://127.0.0.1:9' }));
+  const launchesFile = path.join(home, 'launches.jsonl');
+  const dist = path.resolve('electron', 'dist');
+  const seen: Record<string, unknown> = {};
+  const tag = 'new';
+
+  const app = await launchSandboxed(electron, home, {
+    env: { NODE_ENV: 'development', DOROTHY_DEV_URL: DEV_URL, DOROTHY_API_PORT: apiPort(31544), DOROTHY_E2E: '1' },
+  });
+  try {
+    const page = await app.firstWindow();
+    await page.setViewportSize({ width: 1440, height: 900 });
+    await page.goto(`${DEV_URL}/`, { waitUntil: 'domcontentloaded' });
+    await page.waitForFunction(() => !!(window as unknown as Partial<Api>).electronAPI);
+    const get = (id: string) => page.evaluate((i) => (window as unknown as Api).electronAPI.agent.get(i), id);
+    const panel = page.locator('[data-agent-panel="worker"]');
+    const actions = /^(start|stop|wake)\b/;
+    const menu = async (step: string) => {
+      await panel.getByRole('button', { name: 'Panel actions', exact: true }).click();
+      const items = await panel.locator('[aria-label="Panel actions"] + div button').allInnerTexts();
+      seen[`menu-${step}`] = items;
+      return items;
+    };
+    const pick = (name: string | RegExp) => panel.getByRole('button', { name, exact: typeof name === 'string' }).click();
+
+  /** Every agent rested 40 minutes, and the pass that runs every minute, until it puts the worker to sleep. */
+  const sleepWorker = async () => {
+    await expect.poll(async () => {
+      const checked = await app.evaluate(async (_e, { dist, windows }) => {
+        const req = process.mainModule!.require;
+        const { agents } = req(`${dist}/core/agent-manager.js`);
+        const fortyMinutesAgo = new Date(Date.now() - 40 * 60_000).toISOString();
+        for (const a of agents.values()) { a.statusSince = fortyMinutesAgo; a.lastTurnStartedAt = undefined; a.workHandedAt = undefined; }
+        // Windows has no process table for the pass to read (agent-sleep.ts
+        // reads ps: there it refuses every agent). It is
+        // handed the one ps shows on macOS for these stand-ins, each CLI its
+        // terminal's own process with nothing under it, so that what this spec
+        // is about, an asleep agent's window and its wakes through the
+        // Windows launch, is proven there too.
+        const { ptyProcesses } = req(`${dist}/core/pty-manager.js`);
+        const read = windows ? {
+          procs: async () => [...agents.values()].filter((a) => a.ptyId && ptyProcesses.has(a.ptyId))
+            .map((a) => ({ pid: ptyProcesses.get(a.ptyId).pid, ppid: process.pid, stat: 'S', age: 2400, command: 'node claude' })),
+        } : undefined;
+        return req(`${dist}/services/agent-sleep.js`).checkSleep(undefined, read) as Promise<Array<{ agentId: string; slept: boolean }>>;
+      }, { dist, windows: process.platform === 'win32' });
+      return checked.find((o) => o.agentId === 'worker')?.slept ?? (await get('worker')).status;
+    }, { timeout: 30_000, intervals: [500] }).toBe(true);
+    await expect.poll(async () => (await get('worker')).status).toBe('asleep');
+  };
+
+    // The header: no start, wake or stop button, the menu closed.
+    await expect(panel).toBeVisible({ timeout: 90_000 });
+    await expect(panel.getByRole('button', { name: actions }), 'no start, wake or stop in the header').toHaveCount(0);
+    await stepShot(page, `${tag}-01-header`);
+
+    // Start, from the menu.
+    expect((await menu('idle'))[0]).toBe('start claude');
+    await stepShot(page, `${tag}-02-menu-start`);
+    await pick('start claude');
+    await expect.poll(async () => { const a = await get('worker'); return !!(a.cliRunning && a.currentSessionId); }, { timeout: 60_000 }).toBe(true);
+    const firstSid = lines(launchesFile).find((l) => l.id === 'worker')!.sid as string;
+
+    // Stop, from the menu.
+    expect((await menu('running'))[0]).toBe('stop');
+    await pick('stop');
+    await expect.poll(async () => (await get('worker')).cliRunning === true, { timeout: 30_000 }).toBe(false);
+    seen.afterStop = await get('worker');
+
+    // Start again, then asleep: wake, from the menu, on its own conversation.
+    expect((await menu('stopped'))[0]).toBe('start claude');
+    await pick('start claude');
+    await expect.poll(async () => { const a = await get('worker'); return !!(a.cliRunning && a.currentSessionId); }, { timeout: 60_000 }).toBe(true);
+    await sleepWorker();
+    await expect(panel.getByRole('button', { name: actions }), 'asleep, still no button in the header').toHaveCount(0);
+    expect((await menu('asleep'))[0]).toBe('wake');
+    await stepShot(page, `${tag}-03-menu-wake`);
+    const launches = lines(launchesFile).filter((l) => l.id === 'worker').length;
+    await pick('wake');
+    await expect.poll(() => lines(launchesFile).filter((l) => l.id === 'worker').length, { timeout: 30_000 }).toBe(launches + 1);
+    await expect.poll(async () => { const w = await get('worker'); return `${w.status} ${w.cliRunning} ${!!w.waking}`; }, { timeout: 60_000 }).toMatch(/^(idle|waiting|completed) true false$/);
+    seen.wokeOn = lines(launchesFile).filter((l) => l.id === 'worker').at(-1)!.resume;
+    seen.firstSid = firstSid;
+    await stepShot(page, `${tag}-04-awake`);
+    recordValues(seen);
+  } finally {
+    recordValues(seen);
+    await app.close();
+    await removeHome(home);
+  }
+});

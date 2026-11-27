@@ -7,6 +7,7 @@ import type { ClaudeInfo, AppSettings } from './types';
 import { PRIVACY_POLICY_URL } from './constants';
 import { errorReportsOffered } from '@/lib/error-reports';
 import { lastReportLine } from '@/lib/error-report-line';
+import { useStore } from '@/store';
 
 interface GeneralSectionProps {
   info: ClaudeInfo | null;
@@ -15,6 +16,8 @@ interface GeneralSectionProps {
 }
 
 export const GeneralSection = ({ appSettings, onSaveAppSettings }: GeneralSectionProps) => {
+  const darkMode = useStore((s) => s.darkMode);
+  const setDarkMode = useStore((s) => s.setDarkMode);
   // Not on a Windows build (lib/error-reports.ts): read after hydration, as the bridge is.
   const [reportsOffered, setReportsOffered] = useState(true);
   useEffect(() => setReportsOffered(errorReportsOffered()), []);
@@ -48,6 +51,24 @@ export const GeneralSection = ({ appSettings, onSaveAppSettings }: GeneralSectio
   // stays here is the preference itself.
   return (
     <SettingsCard>
+      {/* Frame: `Shell · Settings card · Preferences, appearance`. The theme's one place since 2.1.0, when the
+          classic sidebar's Light/Dark button went with it (JeanBrasse, 26/11). ClientLayout boots it from
+          `tars-theme` and keeps that in step. */}
+      <SettingsRow
+        label="Appearance"
+        description="Dark or light, for the whole window. The terminals keep the theme chosen in Terminal."
+        control={
+          <SegmentedControl
+            ariaLabel="Appearance"
+            value={darkMode ? 'dark' : 'light'}
+            onChange={(theme) => setDarkMode(theme === 'dark')}
+            options={[
+              { value: 'dark', label: 'Dark' },
+              { value: 'light', label: 'Light' },
+            ]}
+          />
+        }
+      />
       <SettingsRow
         label="Check for updates"
         description="Tars from its fork, never upstream, and the claude and Amp CLIs your agents run: at launch, every 30 min."
@@ -126,20 +147,6 @@ export const GeneralSection = ({ appSettings, onSaveAppSettings }: GeneralSectio
         }
       />
 
-      {/* Settings · Preferences: the last row, off unless chosen. Since 2.0.0 it shows to everyone, the
-          preview; before, only once the settings file had turned it on (JeanBrasse, 12/10). */}
-      <SettingsRow
-        label="New interface"
-        description="Turns on the new shell and chats per project, a preview: the sidebar lists your chats, and Agents, Usage, Settings and the other pages open from More as cards above the app."
-        wrap
-        control={
-          <Toggle
-            label="New interface"
-            enabled={appSettings.newInterface === true}
-            onChange={() => onSaveAppSettings({ newInterface: appSettings.newInterface !== true })}
-          />
-        }
-      />
     </SettingsCard>
   );
 };

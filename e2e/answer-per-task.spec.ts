@@ -19,8 +19,7 @@ import { DEV_URL, apiPort } from './ports.mjs';
  * - Task 2's turn writes "The second answer.".
  * Asserted, by each task's id, once both ended: task 1's answer is its report, then the memory note and "Done.", and
  * not its narration; task 2's is its own; and the worker's last answer (what get_agent_output reads without a task id)
- * is task 2's, though its hooks' copy was replaced. Once with the classic interface, once with the new one. The
- * artefact: values.json (each answer as read, and the prompts the stand-in got).
+ * is task 2's, though its hooks' copy was replaced. The artefact: values.json (each answer as read, and the prompts the stand-in got).
  */
 
 const HOOKS = path.resolve('hooks');
@@ -106,72 +105,70 @@ type Task = { id: string; outcome: string; result?: string };
 
 test.skip(process.platform === 'win32', 'the stand-in is typed into a POSIX shell; the rule is platform-free and its unit tests run everywhere');
 
-for (const newInterface of [false, true]) {
-  test(`each task keeps its whole answer, its report and what followed it${newInterface ? ' (new interface)' : ''}`, async () => {
-    test.setTimeout(240_000);
-    const home = fs.mkdtempSync(path.join(os.tmpdir(), `dorothy-e2e-answer-${newInterface ? 'ni' : 'classic'}-`));
-    const project = path.join(home, 'projects', 'demo');
-    const dir = path.join(home, '.tars');
-    const bin = path.join(home, 'bin');
-    for (const d of [project, dir, bin]) fs.mkdirSync(d, { recursive: true });
-    const cli = path.join(bin, 'claude');
-    fs.writeFileSync(cli, `#!${process.execPath}\nconst HOOKS = ${JSON.stringify(HOOKS)};\nconst REPORT = ${JSON.stringify(REPORT)};\n${STAND_IN}`, { mode: 0o755 });
-    const agent = (id: string, name: string, role = 'worker') => ({
-      id, name, character: 'robot', provider: 'claude', status: 'idle', role, permissionMode: 'normal',
-      projectPath: project, skills: [], cliPath: cli, createdAt: '2026-10-28T08:00:00.000Z', lastActivity: '2026-10-28T08:00:00.000Z',
-    });
-    fs.writeFileSync(path.join(dir, 'agents.json'), JSON.stringify([agent('lead', 'Project Lead', 'orchestrator'), agent('w', 'Worker')], null, 2));
-    fs.writeFileSync(path.join(dir, 'projects.json'), JSON.stringify([project]));
-    fs.writeFileSync(path.join(dir, 'app-settings.json'), JSON.stringify({ autoStartAgentsOnLaunch: false, ollamaBaseUrl: 'http://127.0.0.1:9', newInterface }));
-    const port = apiPort(31514 + (newInterface ? 1 : 0));
-    const dist = path.resolve('electron', 'dist');
-    const seen: Record<string, unknown> = { newInterface };
-    const app = await launchSandboxed(electron, home, {
-      env: { NODE_ENV: 'development', DOROTHY_DEV_URL: DEV_URL, DOROTHY_API_PORT: port, DOROTHY_E2E: '1' },
-    });
-    try {
-      const page = await app.firstWindow();
-      await page.goto(`${DEV_URL}/agents`, { waitUntil: 'domcontentloaded' });
-      await page.waitForFunction(() => !!(window as unknown as { electronAPI?: unknown }).electronAPI);
-      const token = await app.evaluate((_e, { dist }) => {
-        const req = process.mainModule!.require;
-        return req(`${dist}/core/agent-tokens.js`).mintAgentToken('lead') as string;
-      }, { dist });
-      const api = async (method: string, route: string, body?: unknown) => {
-        const res = await fetch(`http://127.0.0.1:${port}${route}`, {
-          method, headers: { 'content-type': 'application/json', authorization: `Bearer ${token}` }, ...(body ? { body: JSON.stringify(body) } : {}),
-        });
-        return await res.json() as Record<string, unknown>;
-      };
-      const first = await api('POST', '/api/agents/w/run-task', { task: 'REPORT>> ship the migration', answer: 'started' });
-      const second = await api('POST', '/api/agents/w/run-task', { task: 'SECOND>> and the next item', answer: 'started' });
-      seen.handed = { first, second };
-      const ended = async (ref: string) => {
-        let task: Task | undefined;
-        for (const until = Date.now() + 120_000; Date.now() < until;) {
-          task = (await api('GET', `/api/tasks/${ref}?wait=20`)).task as Task | undefined;
-          if (task && !['queued', 'starting', 'running'].includes(task.outcome)) return task;
-        }
-        return task;
-      };
-      const one = await ended(String(first.taskId));
-      const two = await ended(String(second.taskId));
-      // Asked again after both: the first's answer is still its own.
-      const oneAgain = (await api('GET', `/api/tasks/${String(first.taskId)}`)).task as Task;
-      const worker = (await api('GET', '/api/agents/w')).agent as { lastAnswer?: { taskId: string; result: string }; lastCleanOutput?: string };
-      Object.assign(seen, { one, two, oneAgain, lastAnswer: worker.lastAnswer, lastCleanOutput: worker.lastCleanOutput, prompts: lines(path.join(home, 'prompts.jsonl')) });
-
-      expect(one?.outcome).toBe('completed');
-      expect(two?.outcome).toBe('completed');
-      expect(one?.result).toBe(`${REPORT}\n\nSaving the durable lessons to memory.\n\nDone.`);
-      expect(oneAgain.result).toBe(one?.result);
-      expect(two?.result).toBe('The second answer.');
-      expect(worker.lastAnswer?.result).toBe('The second answer.');
-      expect(worker.lastAnswer?.taskId).toBe(two?.id);
-    } finally {
-      recordValues(seen);
-      await app.close().catch(() => { /* gone */ });
-      fs.rmSync(home, { recursive: true, force: true });
-    }
+test(`each task keeps its whole answer, its report and what followed it`, async () => {
+  test.setTimeout(240_000);
+  const home = fs.mkdtempSync(path.join(os.tmpdir(), `dorothy-e2e-answer-ni-`));
+  const project = path.join(home, 'projects', 'demo');
+  const dir = path.join(home, '.tars');
+  const bin = path.join(home, 'bin');
+  for (const d of [project, dir, bin]) fs.mkdirSync(d, { recursive: true });
+  const cli = path.join(bin, 'claude');
+  fs.writeFileSync(cli, `#!${process.execPath}\nconst HOOKS = ${JSON.stringify(HOOKS)};\nconst REPORT = ${JSON.stringify(REPORT)};\n${STAND_IN}`, { mode: 0o755 });
+  const agent = (id: string, name: string, role = 'worker') => ({
+    id, name, character: 'robot', provider: 'claude', status: 'idle', role, permissionMode: 'normal',
+    projectPath: project, skills: [], cliPath: cli, createdAt: '2026-10-28T08:00:00.000Z', lastActivity: '2026-10-28T08:00:00.000Z',
   });
-}
+  fs.writeFileSync(path.join(dir, 'agents.json'), JSON.stringify([agent('lead', 'Project Lead', 'orchestrator'), agent('w', 'Worker')], null, 2));
+  fs.writeFileSync(path.join(dir, 'projects.json'), JSON.stringify([project]));
+  fs.writeFileSync(path.join(dir, 'app-settings.json'), JSON.stringify({ autoStartAgentsOnLaunch: false, ollamaBaseUrl: 'http://127.0.0.1:9' }));
+  const port = apiPort(31514 + 1);
+  const dist = path.resolve('electron', 'dist');
+  const seen: Record<string, unknown> = {};
+  const app = await launchSandboxed(electron, home, {
+    env: { NODE_ENV: 'development', DOROTHY_DEV_URL: DEV_URL, DOROTHY_API_PORT: port, DOROTHY_E2E: '1' },
+  });
+  try {
+    const page = await app.firstWindow();
+    await page.goto(`${DEV_URL}/agents`, { waitUntil: 'domcontentloaded' });
+    await page.waitForFunction(() => !!(window as unknown as { electronAPI?: unknown }).electronAPI);
+    const token = await app.evaluate((_e, { dist }) => {
+      const req = process.mainModule!.require;
+      return req(`${dist}/core/agent-tokens.js`).mintAgentToken('lead') as string;
+    }, { dist });
+    const api = async (method: string, route: string, body?: unknown) => {
+      const res = await fetch(`http://127.0.0.1:${port}${route}`, {
+        method, headers: { 'content-type': 'application/json', authorization: `Bearer ${token}` }, ...(body ? { body: JSON.stringify(body) } : {}),
+      });
+      return await res.json() as Record<string, unknown>;
+    };
+    const first = await api('POST', '/api/agents/w/run-task', { task: 'REPORT>> ship the migration', answer: 'started' });
+    const second = await api('POST', '/api/agents/w/run-task', { task: 'SECOND>> and the next item', answer: 'started' });
+    seen.handed = { first, second };
+    const ended = async (ref: string) => {
+      let task: Task | undefined;
+      for (const until = Date.now() + 120_000; Date.now() < until;) {
+        task = (await api('GET', `/api/tasks/${ref}?wait=20`)).task as Task | undefined;
+        if (task && !['queued', 'starting', 'running'].includes(task.outcome)) return task;
+      }
+      return task;
+    };
+    const one = await ended(String(first.taskId));
+    const two = await ended(String(second.taskId));
+    // Asked again after both: the first's answer is still its own.
+    const oneAgain = (await api('GET', `/api/tasks/${String(first.taskId)}`)).task as Task;
+    const worker = (await api('GET', '/api/agents/w')).agent as { lastAnswer?: { taskId: string; result: string }; lastCleanOutput?: string };
+    Object.assign(seen, { one, two, oneAgain, lastAnswer: worker.lastAnswer, lastCleanOutput: worker.lastCleanOutput, prompts: lines(path.join(home, 'prompts.jsonl')) });
+
+    expect(one?.outcome).toBe('completed');
+    expect(two?.outcome).toBe('completed');
+    expect(one?.result).toBe(`${REPORT}\n\nSaving the durable lessons to memory.\n\nDone.`);
+    expect(oneAgain.result).toBe(one?.result);
+    expect(two?.result).toBe('The second answer.');
+    expect(worker.lastAnswer?.result).toBe('The second answer.');
+    expect(worker.lastAnswer?.taskId).toBe(two?.id);
+  } finally {
+    recordValues(seen);
+    await app.close().catch(() => { /* gone */ });
+    fs.rmSync(home, { recursive: true, force: true });
+  }
+});

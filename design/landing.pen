@@ -1,5 +1,5 @@
 {
-  "version": "2.17",
+  "version": "2.19",
   "children": [
     {
       "type": "frame",
@@ -336,7 +336,7 @@
             {
               "type": "frame",
               "id": "PKOna",
-              "name": "screenshot",
+              "name": "screenshot · the Dashboard in the new shell, from the app",
               "width": "fill_container",
               "height": 650,
               "fill": {
@@ -985,7 +985,7 @@
                   "id": "oAEGB",
                   "name": "eyebrow",
                   "fill": "$accent",
-                  "content": "Preview in 2.0.0",
+                  "content": "New in 2.1.0",
                   "lineHeight": 1.45,
                   "fontFamily": "$font-mono",
                   "fontSize": 12,
@@ -1009,7 +1009,7 @@
                   "fill": "#9B9B9B",
                   "textGrowth": "fixed-width",
                   "width": 600,
-                  "content": "A project keeps its team, and you open several chats in it, each its own conversation with the project’s orchestrator on one topic. It comes in 2.0.0 as a preview, off until you turn it on.",
+                  "content": "A project keeps its team, and you open several chats in it, each its own conversation with the project’s orchestrator on one topic. A preview in 2.0.0, it is Tars’s interface since 2.1.0.",
                   "lineHeight": 1.6,
                   "fontFamily": "$font-ui",
                   "fontSize": 15,
@@ -1167,7 +1167,7 @@
                     {
                       "type": "frame",
                       "id": "bWmBn",
-                      "name": "f Off until you turn it on",
+                      "name": "f Every page, a key away",
                       "width": 500,
                       "layout": "vertical",
                       "gap": 8,
@@ -1179,7 +1179,7 @@
                           "fill": "#F5F4F2",
                           "textGrowth": "fixed-width",
                           "width": "fill_container",
-                          "content": "Off until you turn it on",
+                          "content": "Every page, a key away",
                           "lineHeight": 1.55,
                           "fontFamily": "$font-ui",
                           "fontSize": 16,
@@ -1192,7 +1192,7 @@
                           "fill": "#9B9B9B",
                           "textGrowth": "fixed-width",
                           "width": "fill_container",
-                          "content": "Settings, Preferences, New interface. Today’s interface stays exactly as it is until then, and comes back the moment you turn it off.",
+                          "content": "Cmd and a digit (Ctrl on Windows) opens a page, or its card above the one you are on, as before. Dark or light is in Settings, Preferences, Appearance.",
                           "lineHeight": 1.55,
                           "fontFamily": "$font-ui",
                           "fontSize": 14,
@@ -2066,7 +2066,7 @@
         {
           "type": "frame",
           "id": "myRPx",
-          "name": "shot",
+          "name": "shot · the Dashboard in the new shell, from the app",
           "width": 700,
           "height": 438,
           "fill": {
@@ -2899,6 +2899,65 @@
               ]
             }
           ]
+        }
+      ]
+    },
+    {
+      "type": "frame",
+      "id": "ShzMX",
+      "x": -1600,
+      "y": 0,
+      "name": "Landing · notes (2.1.0)",
+      "theme": {
+        "mode": "dark"
+      },
+      "width": 1440,
+      "height": 420,
+      "fill": "$bg",
+      "stroke": "$border",
+      "strokeWidth": 1,
+      "layout": "vertical",
+      "gap": 14,
+      "padding": 60,
+      "children": [
+        {
+          "type": "text",
+          "id": "js8lP",
+          "name": "t",
+          "fill": "$text-primary",
+          "textGrowth": "fixed-width",
+          "width": 1320,
+          "content": "Landing, 2.1.0: the new interface is the only one",
+          "lineHeight": 1.15,
+          "fontFamily": "$font-display",
+          "fontSize": 32,
+          "fontWeight": "normal"
+        },
+        {
+          "type": "text",
+          "id": "ChERa",
+          "name": "t",
+          "fill": "$text-secondary",
+          "textGrowth": "fixed-width",
+          "width": 1320,
+          "content": "The Preview section no longer says the new interface is off until you turn it on: it was the preview of 2.0.0, and it is Tars’s interface since 2.1.0. Its fourth point says the keys and the theme instead of the switch.",
+          "lineHeight": 1.5,
+          "fontFamily": "$font-ui",
+          "fontSize": 14,
+          "fontWeight": "normal"
+        },
+        {
+          "type": "text",
+          "id": "rFZ2J",
+          "name": "t",
+          "fill": "$text-secondary",
+          "textGrowth": "fixed-width",
+          "width": 1320,
+          "content": "The hero’s screenshot and the social image’s shot take landing/src/assets/dashboard.png, the Dashboard in the new shell, re-taken on 27/11 from the real app: four real Claude Code sessions of one throwaway project in a sandbox, against a stand-in Messages API with scripted answers, in Equal grid, QA in the middle of a turn. Never drawn: re-take it under the same file name when the Dashboard changes.",
+          "lineHeight": 1.5,
+          "fontFamily": "$font-ui",
+          "fontSize": 14,
+          "fontWeight": "normal"
         }
       ]
     }
