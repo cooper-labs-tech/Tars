@@ -32,6 +32,21 @@
 //     but 200 with nothing deleted, which would tell it what others hold.
 // D6. Without the install's token (none, a reader's) something is deleted.
 // D7. The operator's deletion log has no receipt for it, or the install's stored bytes still count what went.
+//
+// A session's environment and power events, a request's live count (27/11, the first trace wave): the ways it
+// can fail, written before the code.
+// E1. A session sent with `environment` or `events`, or a request with `liveSessions`, is refused as an unknown field,
+//     so every upload of a Tars that sends them fails.
+// E2. They are not stored, or not read back: the session on the list (§ 6.1) and in the detail (§ 6.2), the request
+//     in the detail and on the join (§ 6.5), each with the shape it was sent in.
+// E3. A session or request sent without them (an older Tars) reads back other than `null`, or without the key.
+// E4. Sent again without them, a session or request loses the ones it had.
+// E5. A malformed one is taken: an environment key it does not know (a serial number), a wrong type, a kind of
+//     event it does not know, a negative count. The batch must be refused whole (422), and nothing of it stored.
+// E6. A deleted session leaves its environment, its events or its requests' counts in any table.
+// E7. The environment reaches the operator's deletion log, or the server's own log.
+// E8. Migration 003 over a database that holds them: its down loses a row or a value other than the three new
+//     ones, or its up gives the rows from before it a value other than `null`.
 import { describe, it, before, after } from 'node:test';
 import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
@@ -84,6 +99,12 @@ const h = Object.fromEntries(Object.entries(msgs).map(([k, v]) => [k, sha(v)])) 
 const toolsHash = sha(tools);
 const T0 = Math.floor(Date.now() / 1000) * 1000 - 3_600_000;
 const PROJECT = 'a'.repeat(64);
+// A session's environment as Tars reads it (exact values), and its power events.
+const ENV = {
+  osName: 'macOS', osVersion: '15.6.1', kernel: '24.6.0', arch: 'arm64', machineModel: 'Mac15,3', chip: 'Chip-E2E-7731', cpuCores: 8,
+  ramBytes: 17179869184, tarsVersion: '2.0.7', tarsArch: 'arm64', locale: 'de-DE', timeZone: 'Europe/Berlin', utcOffsetMinutes: 60, onBattery: false,
+};
+const EVENTS = [{ at: T0 + 1000, kind: 'sleep' }, { at: T0 + 2000, kind: 'wake' }];
 
 function session(over: Record<string, unknown> = {}) {
   return {
@@ -332,6 +353,56 @@ describe('trace back-office, end to end', () => {
     assert.equal(note('read.blob.zstd', res.headers.get('content-encoding')), 'zstd');
   });
 
+  it('takes a session\'s environment and power events and a request\'s live count, reads them back, and refuses them malformed', async () => {
+    const detail = async () => (await call('GET', `/v1/read/sessions/${installA.id}/sess-1`, { token: reader.token })).json;
+    // E3. Sent without them: null, never absent.
+    const before = await detail();
+    assert.deepEqual(note('env.before', [before.session.environment, before.session.events, before.requests.map((r: any) => ['liveSessions' in r, r.liveSessions])]),
+      [null, null, [[true, null], [true, null], [true, null]]]);
+    assert.ok('environment' in before.session && 'events' in before.session);
+    // E1, E2. Sent with them.
+    const sent = await call('PUT', '/v1/batches/batch-env', { token: installA.token, body: {
+      schema: 1, sessions: [session({ finalStatus: 'done', endedAt: T0 + 6000, environment: ENV, events: EVENTS, nativeSessionId: 'native-1' })],
+      requests: [{ ...requests[0], liveSessions: 3 }],
+    } });
+    assert.equal(sent.status, 200, String(sent.buf));
+    const after = await detail();
+    assert.deepEqual(after.session.environment, ENV);
+    assert.deepEqual(after.session.events, EVENTS);
+    assert.equal(after.session.nativeSessionId, 'native-1');
+    assert.deepEqual(note('env.liveSessions', after.requests.map((r: any) => [r.requestId, r.liveSessions])), [['req-1', 3], ['req-2', null], ['req-t', null]]);
+    const listed = (await call('GET', '/v1/read/sessions?agent=agent-1', { token: reader.token })).json.sessions;
+    assert.deepEqual(note('env.list', listed.map((s: any) => [s.sessionId, s.environment?.chip, s.events?.length])), [['sess-1', ENV.chip, EVENTS.length]]);
+    assert.deepEqual(listed[0].environment, ENV);
+    const joined = (await call('GET', '/v1/read/requests?upstreamRequestId=up-111', { token: reader.token })).json.requests;
+    assert.deepEqual(joined.map((r: any) => r.liveSessions), [3]);
+    // E4. Sent again without them: kept.
+    const older = await call('PUT', '/v1/batches/batch-env-older', { token: installA.token, body: {
+      schema: 1, sessions: [session({ finalStatus: 'done', endedAt: T0 + 6000 })], requests: [requests[0]],
+    } });
+    assert.equal(older.status, 200, String(older.buf));
+    const kept = await detail();
+    assert.deepEqual(note('env.keptAfterOlder', [kept.session.environment?.chip, kept.session.events?.length, kept.requests[0].liveSessions]), [ENV.chip, EVENTS.length, 3]);
+    // E5. Malformed: refused whole, nothing of it stored.
+    const bad: Array<[string, Record<string, unknown>, Record<string, unknown>]> = [
+      ['serial', { environment: { ...ENV, serialNumber: 'C02-NOT-SENT' } }, {}],
+      ['coresAsText', { environment: { ...ENV, cpuCores: '8' } }, {}],
+      ['eventKind', { events: [{ at: T0, kind: 'reboot' }] }, {}],
+      ['negativeLive', {}, { liveSessions: -1 }],
+    ];
+    const codes: Array<[string, number, string]> = [];
+    for (const [name, s, r] of bad) {
+      const put = await call('PUT', `/v1/batches/batch-bad-${name}`, { token: installA.token, body: {
+        schema: 1, sessions: [session({ finalStatus: 'done', endedAt: T0 + 6000, environment: { ...ENV, chip: 'Never stored' }, ...s })],
+        requests: [{ ...requests[0], liveSessions: 99, ...r }],
+      } });
+      codes.push([name, put.status, put.json.error]);
+    }
+    assert.deepEqual(note('env.malformed', codes), bad.map(([n]) => [n, 422, 'invalid_batch']));
+    const still = await detail();
+    assert.deepEqual([still.session.environment?.chip, still.requests[0].liveSessions], [ENV.chip, 3]);
+  });
+
   it('migrates a database that holds requests: down keeps every row but the marks, up reads them back unknown', async () => {
     // M1, M2. The server stopped, as an operator migrates; what it logged so far is kept for the artefact.
     const earlier = srv.log.slice();
@@ -339,24 +410,33 @@ describe('trace back-office, end to end', () => {
     const client = new pg.Client({ host: db.env.PGHOST, port: Number(db.env.PGPORT), user: db.env.PGUSER, database: db.env.PGDATABASE });
     await client.connect();
     try {
-      // Every table's rows, compared without `side`: a count and a digest per table.
+      // Every table's rows, compared without the columns 002 and 003 add: a count and a digest per table.
       const rows = async () => {
         const tables = (await client.query("SELECT tablename FROM pg_tables WHERE schemaname = 'public' AND tablename <> 'schema_migrations' ORDER BY 1")).rows.map((r) => r.tablename as string);
         const out: Record<string, string> = {};
         for (const t of tables) {
-          const r = (await client.query(`SELECT count(*)::int AS n, md5(coalesce(string_agg(x, '|' ORDER BY x), '')) AS d FROM (SELECT (to_jsonb(t) - 'side')::text AS x FROM "${t}" t) s`)).rows[0];
+          const r = (await client.query(`SELECT count(*)::int AS n, md5(coalesce(string_agg(x, '|' ORDER BY x), '')) AS d FROM (SELECT (to_jsonb(t) - 'side' - 'environment' - 'events' - 'live_sessions')::text AS x FROM "${t}" t) s`)).rows[0];
           out[t] = `${r.n}:${r.d}`;
         }
         return out;
       };
       const marks = async () => (await client.query('SELECT request_id, side FROM requests ORDER BY request_id')).rows.map((r) => [r.request_id, r.side]);
+      const waveOne = async () => [
+        (await client.query("SELECT session_id, environment->>'chip' AS chip, jsonb_array_length(events) AS n FROM sessions WHERE environment IS NOT NULL OR events IS NOT NULL ORDER BY 1")).rows.map((r) => [r.session_id, r.chip, r.n]),
+        (await client.query('SELECT request_id, live_sessions FROM requests WHERE live_sessions IS NOT NULL ORDER BY 1')).rows.map((r) => [r.request_id, r.live_sessions]),
+      ];
       const before = note('migrate.withData.before', await rows());
       assert.deepEqual(note('migrate.withData.marksBefore', await marks()), [['req-1', false], ['req-2', true], ['req-t', true]]);
-      note('migrate.withData.down', runCli(['migrate', 'down'], env).trim());
-      assert.deepEqual(note('migrate.withData.afterDown', await rows()), before, 'the down kept every request and value but the marks');
+      assert.deepEqual(note('migrate.withData.waveOneBefore', await waveOne()), [[['sess-1', ENV.chip, EVENTS.length]], [['req-1', 3]]]);
+      // E8, M2. Down through 003, then 002.
+      note('migrate.withData.down003', runCli(['migrate', 'down'], env).trim());
+      assert.deepEqual(note('migrate.withData.afterDown003', await rows()), before, 'the down of 003 kept every row and value but its own');
+      note('migrate.withData.down002', runCli(['migrate', 'down'], env).trim());
+      assert.deepEqual(note('migrate.withData.afterDown', await rows()), before, 'the down of 002 kept every request and value but the marks');
       note('migrate.withData.up', runCli(['migrate', 'up'], env).trim());
       assert.deepEqual(await rows(), before, 'the up kept every request and value');
       assert.deepEqual(note('migrate.withData.marksAfterUp', await marks()), [['req-1', null], ['req-2', null], ['req-t', null]]);
+      assert.deepEqual(note('migrate.withData.waveOneAfterUp', await waveOne()), [[], []]);
     } finally {
       // Up again and serving whatever this step found, so a failure here is this step's alone.
       runCli(['migrate', 'up'], env);
@@ -440,8 +520,8 @@ describe('trace back-office, end to end', () => {
     const meta = (hash: string, raw: Buffer, role: string) => ({ hash, role, createdAt: T0, size: raw.length });
     for (const [id, refs] of [['b-del', [h.system, sha(twice), sha(only)]], ['b-del2', [sha(twice)]]] as const) {
       const put = await call('PUT', `/v1/batches/${id}.1`, { token: installB.token, body: {
-        schema: 1, sessions: [session({ sessionId: id, finalStatus: 'done', endedAt: T0 + 10_000, turnCount: 1, requestCount: 1 })],
-        turns: [{ ...turn, turnId: `${id}-t`, sessionId: id }], requests: [req(id, [...refs])],
+        schema: 1, sessions: [session({ sessionId: id, finalStatus: 'done', endedAt: T0 + 10_000, turnCount: 1, requestCount: 1, environment: { ...ENV, chip: `Chip-${id}-7731` }, events: EVENTS })],
+        turns: [{ ...turn, turnId: `${id}-t`, sessionId: id }], requests: [{ ...req(id, [...refs]), liveSessions: 5 }],
         messages: [meta(h.system, msgs.system, 'system'), meta(sha(twice), twice, 'user'), meta(sha(only), only, 'assistant')].filter((m) => (refs as readonly string[]).includes(m.hash)),
       } });
       assert.equal(put.status, 200, String(put.buf));
@@ -478,6 +558,26 @@ describe('trace back-office, end to end', () => {
     note('sessionDelete.storedBytes', [storedBefore, storedAfter]);
     assert.ok(storedAfter < storedBefore, 'the stored bytes count what went');
     assert.ok((await page('/admin/deletions')).html.includes(d.json.receipt), 'the receipt is in the owner\'s deletion log');
+    // E6, E7. Nothing of b-del's environment, events or counts is left in any table, its log line holds none of it,
+    // and neither does the server's own log.
+    const client = new pg.Client({ host: db.env.PGHOST, port: Number(db.env.PGPORT), user: db.env.PGUSER, database: db.env.PGDATABASE });
+    await client.connect();
+    try {
+      const tables = (await client.query("SELECT tablename FROM pg_tables WHERE schemaname = 'public'")).rows.map((r) => r.tablename as string);
+      const holding: string[] = [];
+      for (const t of tables) {
+        const n = (await client.query(`SELECT count(*)::int AS n FROM "${t}" x WHERE to_jsonb(x)::text LIKE '%Chip-b-del-7731%'`)).rows[0].n;
+        if (n) holding.push(t);
+      }
+      assert.deepEqual(note('env.afterSessionDelete.tablesHolding', holding), []);
+      const b2 = (await client.query("SELECT environment->>'chip' AS chip, jsonb_array_length(events) AS n FROM sessions WHERE session_id = 'b-del2'")).rows;
+      assert.deepEqual(b2.map((r) => [r.chip, r.n]), [['Chip-b-del2-7731', EVENTS.length]], 'the session kept keeps its own');
+      const log = JSON.stringify((await client.query('SELECT * FROM deletion_log')).rows);
+      assert.ok(!/Chip-|Mac15,3|Europe\/Berlin/.test(log), 'the operator\'s deletion log holds no environment');
+    } finally {
+      await client.end();
+    }
+    assert.ok(!/Chip-|Mac15,3|Europe\/Berlin/.test(srv.log.join('')), 'the server\'s log holds no environment');
 
     // D3, D4. Readers are told once, with the id, under a reason they know; a retry deletes nothing and tells no one.
     const again = await call('DELETE', '/v1/sessions/b-del', { token: installB.token });
