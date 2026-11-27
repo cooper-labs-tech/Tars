@@ -237,7 +237,9 @@ chats' limit is computed from), `DOROTHY_HEALTH_EVERY_MS` (how often the health 
 set against its CLI's record, 200 ms at least) and `DOROTHY_SLEEP_AFTER_MS` (the sleep's delay, 2 s at least;
 both in `e2e/status-from-events.spec.ts`). `DOROTHY_TELEGRAM_API_URL`, a stand-in of Telegram's Bot API that 2.0.4's
 bot read, is read by nothing since the bot went in 2.0.5: `e2e/telegram-through-hermes.spec.ts` still sets it, to show
-that nothing asks the stand-in anything. And one read by any development run,
+that nothing asks the stand-in anything. `DOROTHY_E2E_GH`, an absolute path to a stand-in of gh (never read by a
+packaged Tars), answers the load window's question whether a repository is public (`e2e/load-window-approval.spec.ts`).
+And one read by any development run,
 never by a packaged Tars (`app.isPackaged`): `DOROTHY_ERROR_REPORTS_DSN`, where error reports go, a
 stand-in of Sentry that records the envelopes (`e2e/health-reports.spec.ts`,
 `e2e/error-reports-coverage.spec.ts`).
