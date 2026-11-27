@@ -677652,7 +677652,7 @@
                             {
                               "type": "frame",
                               "id": "P52Fj",
-                              "name": "t nimbus-cloud",
+                              "name": "t atlas-cloud",
                               "width": "fill_container",
                               "gap": 8,
                               "padding": [
@@ -677688,7 +677688,7 @@
                                   "id": "QZwSL",
                                   "name": "l",
                                   "fill": "$text-primary",
-                                  "content": "nimbus-cloud",
+                                  "content": "atlas-cloud",
                                   "lineHeight": 1.4,
                                   "fontFamily": "$font-ui",
                                   "fontSize": 12,
@@ -680851,7 +680851,7 @@
                             {
                               "type": "frame",
                               "id": "eRFJ4",
-                              "name": "t nimbus-cloud",
+                              "name": "t atlas-cloud",
                               "width": "fill_container",
                               "gap": 8,
                               "padding": [
@@ -680887,7 +680887,7 @@
                                   "id": "b8qul",
                                   "name": "l",
                                   "fill": "$text-primary",
-                                  "content": "nimbus-cloud",
+                                  "content": "atlas-cloud",
                                   "lineHeight": 1.4,
                                   "fontFamily": "$font-ui",
                                   "fontSize": 12,
@@ -682660,7 +682660,7 @@
                           "id": "OFPwh",
                           "name": "crumb",
                           "fill": "$text-secondary",
-                          "content": "nimbus-cloud",
+                          "content": "atlas-cloud",
                           "lineHeight": 1.4,
                           "fontFamily": "$font-mono",
                           "fontSize": 11,
@@ -685591,7 +685591,7 @@
                           "id": "enFk7",
                           "name": "crumb",
                           "fill": "$text-secondary",
-                          "content": "nimbus-cloud",
+                          "content": "atlas-cloud",
                           "lineHeight": 1.4,
                           "fontFamily": "$font-mono",
                           "fontSize": 11,
@@ -689912,7 +689912,7 @@
                             {
                               "type": "frame",
                               "id": "lwD58",
-                              "name": "t nimbus-cloud",
+                              "name": "t atlas-cloud",
                               "width": "fill_container",
                               "gap": 8,
                               "padding": [
@@ -689948,7 +689948,7 @@
                                   "id": "r2l1go",
                                   "name": "l",
                                   "fill": "$text-primary",
-                                  "content": "nimbus-cloud",
+                                  "content": "atlas-cloud",
                                   "lineHeight": 1.4,
                                   "fontFamily": "$font-ui",
                                   "fontSize": 12,
