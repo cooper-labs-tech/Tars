@@ -235,8 +235,8 @@ The proxy:
 - adds `X-Session-Id` (the trace id) and `X-Agent-Id` when the endpoint's "send session headers" is on (off by
   default);
 - adds `X-Install-Id`, the install's back-office id, when the endpoint's "send install id" is on too (off by default,
-  the owner's in the window, refused without the session headers), only while the install is registered with the
-  back-office and never after a deletion (`TraceUploader.currentInstallId`); a harness's own is always dropped. So a
+  the owner's in the window, refused without the session headers), only while sharing is on and the install is
+  registered with the back-office, and never after a deletion (`TraceUploader.currentInstallId`); a harness's own is always dropped. So a
   deletion of the whole install can reach the endpoint's own copy of what it served;
 - adds the endpoint's extra headers, a fixed map of at most 16 (`extraHeaders`), to every request, over a harness's
   header of the same name. None may be the credential (Authorization, x-api-key, Cookie), the connection's own or the

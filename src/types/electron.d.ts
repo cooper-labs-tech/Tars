@@ -3006,7 +3006,7 @@ export interface EndpointView {
   /** Adds X-Session-Id and X-Agent-Id to every request: off by default (they name the agent and its session). */
   sendSessionHeaders: boolean;
   /**
-   * Adds X-Install-Id, the install's back-office id, to every request while the install is registered: off by default,
+   * Adds X-Install-Id, the install's back-office id, to every request while sharing is on and the install is registered: off by default,
    * only with the session headers (a save asking for it without them is refused, and turning them off turns it off).
    */
   sendInstallHeader: boolean;

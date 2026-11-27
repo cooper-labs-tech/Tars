@@ -203,14 +203,15 @@ export class TraceUploader {
   /**
    * The install's back-office id, which the endpoint proxy tells an endpoint whose owner turned its install header on
    * (X-Install-Id, trace feature A4), so that a deletion of the whole install can reach that endpoint's own copy. Null
-   * unless this install is registered with the back-office the settings name now, with no deletion owed, and was
+   * unless sharing is on (the upload notice the user agreed to names it; a deletion and a 401 both take the consent
+   * back), and this install is registered with the back-office the settings name now, with no deletion owed, and was
    * registered after the latest deletion's moment (so an install file that could not be removed after a deletion is
    * never told again, in a later run either), and not deleted or forgotten in this run. Only a plain token goes on a
    * request: a back-office answer with a line break or a space in it is never a header.
    */
   currentInstallId(): string | null {
     const s = this.deps.settings();
-    if (!s.url || s.deletionOwed) return null;
+    if (!s.url || !s.consentAt || s.deletionOwed) return null;
     const install = this.readInstall();
     if (!install || install.url !== s.url || typeof install.installId !== 'string' || !PLAIN_INSTALL_ID.test(install.installId)) return null;
     if (this.retired.has(install.installId)) return null;

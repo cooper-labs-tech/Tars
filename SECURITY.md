@@ -1189,11 +1189,13 @@ install at the back-office can be passed on to that copy. What leaves, and what 
 - only from the window: an agent's save that turns it on is refused, and turning it on is a grant like the session
   headers (written before it applies);
 - only with the session headers: a save asking for it without them is refused, and turning them off turns it off;
-- only while the install is registered with the back-office the settings name now (`currentInstallId` in
-  `services/trace-upload.ts`): an install never registered sends nothing;
+- only while sharing is on, since the upload notice the user agreed to is what names it, and the install is registered
+  with the back-office the settings name now (`currentInstallId` in `services/trace-upload.ts`): an install never
+  registered sends nothing;
 - never while a deletion is owed, never an install deleted or forgotten (a 401), and never one registered before the
   latest deletion's moment, so an install file a full or read-only folder kept after a deletion is not told again
-  after a restart either. A new registration sends the new id;
+  after a restart either, nor one the back-office forgot (a 401 takes the consent back). A new registration sends the
+  new id;
 - a harness's own `X-Install-Id` is always dropped, whatever the switches, and no extra header may set it: no
   harness or agent names an install;
 - an id that is not a plain token (letters, digits, `.`, `_`, `-`, at most 128) is never sent.
