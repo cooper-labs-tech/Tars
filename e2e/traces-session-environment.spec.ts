@@ -27,6 +27,12 @@ import { DEV_URL, apiPort } from './ports.mjs';
  *    once it has exited.
  * 5. C's session keeps codex's own session id. Codex's installation id reaches the endpoint as codex sent it (body and
  *    header), and is in no row or blob of the trace store, nor in the export, nor in the upload's preview.
+ * Added before its code (27/11), the endpoint's Server-Timing (the stand-in sends it, its clock 5000 ms ahead):
+ * 6. Each of C's requests keeps its round trip and the offset between the clocks, within half its round trip of
+ *    5000 ms, and the endpoint's queue and upstream times as it sent them. C's first model call is answered 429 (its
+ *    header says the full wait), held a second by Tars, then answered: its round trip leaves the hold out. C's session
+ *    keeps its median round trip and its offset; Q's, which sent nothing, keeps none. The export and the upload's
+ *    preview carry them.
  * The artefact: values.json, the stand-in's request log, the export, the preview, the fake CLIs' logs, the app's log.
  */
 
@@ -35,7 +41,9 @@ const C = 'eeee5555-0000-4000-8000-0000000000e4';
 const EP = 'ep-0e2e02';
 type Api = { electronAPI: Record<string, Record<string, (...a: unknown[]) => Promise<unknown>>> };
 type Summary = Record<string, unknown> & { traceId: string; agentId: string; endedAt?: number; harnessVersion?: string; nativeSessionId?: string; environment?: Record<string, unknown>; events?: Array<{ kind: string; at: number }> };
-type SessionView = { session: Summary; turns: Array<{ requests: Array<Record<string, unknown> & { liveSessions?: number; startedAt: number }> }> };
+type SessionView = { session: Summary & { rttMedianMs?: number; clockOffsetMs?: number }; turns: Array<{ requests: Array<Record<string, unknown> & {
+  liveSessions?: number; startedAt: number; attempts: number; heldMs: number; rttMs?: number; clockOffsetMs?: number; queueMs?: number; upstreamMs?: number;
+}> }> };
 
 /** The machine and its system, as this test reads them on its own, by each system's means. */
 function machineHere(): Record<string, unknown> {
@@ -80,7 +88,8 @@ test('each traced session keeps its harness version, its environment, its power 
   const fakeLog = path.join(home, 'fake-cli.jsonl');
   const codexLog = path.join(home, 'fake-codex.jsonl');
   const standinLog = test.info().outputPath('endpoint-requests.jsonl');
-  const standin = await startStandIn({ log: standinLog });
+  const SKEW = 5000;
+  const standin = await startStandIn({ log: standinLog, failFirst: [429], serverTiming: { skewMs: SKEW, queueMs: 7, upstreamMs: 41.7, queueOn429Ms: 1200 } });
 
   const agent = (id: string, name: string, extra: Record<string, unknown>) => ({
     id, name, character: 'robot', status: 'idle', permissionMode: 'bypass', projectPath: project, skills: [],
@@ -210,6 +219,26 @@ test('each traced session keeps its harness version, its environment, its power 
     expect.soft(held.preview.includes(install), "the installation id in the upload's preview").toBe(false);
     const exportedC = held.exported.map(l => JSON.parse(l)).find(l => l.table === 'traces' && l.agent_id === C);
     expect.soft(exportedC, "C's exported session").toMatchObject({ client_version: '0.163.0', native_session_id: codexSession, environment: expected });
+
+    // 6. The round trip and the clocks' offset, from the endpoint's Server-Timing.
+    const timing = cRequests.map(r => ({ attempts: r.attempts, heldMs: r.heldMs, rttMs: r.rttMs ?? null, clockOffsetMs: r.clockOffsetMs ?? null, queueMs: r.queueMs ?? null, upstreamMs: r.upstreamMs ?? null }));
+    keep({ timing, cSummary: { rttMedianMs: c2?.session.rttMedianMs ?? null, clockOffsetMs: c2?.session.clockOffsetMs ?? null }, qSummary: { rttMedianMs: q2?.session.rttMedianMs ?? null, clockOffsetMs: q2?.session.clockOffsetMs ?? null } });
+    // Integer milliseconds on both clocks: a loopback round trip of a millisecond or two may read a millisecond under 0.
+    const near = (t: { rttMs: number | null; clockOffsetMs: number | null }) =>
+      typeof t.rttMs === 'number' && t.rttMs >= -2 && t.rttMs < 2000 && typeof t.clockOffsetMs === 'number' && Math.abs(t.clockOffsetMs - SKEW) <= Math.max(t.rttMs, 0) / 2 + 2;
+    expect.soft(timing.map(near), "each request's round trip and offset").toEqual(timing.map(() => true));
+    expect.soft(timing.map(t => [t.queueMs, t.upstreamMs]), "each request's queue and upstream times").toEqual(timing.map(() => [7, 41.7]));
+    expect.soft(timing[0]?.attempts, "C's first call was held").toBe(2);
+    expect.soft(Number(timing[0]?.heldMs), 'the hold').toBeGreaterThanOrEqual(900);
+    expect.soft(Number(timing[0]?.rttMs), "the first call's round trip leaves the hold out").toBeLessThan(900);
+    const cSummary = c2?.session;
+    expect.soft(typeof cSummary?.rttMedianMs === 'number' && cSummary.rttMedianMs >= 0 && cSummary.rttMedianMs < 2000, `C's median round trip: ${cSummary?.rttMedianMs}`).toBe(true);
+    expect.soft(Math.abs(Number(cSummary?.clockOffsetMs) - SKEW) <= Number(cSummary?.rttMedianMs) / 2 + 2, `C's offset: ${cSummary?.clockOffsetMs}`).toBe(true);
+    expect.soft(q2?.session.rttMedianMs ?? null, "Q's median round trip, with no request").toBeNull();
+    expect.soft(exportedC, "C's exported summary").toMatchObject({ rtt_median_ms: cSummary?.rttMedianMs, clock_offset_ms: cSummary?.clockOffsetMs });
+    const previewBody = JSON.parse(held.preview) as { document: { batches: Array<{ body: { requests: Array<Record<string, unknown>> } }> } };
+    const previewRtts = previewBody.document.batches.flatMap(b => b.body.requests).map(r => r.rttMs);
+    expect.soft(previewRtts.length > 0 && previewRtts.every(v => typeof v === 'number'), "the preview's round trips").toBe(true);
   } finally {
     await app?.close().catch(() => {});
     await standin.close();

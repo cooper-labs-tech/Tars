@@ -186,8 +186,12 @@ function answerResponses(body, res, marker) {
  * `emptyFirstChunk`: a chat stream opens with a chunk holding the role and an empty content, then that pause, then
  * the model's first token. Resolves with its base URL, a close(), and failNext(...statuses), which makes the next
  * model calls fail as failFirst does.
+ * `serverTiming`: every response carries a W3C Server-Timing header as an endpoint sends it: `recv` (when it read the
+ * request) and `send` (when it began its headers) as epoch ms on a clock `skewMs` ahead of this one, `queue` (its wait
+ * for a slot: `queueMs`, the full wait `queueOn429Ms` on a 429, 0 on any other error) and `upstream` (`upstreamMs`, on
+ * a model's answer only; absent when the endpoint answers by itself).
  */
-export function startStandIn({ port = 0, key = '', log = '', failFirst = [], chunkDelayMs = 0, emptyFirstChunk = false } = {}) {
+export function startStandIn({ port = 0, key = '', log = '', failFirst = [], chunkDelayMs = 0, emptyFirstChunk = false, serverTiming = null } = {}) {
   const marker = `TARS-PROBE-${randomBytes(4).toString('hex')}`;
   const failing = [...failFirst];
   const note = (entry) => { if (log) fs.appendFileSync(log, `${JSON.stringify({ at: Date.now(), ...entry })}\n`); };
@@ -195,6 +199,18 @@ export function startStandIn({ port = 0, key = '', log = '', failFirst = [], chu
     const chunks = [];
     req.on('data', (c) => chunks.push(c));
     req.on('end', async () => {
+      if (serverTiming) {
+        const { skewMs = 0, queueMs = 0, queueOn429Ms = 30000, upstreamMs = 0 } = serverTiming;
+        const recv = Date.now() + skewMs;
+        const writeHead = res.writeHead.bind(res);
+        res.writeHead = (status, ...rest) => {
+          const model = status < 400 && (req.url || '').includes('/v1/') && req.method === 'POST';
+          const queue = status === 429 ? queueOn429Ms : status >= 400 ? 0 : queueMs;
+          const metrics = [`recv;desc="${recv}"`, `queue;dur=${queue}`, ...(model ? [`upstream;dur=${upstreamMs}`] : []), `send;desc="${Date.now() + skewMs}"`];
+          res.setHeader('Server-Timing', metrics.join(', '));
+          return writeHead(status, ...rest);
+        };
+      }
       const raw = Buffer.concat(chunks).toString();
       let body = {};
       try { body = raw ? JSON.parse(raw) : {}; } catch { body = { unparsed: raw.slice(0, 200) }; }

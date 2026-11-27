@@ -20,6 +20,9 @@ assertThrowaway({ DATA_DIR, PRIVATE_DIR });
  * N2. A field is added to the environment without its line (the list below names every key the environment has, and
  *     a key it does not name fails).
  * N3. The notice does not say that the computer's name, the user's name, a serial number and the addresses stay.
+ * Added before their code (27/11, the endpoint's Server-Timing):
+ * N4. A request's round trip, its clock offset, its wait for a slot or its wait for the model server, or a session's
+ *     median round trip or clock offset, is sent with no line of its own.
  */
 
 const handlers = new Map<string, (...args: unknown[]) => unknown>();
@@ -67,6 +70,12 @@ const OTHER_LINES: Record<string, RegExp> = {
   events: /slept or woke.*battery or mains power/,
   nativeSessionId: /the harness's own id for the session/,
   liveSessions: /how many traced sessions were running/,
+  'request.rttMs': /each request's round trip to the endpoint/,
+  'request.clockOffsetMs': /each request, how far this computer's clock was from the endpoint's/,
+  'request.queueMs': /how long each request waited at the endpoint for a free slot/,
+  'request.upstreamMs': /how long the endpoint waited for its model server/,
+  'session.rttMedianMs': /each session's median round trip/,
+  'session.clockOffsetMs': /each session, how far this computer's clock was from the endpoint's, at its fastest round trip/,
 };
 
 describe('the upload notice', () => {
