@@ -82,16 +82,37 @@ function endsWord(line, j) {
 }
 
 const escape = text => text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-/** Each entry, found in any case in the line as written, so that every position is the line's own. */
-const patterns = entries.map(entry => ({ rx: new RegExp(escape(entry), 'giu'), word: /^\p{L}+$/u.test(entry) }));
+/**
+ * Each entry, found in any case in the line as written, so that every position is the line's own. One made of letters
+ * only is a word (its boundaries, below). One made of digits only is a number: no digit, hex letter or `#` may touch
+ * it on either side, and it is no channel of an `rgb:` colour spec, so a colour that repeats it (`#121212`), a
+ * terminal's OSC colour reply (`rgb:1212/1212/1212`), a longer number or a hash never match, and the number standing
+ * alone (a sentence, an agent's name, a URL path) always does. Anything else is a substring.
+ */
+const patterns = entries.map(entry => ({
+  rx: new RegExp(escape(entry), 'giu'),
+  word: /^\p{L}+$/u.test(entry),
+  number: /^\d+$/.test(entry),
+}));
+
+/** Is the number at [i, j) touched by a digit, a hex letter or `#`? */
+const NUMBER_TOUCH = /[0-9a-fA-F#]/;
+/** An X11 colour spec, as a terminal's OSC 10/11 reply writes one: `rgb:` and three hex channels split by `/`. */
+const RGB_SPEC = /rgba?:[0-9a-f]{1,4}\/[0-9a-f]{1,4}\/[0-9a-f]{1,4}(?:\/[0-9a-f]{1,4})?/giu;
+function standsAsNumber(line, i, j) {
+  if (NUMBER_TOUCH.test(line[i - 1] ?? '') || NUMBER_TOUCH.test(line[j] ?? '')) return false;
+  for (const m of line.matchAll(RGB_SPEC)) if (i >= m.index && j <= m.index + m[0].length) return false;
+  return true;
+}
 
 /** Every [start, end) span where an entry stands in the line. */
 function spans(line) {
   const found = [];
-  for (const { rx, word } of patterns) {
+  for (const { rx, word, number } of patterns) {
     for (const m of line.matchAll(rx)) {
       const i = m.index;
       const j = i + m[0].length;
+      if (number && !standsAsNumber(line, i, j)) continue;
       if (word) {
         const plural = (line[j] === 's' || line[j] === 'S') && endsWord(line, j + 1);
         if (!startsWord(line, i) || !(endsWord(line, j) || plural)) continue;
