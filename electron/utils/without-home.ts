@@ -16,15 +16,20 @@ import * as os from 'os';
  * - the home inside a longer path (/System/Volumes/Data/Users/acct, a backup
  *   disk's /Volumes/Backup/Users/acct): that is another place, which `~`
  *   would misname, so it is left as it is.
- * On Windows, where a path's letter case does not matter and either slash
- * separates, the home is found in any case and with either slash.
+ * On Windows, where either slash separates, the home is found with either. On
+ * Windows and macOS, whose volumes open a path in any letter case (APFS as
+ * NTFS), it is found in any case; on Linux another case is another folder. A
+ * file URL of the home (file:///Users/acct/x, file:///C:/Users/Acct/x) is said
+ * `~` whole, the URL's scheme with it (the Audit's I-a on #660).
  */
 export function withoutHome(message: string, home = os.homedir(), platform: NodeJS.Platform = process.platform): string {
   if (!home || home.length < 2) return message;
   const windows = platform === 'win32';
+  const caseless = windows || platform === 'darwin';
   const escape = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
   const body = windows ? home.split(/[\\/]/).map(escape).join('[\\\\/]') : escape(home);
-  // Not after a name's character or a separator (a longer path); not before one (a longer name).
-  const pattern = new RegExp(`(?<![\\p{L}\\p{N}_.\\-\\\\/])${body}(?![\\p{L}\\p{N}_\\-]|\\.[\\p{L}\\p{N}_\\-])`, windows ? 'giu' : 'gu');
+  // After a file URL's scheme, or not after a name's character or a separator (a longer path);
+  // never before a name's character (a longer name).
+  const pattern = new RegExp(`(?:file:\\/\\/\\/?|(?<![\\p{L}\\p{N}_.\\-\\\\/]))${body}(?![\\p{L}\\p{N}_\\-]|\\.[\\p{L}\\p{N}_\\-])`, caseless ? 'giu' : 'gu');
   return message.replace(pattern, '~');
 }
