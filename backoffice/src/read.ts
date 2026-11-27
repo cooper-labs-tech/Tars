@@ -125,6 +125,7 @@ export async function getSession(ctx: Ctx, req: IncomingMessage, res: ServerResp
       toolErrorCount: t.tool_error_count, toolMs: t.tool_ms ?? undefined, modelMs: t.model_ms ?? undefined, tokensIn: t.tokens_in,
       tokensCached: t.tokens_cached, tokensOut: t.tokens_out, finalStatus: t.final_status ?? undefined,
       finalFinishReason: t.final_finish_reason ?? undefined, author: t.author ?? undefined, authorDetail: t.author_detail ?? undefined,
+      taskRef: t.task_ref ?? null,
     })),
     requests: requests.rows.map((r) => ({ ...request(r), messages: byRequest.get(r.request_id) ?? [] })),
     messages: messages.rows.map((m) => ({

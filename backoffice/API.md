@@ -213,20 +213,22 @@ missing blob, then `PUT` the batch, and send any `missingBlobs` it reports.
 | `environment` | Environment | no | The machine and the system at the session's start, exact values (below). Sent again without it, a session keeps the one it had |
 | `events` | array ≤ 10,000 | no | Power events during the session, `{ "at": ms, "kind": "sleep" \| "wake" \| "battery" \| "ac" }`, no other key. The list as a whole: a session sent with it replaces the list it had, sent without it keeps it |
 | `start` | Start | no | What started the session (below). Sent again without it, a session keeps it |
-| `lostDemand` | array ≤ 1,000 | no | Tasks that left the agent's queue never to start while the session ran: `{ "kind": "queue_drop", "ref": string ≤ 128, "queuedAt": ms, "at": ms, "reason": word }`, all required, no other key. The list as a whole, kept when absent |
+| `lostDemand` | array ≤ 1,000 | no | Tasks that left the agent's queue never to start while the session ran: `{ "kind": "queue_drop", "ref": task ref, "queuedAt": ms, "at": ms, "reason": "cancelled" \| "taken_back" \| "dropped_with_stop" \| "queue_cleared" \| "agent_removed" \| "not_handed_again" }`, all required, no other key. The list as a whole, kept when absent |
 
-A *word* is a lowercase word of at most 40 characters, `a` to `z`, `0` to `9` and `_`, a letter first: a kind or a cause, never a name.
+A *task ref* is `t-` and 8 lowercase hex characters. Every kind below is one of a closed list, the client's own: anything else refuses the batch.
 
 **Start.** An object of these keys and no other:
 
 | Key | Type |
 |---|---|
-| `trigger` | word, required: what started it, by kind (`owner`, `task`, `channel`, `restart`, `start`, `wake`, `redelegation`, `unknown`, ...) |
-| `via` | word: how, by kind (`window`, `api`, `chat`, ...), never who |
-| `taskRef`, `taskId`, `requesterAgentId`, `redelegatedFrom` | string ≤ 128 |
+| `trigger` | required: `owner`, `task`, `channel`, `restart`, `start`, `wake`, `redelegation` or `unknown` |
+| `via` | how it came, by kind, never who: `window`, `chat`, `api`, `telegram`, `slack`, `discord`, `hermes`, `relay`, `settings`, `asked` or `tars` |
+| `taskRef` | task ref |
+| `taskId`, `requesterAgentId` | string ≤ 200 |
+| `redelegatedFrom` | string ≤ 64: the session that had this task before |
 | `queuedAt`, `handedAt`, `firstRequestAt` | ms |
-| `commit` | string ≤ 80 (a commit id, or the client's placeholder if its scrubber replaced it) |
-| `branch` | string ≤ 255 |
+| `commit` | 40 or 64 lowercase hex |
+| `branch` | string ≤ 255 bytes (the client cuts a longer one) |
 
 **Environment.** An object of these keys and no other; a key may be left out. Any other key (a serial number,
 a host name, a user name) refuses the batch.
@@ -234,7 +236,7 @@ a host name, a user name) refuses the batch.
 | Key | Type |
 |---|---|
 | `osName`, `osVersion`, `kernel`, `arch`, `machineModel`, `chip`, `tarsVersion`, `locale`, `timeZone` | string ≤ 200, or null when the client could not read it |
-| `tarsArch` | string ≤ 40: the architecture Tars itself runs as |
+| `tarsArch` | string ≤ 40, the architecture Tars itself runs as, or null |
 | `cpuCores` | integer 0 to 4096, or null |
 | `ramBytes` | integer ≥ 0, or null |
 | `utcOffsetMinutes` | integer -840 to 840, the time zone's offset at the session's start, or null |
@@ -257,6 +259,7 @@ a host name, a user name) refuses the batch.
 | `finalFinishReason` | string ≤ 40 | no | |
 | `author` | string ≤ 40 | no | `user`, `orchestrator`, `chat`, `relay`, `agent`, `tars`, `unknown` |
 | `authorDetail` | string ≤ 128 | no | An agent or chat id; never a person's name |
+| `taskRef` | task ref | no | The task the turn's instruction came from. Sent again without it, a turn keeps it |
 
 ### Request
 
@@ -279,7 +282,7 @@ a host name, a user name) refuses the batch.
 | `streamed` | bool | no | |
 | `side` | bool | no | `true` for a harness's side request (a title request with no tools, a memory request with another system prompt), `false` for the agent's own loop. Leave it out when the client does not know. A request sent again without it keeps the mark it had |
 | `liveSessions` | int 0 to 1,000,000 | no | How many sessions were live on the install when the request was sent. Sent again without it, a request keeps the count it had |
-| `cancel` | object | no | A request cut before the endpoint answered: `{ "by": word, "cause": word, "at": ms, "deliveredBytes": int }`, all required, no other key. Kept when absent |
+| `cancel` | object | no | A request cut before the endpoint answered: `{ "by", "cause", "at": ms, "deliveredBytes": int }`, all required, no other key, the cause one of its `by`'s: `harness`: `esc`, `ctrl_c`, `cli_interrupt`, `abandoned_while_held`, `unknown`; `tars`: `stop`, `restart`, `sleep`, `remove`, `quit`, `replace`; `proxy`: `hold_ceiling`; `endpoint`: `stream_cut`. Kept when absent |
 | `reqBytes`, `respBytes` | int ≥ 0 | no | |
 | `messages` | array ≤ 10,000 | yes | `{ "position": int, "hash": sha256, "direction": "input" \| "output" }`: what the request sent, in order, then what it produced |
 
@@ -340,7 +343,8 @@ The fields added after a client may have been built without them are always pres
 "the uploading Tars did not send it":
 
 - every session, here and in § 6.1: `environment`, `events`, `start` and `lostDemand`, each as sent;
-- every request, here and in § 6.5: `liveSessions` and `cancel`.
+- every request, here and in § 6.5: `liveSessions` and `cancel`;
+- every turn, here: `taskRef`.
 
 ### 6.3 `GET /v1/read/blobs/{hash}`
 
@@ -407,4 +411,4 @@ before the clients.
 |---|---|
 | 26/11/2026 | `side` on a request (§ 5, read back in §§ 6.2 and 6.5), migration `002_request_side` |
 | 27/11/2026 | `environment` and `events` on a session (read back in §§ 6.1 and 6.2), `liveSessions` on a request (§§ 6.2 and 6.5), migration `003_session_environment` |
-| 27/11/2026 | `start` and `lostDemand` on a session, `cancel` on a request (read back the same way), migration `004_session_start` |
+| 27/11/2026 | `start` and `lostDemand` on a session, `taskRef` on a turn, `cancel` on a request (read back the same way), migration `004_session_start` |

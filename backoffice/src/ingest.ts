@@ -150,7 +150,7 @@ const TURN_COLS: Col[] = [
   ['toolErrorCount', 'tool_error_count', 'int'], ['toolMs', 'tool_ms', 'bigint'], ['modelMs', 'model_ms', 'bigint'],
   ['tokensIn', 'tokens_in', 'bigint'], ['tokensCached', 'tokens_cached', 'bigint'], ['tokensOut', 'tokens_out', 'bigint'],
   ['finalStatus', 'final_status', 'text'], ['finalFinishReason', 'final_finish_reason', 'text'], ['author', 'author', 'text'],
-  ['authorDetail', 'author_detail', 'text'],
+  ['authorDetail', 'author_detail', 'text'], ['taskRef', 'task_ref', 'text'],
 ];
 const REQUEST_COLS: Col[] = [
   ['sessionId', 'session_id', 'text'], ['turnId', 'turn_id', 'text'], ['seq', 'seq', 'int'], ['upstreamRequestId', 'upstream_request_id', 'text'],
@@ -187,7 +187,7 @@ function keepWhenAbsent(sql: string, table: string, columns: string[]): string {
 const SQL = {
   sessions: keepWhenAbsent(upsertSql('sessions', 'sessionId', 'session_id', SESSION_COLS, { cols: ['changed_seq'], vals: [`nextval('change_seq')`] }).replace(
     /DO UPDATE SET /, 'DO UPDATE SET received_at = now(), '), 'sessions', ['environment', 'events', 'start', 'lost_demand']),
-  turns: upsertSql('turns', 'turnId', 'turn_id', TURN_COLS),
+  turns: keepWhenAbsent(upsertSql('turns', 'turnId', 'turn_id', TURN_COLS), 'turns', ['task_ref']),
   // A request sent again without its side mark keeps the one it had: only true or false replaces it.
   requests: keepWhenAbsent(upsertSql('requests', 'requestId', 'request_id', REQUEST_COLS), 'requests', ['side', 'live_sessions', 'cancel']),
 };

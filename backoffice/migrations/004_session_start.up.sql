@@ -5,3 +5,5 @@
 ALTER TABLE sessions ADD COLUMN start jsonb;
 ALTER TABLE sessions ADD COLUMN lost_demand jsonb;
 ALTER TABLE requests ADD COLUMN cancel jsonb;
+-- The task a turn's instruction came from, by its ref (t- and 8 hex).
+ALTER TABLE turns ADD COLUMN task_ref text;
