@@ -23,6 +23,7 @@ import { keptSender } from '../services/agent-queues';
 import { dialogOpen, dialogShown } from './agent-launch';
 import type * as pty from 'node-pty';
 import { cliStoppedIn, spawnAgentPty, agentShell, codexLaunching } from './agent-pty';
+import { sayFoldersLeftOut, setKeptOutput } from './folders-left-out';
 import { killPty } from './pty-kill';
 import { withPath, type DirectLaunch, type Launch } from '../platform';
 import { buildFullPath } from '../utils/path-builder';
@@ -411,6 +412,9 @@ export function appendAgentOutput(agent: AgentStatus, chunk: string): void {
   }
   markAgentsDirty();
 }
+
+// A line Tars says in an agent's terminal (core/folders-left-out.ts) is kept as the terminal's own output is.
+setKeptOutput(appendAgentOutput);
 
 interface AgentsFile {
   version: number;
@@ -1221,6 +1225,8 @@ export async function launchIntoTerminal(
   oweToFirstMessage(ptyProcess, '');
   if (start.platform === 'win32') return startCliInTerminal(agent, start, opts);
   if (opts.ready) await opts.ready(ptyProcess);
+  // Before the line is typed: a folder it no longer hands, said in this terminal (sayFoldersLeftOut).
+  sayFoldersLeftOut(agent, ptyProcess, agent.ptyId);
   // codex typed into a shell already there, one reused too: noted as it starts (core/agent-pty.ts).
   if (getProvider(agent.provider).binaryName === 'codex') codexLaunching(agent.id, start.cwd);
   if (opts.delayMs) {
@@ -1263,6 +1269,8 @@ async function initAgentPtyLocked(
   clearNoTerminal(agent);
 
   attachAgentTerminal(agent, ptyId, ptyProcess, handleStatusChangeNotificationCallback, saveAgentsCallback);
+  // A CLI spawned as the terminal itself (win32): said now, before its first byte arrives.
+  if (cli) sayFoldersLeftOut(agent, ptyProcess, ptyId);
   return ptyId;
 }
 

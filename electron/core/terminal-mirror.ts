@@ -166,6 +166,21 @@ export function attachTerminalMirror(
   pty.onExit(() => forget(pty, mirror));
 }
 
+/**
+ * Write `data` into `pty`'s mirror as the terminal's own output is written: a line Tars says in an agent's terminal
+ * before its CLI starts (core/agent-manager.ts sayFoldersLeftOut), which a panel opened later replays with the rest.
+ */
+export function writeTerminalMirror(pty: IPty | undefined, data: string): void {
+  const mirror = pty && mirrors.get(pty);
+  if (!mirror) return;
+  try {
+    mirror.snapshot = undefined;
+    mirror.core.writeSync(data);
+  } catch (err) {
+    console.error('[terminal-mirror] a line Tars said could not be written to the mirror', err);
+  }
+}
+
 function forget(pty: IPty, mirror: Mirror): void {
   if (mirrors.get(pty) === mirror) mirrors.delete(pty);
   mirror.term.dispose();

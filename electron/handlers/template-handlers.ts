@@ -6,6 +6,8 @@ import { DATA_DIR } from '../constants';
 import { BUILTIN_TEMPLATES } from '../constants/builtin-templates';
 import { isValidProvider } from '../providers';
 import { skillsProblem } from '../utils/skill-name';
+import { handedFolderProblem } from '../utils/handed-folder';
+import { handsFolders, leftOutWhy } from '../core/folders-left-out';
 import { quoted } from '../utils/reveal';
 import type {
   AgentTemplate,
@@ -129,6 +131,30 @@ function overrideFromPatch(patch: AgentTemplatePatch, prev?: BuiltinOverride): B
   return merged;
 }
 
+/** What sayFoldersLeftOutAtLoad has said this run: a template's folder once, not at every listing. */
+const saidAtLoad = new Set<string>();
+
+/**
+ * A template saved before a rule refused one of its folders (a folder where credentials are kept, a CLI's content
+ * folder): the agents made from it start without that folder, and say so in their terminal at each start
+ * (core/folders-left-out.ts). The template itself, as it is loaded, says it here in the same words, once per folder,
+ * until the window has a place for it (the Audit's M1 on #666).
+ */
+function sayFoldersLeftOutAtLoad(templates: AgentTemplate[]): void {
+  for (const t of templates) {
+    if (!handsFolders(t.provider)) continue;
+    for (const folder of t.obsidianVaultPaths ?? []) {
+      if (typeof folder !== 'string' || !fs.existsSync(folder)) continue;
+      // Written to be printed, as the agent's terminal says it, the template's name too (a hand edit can reach both).
+      const why = leftOutWhy(folder);
+      const key = `${t.id}\n${folder}`;
+      if (!why || saidAtLoad.has(key)) continue;
+      saidAtLoad.add(key);
+      console.warn(`[templates] ${quoted(t.displayName)}: ${why}. The agents made from it start without it; change the template's folders.`);
+    }
+  }
+}
+
 const PERMISSION_MODES: readonly string[] = ['normal', 'auto', 'bypass'];
 /** The launch's own check on `--model`, as the import review holds it. */
 const MODEL_NAME = /^[a-zA-Z0-9._:/[\]-]+$/;
@@ -164,6 +190,9 @@ function templateProblem(t: unknown, patch = false): string | undefined {
     if (f.obsidianVaultPaths.some(folder => typeof folder !== 'string' || !path.isAbsolute(folder))) {
       return `${name} asks for a folder that is not an absolute path`;
     }
+    // Handed to the agents it makes as their secondary folder is (utils/handed-folder.ts): never one they may not be.
+    const handed = (f.obsidianVaultPaths as string[]).map(folder => handedFolderProblem(folder)).find(Boolean);
+    if (handed) return `${name}: ${handed}`;
   }
   if (f.skills != null) {
     const problem = skillsProblem(f.skills);
@@ -178,6 +207,7 @@ export function registerTemplateHandlers(): void {
     try {
       const store = loadStore();
       const builtinsMerged = BUILTIN_TEMPLATES.map(b => applyOverride(b, store.overrides[b.id]));
+      sayFoldersLeftOutAtLoad([...builtinsMerged, ...store.user]);
       return { templates: [...builtinsMerged, ...store.user] };
     } catch (err) {
       console.error('template:list error:', err);
