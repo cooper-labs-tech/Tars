@@ -2,7 +2,8 @@ import * as http from 'http';
 import { agents } from '../../core/agent-manager';
 import { chatsReadEnv } from '../../core/chat-inbox';
 import { hasOrchestratorPowers } from '../../core/agent-role';
-import { ORCHESTRATOR_ONLY_MCP, SHARED_MCP_SERVERS, sharedMcpTarget } from '../mcp-shared';
+import { SHARED_MCP_SERVERS, sharedMcpTarget } from '../mcp-shared';
+import { roleGetsServer, serverWithheldAnswer } from '../mcp-roles';
 import type { RouteApp, RouteRequest, SendJson } from './types';
 
 /**
@@ -30,8 +31,8 @@ function proxy(req: RouteRequest, sendJson: SendJson): void {
   }
   // The owner's decision of 28/10: telegram and x are an orchestrator's (#525 keeps them out of a worker's config);
   // the door is a second wall (the Audit's M3 on #541).
-  if (ORCHESTRATOR_ONLY_MCP.includes(name) && !hasOrchestratorPowers(agent)) {
-    sendJson({ error: `${name} is an orchestrator's server` }, 403);
+  if (!roleGetsServer(hasOrchestratorPowers(agent), name)) {
+    sendJson(serverWithheldAnswer(name), 403);
     return;
   }
   const target = sharedMcpTarget(name);

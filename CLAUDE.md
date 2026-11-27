@@ -80,6 +80,7 @@ DOROTHY_WAITS_MINUTE_MS  # under DOROTHY_E2E only: a minute of the waits' clock 
 DOROTHY_MEMORY_GUARD_EVERY_MS # under DOROTHY_E2E only: how often each project's MEMORY.md is read against what Claude Code loads (200 ms at least; else every 5 minutes, services/memory-guard.ts)
 DOROTHY_E2E_PASSWD_HOME # under DOROTHY_E2E only: the home a test build takes for the account's own (core/sandbox-build.ts); else the password database's
 DOROTHY_E2E_PTY_MAX   # under DOROTHY_E2E only, never in a packaged build (app.isPackaged): the pool of terminals is Tars's own open terminals out of this many (a whole count, 0 included), and once they reach it a start is refused as on a full machine, NoTerminalLeft, by the same rule on every system; 0 refuses every start (core/pty-pool.ts ptyTestMax, core/pty-spawn.ts useTestPtyMax); else the machine's pool
+DOROTHY_X_API_URL     # under DOROTHY_E2E only, never in a packaged build: a plain http:// address on 127.0.0.1 where POST /api/x/request sends the signed call instead of api.x.com, an E2E spec's recording stand-in of X's API (api-routes/integration-routes.ts xApiTestUrl); anything else is ignored
 DOROTHY_ERROR_REPORTS_DSN # a development run only: where error reports go (a stand-in of Sentry); a packaged Tars never reads it (app.isPackaged, services/error-reports/index.ts)
 ELECTRON_BUILD        # '1' switches next.config.ts to output: 'export' for packaging
 PATH SHELL HOME       # read when composing the PTY environment (buildFullPath, cli-paths detection)

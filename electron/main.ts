@@ -74,6 +74,7 @@ import { initTray, destroyTray } from './core/tray-manager';
 import { broadcastToAllWindows } from './utils/broadcast';
 import { readTerminals, useTestPtyMax } from './core/pty-spawn';
 import { ptyTestMax, terminalsNearFullNote } from './core/pty-pool';
+import { useTestXApi, xApiTestUrl } from './services/api-routes/integration-routes';
 import { readFleetResources } from './services/fleet-resources-runtime';
 
 // Services
@@ -578,6 +579,8 @@ app.whenReady().then(async () => {
   // An E2E spec's full pool of terminals, before any agent starts: under DOROTHY_E2E only, never in a packaged build
   // (core/pty-pool.ts ptyTestMax).
   useTestPtyMax(ptyTestMax(process.env, app.isPackaged));
+  // An E2E spec's stand-in of X's API, under the same two conditions (api-routes/integration-routes.ts xApiTestUrl).
+  useTestXApi(xApiTestUrl(process.env, app.isPackaged));
 
   // Load agents from disk
   loadAgents();

@@ -319,6 +319,18 @@ every claude session loads, the owner's own included; and the door refuses teleg
 orchestrator's powers. What did not: the server's process belongs to the same user as every agent, so
 it is no boundary against them (section 1).
 
+**The API follows the role's MCP list.** An agent's own token is in its terminal's environment, whatever its CLI
+(measured on 27/11 with a stand-in CLI per provider: claude, a key provider through claude, codex, gemini, Qwen Code,
+opencode, pi, amp, grok), so what the API does for a token must match what that agent's MCP setup gives it. The routes
+that do a server's work (`/api/x/request` for `dorothy-x`) and the door (`/api/mcp/<server>`) read the same function the
+CLIs' setup reads (`roleGetsServer`, `services/mcp-roles.ts`, one list). They refuse an agent whose role does not get the server with 403 and the server's name, before the posting switch
+or the keys are read, a delegated run's token and an agent no longer in the fleet included. The shared token, Tars's own
+pass and a Hermes gateway's secret name no agent and keep what they had. `/api/telegram/send` keeps its own rule (from an
+agent with the orchestrator's powers only). What it is: a role check, so a worker gets through the API what its MCP list
+gives it and nothing more. What it is not: a boundary. A worker that edits `~/.tars/agents.json` can give itself the
+orchestrator's role for its next launch, and any process of the user can read an orchestrator's token from its
+environment (above).
+
 **A codex session posts as an agent only on evidence that it is the agent's.** Tars reads codex's turns from its session logs and posts them with the agent's own token (`services/codex-sessions.ts`). Until the Audit's gate of #465, the first session begun in a codex agent's folder after its launch was taken for the agent's: a codex its user ran in that folder had its turns posted as the agent's, a delegated task could be answered by it, and its id became the session the agent resumed after a restart or a wake. A session is bound now on the agent's identity line in its first message, on the agent's own codex holding its file open, or as a fork of the agent's own session its launch began; a first message naming another agent never is, and where a process's open files cannot be read (Windows), a session that names nobody stays nobody's. What this does not stop: whoever can type into the agent's terminal, or write its codex's rollout, can still make text read as the agent's turn. The boundary is the account, as everywhere in this file.
 
 **Gemini's redaction is let through on purpose.** Gemini CLI withholds from
