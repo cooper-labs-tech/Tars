@@ -107,7 +107,8 @@ test('each traced request\'s gap splits into its tools\' run, read from codex\'s
     keep({ setKey });
     expect(setKey.status, `the key: ${JSON.stringify(setKey.body)}`).toBeLessThan(300);
 
-    const outcomeOf = `const t = req(dist + '/services/task-ledger.js').liveTaskLedger()?.tasks().find(x => x.ref === arg.ref); return t ? t.outcome ?? null : null;`;
+    // A task's end, as Lead reads it (task_status): the ledger's outcome, by the id run-task gave.
+    const ended = async (ref: string) => String(((await api('GET', `/api/tasks/${ref}`)).body.task as Row | undefined)?.outcome ?? '');
     const traceIdOf = `const s = req(dist + '/services/traces-runtime.js').traceStore().list({ agentId: arg.id }).sessions; return s.length ? s[0].traceId : null;`;
     const sessionOf = `return req(dist + '/services/traces-runtime.js').traceStore().session(arg.id);`;
     const mainRequests = async (traceId: string) => ((await evaluate<{ turns: Array<{ requests: Req[] }> } | null>(sessionOf, { id: traceId }))?.turns ?? [])
@@ -118,12 +119,12 @@ test('each traced request\'s gap splits into its tools\' run, read from codex\'s
       const first = await api('POST', `/api/agents/${id}/run-task`, { task: `Run both probes. TOOLS 0.8:0,0.4:3`, answer: 'started' });
       expect(first.status, `${name}'s first task: ${JSON.stringify(first.body)}`).toBeLessThan(300);
       const ref1 = String(first.body.taskId);
-      await expect.poll(() => evaluate<string | null>(outcomeOf, { ref: ref1 }), { timeout: 60_000, message: `${name}'s first task` }).toMatch(/completed|error|stopped/);
+      await expect.poll(() => ended(ref1), { timeout: 60_000, message: `${name}'s first task` }).toMatch(/completed|error|stopped/);
       await new Promise(r => setTimeout(r, WAIT_MS));
       const second = await api('POST', `/api/agents/${id}/run-task`, { task: `Now the last probe. TOOLS 0.3:0`, answer: 'started' });
       expect(second.status, `${name}'s second task: ${JSON.stringify(second.body)}`).toBeLessThan(300);
       const ref2 = String(second.body.taskId);
-      await expect.poll(() => evaluate<string | null>(outcomeOf, { ref: ref2 }), { timeout: 60_000, message: `${name}'s second task` }).toMatch(/completed|error|stopped/);
+      await expect.poll(() => ended(ref2), { timeout: 60_000, message: `${name}'s second task` }).toMatch(/completed|error|stopped/);
       const traceId = (await evaluate<string | null>(traceIdOf, { id }))!;
       // The calls' lines are read from the harness's log on its watcher's tick: waited for without a throw, so a build
       // without them fails on each field below.
