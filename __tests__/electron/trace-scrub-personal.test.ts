@@ -72,6 +72,22 @@ import { personNamesOf, usablePersonName } from '../../electron/services/trace-p
  *
  * The report:
  * R1. maskCounts lacks a type or counts values rather than placeholders inserted; the version is not a string.
+ *
+ * Added before their code, after the Audit's NO-MERGE at 38ccde8cb (27/11):
+ * T1. (M1.) The names take time with their number: one pattern of 2000 names over a 1 MB session took 10.9 s (5.7 s
+ *     at 1500), as the Audit measured, and the upload builds every session that way.
+ * C1. (M3.) Another person's name is masked by its parts, so a word that is also a given or a family name goes:
+ *     "Will this compile?", "Mark as done.", a class Price. Only the account's own name is masked by its parts (and
+ *     its login as written); anyone else's whole only, as "First Last" or "Last, First", both under one number; a
+ *     name of one word that is not the account's is not masked. The account's own name stays its own when the git
+ *     history has it too.
+ * H1. (L1.) A home path in a JSON string written with escaped slashes (`\/Users\/name\/`) passes, or takes another
+ *     number than the same home written plainly.
+ * I1. (L1.) An IPv4-mapped IPv6 address (::ffff:192.0.2.128) is masked in two pieces, its IPv4 tail left or cut.
+ * F1. (L2.) A version or a word taken for an address or a phone number: 1.0.0.0, pkg@1.2.3.4, "build 0612345678",
+ *     a word pair in hex letters (add::bad, dead::beef). An address after a user's name (root@203.0.113.5) still goes;
+ *     after `@`, a four-part number of parts all under 100 reads as a version (so user@10.0.0.5 stays: said).
+ * The numbering kept from one build of a session to the next (M2) is trace-upload.test.ts's 46.
  */
 
 const HOME = '/Users/someone';
@@ -102,14 +118,14 @@ describe('masking personal data', () => {
     expect(one('v6 2001:db8:85a3:0:0:8a2e:370:7334 and fe80::1ff:fe23:4567:890a%en0 and 2001:db8::1')).toBe('v6 <IP_1> and <IP_2> and <IP_3>');
   });
 
-  it('N3: the names Tars knows go, in any case, spacing or Unicode form, whole or by part', () => {
-    const c = ctx({ personNames: ['Ada Quill', 'José Müller', 'Bram Okafor'] });
+  it('N3: the names Tars knows go, in any case, spacing or Unicode form, whole, and the account\'s own by part', () => {
+    const c = ctx({ personNames: ['Ada Quill', 'José Müller'], ownNames: ['Bram Okafor'] });
     const s = session(c);
     expect(s.text('Ada Quill wrote it; ada  quill\nreviewed; ADA QUILL merged')).toBe('<PERSON_1> wrote it; <PERSON_1>\nreviewed; <PERSON_1> merged');
     // NFD, as macOS writes a file name, and NFC, as a commit's author is typed.
     expect(s.text('by José Müller and by José Müller'.normalize('NFD'))).toBe('by <PERSON_2> and by <PERSON_2>');
     expect(s.text('by José Müller')).toBe('by <PERSON_2>');
-    // A part alone: the given name, the family name.
+    // A part alone of the account's own name: the given name, the family name.
     expect(s.text('ask Bram, or Okafor')).toBe('ask <PERSON_3>, or <PERSON_4>');
     expect(s.counts.person).toBe(8);
   });
@@ -165,7 +181,7 @@ describe('masking personal data', () => {
   });
 
   it('O2 and O3: a placeholder is never masked again; one path or address is one placeholder', () => {
-    const c = ctx({ personNames: ['Secret Phone', 'someone'], knownSecrets: ['plainword9secret'] });
+    const c = ctx({ personNames: ['Secret Phone'], ownNames: ['someone'], knownSecrets: ['plainword9secret'] });
     const s = session(c);
     expect(s.text('plainword9secret then <PHONE_2> as text')).toBe('<SECRET_1> then <PHONE_2> as text');
     expect(s.text('/Users/someone/x and someone@example.com and someone')).toBe('<HOME_1>/x and <EMAIL_1> and <PERSON_1>');
@@ -193,7 +209,7 @@ describe('masking personal data', () => {
   });
 
   it('X1: Unicode around a name, in an address, and in its two normal forms', () => {
-    const c = ctx({ personNames: ['Zoë Ødegård'] });
+    const c = ctx({ ownNames: ['Zoë Ødegård'] });
     expect(one('«Zoë Ødegård» écrit; Zoë, Ødegård', c)).toBe('«<PERSON_1>» écrit; <PERSON_2>, <PERSON_3>');
     expect(one('éZoë is a word', c)).toBe('éZoë is a word');
     expect(one('Zoë Ødegård'.normalize('NFD'), c)).toBe('<PERSON_1>');
@@ -204,6 +220,45 @@ describe('masking personal data', () => {
     expect(scrubValue(['ada@', 'example.com'], ctx(), {})).toEqual(['ada@', 'example.com']);
     expect(one('ada%40example.com and YWRhQGV4YW1wbGUuY29t')).toBe('ada%40example.com and YWRhQGV4YW1wbGUuY29t');
     expect(one('Unknown Person wrote it', ctx({ personNames: ['Ada Quill'] }))).toBe('Unknown Person wrote it');
+  });
+
+  it('T1: 2000 names over a 1 MB session take well under a second and a half', () => {
+    const letters = (i: number) => [0, 1, 2].map(k => String.fromCharCode(97 + Math.floor(i / 26 ** k) % 26)).join('');
+    const names = Array.from({ length: 2000 }, (_, i) => `Fn${letters(i)} Ln${letters(i)}`);
+    const filler = 'the build ran, the tests passed and the module was merged into the branch after review. ';
+    let text = '';
+    for (let i = 0; text.length < 1024 * 1024; i++) text += `${filler.repeat(24)}${names[(i * 37) % names.length]} wrote it. `;
+    const c = ctx({ personNames: names });
+    const t0 = performance.now();
+    const out = one(text, c);
+    const ms = performance.now() - t0;
+    expect(out).not.toMatch(/Fn[a-z]{3} Ln[a-z]{3}/);
+    expect(out).toContain('<PERSON_1> wrote it.');
+    expect(ms, `${Math.round(ms)} ms`).toBeLessThan(1500);
+  }, 120_000);
+
+  it('C1: another person\'s name goes whole only, as First Last or Last, First; the account\'s own by its parts too', () => {
+    const s = session(ctx({ personNames: ['Will Pruitt', 'Mark Price', 'Solo'], ownNames: ['Cleo Marsh', 'cleom'] }));
+    expect(s.text('Will this compile? Mark as done.')).toBe('Will this compile? Mark as done.');
+    expect(s.text('class Price { static of(n) {} } then Price.of(1); Solo mode')).toBe('class Price { static of(n) {} } then Price.of(1); Solo mode');
+    expect(s.text('Will Pruitt reviewed; Pruitt, Will merged; Price, Mark approved')).toBe('<PERSON_1> reviewed; <PERSON_1> merged; <PERSON_2> approved');
+    expect(s.text('Cleo Marsh wrote; Marsh, Cleo signed; cleom and Cleo alone')).toBe('<PERSON_3> wrote; <PERSON_3> signed; <PERSON_4> and <PERSON_5> alone');
+  });
+
+  it('H1 and I1: a home in a JSON string with escaped slashes; an IPv4-mapped IPv6 address, whole', () => {
+    const s = session();
+    expect(s.text('{"cwd":"\\/Users\\/someonex\\/proj","home":"\\/home\\/bram\\/x"}')).toBe('{"cwd":"<HOME_1>\\/proj","home":"<HOME_2>\\/x"}');
+    // The account's own, escaped, is the same home as written plainly.
+    expect(s.text('/Users/someone/a and \\/Users\\/someone\\/b')).toBe('<HOME_3>/a and <HOME_3>\\/b');
+    expect(s.text('from ::ffff:192.0.2.128 and ::FFFF:192.0.2.128, then 192.0.2.128')).toBe('from <IP_1> and <IP_1>, then <IP_2>');
+  });
+
+  it('F1: versions and words read as addresses or phone numbers stay; an address after a user\'s name goes', () => {
+    for (const t of ['release 1.0.0.0 and 2.0.0.0', 'pkg@1.2.3.4 and @scope/lib@10.20.30.40', 'build 0612345678, Build 0612345678, version 0612345678',
+      'add::bad and dead::beef', 'user@10.0.0.5']) {
+      expect(one(t), t).toBe(t);
+    }
+    expect(one('ssh root@203.0.113.5, then 10.1.0.0 and 172.16.0.1; call 0612345678')).toBe('ssh root@<IP_1>, then <IP_2> and <IP_3>; call <PHONE_1>');
   });
 
   it('R1: the counts are placeholders inserted, by type, every type present, and the version is named', () => {
@@ -235,13 +290,19 @@ describe('the names Tars knows', () => {
     commit('b', 'dependabot[bot]', 'GitHub');
     commit('c', 'José Müller', 'Ada Quill');
     const names = await personNamesOf(dir, { login: () => undefined, fullName: async () => undefined });
-    expect([...names].sort()).toEqual(['Ada Quill', 'Bram Okafor', 'José Müller']);
+    expect([...names.others].sort()).toEqual(['Ada Quill', 'Bram Okafor', 'José Müller']);
+    expect(names.own).toEqual([]);
+    // C1: the account's own name is its own, even when the history has it too.
+    const mine = await personNamesOf(dir, { login: () => undefined, fullName: async () => 'Ada Quill' });
+    expect(mine.own).toEqual(['Ada Quill']);
+    expect([...mine.others].sort()).toEqual(['Bram Okafor', 'José Müller']);
   });
 
   it('N3: the account\'s own name, as git and the system have it; a folder that is no repository gives none of git\'s', async () => {
     dir = fs.mkdtempSync(path.join(os.tmpdir(), 'person-names-'));
     const names = await personNamesOf(dir, { login: () => 'cleom', fullName: async () => 'Cleo Marsh' });
-    expect([...names].sort()).toEqual(['Cleo Marsh', 'cleom']);
+    expect([...names.own].sort()).toEqual(['Cleo Marsh', 'cleom']);
+    expect(names.others).toEqual([]);
   });
 
   it('P7: a name is used only when it can be told from a word', () => {

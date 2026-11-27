@@ -99,6 +99,13 @@ import { hasPosixModes } from '../setup/platform-limits';
  * 44. The names of a session's project (its git history) are not read before its payload is built, so they pass on
  *     the first pass after a start; or the preview, built before them, shows a document other than the one sent.
  * 45. Personal data reaches the back-office as typed: an e-mail, a phone number, an IP address, another user's home.
+ * Added before their code, after the Audit's NO-MERGE at 38ccde8cb (27/11):
+ * 46. (M2.) A session's numbering moves from one build of it to the next: as the session grows, or when the names
+ *     Tars knows change in between (a name newly known, met before one already numbered, takes that one's number), so
+ *     one value carries two numbers across the uploads of one session, and a preview shows numbers the upload does not
+ *     send. Or the numbering outlives its session: deleted, its numbers stay in the store.
+ * 47. (L3.) The consent withdrawn while a project's names are read (prepareScrub awaited): the session is built and
+ *     sent all the same.
  */
 
 type Seen = { method: string; url: string; headers: http.IncomingHttpHeaders; body: Buffer };
@@ -889,5 +896,36 @@ describe('personal data masked in what is sent (trace feature B3)', () => {
     expect(prepared).toEqual([PROJECT, PROJECT]);
     expect(allSent()).not.toContain('Ada Quill');
     expect(allSent()).toContain('ask <PERSON_1> to review');
+  });
+
+  it('46: a session keeps its numbering from one build to the next, as it grows and as the names known change', async () => {
+    const names = ['Ada Quill'];
+    const u = uploader({ scrubContext: () => ({ homeDirs: [HOME], knownSecrets: [SECRET], envValues: [], personNames: [...names] }) });
+    seed('t1', 'ask Bram Okafor, then Ada Quill; mail b@example.com');
+    expect(JSON.stringify(u.preview('t1'))).toContain('ask Bram Okafor, then <PERSON_1>; mail <EMAIL_1>');
+    // Bram is known now, and the session grows by a turn.
+    names.push('Bram Okafor');
+    const req = Buffer.from(JSON.stringify({ model: 'open-coder-1', messages: [{ role: 'system', content: `You work in ${PROJECT}` },
+      { role: 'user', content: 'ask Bram Okafor, then Ada Quill; mail b@example.com' }, { role: 'assistant', content: `done, key ${SECRET}` },
+      { role: 'user', content: 'and a@example.com, Ada Quill again' }], tools: [{ type: 'function', function: { name: 'bash' } }] }));
+    const resp = Buffer.from(JSON.stringify({ choices: [{ message: { role: 'assistant', content: 'ok' }, finish_reason: 'stop' }], usage: { prompt_tokens: 9, completion_tokens: 1 } }));
+    store.ingest({ traceId: 't1', agentId: 'agent-1', surface: 'openai_chat', startedAt: 2000, endedAt: 2100, status: 200, contentType: 'application/json', requestBody: req, responseBody: resp, attempts: 1, heldMs: 0, upstreamRequestId: 'req_up_2' });
+    expect(await u.runOnce()).toMatchObject({ sent: 1 });
+    const sent = allSent();
+    expect(sent).toContain('ask <PERSON_2>, then <PERSON_1>; mail <EMAIL_1>');
+    expect(sent).toContain('and <EMAIL_2>, <PERSON_1> again');
+    expect(sent).not.toMatch(/Bram Okafor|Ada Quill/);
+    // The numbering goes with its session.
+    expect(store.maskNumbers('t1').length).toBeGreaterThan(0);
+    store.remove({ traceIds: ['t1'] });
+    expect(store.maskNumbers('t1')).toEqual([]);
+  });
+
+  it('47: the consent withdrawn while a project\'s names are read stops the pass before that session is sent', async () => {
+    const u = uploader({ prepareScrub: async () => { await new Promise(r => setTimeout(r, 5)); settings.consentAt = undefined; } });
+    seed('t1', 'mail a@example.com');
+    expect(await u.runOnce()).toMatchObject({ sent: 0 });
+    expect(bo.rows).toEqual([]);
+    expect(bo.blobs.size).toBe(0);
   });
 });
