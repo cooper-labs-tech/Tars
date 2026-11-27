@@ -9,6 +9,7 @@ import { publishedWaitingOn } from '../../utils/waiting-on';
 import * as fs from 'fs';
 import { v4 as uuidv4 } from 'uuid';
 import { agents, saveAgents, killStalePty, ensureProjectTrusted, appendAgentOutput, armTaskStartWatch } from '../../core/agent-manager';
+import { sayFoldersLeftOut } from '../../core/folders-left-out';
 import { markNoTerminal } from '../../core/no-terminal';
 import { launchPrompt, noteTurnCut, ptyProcesses, writeProgrammaticInput, type MessageSender } from '../../core/pty-manager';
 import { spawnAgentPty, cliRunningIn } from '../../core/agent-pty';
@@ -487,6 +488,8 @@ async function spawnAgentSessionInSlot(
   if (prompt.trim()) typeLaunchTask(cliProvider, ptyProcess, { prompt: taskPrompt, skills: agent.skills, isSuperAgent: isSuperAgentApi });
 
   agent.ptyId = ptyId;
+  // A folder it was saved with and its line leaves out, said in its terminal before the CLI's first byte arrives.
+  sayFoldersLeftOut(agent, ptyProcess, ptyId);
   // The request this prompt runs is delivered with it, and its first turn is
   // its turn (core/task-requests.ts). A link left from before (an older Tars)
   // is carried onto the new terminal, as it was.

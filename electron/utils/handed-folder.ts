@@ -71,6 +71,10 @@ export const CREDENTIAL_FOLDERS: ReadonlyArray<{ readonly base: CredentialBase; 
   { base: 'home', path: ['.pi'], on: ALL },
   // opencode 1.19.3: auth.json and mcp-auth.json in its data folder.
   { base: 'data', path: ['opencode'], on: ALL },
+  // Amp 0.0.1795752045: its data folder, which its own code builds from ~/.local/share on macOS and Windows and from
+  // XDG_DATA_HOME on Linux; a secrets.json sits beside its CLI account's keys (read in its binary, not run).
+  { base: 'home', path: ['.local', 'share', 'amp'], on: ['darwin', 'win32'] },
+  { base: 'data', path: ['amp'], on: ['linux'] },
   // Kimi Code 2.6.3: its credentials folder, and the one of its older versions (its provider comes with the harness
   // adapters; KIMI_CODE_HOME, which moves it, is not followed).
   { base: 'home', path: ['.kimi-code', 'credentials'], on: ALL },
@@ -81,9 +85,33 @@ export const CREDENTIAL_FOLDERS: ReadonlyArray<{ readonly base: CredentialBase; 
 ];
 
 /**
- * CREDENTIAL_FOLDERS on `system`, as paths, with the homes Tars itself follows for two CLIs: CODEX_HOME
- * (providers/codex-cli.ts codexHome) and PI_CODING_AGENT_DIR (providers/pi-provider.ts). None that is the root, the
- * home or a folder above it, nor a relative one: as a credential folder, it would refuse every folder.
+ * The CLIs' content folders: every session of that CLI, in every project, loads what is in them (its skills, commands,
+ * agents or prompts). They hold no credential, and are refused all the same, as the safer default until the owner
+ * says otherwise (the Audit's L1 on #666): an agent handed one could leave instructions for all the others.
+ */
+export const CLI_CONTENT_FOLDERS: ReadonlyArray<{ readonly path: readonly string[]; readonly cli: string }> = [
+  { path: ['.claude', 'skills'], cli: 'Claude Code' },
+  { path: ['.claude', 'commands'], cli: 'Claude Code' },
+  { path: ['.claude', 'agents'], cli: 'Claude Code' },
+  { path: ['.codex', 'prompts'], cli: 'codex' },
+  { path: ['.gemini', 'commands'], cli: 'gemini' },
+  { path: ['.qwen', 'commands'], cli: 'Qwen Code' },
+];
+
+/** CLI_CONTENT_FOLDERS under `home`, on `system`. */
+export function cliContentFolders(system: NodeJS.Platform = process.platform, _env: NodeJS.ProcessEnv = process.env, home: string = os.homedir()): Array<{ folder: string; cli: string }> {
+  const p = system === 'win32' ? path.win32 : path.posix;
+  return CLI_CONTENT_FOLDERS.map(entry => ({ folder: p.join(home, ...entry.path), cli: entry.cli }));
+}
+
+/**
+ * CREDENTIAL_FOLDERS on `system`, as paths, with the folders the variables of Tars's own environment move a tool to:
+ * CODEX_HOME (providers/codex-cli.ts codexHome) and PI_CODING_AGENT_DIR (providers/pi-provider.ts), which Tars itself
+ * follows; GNUPGHOME, DOCKER_CONFIG, GH_CONFIG_DIR, CLOUDSDK_CONFIG; the folders of KUBECONFIG's files (`:` between
+ * them on macOS and Linux, `;` on Windows); and a CLAUDE_CONFIG_DIR the user set. A Tars started from the Dock or the
+ * Start menu sees no shell's exports, so this follows only what its process has: a guard against a mistaken choice,
+ * not a boundary (SECURITY.md §4). None that is the root, the home or a folder above it, nor a relative one: as a
+ * credential folder, it would refuse every folder.
  */
 export function credentialFolders(system: NodeJS.Platform = process.platform, env: NodeJS.ProcessEnv = process.env, home: string = os.homedir()): string[] {
   const on: CredentialSystem = system === 'win32' || system === 'darwin' ? system : 'linux';
@@ -97,9 +125,13 @@ export function credentialFolders(system: NodeJS.Platform = process.platform, en
     localAppData: absolute(env.LOCALAPPDATA) || p.join(home, 'AppData', 'Local'),
   };
   const folders = CREDENTIAL_FOLDERS.filter(entry => entry.on.includes(on)).map(entry => p.join(bases[entry.base], ...entry.path));
-  for (const followed of [env.CODEX_HOME, env.PI_CODING_AGENT_DIR]) {
+  for (const followed of [env.CODEX_HOME, env.PI_CODING_AGENT_DIR, env.GNUPGHOME, env.DOCKER_CONFIG, env.GH_CONFIG_DIR, env.CLOUDSDK_CONFIG, env.CLAUDE_CONFIG_DIR]) {
     const dir = absolute(followed);
     if (dir) folders.push(dir);
+  }
+  for (const file of (env.KUBECONFIG ?? '').split(on === 'win32' ? ';' : ':')) {
+    const absoluteFile = absolute(file.trim());
+    if (absoluteFile) folders.push(p.dirname(absoluteFile));
   }
   return [...new Set(folders)].filter(folder => !trustsTooMuch(folder, on, home));
 }
@@ -129,7 +161,7 @@ export function credentialFolders(system: NodeJS.Platform = process.platform, en
  */
 export function handedFolderProblem(
   folder: string,
-  where: { privateDir: string; credentialDirs?: string[] } = { privateDir: PRIVATE_DIR },
+  where: { privateDir: string; credentialDirs?: string[]; contentDirs?: Array<{ folder: string; cli: string }> } = { privateDir: PRIVATE_DIR },
 ): string | null {
   // A `.` or `..` is refused as written: the system follows a link before it goes up, path.resolve goes up on the
   // text first, so proj/lnk/../x was read as proj/x (the Audit's M1 on #503).
@@ -148,6 +180,18 @@ export function handedFolderProblem(
       }
       if (under(priv, place)) {
         return `${folder} holds ${where.privateDir}, which agents are never handed: name a folder of its own`;
+      }
+    }
+  }
+  // A CLI's content folder (CLI_CONTENT_FOLDERS), or one inside it, for what it is: no credential, but what every
+  // session of that CLI loads. Before the credentials, which the CLI's own folder around it is.
+  for (const { folder: content, cli } of where.contentDirs ?? cliContentFolders()) {
+    const contentPlaces = places(content).filter(place => !trustsTooMuch(place));
+    for (const place of folderPlaces) {
+      for (const loaded of contentPlaces) {
+        if (same(place, loaded) || under(place, loaded)) {
+          return `${folder} is ${same(place, loaded) ? '' : 'inside '}a folder ${cli} loads in every session, so an agent handed it could leave instructions for all the others: it is never handed`;
+        }
       }
     }
   }
