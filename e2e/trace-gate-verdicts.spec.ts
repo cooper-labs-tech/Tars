@@ -128,6 +128,24 @@ test('a gate records its verdict through the tool, and the session shows it on t
       return res.json() as Promise<Record<string, unknown>>;
     };
 
+    // Tars's MCP servers registered in every CLI's configuration, as a packaged Tars does at every start
+    // (setupMcpOrchestrator), as e2e/cli-matrix.spec.ts does: a development run finds no bundle under
+    // process.resourcesPath, the app's own.
+    const resources = path.join(home, 'resources');
+    fs.mkdirSync(path.join(resources, 'mcp-orchestrator', 'dist'), { recursive: true });
+    fs.copyFileSync(path.resolve('mcp-orchestrator', 'dist', 'bundle.js'), path.join(resources, 'mcp-orchestrator', 'dist', 'bundle.js'));
+    fs.copyFileSync(path.resolve('mcp-orchestrator', 'package.json'), path.join(resources, 'mcp-orchestrator', 'package.json'));
+    const dist = path.resolve('electron', 'dist');
+    await app.evaluate(async (_e, { resources, dist }) => {
+      const was = process.resourcesPath;
+      Object.defineProperty(process, 'resourcesPath', { value: resources, configurable: true, writable: true });
+      try {
+        await process.mainModule!.require(`${dist}/services/mcp-orchestrator.js`).setupMcpOrchestrator({});
+      } finally {
+        Object.defineProperty(process, 'resourcesPath', { value: was, configurable: true, writable: true });
+      }
+    }, { resources, dist });
+
     // Q's three turns: c1, c2, then nothing.
     await api('agent', 'start', { id: Q, prompt: `turn one ${files({ write: { 'a.txt': 'a1\na2\n' }, commit: 'c1' })}` });
     await until(() => answers().length, n => n >= 1, 60_000, 'the first turn');
