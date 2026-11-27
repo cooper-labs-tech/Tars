@@ -71,6 +71,10 @@ import {
  *    main ..."`, not as `python3 -m hermes_cli.main gateway run`, the form Hermes gives the gateways it starts itself:
  *    taken for no gateway, it is never found (the chat's line waits out its timeout) nor stopped. And a chat or any
  *    other command relaunched the same way is not a gateway.
+ * 19. (The real binary, 27/11.) A question at start that nobody answers in an agent's terminal: with the disk low,
+ *    Hermes asks whether to prune its session history ("Enable auto-prune? [y / n / Enter]", hermes_cli/prune_advisor.py)
+ *    for as long as `sessions.auto_prune` is absent from its config; a restarted agent waited on it. Both configs
+ *    answer it, with Hermes's own default (history kept: deleting it is opt-in).
  */
 
 let tmp: string;
@@ -174,6 +178,10 @@ describe('the configs', () => {
       if (!base.includes(' ')) expect(() => hermesEnvText({ ...secretsA, OPENAI_BASE_URL: base }), `.env ${base}`).toThrow();
     }
     expect(fs.existsSync(root)).toBe(false);
+  });
+
+  it('19: both configs answer the low-disk question about pruning the session history, keeping it', () => {
+    for (const text of [hermesRootConfig(PROXY), hermesProfileConfig(spec())]) expect(text).toMatch(/^sessions:\n {2}auto_prune: false$/m);
   });
 
   it('15: each session\'s tools take the agent\'s identity and temporary folders from its own terminal', () => {

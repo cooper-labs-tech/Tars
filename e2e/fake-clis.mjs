@@ -538,6 +538,9 @@ export async function run() {
   }
   // Hermes asks about telemetry at its first interactive start, unless its config answered it (0.23.4, measured 26/11).
   if (kind === 'hermes' && !opts.oneShot && !/^ {4}offer_version: 2$/m.test(hermesConfig)) question = 'telemetry';
+  // And whether to prune its session history, which it asks while `sessions.auto_prune` is absent and the disk is low
+  // (hermes_cli/prune_advisor.py, measured 27/11): asked here whatever the disk, so the config must answer it.
+  else if (kind === 'hermes' && !opts.oneShot && !/^sessions:\n {2}auto_prune: (true|false)$/m.test(hermesConfig)) question = 'auto-prune';
 
   const permissionMode = opts.bypass ? 'bypassPermissions' : 'default';
   log({ launch: true, argv, cwd, token: !!process.env.CLAUDE_MGR_API_TOKEN, instance: !!process.env.TARS_INSTANCE_ID, sid, prompt: opts.prompt, oneShot: opts.oneShot, question, loggedIn, servers: Object.keys(mcpServers()) });

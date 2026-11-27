@@ -139,6 +139,9 @@ const GUARDS = {
   // step fetches the plugin catalog (hermes-agent.nousresearch.com) and the plugins' sources (github.com). Lazy
   // installs off stops it; the first sync of the home still runs (measured on the installed binary).
   security: { allow_lazy_installs: false },
+  // With the disk low, Hermes asks whether to prune its session history for as long as this key is absent, and nobody
+  // answers in an agent's terminal (a restarted agent waited on it, 27/11): answered with its own default, kept.
+  sessions: { auto_prune: false },
 };
 
 /**
