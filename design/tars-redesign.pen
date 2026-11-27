@@ -956861,6 +956861,145 @@
           ]
         }
       ]
+    },
+    {
+      "type": "frame",
+      "id": "uKiNe",
+      "x": 6160,
+      "y": 142000,
+      "name": "Shell · Schedules · Hermes did not answer · notes",
+      "theme": {
+        "mode": "dark"
+      },
+      "width": 1000,
+      "fill": "$bg",
+      "stroke": "$border",
+      "strokeWidth": 1,
+      "layout": "vertical",
+      "gap": 14,
+      "padding": [
+        40,
+        50
+      ],
+      "children": [
+        {
+          "type": "text",
+          "id": "k77Tde",
+          "name": "t",
+          "fill": "$text-primary",
+          "textGrowth": "fixed-width",
+          "width": 900,
+          "content": "Schedules: when Tars cannot reach Hermes",
+          "lineHeight": 1.15,
+          "fontFamily": "$font-display",
+          "fontSize": 28,
+          "fontWeight": "normal"
+        },
+        {
+          "type": "text",
+          "id": "uiEyM",
+          "name": "t",
+          "fill": "$text-secondary",
+          "textGrowth": "fixed-width",
+          "width": 900,
+          "content": "Every call of the page that can fail says so in this state, in words, with Open Hermes settings and Retry: never the window's raw error, never a click that does nothing. The reason in brackets is the request's own (a refused connection, a timeout).",
+          "lineHeight": 1.45,
+          "fontFamily": "$font-ui",
+          "fontSize": 13,
+          "fontWeight": "normal"
+        },
+        {
+          "type": "text",
+          "id": "r7MsQ",
+          "name": "t",
+          "fill": "$text-secondary",
+          "textGrowth": "fixed-width",
+          "width": 900,
+          "content": "reading the list        Could not read the schedules: Tars could not reach Hermes (connect ECONNREFUSED 127.0.0.1:9).",
+          "lineHeight": 1.45,
+          "fontFamily": "$font-mono",
+          "fontSize": 11.5,
+          "fontWeight": "normal"
+        },
+        {
+          "type": "text",
+          "id": "tbsQe",
+          "name": "t",
+          "fill": "$text-secondary",
+          "textGrowth": "fixed-width",
+          "width": 900,
+          "content": "pause                   Could not pause the schedule: Tars could not reach Hermes (...).",
+          "lineHeight": 1.45,
+          "fontFamily": "$font-mono",
+          "fontSize": 11.5,
+          "fontWeight": "normal"
+        },
+        {
+          "type": "text",
+          "id": "BQcob",
+          "name": "t",
+          "fill": "$text-secondary",
+          "textGrowth": "fixed-width",
+          "width": 900,
+          "content": "resume                  Could not resume the schedule: Tars could not reach Hermes (...).",
+          "lineHeight": 1.45,
+          "fontFamily": "$font-mono",
+          "fontSize": 11.5,
+          "fontWeight": "normal"
+        },
+        {
+          "type": "text",
+          "id": "w4t4ND",
+          "name": "t",
+          "fill": "$text-secondary",
+          "textGrowth": "fixed-width",
+          "width": 900,
+          "content": "run now                 Could not run the schedule: Tars could not reach Hermes (...).",
+          "lineHeight": 1.45,
+          "fontFamily": "$font-mono",
+          "fontSize": 11.5,
+          "fontWeight": "normal"
+        },
+        {
+          "type": "text",
+          "id": "KgJ2P",
+          "name": "t",
+          "fill": "$text-secondary",
+          "textGrowth": "fixed-width",
+          "width": 900,
+          "content": "delete                  Could not delete the schedule: Tars could not reach Hermes (...).",
+          "lineHeight": 1.45,
+          "fontFamily": "$font-mono",
+          "fontSize": 11.5,
+          "fontWeight": "normal"
+        },
+        {
+          "type": "text",
+          "id": "DQMF5",
+          "name": "t",
+          "fill": "$text-secondary",
+          "textGrowth": "fixed-width",
+          "width": 900,
+          "content": "save, in the dialog     Could not save the change: Tars could not reach Hermes (...).  (under the form, the dialog kept open)",
+          "lineHeight": 1.45,
+          "fontFamily": "$font-mono",
+          "fontSize": 11.5,
+          "fontWeight": "normal"
+        },
+        {
+          "type": "text",
+          "id": "H6cWuJ",
+          "name": "t",
+          "fill": "$text-secondary",
+          "textGrowth": "fixed-width",
+          "width": 900,
+          "content": "A call Hermes answered with a refusal says the same verb with Hermes's own reason: \"Could not pause the schedule: HTTP 404.\" The list stays below the sentence as last read; Retry reads it again.",
+          "lineHeight": 1.45,
+          "fontFamily": "$font-ui",
+          "fontSize": 13,
+          "fontWeight": "normal"
+        }
+      ]
     }
   ],
   "themes": {

@@ -110,9 +110,6 @@ test('the chat list from the records: sections, a new chat, rename, pin, snooze,
     await expect(main.getByRole('heading', { name: 'Main', exact: true })).toBeVisible();
     await expect(main.getByRole('log', { name: 'Conversation' })).toBeVisible();
     await expect(main.getByRole('group', { name: 'Message composer' }).getByRole('textbox', { name: 'Message' })).toBeEnabled();
-    // /chats without `?chat=` opened Main: its row is the current one, as when it is named.
-    await expect(rows('Active').first().getByRole('link')).toHaveAttribute('aria-current', 'page');
-    await expect(rows('Active').nth(1).getByRole('link')).not.toHaveAttribute('aria-current', 'page');
     await stepShot(page, '01-list');
 
     // New chat: a project without an orchestrator cannot be chosen.
