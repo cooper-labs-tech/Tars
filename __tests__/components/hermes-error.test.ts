@@ -70,6 +70,10 @@ describe('describeHermesFailure', () => {
  *    not answer in time"), which they are not: Hermes began to answer.
  * 3. Either loses the gateway's address, or the detail line loses the words.
  * 4. The timeout and a Node code (ECONNREFUSED) change their sentences.
+ * 5. A sentence prints the saved URL whole, its user name, password, query and
+ *    hash with it (a token in a query, credentials before the host), where the
+ *    main process's own sentence (#660, noAnswerSentence) keeps only the
+ *    protocol, the host and the path (the Audit's M1 on #663). Added after 1 to 4.
  *
  * The sentences themselves are the Frontend's: these only ask that each class
  * has its own, apart from a refusal's.
@@ -106,5 +110,26 @@ describe('describeHermesFailure, for an answer Hermes began and never ended', ()
   it('the timeout and a Node code keep their sentences (4)', () => {
     expect(timeout.message).toMatch(/did not answer in time/i);
     expect(refusal.message).toMatch(/not answering/i);
+  });
+
+  describe('a saved URL that carries a user name, a password, a query and a hash (5)', () => {
+    const SAVED = 'https://hermes-user:s3cretpw@gw.example/base?token=s3crettok#s3cretfrag';
+    const RAWS: Array<[string, string]> = [
+      ['the cut', 'its answer was cut off before the end'],
+      ['the deadline', 'its answer did not end within 30 s'],
+      ['a refusal', 'connect ECONNREFUSED 127.0.0.1:443'],
+      ['the timeout', 'timeout'],
+      ['a host that cannot be resolved', 'getaddrinfo ENOTFOUND gw.example'],
+      ['a TLS refusal', 'self-signed certificate'],
+      ['the generic one', 'something odd happened'],
+    ];
+
+    it.each(RAWS)('%s names the gateway by its protocol, host and path, and nothing else of the URL', (_what, raw) => {
+      const { message } = describeHermesFailure(`${IPC}${raw}`, SAVED);
+
+      expect(message).toContain('https://gw.example/base');
+      // The user, the password, the query's token and the hash: every one of them holds "s3cret" but the user.
+      for (const secret of ['hermes-user', 's3cret', 'token=']) expect(message).not.toContain(secret);
+    });
   });
 });
