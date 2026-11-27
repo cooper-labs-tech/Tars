@@ -71,6 +71,7 @@ import { oneReadingAtATime } from '../core/one-reading-at-a-time';
 import { consumeResumeSessionId, resolveResumeSessionId, spendResume } from '../utils/resume-session';
 import { registerAgentLauncher, launchAgent, launchBegins, launchAbandoned, sessionStarting, type AgentLauncher } from '../core/agent-launch';
 import { registerAgentCreator, type AgentCreateConfig, type AgentCreator } from '../core/agent-create';
+import { pushBlockEnv } from '../services/load-session';
 import { noTerminalAnswer } from '../core/no-terminal';
 import { orchestratorMoved } from '../core/chat-identity';
 import { launchSettings, restartForSettings, noteLaunch, restartAgent, pendingRestarts } from '../core/agent-restart';
@@ -233,7 +234,7 @@ export function registerIpcHandlers(deps: IpcHandlerDependencies): void {
   registerTrayHandlers(deps);
   registerTracesHandlers({ getAppSettings: deps.getAppSettings, setAppSettings: deps.setAppSettings, writeAppSettings: deps.writeAppSettings });
   // The load window (trace feature C3): its approval and the owner's grants, reached from the window alone.
-  registerLoadHandlers({ getAppSettings: deps.getAppSettings, agents: deps.agents, getMainWindow: deps.getMainWindow, projects: knownProjects });
+  registerLoadHandlers({ getAppSettings: deps.getAppSettings, agents: deps.agents, getMainWindow: deps.getMainWindow, projects: knownProjects, saveAgents: deps.saveAgents });
 }
 
 // ============== Tray Panel IPC Handlers ==============
@@ -434,6 +435,8 @@ function registerAgentHandlers(deps: IpcHandlerDependencies): void {
         env: {
           ...withPath(cleanEnv, fullPath, process.platform),
           ...providerEnvVars,
+          // A load agent's terminal blocks every push, through its environment alone (services/load-session.ts).
+          ...(config.load === true ? pushBlockEnv({ ...cleanEnv, ...providerEnvVars }) : {}),
         },
       });
       // The keys this shell's environment carries, for the start that reuses it (core/agent-manager.ts).

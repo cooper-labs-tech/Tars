@@ -9,6 +9,7 @@ import * as path from 'path';
 import { v4 as uuidv4 } from 'uuid';
 import { BrowserWindow, Notification } from 'electron';
 import { AgentStatus, AppSettings } from '../types';
+import { pushBlockEnv } from '../services/load-session';
 import { broadcastToAllWindows } from '../utils/broadcast';
 import { AGENTS_FILE, API_TOKEN_FILE, DATA_DIR, dataPath } from '../constants';
 import { dropRejectedTails, keysHandedToClaude, maskKeyFragments } from './key-fragments';
@@ -1350,6 +1351,8 @@ async function spawnShell(agent: AgentStatus): Promise<{ ptyProcess: pty.IPty; c
     env: {
       ...withPath(process.env, fullPath, process.platform),
       ...providerEnvVars,
+      // A load agent's terminal blocks every push, through its environment alone (services/load-session.ts).
+      ...(agent.load === true ? pushBlockEnv({ ...process.env, ...providerEnvVars }) : {}),
       // CLAUDE_MGR_API_URL is imposed by spawnAgentPty, on the one line that
       // starts a process, so the API-driven spawn cannot miss it as it did.
       // Load CLAUDE.md from --add-dir directories (e.g. ~/.tars)

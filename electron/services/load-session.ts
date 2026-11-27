@@ -14,7 +14,7 @@ import { isUnsafePathSegment } from '../platform/windows-names';
 const BLOCK_KEY = 'url.tars-load-push-blocked://.pushInsteadOf';
 
 /** The variables that block every push, after the GIT_CONFIG entries the environment already has. */
-export function pushBlockEnv(env: NodeJS.ProcessEnv): Record<string, string> {
+export function pushBlockEnv(env: Record<string, string | undefined>): Record<string, string> {
   const raw = env.GIT_CONFIG_COUNT;
   // A count git would refuse makes every git command fail: ours replaces it.
   const n = raw !== undefined && /^\d{1,3}$/.test(raw) ? Number(raw) : 0;

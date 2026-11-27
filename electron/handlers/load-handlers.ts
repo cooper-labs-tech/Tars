@@ -2,7 +2,14 @@ import { app, ipcMain, type BrowserWindow, type IpcMainInvokeEvent } from 'elect
 import { execFile } from 'child_process';
 import * as path from 'path';
 import { DATA_DIR, privatePath } from '../constants';
-import type { AgentStatus, AppSettings } from '../types';
+import type { AgentProvider, AgentStatus, AppSettings } from '../types';
+import { broadcastToAllWindows } from '../utils/broadcast';
+import { createAgent } from '../core/agent-create';
+import { launchAgent } from '../core/agent-launch';
+import { stopAgent } from '../core/agent-stop';
+import { agentStatusEmitter, emitAgentStatus } from '../services/agent-events';
+import { createLoadEngine } from '../services/load-engine';
+import { updateRun } from '../services/load-run-record';
 import { safeGit } from '../utils/safe-git';
 import { buildFullPath } from '../utils/path-builder';
 import { traceSettingsOf } from '../services/traces-runtime';
@@ -24,8 +31,10 @@ export interface LoadHandlerDeps {
   getMainWindow(): BrowserWindow | null;
   /** Tars's projects (review-handlers.ts knownProjects). */
   projects(): string[];
-  /** Tests only: where the pools, runs, grants and approvals live, and the clock. */
-  dirs?: { pools: string; runs: string; grants: string; approved: string; setAside: string };
+  /** Writes the fleet to disk (agents.json): a load agent's worktree is set and cleared through it. */
+  saveAgents?(): void;
+  /** Tests only: where the pools, runs, grants, approvals and the engine's state live, and the clock. */
+  dirs?: { pools: string; runs: string; grants: string; approved: string; setAside: string; state?: string };
   now?: () => number;
 }
 
@@ -46,12 +55,16 @@ const POLL_MS = 5000;
 
 /** The registered window's way to tell it the state, for the watch main.ts starts. */
 let tellWindow: (() => void) | undefined;
+/** The registered engine's recovery, for the watch main.ts starts. */
+let recoverLoad: (() => Promise<void>) | undefined;
 
 /**
- * Reads the state every 5 s and tells the window when it changed (a pool written, a window's end). Started by main.ts
- * with the app's other watches, never by the registration, so a test that registers the handlers runs no timer.
+ * Reads the state every 5 s and tells the window when it changed (a pool written, a window's end), after the engine's
+ * recovery of what a quit or a crash left (load-engine.ts recover). Started by main.ts with the app's other watches,
+ * never by the registration, so a test that registers the handlers runs no timer and recovers nothing.
  */
 export function startLoadWatch(): () => void {
+  void recoverLoad?.().catch(err => console.error(`[load] the recovery at start failed: ${(err as Error).message}`));
   const timer = setInterval(() => tellWindow?.(), POLL_MS);
   timer.unref?.();
   return () => clearInterval(timer);
@@ -87,8 +100,69 @@ export function registerLoadHandlers(deps: LoadHandlerDeps): { window: LoadWindo
     gh,
     now: deps.now ?? Date.now,
     emit: tell,
+    startRun: (run, planned) => { void startEngine(run.runId, planned); },
+    stopRun: (runId) => { void engine.stop(runId); },
   };
   const window = createLoadWindow(windowDeps);
+
+  const save = () => deps.saveAgents?.();
+  const announce = (a: AgentStatus) => {
+    broadcastToAllWindows('agent:status', { type: 'status', agentId: a.id, status: a.status, timestamp: new Date().toISOString() });
+    emitAgentStatus(a.id);
+  };
+  const engine = createLoadEngine({
+    now: deps.now ?? Date.now,
+    setTimer: (fn, ms) => setTimeout(fn, Math.max(0, ms)),
+    clearTimer: (h) => clearTimeout(h as NodeJS.Timeout),
+    stateFile: dirs.state ?? privatePath('load-run-state.json'),
+    plan: runId => window.runPlan(runId),
+    isRunning: runId => window.isRunning(runId),
+    endRun: (runId, stopped) => window.endRun(runId, stopped),
+    grantHarnesses: project => readGrants(dirs.grants).find(g => g.path === project)?.harnesses ?? [],
+    loadAgents: () => [...deps.agents.values()].filter(a => a.load === true)
+      .map(a => ({ id: a.id, projectPath: a.projectPath, provider: String(a.provider ?? ''), status: a.status })),
+    // The busy cap's seam, shaped like #593's capVerdict (core/project-cap.ts): every arrival allowed until it lands.
+    busyCap: () => ({ ok: true }),
+    git: (cwd, args) => safeGit(cwd, args, { timeout: 60_000 }).then(r => r.stdout),
+    prepare: (agentId, worktreePath) => { const a = deps.agents.get(agentId); if (a) { a.worktreePath = worktreePath; save(); } },
+    release: (agentId) => { const a = deps.agents.get(agentId); if (a && a.worktreePath) { delete a.worktreePath; save(); } },
+    launch: async (agentId, prompt) => {
+      const r = await launchAgent(agentId, prompt, { resumeSessionId: null });
+      return r.success ? { ok: true } : { ok: false, error: r.error };
+    },
+    stopSession: async (agentId) => {
+      const a = deps.agents.get(agentId);
+      if (a) await stopAgent(a, { by: 'Tars', reason: 'its load task ended' }, { save, announce });
+    },
+    statusOf: agentId => deps.agents.get(agentId)?.status,
+    onStatus: (fn) => { agentStatusEmitter.on('fleet-change', fn); return () => { agentStatusEmitter.off('fleet-change', fn); }; },
+    logArrival: (runId, arrival) => {
+      try {
+        updateRun(dirs.runs, runId, r => ({ ...r, arrivals: [...r.arrivals.filter(x => x.n !== arrival.n), arrival].sort((x, y) => x.n - y.n) }));
+      } catch (err) {
+        console.error(`[load] the log of ${runId} not written: ${(err as Error).message}`);
+      }
+      tell();
+    },
+  });
+
+  /** An approved run: the load agents its proposal planned made where missing, through the one creation, then armed. */
+  async function startEngine(runId: string, planned: Array<{ name: string; project: string; harness: string; existing: boolean }>): Promise<void> {
+    for (const p of planned.filter(x => !x.existing)) {
+      const grant = readGrants(dirs.grants).find(g => g.path === p.project);
+      if (!grant?.endpointId || !grant.model) continue;
+      try {
+        await createAgent({
+          projectPath: p.project, skills: [], name: p.name, provider: p.harness as AgentProvider, model: grant.model, endpointId: grant.endpointId,
+          traces: true, load: true, permissionMode: 'bypass', character: 'robot',
+        });
+      } catch (err) {
+        console.error(`[load] ${p.name} of ${p.project} not made: ${(err as Error).message}`);
+      }
+    }
+    engine.start(runId);
+  }
+  recoverLoad = () => engine.recover(window.unstoppedRunIds());
 
   /** The owner's click: the main window's own frame, nothing else. */
   const fromWindow = (e: IpcMainInvokeEvent): boolean => {

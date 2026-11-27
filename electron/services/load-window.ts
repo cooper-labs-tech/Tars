@@ -6,6 +6,7 @@ import {
   type LoadHarness, type LoadSplit, type LoadTask, type LoadWindowParams, type RefusedLine,
 } from './load-pool';
 import { approvedEndpoint, type LoadGrant } from './load-grants';
+import type { LoadRunPlan } from './load-engine';
 import { writeSecretFileSync } from '../utils/secret-file';
 import {
   createRun, newRunId, readRun, readSnapshot, updateRun,
@@ -62,7 +63,7 @@ export interface LoadWindowDeps {
   /** Tells the window the state changed (load:changed). */
   emit(): void;
   /** The engine's start of an approved run (the scheduler); none in this part. */
-  startRun?(run: LoadRunRecord): void;
+  startRun?(run: LoadRunRecord, agents: LoadProposal['agents']): void;
   /** The engine's stop of a run (its sessions stopped where they are). */
   stopRun?(runId: string): void;
 }
@@ -559,7 +560,8 @@ export function createLoadWindow(deps: LoadWindowDeps) {
     const approval: Approval = { runId: record.runId, pool: record.pool, snapshotSha256: record.snapshotSha256, window: record.window, approvedAt: now, lines: tasks.map(t => t.line) };
     writeSecretFileSync(deps.approvedFile, `${JSON.stringify([...approvals(), approval], null, 2)}\n`);
     createRun(deps.runsDir, record, pool.bytes);
-    deps.startRun?.(record);
+    // The engine (load-engine.ts): the load agents the proposal planned made where missing, then the arrivals armed.
+    deps.startRun?.(record, proposal.agents);
     deps.emit();
     return { ok: true, runId: record.runId };
   }
@@ -586,7 +588,35 @@ export function createLoadWindow(deps: LoadWindowDeps) {
     return { ok: true };
   }
 
-  return { refresh, approve, notNow, stop, projects, project, settle };
+  /**
+   * What the engine runs (load-engine.ts): the run's window, its approved tasks whole and its planned arrivals, from
+   * the private approval and the verified snapshot alone; none for a run not approved or whose snapshot changed.
+   */
+  function runPlan(runId: string): LoadRunPlan | undefined {
+    const a = approvals().find(x => x.runId === runId);
+    const snapshot = a ? readSnapshot(deps.runsDir, a.runId) : undefined;
+    if (!a || !snapshot || sha256(snapshot) !== a.snapshotSha256) return undefined;
+    const lines = new Set(a.lines);
+    return {
+      runId: a.runId, endsAt: a.approvedAt + a.window.window_min * 60_000, window: { max_concurrent: a.window.max_concurrent },
+      tasks: parseTasksJsonl(snapshot.toString('utf8')).tasks.filter(t => lines.has(t.line)),
+      planned: derivedOf(a, snapshot).planned.map(p => ({ n: p.n, taskId: p.taskId, plannedAt: p.plannedAt })),
+    };
+  }
+
+  /** Whether the run is the one under way. */
+  const isRunning = (runId: string): boolean => current()?.runId === runId;
+
+  /** The engine ends a run (an error it met), its stop kept with the approval. */
+  function endRun(runId: string, stopped: NonNullable<LoadRunRecord['stop']>): void {
+    setStop(runId, stopped);
+    deps.emit();
+  }
+
+  /** The runs approved and not stopped: at a start, those a quit or a crash cut. */
+  const unstoppedRunIds = (): string[] => approvals().filter(a => !a.stop).map(a => a.runId);
+
+  return { refresh, approve, notNow, stop, projects, project, settle, runPlan, isRunning, endRun, unstoppedRunIds };
 }
 
 export type LoadWindow = ReturnType<typeof createLoadWindow>;
