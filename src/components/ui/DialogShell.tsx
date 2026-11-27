@@ -1,7 +1,8 @@
 'use client';
 
-import { useEffect } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import type { ReactNode } from 'react';
+import { ChevronDown } from 'lucide-react';
 
 /**
  * Every dialog in the app.
@@ -45,6 +46,57 @@ export function DialogShell({
   children?: ReactNode;
   className?: string;
 }) {
+  // More below: the body overflows and is not scrolled to its end (`Dialog · a body longer than the window`). macOS
+  // hides the scroll bar, so without it a half-cut line was the only sign, and an answer could be given unread. The
+  // strip is in the flow, between the body and the foot, as the frame draws it: it takes its 26 px from the body and
+  // never covers it, so a field reached with Tab is never left under it (the Audit's M1 on #684).
+  //
+  // Cramped (`Dialog · a body longer than the window, at a high zoom`): when the body overflows and the room the cap
+  // leaves it (the window's height less 140, less the head, the foot and the strip) falls under 6 rem, as at 300 % on
+  // a 1200 by 800 window, the column of head, body and foot scrolls as one, so nothing is cut and the answers can be
+  // reached, and the strip sits under that column, never over the foot. At a normal zoom it never happens. The tree is
+  // the same either way, so a form keeps what was typed in it when the zoom changes.
+  const column = useRef<HTMLDivElement>(null);
+  const head = useRef<HTMLDivElement>(null);
+  const body = useRef<HTMLDivElement>(null);
+  const foot = useRef<HTMLDivElement>(null);
+  const [more, setMore] = useState(false);
+  const [cramped, setCramped] = useState(false);
+  const measure = useCallback(() => {
+    const el = body.current;
+    if (!el) { setMore(false); return; }
+    const rem = parseFloat(getComputedStyle(document.documentElement).fontSize) || 16;
+    const room = window.innerHeight - 140 - (head.current?.offsetHeight ?? 0) - (foot.current?.offsetHeight ?? 0) - 2;
+    const isCramped = el.scrollHeight > room + 1 && room - 26 < 6 * rem;
+    setCramped(isCramped);
+    const scroller = isCramped ? column.current : el;
+    setMore(!!scroller && scroller.scrollHeight - scroller.scrollTop - scroller.clientHeight > 1);
+  }, []);
+  useEffect(() => {
+    const el = body.current;
+    if (!open || !el) return;
+    measure();
+    const seen = new ResizeObserver(measure);
+    seen.observe(el);
+    for (const child of Array.from(el.children)) seen.observe(child);
+    window.addEventListener('resize', measure);
+    return () => { seen.disconnect(); window.removeEventListener('resize', measure); };
+  }, [open, measure, children, cramped]);
+  const pageDown = () => {
+    const scroller = cramped ? column.current : body.current;
+    scroller?.scrollBy({ top: scroller.clientHeight - 26, behavior: 'smooth' });
+  };
+  const moreBelow = (
+    <button
+      type="button"
+      onClick={pageDown}
+      className="shrink-0 h-[26px] flex items-center justify-center gap-1.5 border-t border-border bg-card font-mono text-[10.5px] text-muted-foreground hover:text-foreground"
+    >
+      <ChevronDown className="w-3 h-3" aria-hidden />
+      more below
+    </button>
+  );
+
   useEffect(() => {
     if (!open) return;
     const onKeyDown = (e: KeyboardEvent) => {
@@ -68,24 +120,28 @@ export function DialogShell({
         style={{ width }}
         className={`absolute top-[90px] left-1/2 -translate-x-1/2 max-w-[calc(100vw-48px)] max-h-[calc(100vh-140px)] flex flex-col border border-border bg-card ${className}`}
       >
-        {(title || subtitle) && (
-          <div className="px-4 py-3.5 border-b border-border shrink-0 flex items-start justify-between gap-4">
-            <div className="min-w-0">
-              {title && <h2 className="font-serif text-2xl leading-[1.15] text-foreground">{title}</h2>}
-              {subtitle && (
-                <p className="mt-0.5 text-[12.5px] leading-[1.4] text-muted-foreground">{subtitle}</p>
-              )}
+        <div ref={column} onScroll={cramped ? measure : undefined} className={cramped ? 'min-h-0 flex flex-col overflow-y-auto' : 'min-h-0 flex flex-col'}>
+          {(title || subtitle) && (
+            <div ref={head} className="px-4 py-3.5 border-b border-border shrink-0 flex items-start justify-between gap-4">
+              <div className="min-w-0">
+                {title && <h2 className="font-serif text-2xl leading-[1.15] text-foreground">{title}</h2>}
+                {subtitle && (
+                  <p className="mt-0.5 text-[12.5px] leading-[1.4] text-muted-foreground">{subtitle}</p>
+                )}
+              </div>
+              {headerRight && <div className="shrink-0 pt-0.5">{headerRight}</div>}
             </div>
-            {headerRight && <div className="shrink-0 pt-0.5">{headerRight}</div>}
-          </div>
-        )}
-        <div className="min-h-0 overflow-y-auto p-4">{children}</div>
-        {(footerLeft || footerRight) && (
-          <div className="flex items-center justify-between gap-3 px-4 py-3 border-t border-border shrink-0">
-            <div className="flex items-center gap-2">{footerLeft}</div>
-            <div className="flex items-center gap-2">{footerRight}</div>
-          </div>
-        )}
+          )}
+          <div ref={body} onScroll={cramped ? undefined : measure} className={cramped ? 'shrink-0 p-4' : 'min-h-0 overflow-y-auto p-4'}>{children}</div>
+          {more && !cramped && moreBelow}
+          {(footerLeft || footerRight) && (
+            <div ref={foot} className="flex items-center justify-between gap-3 px-4 py-3 border-t border-border shrink-0">
+              <div className="flex items-center gap-2">{footerLeft}</div>
+              <div className="flex items-center gap-2">{footerRight}</div>
+            </div>
+          )}
+        </div>
+        {more && cramped && moreBelow}
       </div>
     </div>
   );
