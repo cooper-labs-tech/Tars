@@ -44,6 +44,19 @@ function gh(args: string[]): Promise<string> {
 
 const POLL_MS = 5000;
 
+/** The registered window's way to tell it the state, for the watch main.ts starts. */
+let tellWindow: (() => void) | undefined;
+
+/**
+ * Reads the state every 5 s and tells the window when it changed (a pool written, a window's end). Started by main.ts
+ * with the app's other watches, never by the registration, so a test that registers the handlers runs no timer.
+ */
+export function startLoadWatch(): () => void {
+  const timer = setInterval(() => tellWindow?.(), POLL_MS);
+  timer.unref?.();
+  return () => clearInterval(timer);
+}
+
 export function registerLoadHandlers(deps: LoadHandlerDeps): { window: LoadWindow; dispose(): void } {
   const dirs = deps.dirs ?? {
     pools: path.join(DATA_DIR, 'load-pools'), runs: path.join(DATA_DIR, 'load-runs'), grants: LOAD_GRANTS_FILE, approved: privatePath('load-approved.json'),
@@ -100,13 +113,11 @@ export function registerLoadHandlers(deps: LoadHandlerDeps): { window: LoadWindo
     return { ok: true, grants: readGrants(dirs.grants) };
   });
 
-  // A pool written, a window's end: the window hears of it within a few seconds.
-  const timer = setInterval(tell, POLL_MS);
-  timer.unref?.();
+  tellWindow = tell;
   return {
     window,
     dispose: () => {
-      clearInterval(timer);
+      if (tellWindow === tell) tellWindow = undefined;
       for (const channel of ['load:state', 'load:approve', 'load:notNow', 'load:stop', 'load:grants', 'load:grant']) ipcMain.removeHandler(channel);
     },
   };
