@@ -122,8 +122,15 @@ test('the training switch: on by default, stamped on each session as it stood, s
     const pass = () => app!.evaluate((_e, d) => process.mainModule!.require(`${d}/services/traces-runtime.js`).traceUploader().runOnce(), dist) as Promise<{ sent: number; failed: number; skipped?: string }>;
     const turn = async (what: string) => {
       const answers = () => lines(fakeLog).filter(e => e.answer && e.agent === Q).length;
+      const typed = () => lines(fakeLog).filter(e => e.typed && e.agent === Q).length;
       const before = answers();
-      await api('agent', 'sendInput', { id: Q, input: `Run the probe for ${what}.\r` });
+      const typedBefore = typed();
+      // A terminal Tars restored at its start may not read yet: typed again once if the fake saw nothing in 15 s
+      // (both tries are in the fake's log).
+      for (let attempt = 0; attempt < 2 && typed() === typedBefore; attempt++) {
+        await api('agent', 'sendInput', { id: Q, input: `Run the probe for ${what}.\r` });
+        await expect.poll(typed, { timeout: 15_000 }).toBeGreaterThan(typedBefore).catch(() => undefined);
+      }
       await expect.poll(answers, { timeout: 60_000, message: `Q's turn for ${what}` }).toBeGreaterThan(before);
     };
     const startQ = async () => {
@@ -188,8 +195,12 @@ test('the training switch: on by default, stamped on each session as it stood, s
     keep({ owedAfter, putsAfter4: consentPuts().map(p => ({ status: p.status, body: p.body })) });
     expect.soft(owedAfter, 'step 4: nothing owed once sent').toMatchObject({ training: true, owed: false });
 
-    // 5. A new session after the restart is true; the old one stays false.
-    await a.startQ();
+    // 5. A new session after the restart is true; the old one stays false. Tars may restore Q's terminal by itself at
+    // the start (a new endpoint session), or not: that launch is waited for 15 s, and Q started when it did not come.
+    const launches = () => lines(fakeLog).filter(e => e.launch && e.agent === Q).length;
+    const restored = await expect.poll(launches, { timeout: 15_000 }).toBeGreaterThanOrEqual(2).then(() => true, () => false);
+    if (!restored) await a.startQ();
+    keep({ restoredAtStart: restored });
     await a.turn('step 5');
     const pass5 = await a.pass();
     const consents5 = sessionConsents();
@@ -205,6 +216,8 @@ test('the training switch: on by default, stamped on each session as it stood, s
     keep({ backOffice: backOfficeCalls().map(c => ({ method: c.method, url: c.url, status: c.status, auth: c.auth })) });
   } finally {
     await app?.close().catch(() => {});
+    // The fake CLI's own log, part of the artefact: what Q's harness was launched with and what it answered.
+    if (fs.existsSync(fakeLog)) fs.copyFileSync(fakeLog, test.info().outputPath('fake-cli.jsonl'));
     await standin.close();
     await new Promise(r => backOffice.close(() => r(undefined)));
     await removeHome(home);
