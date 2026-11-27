@@ -2,6 +2,7 @@ import { test, expect, _electron as electron, type ElectronApplication, type Pag
 import * as fs from 'fs';
 import * as http from 'http';
 import * as path from 'path';
+import * as zlib from 'zlib';
 import { randomBytes } from 'crypto';
 import { execFileSync } from 'child_process';
 import type { AddressInfo } from 'net';
@@ -55,7 +56,10 @@ test('the training switch: on by default, stamped on each session as it stood, s
     const chunks: Buffer[] = [];
     req.on('data', (c: Buffer) => chunks.push(c));
     req.on('end', () => {
-      const raw = Buffer.concat(chunks).toString();
+      const bytes = Buffer.concat(chunks);
+      const enc = req.headers['content-encoding'];
+      const zstd = zlib as unknown as { zstdDecompressSync: (b: Buffer) => Buffer };
+      const raw = (enc === 'zstd' ? zstd.zstdDecompressSync(bytes) : enc === 'gzip' ? zlib.gunzipSync(bytes) : bytes).toString();
       const token = String(req.headers.authorization ?? '').replace(/^Bearer /, '');
       let status = 200;
       let body: unknown = {};

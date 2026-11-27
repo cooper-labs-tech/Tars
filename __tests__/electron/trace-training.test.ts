@@ -3,6 +3,7 @@ import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
 import * as http from 'node:http';
+import * as zlib from 'node:zlib';
 import type { AddressInfo } from 'node:net';
 import { TraceStore } from '../../electron/services/trace-store';
 import { sessionDocument } from '../../electron/services/trace-export';
@@ -54,7 +55,10 @@ class BackOffice {
       const chunks: Buffer[] = [];
       req.on('data', c => chunks.push(c));
       req.on('end', async () => {
-        const body = Buffer.concat(chunks).toString();
+        const raw = Buffer.concat(chunks);
+        const enc = req.headers['content-encoding'];
+        const zstd = zlib as unknown as { zstdDecompressSync: (b: Buffer) => Buffer };
+        const body = (enc === 'zstd' ? zstd.zstdDecompressSync(raw) : enc === 'gzip' ? zlib.gunzipSync(raw) : raw).toString();
         const url = req.url ?? '';
         const auth = String(req.headers.authorization ?? '');
         this.seen.push({ method: req.method ?? '', url, auth, body });
