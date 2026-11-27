@@ -15,9 +15,10 @@ import { DEV_URL, apiPort } from './ports.mjs';
  *    connect ECONNREFUSED 127.0.0.1:9", never Electron's "Error invoking remote
  *    method 'hermes:crons:list'" (the Frontend's finding, 27/11).
  * 2. Brain, Backends keeps its six sources, Hermes among them, unreachable, and
- *    says the same sentence under the gateway's MCP servers and its memory
- *    provider: one of the page's three calls rejecting took every source off
- *    it, and both said "No response from the gateway".
+ *    says the same sentence on the Hermes memory row and under the gateway's
+ *    MCP servers and its memory provider: one of the page's three calls
+ *    rejecting took every source off it, both cards said "No response from the
+ *    gateway", and the row the transport's raw words.
  * Red on main 58f2863b4's main process; the surfaces' baselines of both pages
  * (crons, brain-backends) photographed both defects.
  */
@@ -57,7 +58,7 @@ test('schedules: a gateway that gives no answer is named, with the reason, never
   recordValues({ schedules: { shown: SENTENCE, electronWords: 0 }, pageErrors: errors });
 });
 
-test('brain, backends: the sources stay, and the gateway\'s two cards say why it gave no answer', async () => {
+test('brain, backends: the sources stay, and the Hermes row and the gateway\'s two cards say why it gave no answer', async () => {
   test.setTimeout(180_000);
   await page.goto(`${DEV_URL}/memory`, { waitUntil: 'domcontentloaded' });
   const backends = page.getByRole('radio', { name: 'Backends' });
@@ -65,9 +66,10 @@ test('brain, backends: the sources stay, and the gateway\'s two cards say why it
   await expect(backends).toHaveAttribute('aria-checked', 'true');
 
   for (const label of SOURCES) await expect(page.getByText(label, { exact: true }).first()).toBeVisible({ timeout: 60_000 });
-  await expect(page.getByText(SENTENCE, { exact: true })).toHaveCount(2);
+  await expect(page.getByText(SENTENCE, { exact: true })).toHaveCount(3);
   await expect(page.getByText('No response from the gateway', { exact: true })).toHaveCount(0);
+  await expect(page.getByText('connect ECONNREFUSED 127.0.0.1:9', { exact: true })).toHaveCount(0);
   await stepShot(page, '02-backends-keep-their-sources');
   expect(errors, errors.join('\n')).toEqual([]);
-  recordValues({ backends: { sources: SOURCES, sentenceShown: 2, noResponse: 0 }, pageErrors: errors });
+  recordValues({ backends: { sources: SOURCES, sentenceShown: 3, rawWords: 0, noResponse: 0 }, pageErrors: errors });
 });
