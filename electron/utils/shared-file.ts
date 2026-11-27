@@ -1,5 +1,6 @@
 import * as fs from 'fs';
 import * as path from 'path';
+import { applyEdits, modify, stripComments, type JSONPath } from 'jsonc-parser';
 import { renameReplacingSync } from '../platform/rename-replacing';
 
 /** What updateSharedJsonSync did. */
@@ -84,6 +85,87 @@ export function updateSharedJsonSync<T>(
 
 const parsesAsJson = (text: string) => { JSON.parse(text); };
 const withNewline = (text: string) => (text === '' || text.endsWith('\n') ? text : `${text}\n`);
+
+/**
+ * JSON with comments, read as gemini 0.70.0 reads its settings.json: its `//` and block comments out, then strict JSON
+ * (`JSON.parse(stripJsonComments(content))` in its `_doLoadSettings`, read in its bundle), so a trailing comma is
+ * still an error. Throws on what gemini could not read.
+ */
+export function parseJsonc(text: string): unknown {
+  return JSON.parse(stripComments(text));
+}
+
+const isObject = (v: unknown): v is Record<string, unknown> => typeof v === 'object' && v !== null && !Array.isArray(v);
+
+/** Whether two JSON values are the same, whatever the order of their keys. */
+function sameJson(a: unknown, b: unknown): boolean {
+  if (isObject(a) && isObject(b)) {
+    const keys = Object.keys(a);
+    return keys.length === Object.keys(b).length && keys.every((k) => Object.hasOwn(b, k) && sameJson(a[k], b[k]));
+  }
+  if (Array.isArray(a) && Array.isArray(b)) return a.length === b.length && a.every((v, i) => sameJson(v, b[i]));
+  return a === b;
+}
+
+/** The edits that make `from` into `to`, as deep in the objects as they go: a value or an array changed is set whole. */
+function changesBetween(from: unknown, to: unknown, at: JSONPath): Array<[JSONPath, unknown]> {
+  if (!isObject(from) || !isObject(to)) return sameJson(from, to) ? [] : [[at, to]];
+  const changes: Array<[JSONPath, unknown]> = [];
+  for (const key of Object.keys(from)) if (!Object.hasOwn(to, key)) changes.push([[...at, key], undefined]);
+  for (const [key, value] of Object.entries(to)) {
+    if (!Object.hasOwn(from, key)) changes.push([[...at, key], value]);
+    else changes.push(...changesBetween(from[key], value, [...at, key]));
+  }
+  return changes;
+}
+
+/**
+ * updateSharedJsonSync for a JSON file its own program reads with comments: gemini's settings.json (the Audit's P-1 on
+ * #633), whose hooks Tars writes at every start, on every platform. The file is read as gemini reads it (parseJsonc),
+ * and must hold an object: anything else, a trailing comma, a half-written file, an array, is 'unreadable' and left
+ * byte for byte, where Tars used to start from nothing and write its hooks alone over the user's settings. An empty
+ * file holds nothing and is written whole, as a missing one is. Otherwise only what changed is edited into the text,
+ * so the user's comments and layout stay (gemini's own writer keeps them too), and what gemini would read back must be
+ * exactly what `update` returned, or nothing is written ('refused'). An array Tars changes is written whole, without
+ * the comments inside it.
+ */
+export function updateSharedJsoncSync<T extends Record<string, unknown>>(
+  filePath: string,
+  update: (current: T | undefined) => T | undefined,
+  { createMode = 0o600 }: { createMode?: number } = {},
+): SharedJsonOutcome {
+  return replaceShared(filePath, before => {
+    let current: T | undefined;
+    if (before !== undefined && before.trim()) {
+      let parsed: unknown;
+      try {
+        parsed = parseJsonc(before);
+      } catch {
+        return 'unreadable';
+      }
+      if (!isObject(parsed)) return 'unreadable';
+      current = parsed as T;
+    }
+    // As read, before `update` may change `current` in place.
+    const original = current === undefined ? undefined : (parseJsonc(before as string) as Record<string, unknown>);
+    const next = update(current);
+    if (next === undefined || (original !== undefined && sameJson(original, next))) return 'unchanged';
+    if (original === undefined) return { write: `${JSON.stringify(next, null, 2)}\n` };
+
+    const eol = (before as string).includes('\r\n') ? '\r\n' : '\n';
+    let text = before as string;
+    for (const [at, value] of changesBetween(original, next, [])) {
+      text = applyEdits(text, modify(text, at, value, { formattingOptions: { insertSpaces: true, tabSize: 2, eol } }));
+    }
+    let back: unknown;
+    try {
+      back = parseJsonc(text);
+    } catch {
+      return 'refused';
+    }
+    return sameJson(back, next) ? { write: withNewline(text) } : 'refused';
+  }, createMode, parseJsonc);
+}
 
 /**
  * updateSharedJsonSync for a file that is not JSON: codex's config.toml, which every codex reads at its start and

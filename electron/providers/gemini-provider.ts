@@ -17,13 +17,45 @@ import type {
 } from './cli-provider';
 import { servedPathMatches, shellQuote } from './cli-provider';
 import { geminiRoleArgs } from '../services/mcp-roles';
-import { writeSharedJsonSync } from '../utils/shared-file';
+import { parseJsonc, updateSharedJsoncSync, type SharedJsonOutcome } from '../utils/shared-file';
+import { agentNotice } from '../core/agent-notices';
+
+type HookEntry = { matcher?: string; hooks: Array<{ type: string; command: string; timeout?: number }> };
+type GeminiSettings = { hooks?: Record<string, HookEntry[]>; mcpServers?: Record<string, unknown>; [key: string]: unknown };
+
+/**
+ * Why Tars's hooks are not in gemini's settings file, in the window's words, or null when they are. One sentence:
+ * the log says it at Tars's start, and each launch of a gemini agent says it in that agent's output (agentNotice).
+ */
+/**
+ * Why Tars left gemini's settings file as it was, in the words the user reads (the hooks' notice here, and the
+ * window's MCP channels, handlers/mcp-config-handlers.ts), or null when it was written or needed nothing.
+ */
+export function geminiSettingsLeft(outcome: SharedJsonOutcome, settingsPath: string): string | null {
+  const shown = settingsPath.startsWith(os.homedir()) ? `~${settingsPath.slice(os.homedir().length)}` : settingsPath;
+  const why = outcome === 'unreadable'
+    ? 'could not be read as gemini reads it (not valid JSON even without its comments, or not an object)'
+    : outcome === 'busy' ? 'kept changing while Tars wrote to it'
+      : outcome === 'refused' ? 'would have read back differently from what Tars meant to write'
+        : null;
+  return why ? `Gemini's settings file ${shown} ${why}, so Tars left it exactly as it is` : null;
+}
+
+function hooksNotWritten(outcome: SharedJsonOutcome, settingsPath: string): string | null {
+  const left = geminiSettingsLeft(outcome, settingsPath);
+  return left && `${left} and wrote none of its hooks there: `
+    + 'this agent runs, but Tars does not hear its turns or its answers until the file is fixed, and its next start tries again.';
+}
 
 export class GeminiProvider implements CLIProvider {
   readonly id = 'gemini' as const;
   readonly displayName = 'Gemini CLI';
   readonly binaryName = 'gemini';
   readonly configDir = path.join(os.homedir(), '.gemini');
+  /** Where Tars's hooks are, and on which platform, from configureHooks: a launch writes them again from there. */
+  private hooksAt: { dir: string; platform: NodeJS.Platform } | undefined;
+  /** Why Tars's hooks are not in gemini's settings file (hooksNotWritten), or null. */
+  private hooksProblem: string | null = null;
 
   getModels(): ProviderModel[] {
     return [
@@ -39,6 +71,12 @@ export class GeminiProvider implements CLIProvider {
   }
 
   buildInteractiveCommand(params: InteractiveCommandParams): string {
+    // Its hooks tried again if Tars could not write them (the file may be fixed since), and the agent told if they are
+    // still missing: it runs all the same, unheard.
+    if (params.agentId && this.hooksProblem && this.hooksAt) {
+      this.writeHooks(this.hooksAt.dir, this.hooksAt.platform);
+      if (this.hooksProblem) agentNotice(params.agentId, this.hooksProblem);
+    }
     let command = `'${params.binaryPath.replace(/'/g, "'\\''")}'`;
 
     // Model (Gemini uses -m flag)
@@ -144,37 +182,37 @@ export class GeminiProvider implements CLIProvider {
   }
 
   async configureHooks(hooksDir: string, platform: NodeJS.Platform = process.platform): Promise<void> {
+    this.writeHooks(hooksDir, platform);
+  }
+
+  /**
+   * Tars's hooks into gemini's own settings file, `~/.gemini/settings.json`, which holds everything else of the
+   * user's gemini: their servers, their auth. Read as gemini reads it, comments included, and edited where it changes
+   * (updateSharedJsoncSync), on every platform. A file gemini could not read either is left byte for byte: Tars used
+   * to start from nothing on macOS and Linux and write its hooks alone over the user's settings, at every start (the
+   * Audit's P-1 on #633). Then the agents run without Tars's hooks, which the log says now and each gemini launch
+   * says in its agent's output (hooksNotWritten).
+   */
+  private writeHooks(hooksDir: string, platform: NodeJS.Platform): void {
     const geminiHooksDir = path.join(hooksDir, 'gemini');
     if (!fs.existsSync(geminiHooksDir)) {
       console.log('Gemini hooks directory not found at', geminiHooksDir);
       return;
     }
-    // Windows: the Node runner, not the .sh, which cannot run there (see hook-command.ts).
-    if (usesNodeHooks(platform)) {
-      configureGeminiNodeHooks(this.configDir, hooksDir);
-      return;
-    }
-
+    this.hooksAt = { dir: hooksDir, platform };
     const settingsPath = path.join(this.configDir, 'settings.json');
+    // Windows: the Node runner, not the .sh, which cannot run there (see hook-command.ts).
+    const outcome = usesNodeHooks(platform)
+      ? configureGeminiNodeHooks(this.configDir, hooksDir)
+      : updateSharedJsoncSync<GeminiSettings>(settingsPath, (current) => this.withShHooks(current ?? {}, geminiHooksDir, hooksDir));
+    this.hooksProblem = hooksNotWritten(outcome, settingsPath);
+    if (this.hooksProblem) console.warn(`[gemini] hooks not written: ${this.hooksProblem}`);
+    else if (!usesNodeHooks(platform)) console.log(outcome === 'written' ? `Gemini hooks configured/updated in ${settingsPath}` : 'Gemini hooks already configured');
+  }
 
-    if (!fs.existsSync(this.configDir)) {
-      fs.mkdirSync(this.configDir, { recursive: true });
-    }
-
-    let settings: {
-      hooks?: Record<string, Array<{ matcher?: string; hooks: Array<{ type: string; command: string; timeout?: number }> }>>;
-      [key: string]: unknown;
-    } = {};
-
-    if (fs.existsSync(settingsPath)) {
-      try {
-        settings = JSON.parse(fs.readFileSync(settingsPath, 'utf-8'));
-      } catch {
-        settings = {};
-      }
-    }
-
-    if (!settings.hooks) {
+  /** darwin/linux: Tars's .sh hooks and the agent token's allow-list in `settings`, or undefined when both are there. */
+  private withShHooks(settings: GeminiSettings, geminiHooksDir: string, hooksDir: string): GeminiSettings | undefined {
+    if (!settings.hooks || typeof settings.hooks !== 'object' || Array.isArray(settings.hooks)) {
       settings.hooks = {};
     }
 
@@ -191,8 +229,6 @@ export class GeminiProvider implements CLIProvider {
     ];
 
     let updated = false;
-
-    type HookEntry = { matcher?: string; hooks: Array<{ type: string; command: string; timeout?: number }> };
 
     // The entry an older Tars wrote on UserPromptSubmit goes; the user's own
     // entries in that event stay, and so do another app's of the same name
@@ -239,12 +275,7 @@ export class GeminiProvider implements CLIProvider {
     // The agent token through Gemini's environment redaction, as on win32.
     if (allowAgentToken(settings)) updated = true;
 
-    if (updated) {
-      writeSharedJsonSync(settingsPath, settings);
-      console.log('Gemini hooks configured/updated in', settingsPath);
-    } else {
-      console.log('Gemini hooks already configured');
-    }
+    return updated ? settings : undefined;
   }
 
   async registerMcpServer(name: string, command: string, args: string[]): Promise<void> {
@@ -268,28 +299,17 @@ export class GeminiProvider implements CLIProvider {
       console.warn(`[gemini] gemini mcp add failed (${cliFailureText(err)}), writing settings.json instead`);
     }
 
+    // Read and edited as gemini reads it, like its hooks: a file gemini could not read either is left as it is, never
+    // replaced by this server alone (the Audit's P-1 on #633).
     const settingsPath = path.join(this.configDir, 'settings.json');
-
-    if (!fs.existsSync(this.configDir)) {
-      fs.mkdirSync(this.configDir, { recursive: true });
-    }
-
-    let settings: { mcpServers?: Record<string, unknown>; [key: string]: unknown } = {};
-    if (fs.existsSync(settingsPath)) {
-      try {
-        settings = JSON.parse(fs.readFileSync(settingsPath, 'utf-8'));
-      } catch {
-        settings = {};
-      }
-    }
-
-    if (!settings.mcpServers) {
-      settings.mcpServers = {};
-    }
-
-    (settings.mcpServers as Record<string, unknown>)[name] = { command, args };
-    writeSharedJsonSync(settingsPath, settings);
-    console.log(`[gemini] Registered MCP server ${name} in settings.json (fallback)`);
+    const outcome = updateSharedJsoncSync<GeminiSettings>(settingsPath, (current) => {
+      const settings = current ?? {};
+      const servers = settings.mcpServers && typeof settings.mcpServers === 'object' && !Array.isArray(settings.mcpServers) ? settings.mcpServers : {};
+      settings.mcpServers = { ...servers, [name]: { command, args } };
+      return settings;
+    });
+    if (outcome === 'written' || outcome === 'unchanged') console.log(`[gemini] Registered MCP server ${name} in settings.json (fallback)`);
+    else console.warn(`[gemini] MCP server ${name} not registered: ${settingsPath} ${outcome === 'unreadable' ? 'could not be read as gemini reads it' : 'could not be written'}, left as it is`);
   }
 
   async removeMcpServer(name: string): Promise<void> {
@@ -308,28 +328,23 @@ export class GeminiProvider implements CLIProvider {
       if (err instanceof CliNotRunnableError) console.warn(`[gemini] gemini mcp remove not run: ${err.message}`);
     }
 
-    // Also clean settings.json fallback
+    // Also clean settings.json fallback, read as gemini reads it; a file it could not read either is left as it is.
     const settingsPath = path.join(this.configDir, 'settings.json');
-    if (!fs.existsSync(settingsPath)) return;
-
-    try {
-      const settings = JSON.parse(fs.readFileSync(settingsPath, 'utf-8'));
-      if (settings?.mcpServers?.[name]) {
-        delete settings.mcpServers[name];
-        writeSharedJsonSync(settingsPath, settings);
-        console.log(`[gemini] Removed MCP server ${name} from settings.json`);
-      }
-    } catch {
-      // Ignore parse errors
-    }
+    const outcome = updateSharedJsoncSync<GeminiSettings>(settingsPath, (current) => {
+      const servers = current?.mcpServers;
+      if (!current || !servers || typeof servers !== 'object' || !Object.hasOwn(servers, name)) return undefined;
+      delete servers[name];
+      return current;
+    });
+    if (outcome === 'written') console.log(`[gemini] Removed MCP server ${name} from settings.json`);
   }
 
   isMcpServerRegistered(name: string, expectedServerPath: string): boolean {
     const settingsPath = path.join(this.configDir, 'settings.json');
     if (!fs.existsSync(settingsPath)) return false;
     try {
-      const settings = JSON.parse(fs.readFileSync(settingsPath, 'utf-8'));
-      const existing = settings?.mcpServers?.[name];
+      const settings = parseJsonc(fs.readFileSync(settingsPath, 'utf-8')) as GeminiSettings;
+      const existing = (settings?.mcpServers as Record<string, { args?: string[] }> | undefined)?.[name];
       if (!existing?.args) return false;
       return servedPathMatches(existing.args[existing.args.length - 1], expectedServerPath);
     } catch {

@@ -14,7 +14,7 @@ import { AGENTS_FILE, API_TOKEN_FILE, DATA_DIR, dataPath } from '../constants';
 import { dropRejectedTails, keysHandedToClaude, maskKeyFragments } from './key-fragments';
 import { ensureDataDir, sendNotification } from '../utils';
 import { isSkillName } from '../utils/skill-name';
-import { quoted } from '../utils/reveal';
+import { quoted, reveal } from '../utils/reveal';
 import { hasOrchestratorPowers, rolesOnLoad } from './agent-role';
 import { holdsMessages } from './one-task';
 import { deliveryVerdict, sessionTail, taskOnRecord } from './delivery-proof';
@@ -23,6 +23,7 @@ import { keptSender } from '../services/agent-queues';
 import { dialogOpen, dialogShown } from './agent-launch';
 import type * as pty from 'node-pty';
 import { cliStoppedIn, spawnAgentPty, agentShell, codexLaunching } from './agent-pty';
+import { setAgentNoticeSink } from './agent-notices';
 import { killPty } from './pty-kill';
 import { withPath, type DirectLaunch, type Launch } from '../platform';
 import { buildFullPath } from '../utils/path-builder';
@@ -411,6 +412,23 @@ export function appendAgentOutput(agent: AgentStatus, chunk: string): void {
   }
   markAgentsDirty();
 }
+
+// A notice from below the agent store (core/agent-notices.ts: a gemini launch without Tars's hooks) goes where a person
+// reads it, the agent's kept output, as a refused session's does (hooks-routes.ts).
+//
+// Written to be printed: a notice can name a folder the agent was saved with (gemini's and Qwen Code's split at a comma,
+// grok's secondary folder), and a direct edit of agents.json or templates.json can put there what every save path
+// refuses, control characters among them, which a terminal acts on: a cleared screen, the cursor moved over an earlier
+// line, a title, a line end and a forged [Tars] line, in what the Logs page replays and get_agent_output hands an
+// orchestrator. So each character that does not show is written out as Tars writes it in a refusal, `[U+001B]`
+// (utils/reveal.ts), and the newline and the tab too, so the notice stays one line. Not JSON.stringify: it escapes the
+// C0 controls only, and the headless xterm a panel's mirror runs acts on the C1 controls too (U+009B as a CSI).
+setAgentNoticeSink((agentId, notice) => {
+  const line = reveal(notice).text.replace(/\n/g, '[U+000A]').replace(/\t/g, '[U+0009]');
+  const agent = agents.get(agentId);
+  if (agent) appendAgentOutput(agent, `\r\n[Tars] ${line}\r\n`);
+  else console.log(`[notice] ${agentId}: ${line}`);
+});
 
 interface AgentsFile {
   version: number;
