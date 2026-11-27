@@ -30,7 +30,10 @@ import type { WireRecord } from './trace-store';
  *   recorder that fails changes nothing for the harness. With it go the time of the first byte and the time of the
  *   first token: when the chunk holding the first stream event with text, reasoning or a tool call came (a chunk
  *   with only a role, or empty, is not one), found on the copy once the response has ended, never on the relay's
- *   path. A response that is not streamed has its first byte as its first token.
+ *   path. A response that is not streamed has its first byte as its first token. With them go the number of traced
+ *   sessions live on this computer when the request came, and the harness's own session id when it sends one (codex's
+ *   `session-id`). No other header is recorded: codex's installation id header goes on to the endpoint as it came,
+ *   and nowhere else.
  *
  * It speaks the three protocols the endpoints serve, chat completions, Responses and Anthropic Messages (with
  * count_tokens), plus `GET /v1/models`. Nothing else is forwarded.
@@ -64,6 +67,8 @@ export interface ProxyDeps {
   sessionOf(token: string): ProxySession | undefined;
   targetOf(endpointId: string): ProxyTarget | { refused: { status: number; type: string; message: string } };
   record?(rec: WireRecord): void;
+  /** The traced sessions live on this computer now (traces-runtime.ts): counted when a request comes in. */
+  liveSessions?(): number;
   onHold?(e: HoldEvent): void;
   sleep?(ms: number, signal: AbortSignal): Promise<void>;
   now?(): number;
@@ -129,6 +134,12 @@ const defaultSleep = (ms: number, signal: AbortSignal): Promise<void> => new Pro
   const timer = setTimeout(resolve, ms);
   signal.addEventListener('abort', () => { clearTimeout(timer); resolve(); }, { once: true });
 });
+
+/** A harness's session id as a header gave it: one token of printable characters, 200 at most; else none. */
+function sessionIdOf(value: string | string[] | undefined): string | undefined {
+  const v = (Array.isArray(value) ? value[0] : value)?.trim();
+  return v && v.length <= 200 && /^[\x21-\x7e]+$/.test(v) ? v : undefined;
+}
 
 function presentedToken(headers: http.IncomingHttpHeaders): { token: string; form: 'bearer' | 'x-api-key' } | null {
   const auth = headers.authorization;
@@ -208,6 +219,10 @@ export function createEndpointProxy(deps: ProxyDeps): http.Server {
       return;
     }
     const body = Buffer.concat(chunks);
+    // For the record: how many traced sessions were live when this request came, and the harness's own session id
+    // (codex 0.170's session-id header, measured 26/11). Every header still goes on as the harness sent it.
+    const liveSessions = session.traced ? deps.liveSessions?.() : undefined;
+    const nativeSessionId = sessionIdOf(req.headers['session-id']);
 
     const target = deps.targetOf(session.endpointId);
     if ('refused' in target) {
@@ -332,7 +347,7 @@ export function createEndpointProxy(deps: ProxyDeps): http.Server {
       const rec: WireRecord = {
         traceId: session!.traceId, agentId: session!.agentId, surface, startedAt, firstByteAt, endedAt: now(),
         status: upstream?.statusCode ?? 502, contentType: upstream?.headers['content-type'], requestBody: body, responseBody,
-        upstreamRequestId, attempts, heldMs, error,
+        upstreamRequestId, attempts, heldMs, error, liveSessions, nativeSessionId,
       };
       setImmediate(() => {
         try {

@@ -21,7 +21,7 @@ import { startGithubWatch } from './services/github-watch';
 import { onRelayReply, onRelayStatus, relayEnabled, relaySend, relayWasSent, startHermesRelay, tellUser } from './services/hermes-relay';
 import { startRelayRouting } from './services/hermes-relay-routing';
 import { reportsOn } from './services/event-reports';
-import { app, dialog, ipcMain, Notification, powerSaveBlocker } from 'electron';
+import { app, dialog, ipcMain, Notification, powerMonitor, powerSaveBlocker } from 'electron';
 import { endPermissionAsks } from './services/permission-asks';
 import { stopSharedMcp } from './services/mcp-shared';
 import * as fs from 'fs';
@@ -455,6 +455,10 @@ function initApiServer() {
     writeSettings: writeAppSettingsFile,
     getAgent: (id) => agents.get(id),
     clientVersion: app.getVersion(),
+    launchedBinary: (agent) => agent.cliPath || getProvider(agent.provider).resolveBinaryPath(appSettings),
+    power: powerMonitor,
+    systemVersion: () => process.getSystemVersion(),
+    locale: () => app.getSystemLocale(),
     emit: (channel, payload) => { const w = getMainWindow(); if (w && !w.isDestroyed()) w.webContents.send(channel, payload); },
   });
   moveLocalKanbanToHermes();

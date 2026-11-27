@@ -23,7 +23,9 @@ import { scrubValue, SCRUB_VERSION, type ScrubContext } from './trace-scrub';
  * - **Resumable**: what was sent is kept in the store (`uploads`), by change sequence, so a restart sends only what
  *   is new or grew. A failure waits (backoff, or Retry-After for a 429 or 503) and the next pass goes on.
  * - **Never** a session whose project or agent is not opted in at the time of sending, a person's name as a turn's
- *   author detail, an endpoint's address or key, or anything outside the traced sessions.
+ *   author detail, an endpoint's address or key, or anything outside the traced sessions. Nor the computer's name, the
+ *   user's, a serial number or an address: a session's environment holds none (session-environment.ts), and a
+ *   harness's installation id is never stored (trace-wire.ts withoutInstallIds).
  */
 
 export interface UploaderDeps {
@@ -388,6 +390,9 @@ export class TraceUploader {
       finalStatus: String(t.final_status), turnCount: Number(t.turn_count), requestCount: Number(t.request_count),
       tokensIn: Number(t.tokens_in), tokensCached: Number(t.tokens_cached), tokensOut: Number(t.tokens_out),
       mixed: t.mixed === true, unknownTurns: Number(t.unknown_turns ?? 0), outcome: t.outcome ? scrub(t.outcome) : undefined,
+      // The harness's own session id, the machine and the system, the power events: each its own line in the notice.
+      nativeSessionId: opt(t.native_session_id as string), environment: opt(t.environment as Record<string, unknown>),
+      events: Array.isArray(t.events) ? t.events : [],
     };
     const turns = doc.turns.map(x => ({
       turnId: String(x.turn_id), sessionId: traceId, index: Number(x.turn_index), startedAt: Number(x.started_at), endedAt: opt(x.ended_at as number),
@@ -420,6 +425,7 @@ export class TraceUploader {
         totalMs: opt(r.total_ms as number), tokensIn: Number(r.tokens_in), tokensCached: Number(r.tokens_cached), tokensOut: Number(r.tokens_out),
         status: Number(r.status), error: r.error ? String(scrub(String(r.error))).slice(0, 2000) : undefined,
         finishReason: opt(r.finish_reason as string), reqBytes: Number(r.req_bytes), respBytes: Number(r.resp_bytes), messages,
+        liveSessions: opt(r.live_sessions as number),
       };
     });
     const messages = [...remote.values()].filter(m => m.role !== 'tools').map(m => ({

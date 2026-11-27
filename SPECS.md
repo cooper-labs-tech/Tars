@@ -274,7 +274,15 @@ from the window, or from an agent's drop file (`~/.tars/endpoint-keys/<name>.key
 - messages, system prompts and tool sets are stored once by content hash, compressed;
 - authorship comes from what Tars typed into the terminal. A closed model's words set `mixed`, and an instruction
   Tars did not type counts in `unknown_turns`;
-- the outcome holds the branch, the head, held requests and errors.
+- the outcome holds the branch, the head, held requests and errors;
+- each session keeps its environment: the harness's exact version, read from the binary its terminal started (an npm
+  package's own version, else its `--version` asked in a throwaway home, `harness-version.ts`), the harness's own
+  session id (codex's `session-id`), the system's name, version, kernel and architecture, the machine's model, chip,
+  cores and memory, exact, read by each system's own means, Tars's version, the locale, the time zone and its offset,
+  and whether it ran on battery (`session-environment.ts`); and the sleeps, wakes and changes of power during it.
+  Never the computer's name, the user's, a serial number or an address;
+- each request keeps how many traced sessions were live on this computer when it was sent;
+- a harness's installation id (codex sends one in its body) is taken out of a request before it is stored.
 
 Retention and a size cap come from Settings. The back-office reads it through `window.electronAPI.traces`. An external
 reader reads it through `GET /api/traces/*`, with its own token, as the reader's trace format tables.
@@ -289,6 +297,9 @@ consent, opted-in sessions are uploaded:
   request is never counted as a step of its turn. A back-office refuses fields it does not know (422
   `invalid_batch`), so it takes `side` before Tars sends it: the back-office is updated first. A batch it refuses
   stays unsent and is tried again on the backoff, never sent without the mark;
+- each session with its environment, its power events and the harness's own session id, and each request with its
+  live count, each field on its own line of the notice; the back-office takes them before Tars sends them, as for
+  `side`;
 - resumed after a restart, with backoff.
 
 `deleteEverywhere` asks the back-office to delete all of it.
