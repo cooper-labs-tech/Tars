@@ -164,7 +164,9 @@ describe('arrivals', () => {
     f.cap = { ok: false, reason: 'the project is at its busy cap' };
     await c.advance(T0 + 2000);
     expect(f.log.find(x => x.n === 3)).toMatchObject({ blocked: 'busy_cap', blockedDetail: 'the project is at its busy cap' });
-    // A stopped run starts nothing more.
+    // A stopped run starts nothing more, whatever else would let it (found by the mutation bench: the busy cap still
+    // refusing here hid the check).
+    f.cap = { ok: true };
     f.running = false;
     const e2 = createLoadEngine(deps(plan([task({})], [{ n: 1, taskId: 'fix-retry', offsetMs: 3000 }])));
     e2.start(RUN);

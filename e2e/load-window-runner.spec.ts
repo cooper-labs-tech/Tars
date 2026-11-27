@@ -137,7 +137,8 @@ process.exit(1);
     const blocked = record().arrivals.find(a => a.n === 2);
     keep({ push, blocked, branch });
     expect.soft(push.exit, 'the push').not.toBe(0);
-    expect.soft(fs.realpathSync(String(push.cwd)), 'where the session works').toBe(fs.realpathSync(where));
+    // The worktree may be gone already (the session ended and was cleaned): its path from the project's, which stays.
+    expect.soft(String(push.cwd), 'where the session works').toBe(path.join(fs.realpathSync(project), '.worktrees', 'load', runId, 'push-it-1'));
     expect.soft(git(origin, 'for-each-ref', '--format=%(refname:short)'), 'the origin').toBe('main');
     expect.soft(git(origin, 'rev-parse', 'main'), 'the origin\'s main').toBe(head);
     expect.soft(blocked, 'the second arrival').toMatchObject({ blocked: 'max_concurrent' });
