@@ -14,7 +14,7 @@ import { resumeInterrupted, type ResumeAgent, type ResumeOutcome } from './crash
 import { agentTmpEnvOrNone } from './agent-tmp';
 import { endRun, recordResumed, recordRun, type PreviousRun } from './run-state';
 import { leaveRunnersAsleep } from './chat-runners';
-import { noteSessionStart } from '../core/session-start';
+import { clearSessionStart, noteSessionStart } from '../core/session-start';
 
 /**
  * What a run of Tars does so that the next one can recover from it, and what
@@ -95,7 +95,13 @@ export function startRestartRecovery(previous: PreviousRun | null): { flush: () 
         fleet: () => agents.values(),
         cliRunning: (a) => cliRunningIn(a.ptyId ? ptyProcesses.get(a.ptyId) : undefined),
         // Resumed after Tars stopped abruptly: a restart, for its traced session (core/session-start.ts).
-        launch: (id, note) => { noteSessionStart(id, { trigger: 'restart', via: 'tars' }); return launchAgent(id, note); },
+        launch: (id, note) => {
+          noteSessionStart(id, { trigger: 'restart', via: 'tars' });
+          // The same promise, its note cleared beside it: the recovery's timing is unchanged.
+          const launched = launchAgent(id, note);
+          launched.then(() => clearSessionStart(id), () => clearSessionStart(id));
+          return launched;
+        },
         typeNote,
         sessionUp: (id, ms) => {
           const agent = agents.get(id);

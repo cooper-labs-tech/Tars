@@ -27,7 +27,7 @@ import { factsOf, sleepNow, sleepRefusal } from './agent-sleep';
 import { readProcesses } from './stall-watch';
 import { cloneDependencies, logDependencies } from './worktree-deps';
 import { chatLimitOf, launchLimitNote, type Chat, type ChatStore } from './chats';
-import { noteSessionStart } from '../core/session-start';
+import { clearSessionStart, noteSessionStart } from '../core/session-start';
 
 /**
  * A chat's conversation, run (ORCHESTRATOR-PER-CHAT.md v2.2, 4.2; PR D of 2.0.0).
@@ -454,6 +454,7 @@ export async function sendToChat(chatId: unknown, text: unknown, opts: { sender?
       return { success: true, chatId: chat.id, runnerId: runner.id, how: 'launched' };
     } finally {
       reserved.delete(runner.id);
+      clearSessionStart(runner.id);
     }
   });
   return 'typeInto' in decided ? typeInto(decided.typeInto, decided.chat, text, opts.sender) : decided;

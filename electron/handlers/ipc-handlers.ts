@@ -16,7 +16,7 @@ import { janitorApprove, janitorScan, janitorState, setJanitorProjects } from '.
 import { cloneDependencies, logDependencies } from '../services/worktree-deps';
 import { answerPermission, type PermissionDecision } from '../services/permission-asks';
 import { noteWaker, publishedWaking, screenWhileAsleep, wakeAgent, wakesOnKey } from '../core/agent-asleep';
-import { noteSessionStart } from '../core/session-start';
+import { clearSessionStart, noteSessionStart } from '../core/session-start';
 import { publishedWaitingOn } from '../utils/waiting-on';
 import { defaultShell } from '../utils/default-shell';
 import { openTerminal } from '../utils/open-terminal';
@@ -997,6 +997,9 @@ function registerAgentHandlers(deps: IpcHandlerDependencies): void {
       const answer = noTerminalAnswer(err);
       if (answer) return answer;
       throw err;
+    } finally {
+      // Read by the spawn, or the CLI was running and the words were typed in: either way the note goes.
+      clearSessionStart(id);
     }
   });
 

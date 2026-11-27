@@ -17,8 +17,9 @@ import { DEV_URL, apiPort } from './ports.mjs';
  * uses, with its own token.
  *
  * 1. Lead's first task starts Q's session: the session reads `task`, with that task's ref, Lead as its asker, when
- *    the task entered Q's line, when its turn came, and the session's first request at the endpoint, in that order;
- *    the ledger's task once its turn opened it; the commit and branch Q's folder was on.
+ *    the task entered Q's line and when its turn came, in that order, and no first request at the endpoint (its one
+ *    request is given up while held, 2); the ledger's task once its turn opened it; the commit and branch Q's folder
+ *    was on.
  * 2. The endpoint pauses (503, Retry-After) and Q's harness gives its model call up while Tars holds it: a request
  *    row with status 499 and a structured cancel, never free text, and no endpoint error counted.
  * 3. Lead's second task, queued behind the first, is taken back by Lead before it starts: the session keeps it as
@@ -38,13 +39,14 @@ const Q = 'eeee5555-0000-4000-8000-0000000000a3';
 const EP = 'ep-0e2ea3';
 const REPO_URL = 'https://github.com/e2e-owner/e2e-probe.git';
 const NEW_NOTICE_LINES = [
-  'what started each session: you, a task, a channel, a restart, a wake from sleep or a task handed on again, by its kind and never by who',
+  'what started each session: you, a task, a channel, a restart, a wake from sleep or a task handed on again, by its kind, and the id of the agent that asked when one did',
   'the tasks each session ran: their ids, where they came from (you, an agent, a channel, Tars), the task they were part of, the agent that asked, and how they ended',
   'the task each turn served, by its reference',
   'when each task reached Tars, was handed to the agent, and sent its first request to the model',
   'the commit and branch each session started from',
-  'whether the pull request of a session\'s branch was merged or closed, and when',
+  'whether the pull request of a session\'s branch was merged or closed, its number, and when',
   'the tasks taken out of an agent\'s queue before they started, with when and why, by its kind',
+  'past the last 50, how many more tasks a session ran and how many more were taken out of its queue',
   'the requests a harness gave up while Tars held them for a paused endpoint',
 ];
 
@@ -205,9 +207,12 @@ process.exit(1);
     // 1. What started it, and when.
     expect.soft(start, 'the start').toMatchObject({ trigger: 'task', via: 'api', taskRef: ref1, requesterAgentId: LEAD, commit: head, branch: 'feat/probe' });
     expect.soft(typeof start.taskId, 'the ledger\'s task, named').toBe('string');
-    const [queuedAt, handedAt, firstRequestAt] = [start.queuedAt, start.handedAt, start.firstRequestAt].map(Number);
-    expect.soft([queuedAt, handedAt, firstRequestAt].every(Number.isFinite), `the queue times ${queuedAt} ${handedAt} ${firstRequestAt}`).toBe(true);
-    expect.soft(queuedAt <= handedAt && handedAt <= firstRequestAt, `queued ${queuedAt}, handed ${handedAt}, first request ${firstRequestAt}`).toBe(true);
+    const [queuedAt, handedAt] = [start.queuedAt, start.handedAt].map(Number);
+    expect.soft([queuedAt, handedAt].every(Number.isFinite), `the queue times ${queuedAt} ${handedAt}`).toBe(true);
+    expect.soft(queuedAt <= handedAt, `queued ${queuedAt}, handed ${handedAt}`).toBe(true);
+    // The session's one request was given up while held: it never reached the endpoint, so the session has no first
+    // request (the Audit's L2 on #675).
+    expect.soft(start.firstRequestAt, 'a first request, from the one that never reached the endpoint').toBeUndefined();
 
     // 2. The request given up while held.
     const givenUp = requests.filter(r => r.cancel);

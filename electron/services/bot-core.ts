@@ -23,7 +23,7 @@ import { killStalePty, armTaskStartWatch, launchIntoTerminal, cliStartRefusal } 
 import { toLaunch, projectName, type Launch } from '../platform';
 import { consumeResumeSessionId } from '../utils/resume-session';
 import { noteWaker } from '../core/agent-asleep';
-import { VIA_OF_CHANNEL, noteSessionStart } from '../core/session-start';
+import { VIA_OF_CHANNEL, clearSessionStart, noteSessionStart } from '../core/session-start';
 import { noteLaunch, launchSettings } from '../core/agent-restart';
 import { sessionStarted, launchUnlessRunning, launchAbandoned, dialogShown, takeSlot } from '../core/agent-launch';
 import { handOffFrom, noteHandOff } from './task-ledger';
@@ -345,7 +345,10 @@ export async function startWithTask(
     launch = await claimLaunch(agent);
     // Why a terminal opens here, for its traced session (core/session-start.ts).
     noteSessionStart(agent.id, { trigger: 'channel', via: VIA_OF_CHANNEL[from] });
-    const ptyProcess = await terminalOf(fleet, agent);
+    // Read by the spawn, or the terminal was open already: either way the note goes, beside the opening.
+    const opening = terminalOf(fleet, agent);
+    opening.then(() => clearSessionStart(agent.id), () => clearSessionStart(agent.id));
+    const ptyProcess = await opening;
     if (!ptyProcess) {
       if (launch) launchAbandoned(agent.id, launch);
       await opts.reply('no-terminal');
@@ -460,7 +463,9 @@ export async function forwardToOrchestrator(
     launch = await claimLaunch(orchestrator);
     // The owner's own words (the relay passes them as the user's), else the channel's message.
     noteSessionStart(orchestrator.id, { trigger: opts.sender?.kind === 'user' ? 'owner' : 'channel', via: VIA_OF_CHANNEL[from] });
-    const ptyProcess = await terminalOf(fleet, orchestrator);
+    const opening = terminalOf(fleet, orchestrator);
+    opening.then(() => clearSessionStart(orchestrator.id), () => clearSessionStart(orchestrator.id));
+    const ptyProcess = await opening;
     if (!ptyProcess) {
       if (launch) launchAbandoned(orchestrator.id, launch);
       await opts.reply('no-terminal');

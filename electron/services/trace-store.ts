@@ -159,6 +159,9 @@ export interface TraceStart {
   redelegatedFrom?: string;
 }
 
+/** The lost demand as a session keeps it: its last drops, and how many older ones it left out. */
+interface StoredDemand { items: LostDemand[]; omitted: number }
+
 /** A task that left the agent's queue never to start, while this session ran: demand the endpoint never saw. */
 export interface LostDemand {
   kind: 'queue_drop';
@@ -243,6 +246,14 @@ export interface TraceOutcome {
   abandonedWhileHeld?: number;
   pr?: { number: number; state: 'merged' | 'closed'; at: number };
 }
+
+/**
+ * The lost demand a session keeps: its last LOST_DEMAND_MAX drops, the rest counted in `lostDemandOmitted`, within
+ * LOST_DEMAND_BYTES_MAX as JSON (a drop weighs about 105 bytes, so 50 take about 5.3 KB). A busy agent's queue can drop
+ * hundreds in one session; unbounded, its batch would pass what the back office takes, and hold every later upload.
+ */
+export const LOST_DEMAND_MAX = 50;
+export const LOST_DEMAND_BYTES_MAX = 8 * 1024 - 256;
 
 /** The most tasks an outcome lists: the last ones, the rest counted in `tasksOmitted` (the back office's need, #675). */
 export const OUTCOME_TASKS_MAX = 50;
@@ -402,6 +413,15 @@ function summaryOf(r: Row): TraceSessionSummary {
   };
 }
 
+/** A session's lost demand as it reads: its kept drops and how many older ones it left out (none: neither). */
+function demandOf(raw: unknown): { lostDemand?: LostDemand[]; lostDemandOmitted?: number } {
+  if (typeof raw !== 'string' || !raw) return {};
+  const value = JSON.parse(raw) as StoredDemand | LostDemand[];
+  const items = Array.isArray(value) ? value : value.items ?? [];
+  const omitted = Array.isArray(value) ? 0 : value.omitted ?? 0;
+  return { ...(items.length ? { lostDemand: items } : {}), ...(omitted ? { lostDemandOmitted: omitted } : {}) };
+}
+
 function encodeCursor(n: number): string {
   return Buffer.from(`s:${n}`).toString('base64url');
 }
@@ -537,9 +557,19 @@ export class TraceStore {
     return this.changeJson<TraceStart>(traceId, 'start_json', current => ({ ...(current ?? { trigger: 'unknown' }), ...defined }));
   }
 
-  /** A task that left the agent's queue never to start, while this session ran. */
+  /**
+   * A task that left the agent's queue never to start, while this session ran: kept with the last LOST_DEMAND_MAX,
+   * within LOST_DEMAND_BYTES_MAX, the older ones counted. Kept as `{ items, omitted }`; a list an earlier build of
+   * this change wrote is read as its items.
+   */
   addLostDemand(traceId: string, demand: LostDemand): boolean {
-    return this.changeJson<LostDemand[]>(traceId, 'demand_json', current => [...(current ?? []), demand]);
+    return this.changeJson<StoredDemand | LostDemand[]>(traceId, 'demand_json', (current) => {
+      const before = Array.isArray(current) ? { items: current, omitted: 0 } : { items: current?.items ?? [], omitted: current?.omitted ?? 0 };
+      const all = [...before.items, demand];
+      let items = all.slice(-LOST_DEMAND_MAX);
+      while (items.length > 1 && Buffer.byteLength(JSON.stringify(items)) > LOST_DEMAND_BYTES_MAX) items = items.slice(1);
+      return { items, omitted: before.omitted + all.length - items.length };
+    });
   }
 
   /** Fields of the outcome, merged into what it holds (a pull request's end, a link to another session). */
@@ -578,9 +608,9 @@ export class TraceStore {
     return cancel.at;
   }
 
-  /** The session's first request at the endpoint at or after `from`. */
+  /** The session's first request at the endpoint at or after `from`: one given up while held never reached it. */
   firstRequestAt(traceId: string, from: number = Number.MIN_SAFE_INTEGER): number | undefined {
-    const r = this.db.prepare('SELECT MIN(started_at) AS m FROM requests WHERE trace_id = ? AND started_at >= ?').get(traceId, from) as { m: number | null };
+    const r = this.db.prepare('SELECT MIN(started_at) AS m FROM requests WHERE trace_id = ? AND started_at >= ? AND cancel_json IS NULL').get(traceId, from) as { m: number | null };
     return r.m ?? undefined;
   }
 
@@ -598,11 +628,11 @@ export class TraceStore {
       .all(except, taskId) as Array<{ trace_id: string }>).map(r => r.trace_id);
   }
 
-  /** The ended sessions on a branch whose pull request's end is not known yet. */
-  awaitingPullRequest(): Array<{ traceId: string; projectPath: string; branch: string; startedAt: number }> {
+  /** The sessions ended since `since` on a branch, whose pull request's end is not known yet. */
+  awaitingPullRequest(since: number = Number.MIN_SAFE_INTEGER): Array<{ traceId: string; projectPath: string; branch: string; startedAt: number }> {
     return (this.db.prepare(`SELECT trace_id, project_path, started_at, json_extract(outcome_json, '$.branch') AS branch FROM traces
-      WHERE ended_at IS NOT NULL AND outcome_json IS NOT NULL AND json_type(outcome_json, '$.branch') = 'text'
-      AND json_extract(outcome_json, '$.branch') != 'HEAD' AND json_type(outcome_json, '$.pr') IS NULL`).all() as Row[])
+      WHERE ended_at IS NOT NULL AND ended_at >= ? AND outcome_json IS NOT NULL AND json_type(outcome_json, '$.branch') = 'text'
+      AND json_extract(outcome_json, '$.branch') != 'HEAD' AND json_type(outcome_json, '$.pr') IS NULL`).all(since) as Row[])
       .map(r => ({ traceId: String(r.trace_id), projectPath: String(r.project_path), branch: String(r.branch), startedAt: num(r.started_at) }));
   }
 
@@ -815,20 +845,21 @@ export class TraceStore {
       const status = cutByCaller ? 'abandoned' : failed ? 'failed' : resp.toolCalls > 0 ? 'open' : 'done';
       if (!side) {
         const toolMs = !opens && lastEnd !== undefined ? Math.max(0, rec.startedAt - lastEnd) : 0;
-        this.db.prepare(`UPDATE turns SET ended_at = ?, request_count = request_count + 1, tool_call_count = tool_call_count + ?,
+        // A request given up while held never reached the endpoint: no request of the turn, no model time.
+        this.db.prepare(`UPDATE turns SET ended_at = ?, request_count = request_count + ?, tool_call_count = tool_call_count + ?,
           tool_error_count = tool_error_count + ?, tool_ms = tool_ms + ?, model_ms = model_ms + ?, tokens_in = tokens_in + ?,
           tokens_cached = tokens_cached + ?, tokens_out = tokens_out + ?, final_status = ?, final_finish_reason = ? WHERE turn_id = ?`)
-          .run(rec.endedAt, resp.toolCalls, toolErrors, toolMs, total, resp.usage.input, resp.usage.cached, resp.usage.output, status,
-            resp.finishReason ?? null, turnId);
+          .run(rec.endedAt, rec.cancel ? 0 : 1, resp.toolCalls, toolErrors, toolMs, rec.cancel ? 0 : total, resp.usage.input, resp.usage.cached,
+            resp.usage.output, status, resp.finishReason ?? null, turnId);
       } else {
         this.db.prepare('UPDATE turns SET tokens_in = tokens_in + ?, tokens_cached = tokens_cached + ?, tokens_out = tokens_out + ? WHERE turn_id = ?')
           .run(resp.usage.input, resp.usage.cached, resp.usage.output, turnId);
       }
     }
-    this.db.prepare(`UPDATE traces SET request_count = request_count + 1, turn_count = ?, tokens_in = tokens_in + ?,
+    this.db.prepare(`UPDATE traces SET request_count = request_count + ?, turn_count = ?, tokens_in = tokens_in + ?,
       tokens_cached = tokens_cached + ?, tokens_out = tokens_out + ?, mixed = ?, unknown_turns = ?, main_system_hash = ?,
       last_end_at = CASE WHEN ? THEN last_end_at ELSE ? END, bytes = bytes + ?, updated_seq = ? WHERE trace_id = ?`).run(
-      turnCount, resp.usage.input, resp.usage.cached, resp.usage.output, mixed ? 1 : 0, unknownTurns, mainSystem ?? null,
+      rec.cancel ? 0 : 1, turnCount, resp.usage.input, resp.usage.cached, resp.usage.output, mixed ? 1 : 0, unknownTurns, mainSystem ?? null,
       side ? 1 : 0, rec.endedAt, added + ROW_BYTES, this.nextSeq(), rec.traceId);
     return requestId;
   }
@@ -874,7 +905,7 @@ export class TraceStore {
     return { sessions: rows.map(summaryOf), nextCursor: encodeCursor(last) };
   }
 
-  session(traceId: string): { session: TraceSessionSummary; outcome?: TraceOutcome; start?: TraceStart; lostDemand?: LostDemand[]; turns: TraceTurnView[] } | null {
+  session(traceId: string): { session: TraceSessionSummary; outcome?: TraceOutcome; start?: TraceStart; lostDemand?: LostDemand[]; lostDemandOmitted?: number; turns: TraceTurnView[] } | null {
     const trace = this.db.prepare('SELECT * FROM traces WHERE trace_id = ?').get(traceId) as Row | undefined;
     if (!trace) return null;
     const firstRequestAt = this.firstRequestAt(traceId);
@@ -896,7 +927,7 @@ export class TraceStore {
       session: summaryOf(trace),
       outcome: trace.outcome_json ? JSON.parse(String(trace.outcome_json)) : undefined,
       ...(start ? { start } : {}),
-      ...(trace.demand_json ? { lostDemand: JSON.parse(String(trace.demand_json)) as LostDemand[] } : {}),
+      ...demandOf(trace.demand_json),
       turns: turns.map((t, i) => ({
         turnId: String(t.turn_id), index: num(t.turn_index), startedAt: num(t.started_at), endedAt: optNum(t.ended_at),
         gapBeforeMs: optNum(t.gap_before_ms), author: String(t.author), authorDetail: optStr(t.author_detail), finalStatus: optStr(t.final_status),

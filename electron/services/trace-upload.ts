@@ -392,6 +392,7 @@ export class TraceUploader {
       // the tasks that left its agent's queue never to start, by their kind. Each has its line in the notice.
       start: t.start ? scrub(t.start) : undefined,
       lostDemand: Array.isArray(t.lost_demand) && t.lost_demand.length ? scrub(t.lost_demand) : undefined,
+      lostDemandOmitted: Number(t.lost_demand_omitted ?? 0) > 0 ? Number(t.lost_demand_omitted) : undefined,
     };
     const turns = doc.turns.map(x => ({
       turnId: String(x.turn_id), sessionId: traceId, index: Number(x.turn_index), startedAt: Number(x.started_at), endedAt: opt(x.ended_at as number),
