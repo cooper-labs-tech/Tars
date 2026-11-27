@@ -46,11 +46,13 @@ import { assertThrowaway } from '../../setup/throwaway-dirs';
  * 11. (Found by the E2E, 27/11, before its fix.) The agent's folder is named through a link (macOS's /tmp is
  *     /private/tmp): Qwen Code names its chat folder after its real working folder, so a file looked for under the
  *     folder as Tars names it is never found.
+ * 12. (Found by the E2E, 27/11, before its fix.) Qwen's result line gives no time of its own, so it cannot be put on
+ *     the session it happened in, and the call's exit code and cut are lost: it carries the time it was written.
  */
 
 assertThrowaway({ DATA_DIR, PRIVATE_DIR });
 
-import { opencodeToolPartOf, qwenToolPartOf, toolCallRecordOf, type ToolCallPart } from '../../../electron/services/tool-calls';
+import { opencodeToolPartOf, qwenToolPartOf, toolCallAt, toolCallRecordOf, type ToolCallPart } from '../../../electron/services/tool-calls';
 import { HarnessToolLogs, ENDED_GRACE_MS, QWEN_PASS_BYTES_MAX, OPENCODE_PASS_ROWS_MAX, type FollowedSession } from '../../../electron/services/harness-tool-logs';
 import { qwenTranscriptPath } from '../../../electron/services/qwen-code';
 
@@ -108,10 +110,12 @@ describe('Qwen Code lines', () => {
     expect(qwenToolPartOf(qwenTelemetry(t, 'call_a', { started: t - 883, ms: 883, success: true }))).toEqual({ callId: 'call_a', startedAt: t - 883, wallMs: 883 });
     expect(qwenToolPartOf(qwenTelemetry(t, 'call_b', { started: t - 421, ms: 421, success: false }))).toEqual({ callId: 'call_b', startedAt: t - 421, wallMs: 421, failed: true });
     expect(qwenToolPartOf(qwenTelemetry(t, 'call_c', { started: t, ms: 0, success: false, decision: 'reject' }))).toEqual({ callId: 'call_c', startedAt: t, wallMs: 0, denied: true, failed: true });
-    expect(qwenToolPartOf(qwenResult(t, 'call_a', { status: 'success', exit: 0 }))).toEqual({ callId: 'call_a', exit: 0 });
-    expect(qwenToolPartOf(qwenResult(t, 'call_b', { status: 'error', exit: 3, outcome: 'failed', truncated: true }))).toEqual({ callId: 'call_b', exit: 3, failed: true, truncated: true });
+    expect(qwenToolPartOf(qwenResult(t, 'call_a', { status: 'success', exit: 0 }))).toEqual({ callId: 'call_a', outputAt: t, exit: 0 });
+    expect(qwenToolPartOf(qwenResult(t, 'call_b', { status: 'error', exit: 3, outcome: 'failed', truncated: true }))).toEqual({ callId: 'call_b', outputAt: t, exit: 3, failed: true, truncated: true });
     // A call that is no shell: no exit code.
-    expect(qwenToolPartOf(qwenResult(t, 'call_d', { status: 'success' }))).toEqual({ callId: 'call_d' });
+    expect(qwenToolPartOf(qwenResult(t, 'call_d', { status: 'success' }))).toEqual({ callId: 'call_d', outputAt: t });
+    // 12. The result line alone can be put on the session it happened in: it has a time.
+    expect(toolCallAt(qwenToolPartOf(qwenResult(t, 'call_a', { status: 'success', exit: 0 }))!)).toBe(t);
     const merged = [qwenTelemetry(t, 'call_b', { started: t - 421, ms: 421, success: false }), qwenResult(t, 'call_b', { status: 'error', exit: 3, outcome: 'failed', truncated: true })]
       .map(l => qwenToolPartOf(l)!).reduce((a, b) => ({ ...b, ...a }));
     expect(toolCallRecordOf(merged)).toEqual({ toolCallId: 'call_b', exit: 3, ms: 421, denied: false, timedOut: false, failed: true, truncated: true });
