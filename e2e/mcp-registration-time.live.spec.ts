@@ -51,17 +51,22 @@ test('the start-up registration of the MCP servers ends, and how long it takes, 
         values[start] = await app.evaluate(async (_e, [dist]) => {
           const req = (process as unknown as { mainModule: { require(m: string): Record<string, unknown> } }).mainModule.require;
           const gate = req(`${dist}/core/mcp-registration.js`) as {
-            untilMcpRegistered(): Promise<string>; mcpGateOpenedAt?: () => number | undefined; MCP_REGISTRATION_WAIT_MS: number;
+            untilMcpRegistered(): Promise<string>; MCP_REGISTRATION_WAIT_MS: number;
+            mcpGateOpenedAt?: () => number | undefined; mcpRegistrationBeganAt?: () => number | undefined;
           };
           const startedAt = Date.now() - process.uptime() * 1000;
           const windowAtS = process.uptime();
           const outcome = await gate.untilMcpRegistered();
           const openedAt = gate.mcpGateOpenedAt?.();
+          const beganAt = gate.mcpRegistrationBeganAt?.();
+          const s = (ms: number) => Math.round(ms / 100) / 10;
           return {
             outcome,
-            windowAtS: Math.round(windowAtS * 10) / 10,
+            windowAtS: s(windowAtS * 1000),
             // The gate's own record where it keeps one; else the moment this wait ended, the end itself when it waited.
-            gateOpenedAfterStartS: Math.round(((openedAt ?? Date.now()) - startedAt) / 100) / 10,
+            gateOpenedAfterStartS: s((openedAt ?? Date.now()) - startedAt),
+            // What a launch issued at the start waits at most: from the gate's begin to its opening.
+            registrationS: openedAt !== undefined && beganAt !== undefined ? s(openedAt - beganAt) : null,
             exact: openedAt !== undefined || outcome === 'registered',
             boundS: gate.MCP_REGISTRATION_WAIT_MS / 1000,
           };
