@@ -89,6 +89,16 @@ import { hasPosixModes } from '../setup/platform-limits';
  * 40. A back-office older than the `side` field refuses the batch (422 invalid_batch, it refuses unknown fields), and
  *     the uploader sends it again without the mark, or with a side request marked false; or it marks the session
  *     sent; or it never sends it once the back-office knows the field. The order is the back-office first (SPECS).
+ * Added before their code, trace feature B3 (27/11): personal data masked, in the trace reader's pinned format
+ * (the scrubber's own failures are in trace-scrub-personal.test.ts):
+ * 41. A session goes without its `maskingVersion` (a string) and `maskCounts` (SECRET, EMAIL, IP, PERSON, HOME and
+ *     PHONE, each present, the placeholders inserted in that session's document as sent).
+ * 42. One value takes two numbers in one session: in a message and in a field, or in two batches of a session too
+ *     long for one (a value split across chunks of the upload).
+ * 43. A second session goes on from the first's numbers, which links what each held.
+ * 44. The names of a session's project (its git history) are not read before its payload is built, so they pass on
+ *     the first pass after a start; or the preview, built before them, shows a document other than the one sent.
+ * 45. Personal data reaches the back-office as typed: an e-mail, a phone number, an IP address, another user's home.
  */
 
 type Seen = { method: string; url: string; headers: http.IncomingHttpHeaders; body: Buffer };
@@ -257,12 +267,13 @@ describe('the trace uploader', () => {
     expect(everything).not.toContain('Remote host');
     expect(bo.sessions.get('t1')!.agentName).toBeUndefined();
     expect(bo.sessions.get('t1')!.endpointName).toBeUndefined();
-    expect(everything).toContain('<REDACTED:known_secret>');
+    expect(everything).toContain('<SECRET_1>');
     const session = bo.sessions.get('t1')!;
     expect(session.projectKey).toMatch(/^[0-9a-f]{64}$/);
     expect(session.endpointKey).toMatch(/^[0-9a-f]{64}$/);
     expect(Object.keys(session).sort()).toEqual(expect.arrayContaining(['sessionId', 'harness', 'model', 'startedAt', 'finalStatus', 'turnCount', 'requestCount', 'tokensIn', 'tokensCached', 'tokensOut']));
-    const allowed = { session: ['sessionId', 'agentId', 'agentName', 'projectKey', 'harness', 'harnessVersion', 'nativeSessionId', 'endpointKey', 'endpointName', 'model', 'startedAt', 'endedAt', 'finalStatus', 'turnCount', 'requestCount', 'tokensIn', 'tokensCached', 'tokensOut', 'mixed', 'unknownTurns', 'outcome'],
+    // maskingVersion and maskCounts (trace feature B3): the back-office takes them before a Tars that sends them ships.
+    const allowed = { session: ['sessionId', 'agentId', 'agentName', 'projectKey', 'harness', 'harnessVersion', 'nativeSessionId', 'endpointKey', 'endpointName', 'model', 'startedAt', 'endedAt', 'finalStatus', 'turnCount', 'requestCount', 'tokensIn', 'tokensCached', 'tokensOut', 'mixed', 'unknownTurns', 'outcome', 'maskingVersion', 'maskCounts'],
       turn: ['turnId', 'sessionId', 'index', 'startedAt', 'endedAt', 'gapBeforeMs', 'requestCount', 'toolCallCount', 'toolErrorCount', 'toolMs', 'modelMs', 'tokensIn', 'tokensCached', 'tokensOut', 'finalStatus', 'finalFinishReason', 'author', 'authorDetail'],
       request: ['requestId', 'sessionId', 'turnId', 'seq', 'side', 'upstreamRequestId', 'surface', 'modelRequested', 'modelServed', 'params', 'toolsHash', 'startedAt', 'ttftMs', 'totalMs', 'tokensIn', 'tokensCached', 'tokensOut', 'status', 'error', 'finishReason', 'streamed', 'reqBytes', 'respBytes', 'messages'],
       message: ['hash', 'role', 'createdAt', 'size', 'toolCallCount', 'hasThinking'] };
@@ -809,5 +820,74 @@ describe('forgetting the progress after a DELETE that went through, on a full di
     expect(await u.runOnce()).toMatchObject({ sent: 1, failed: 0 });
     const sent = bo.rows.flatMap(b => (b as { requests?: Array<{ side?: unknown }> }).requests ?? []);
     expect(sent.map(r => r.side).sort()).toEqual([false, true]);
+  });
+});
+
+describe('personal data masked in what is sent (trace feature B3)', () => {
+  const allSent = () => [...bo.blobs.values()].map(b => b.toString()).join('\n') + JSON.stringify(bo.rows);
+
+  it('41 and 45: each session carries its masking version and its counts by type; no personal data goes as typed', async () => {
+    seed('t1', 'mail ada@example.com or call +33 6 12 34 56 78 from 203.0.113.9; see /Users/otherone/x');
+    expect(await uploader().runOnce()).toMatchObject({ sent: 1, failed: 0 });
+    const session = bo.sessions.get('t1')!;
+    expect(typeof session.maskingVersion).toBe('string');
+    expect(session.maskingVersion).not.toBe('');
+    // The system prompt names the project under the home, the user's message another home: two placeholders.
+    expect(session.maskCounts).toEqual({ SECRET: 1, EMAIL: 1, IP: 1, PERSON: 0, HOME: 2, PHONE: 1 });
+    const everything = allSent();
+    for (const typed of ['ada@example.com', '+33 6 12 34 56 78', '203.0.113.9', '/Users/otherone']) expect(everything, typed).not.toContain(typed);
+    expect(everything).toContain('mail <EMAIL_1> or call <PHONE_1> from <IP_1>; see <HOME_2>/x');
+  });
+
+  it('42: one value has one number in a session: across its messages, its fields and every batch of a session sent in parts', async () => {
+    store.openTrace({ traceId: 'long', projectPath: PROJECT, agentId: 'agent-1', harness: 'qwen-code', endpointId: 'ep-000001', model: 'open-coder-1', startedAt: 1000 });
+    const history: unknown[] = [{ role: 'user', content: 'write to b@example.com first, then a@example.com' }];
+    for (let i = 0; i < 30; i++) {
+      const req = Buffer.from(JSON.stringify({ model: 'open-coder-1', messages: [{ role: 'system', content: 'S' }, ...history], tools: [{ type: 'function', function: { name: 'bash' } }] }));
+      const call = { role: 'assistant', content: null, tool_calls: [{ id: `c${i}`, type: 'function', function: { name: 'bash', arguments: `{"n":${i}}` } }] };
+      const resp = Buffer.from(JSON.stringify({ choices: [{ message: call, finish_reason: 'tool_calls' }], usage: { prompt_tokens: 1, completion_tokens: 1 } }));
+      store.ingest({ traceId: 'long', agentId: 'agent-1', surface: 'openai_chat', startedAt: 1000 + i * 10, endedAt: 1005 + i * 10, status: i === 29 ? 500 : 200, contentType: 'application/json', requestBody: req, responseBody: resp, attempts: 1, heldMs: 0, ...(i === 29 ? { error: 'the engine refused a@example.com' } : {}) });
+      history.push(call, { role: 'tool', tool_call_id: `c${i}`, content: `mailed a@example.com, run ${i}` });
+    }
+    expect(await uploader({ maxBatchBytes: 3000 }).runOnce()).toMatchObject({ sent: 1 });
+    expect(bo.rows.length).toBeGreaterThan(1);
+    const everything = allSent();
+    expect(everything).not.toContain('a@example.com');
+    expect(everything).toContain('write to <EMAIL_1> first, then <EMAIL_2>');
+    expect(everything).toContain('mailed <EMAIL_2>, run 7');
+    const errors = bo.rows.flatMap(b => (b as { requests?: Array<{ error?: string }> }).requests ?? []).map(q => q.error).filter(Boolean);
+    expect(errors).toEqual(['the engine refused <EMAIL_2>']);
+    // Every part carries the session's counts, the same in each.
+    const counts = bo.rows.map(b => JSON.stringify(((b as { sessions: Array<{ maskCounts?: unknown }> }).sessions[0]).maskCounts));
+    expect(new Set(counts).size).toBe(1);
+  });
+
+  it('43: a second session numbers from 1 again', async () => {
+    seed('t1', 'mail a@example.com');
+    seed('t2', 'mail b@example.com', 2000);
+    expect(await uploader().runOnce()).toMatchObject({ sent: 2 });
+    const everything = allSent();
+    expect(everything).toContain('mail <EMAIL_1>');
+    expect(everything).not.toContain('<EMAIL_2>');
+  });
+
+  it('44: the names of a session\'s project are read before its payload is built, for the upload and for the preview', async () => {
+    const names: string[] = [];
+    const prepared: string[] = [];
+    const u = uploader({
+      scrubContext: () => ({ homeDirs: [HOME], knownSecrets: [SECRET], envValues: [], personNames: [...names] }),
+      // As git answers: after a turn of the event loop.
+      prepareScrub: async (projectPath: string) => { prepared.push(projectPath); await new Promise(r => setTimeout(r, 5)); names.splice(0, names.length, 'Ada Quill'); },
+    });
+    seed('t1', 'ask Ada Quill to review');
+    const preview = await u.previewPrepared('t1');
+    expect(prepared).toEqual([PROJECT]);
+    expect(JSON.stringify(preview)).not.toContain('Ada Quill');
+    expect(JSON.stringify(preview)).toContain('ask <PERSON_1> to review');
+    names.splice(0, names.length);
+    expect(await u.runOnce()).toMatchObject({ sent: 1 });
+    expect(prepared).toEqual([PROJECT, PROJECT]);
+    expect(allSent()).not.toContain('Ada Quill');
+    expect(allSent()).toContain('ask <PERSON_1> to review');
   });
 });

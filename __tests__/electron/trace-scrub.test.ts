@@ -22,6 +22,11 @@ import { scrubValue, envValuesFrom, projectEnvValues, SCRUB_VERSION, type ScrubC
  * 7. The structure changes: object keys, numbers, booleans, arrays.
  * 8. The report does not say what was replaced, by kind, or which version of the rules ran.
  * 9. Ordinary code and prose are mangled: a variable named token_count, a sha, a uuid, a long word.
+ *
+ * Since trace feature B3 (27/11), in the trace reader's pinned format: what these rules catch becomes `<SECRET_n>`,
+ * numbered per session, the same value under the same number (trace-scrub-personal.test.ts, U1 and U2); a home path
+ * becomes `<HOME_n>`, the account's and anyone else's, each home its own number, so 6 now reads: another home that
+ * merely starts alike is another home, never the account's. The counts by kind stay.
  */
 
 const HOME = '/Users/someone';
@@ -34,7 +39,7 @@ afterEach(() => { if (dir) fs.rmSync(dir, { recursive: true, force: true }); dir
 describe('scrubbing a trace', () => {
   it('1: a known secret goes whatever its shape', () => {
     const { out, counts } = scrub('use plainword9secret here and plainword9secret there', ctx({ knownSecrets: ['plainword9secret'] }));
-    expect(out).toBe('use <REDACTED:known_secret> here and <REDACTED:known_secret> there');
+    expect(out).toBe('use <SECRET_1> here and <SECRET_1> there');
     expect(counts.known_secret).toBe(2);
   });
 
@@ -44,7 +49,7 @@ describe('scrubbing a trace', () => {
     expect(values).toContain('whsec_abcdef123456');
     for (const harmless of ['3000', 'true', 'localhost']) expect(values).not.toContain(harmless);
     const { out } = scrub('connect to postgres://app:Pa55word@db.internal:5432/app on port 3000 (debug true)', ctx({ envValues: values }));
-    expect(out).toBe('connect to <REDACTED:env_value> on port 3000 (debug true)');
+    expect(out).toBe('connect to <SECRET_1> on port 3000 (debug true)');
   });
 
   it('2: the project\'s .env-like files are read, examples and samples are not', () => {
@@ -75,39 +80,39 @@ describe('scrubbing a trace', () => {
     ];
     for (const [secret, kind] of samples) {
       const { out, counts } = scrub(`value: ${secret} end`);
-      expect(out, kind).toBe(`value: <REDACTED:${kind}> end`);
+      expect(out, kind).toBe('value: <SECRET_1> end');
       expect(counts[kind], kind).toBe(1);
     }
     const pem = '-----BEGIN OPENSSH PRIVATE KEY-----\nb3BlbnNzaC1rZXktdjEAAAAA\nAAAA\n-----END OPENSSH PRIVATE KEY-----';
-    expect(scrub(`key:\n${pem}\nafter`).out).toBe('key:\n<REDACTED:private_key>\nafter');
+    expect(scrub(`key:\n${pem}\nafter`).out).toBe('key:\n<SECRET_1>\nafter');
   });
 
   it('4: secrets by name keep their name', () => {
-    expect(scrub('password=hunter2hunter').out).toBe('password=<REDACTED:named_secret>');
-    expect(scrub('export API_KEY="abcdef123456"').out).toBe('export API_KEY="<REDACTED:named_secret>"');
-    expect(scrub('{"apiKey": "zzzzzzzz9999", "name": "x"}').out).toBe('{"apiKey": "<REDACTED:named_secret>", "name": "x"}');
-    expect(scrub('SLACK_TOKEN: abcdef-ghijkl').out).toBe('SLACK_TOKEN: <REDACTED:named_secret>');
-    expect(scrub({ client_secret: 'abcdefgh12345' }).out).toEqual({ client_secret: '<REDACTED:named_secret>' });
+    expect(scrub('password=hunter2hunter').out).toBe('password=<SECRET_1>');
+    expect(scrub('export API_KEY="abcdef123456"').out).toBe('export API_KEY="<SECRET_1>"');
+    expect(scrub('{"apiKey": "zzzzzzzz9999", "name": "x"}').out).toBe('{"apiKey": "<SECRET_1>", "name": "x"}');
+    expect(scrub('SLACK_TOKEN: abcdef-ghijkl').out).toBe('SLACK_TOKEN: <SECRET_1>');
+    expect(scrub({ client_secret: 'abcdefgh12345' }).out).toEqual({ client_secret: '<SECRET_1>' });
   });
 
   it('5: URL credentials and Bearer or Basic credentials go', () => {
-    expect(scrub('git clone https://user:s3cr3tpass@host.example.com/r.git').out).toBe('git clone https://user:<REDACTED:url_password>@host.example.com/r.git');
-    expect(scrub('Authorization: Bearer abcdefghijklmnop1234').out).toBe('Authorization: Bearer <REDACTED:bearer>');
-    expect(scrub('curl -H "Authorization: Basic dXNlcjpwYXNzd29yZA=="').out).toBe('curl -H "Authorization: Basic <REDACTED:bearer>"');
+    expect(scrub('git clone https://user:s3cr3tpass@host.example.com/r.git').out).toBe('git clone https://user:<SECRET_1>@host.example.com/r.git');
+    expect(scrub('Authorization: Bearer abcdefghijklmnop1234').out).toBe('Authorization: Bearer <SECRET_1>');
+    expect(scrub('curl -H "Authorization: Basic dXNlcjpwYXNzd29yZA=="').out).toBe('curl -H "Authorization: Basic <SECRET_1>"');
   });
 
-  it('6: the home path becomes ~, in every spelling, and only it', () => {
+  it('6: the home path becomes <HOME_n>, in every spelling; another home is another number', () => {
     const c = ctx({ homeDirs: ['/Users/someone', 'C:\\Users\\someone'] });
-    expect(scrub('/Users/someone/projects/a and /Users/someone', c).out).toBe('~/projects/a and ~');
-    expect(scrub('C:\\Users\\someone\\code\\x', c).out).toBe('~\\code\\x');
-    expect(scrub('/Users/someone2/other', c).out).toBe('/Users/someone2/other');
-    expect(scrub('/home/someone/x', ctx({ homeDirs: ['/home/someone'] })).out).toBe('~/x');
+    expect(scrub('/Users/someone/projects/a and /Users/someone', c).out).toBe('<HOME_1>/projects/a and <HOME_1>');
+    expect(scrub('C:\\Users\\someone\\code\\x', c).out).toBe('<HOME_1>\\code\\x');
+    expect(scrub('/Users/someone/a and /Users/someone2/other', c).out).toBe('<HOME_1>/a and <HOME_2>/other');
+    expect(scrub('/home/someone/x', ctx({ homeDirs: ['/home/someone'] })).out).toBe('<HOME_1>/x');
   });
 
   it('7: the structure stays', () => {
     const v = { role: 'tool', n: 3, ok: true, list: ['ghp_' + 'A'.repeat(36), 4], nested: { 'password=': 'x' } };
     const { out } = scrub(v);
-    expect(out).toEqual({ role: 'tool', n: 3, ok: true, list: ['<REDACTED:github_token>', 4], nested: { 'password=': 'x' } });
+    expect(out).toEqual({ role: 'tool', n: 3, ok: true, list: ['<SECRET_1>', 4], nested: { 'password=': 'x' } });
   });
 
   it('8: the version of the rules is named', () => {
