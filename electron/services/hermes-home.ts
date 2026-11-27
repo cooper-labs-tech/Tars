@@ -291,8 +291,14 @@ const samePath = (a: string, b: string) => {
     : norm(a) === norm(b);
 };
 
-/** A Hermes gateway's command line: `python3 -m hermes_cli.main [--profile <p>] gateway run ...` (measured). */
-const GATEWAY_COMMAND = /\bhermes_cli[./\\]main\b.*\bgateway\s+run\b/;
+/**
+ * A Hermes gateway's command line, in the two forms measured on 0.23.4: the one Hermes gives the gateways it starts,
+ * `python3 -m hermes_cli.main [--profile <p>] gateway run ...`; and the one its `hermes` launcher relaunches a command
+ * in, which is how the gateway Tars starts runs: `python3 -I -I -c "...; sys.argv = ['-c', 'gateway', 'run', ...];
+ * ... from hermes_cli.main import main ..."`.
+ */
+// (The relaunched code's line breaks read as a literal `\n` in the command line, so `from` follows an `n`.)
+const GATEWAY_COMMAND = /\bhermes_cli[./\\]main\b.*\bgateway\s+run\b|\bsys\.argv = \['-c', 'gateway', 'run'[,\]][\s\S]*from hermes_cli\.main import main\b/;
 
 /** A path with every symlink resolved, its missing tail (a profile not written yet, or removed) kept as it is. */
 function resolvedPath(p: string): string {

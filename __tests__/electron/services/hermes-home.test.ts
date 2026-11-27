@@ -66,6 +66,11 @@ import {
  *    home (the root), a temporary folder of its own, and the cloud metadata lookup off.
  * 17. A gateway is believed on its record alone when Tars looks for one to reuse, or waits for one to hold its home:
  *    the same checks as the stop (its command line, and its own HERMES_HOME on macOS and Linux, its start on Windows).
+ * 18. (The real binary, 27/11.) The gateway Tars starts through the `hermes` launcher runs as the launcher relaunches
+ *    it, `python3 -I -I -c "...; sys.argv = ['-c', 'gateway', 'run', '--quiet']; ... from hermes_cli.main import
+ *    main ..."`, not as `python3 -m hermes_cli.main gateway run`, the form Hermes gives the gateways it starts itself:
+ *    taken for no gateway, it is never found (the chat's line waits out its timeout) nor stopped. And a chat or any
+ *    other command relaunched the same way is not a gateway.
  */
 
 let tmp: string;
@@ -419,6 +424,23 @@ describe('the gateway it leaves', () => {
     expect(await findHermesGateway(root, deps(GATEWAY, { platform: 'win32', startedAt: recordTime() - 3600_000, home: null }).deps)).toBeNull();
     fs.rmSync(path.join(root, 'gateway.pid'));
     expect(await findHermesGateway(root, deps(GATEWAY).deps)).toBeNull();
+  });
+
+  it('18: the gateway as the hermes launcher relaunches it is found and stopped; a chat relaunched so is not', async () => {
+    // The relaunched line, as ps showed it on the real binary (27/11), its long inline code shortened.
+    const relaunched = (args: string) => `/Users/u/.hermes/tools/python-3.14.9/bin/python3 -I -I -c import sys, runpy; sys.path.insert(0, '/Users/u/.hermes/hermes-agent'); sys.argv = ['-c', ${args}]; sys._hermes_relaunched = True; exec("import os, re, sys\\n...\\nfrom hermes_cli.main import main\\nsys.exit(main())\\n")`;
+    record({ pid: 4242, hermes_home: root });
+    for (const [command, outcome] of [
+      [relaunched("'gateway', 'run', '--quiet'"), 'stopped'],
+      [relaunched("'gateway', 'run'"), 'stopped'],
+      [relaunched("'chat', '--source', 'tool', '-m', 'm'"), 'not-a-gateway'],
+      [relaunched("'gateway', 'status'"), 'not-a-gateway'],
+      [`/usr/bin/python3 -c "sys.argv = ['-c', 'gateway', 'run']"`, 'not-a-gateway'],
+    ] as const) {
+      const d = deps(command, { home: root, platform: 'linux' });
+      expect(await stopHermesGateway(root, d.deps), command.slice(-80)).toBe(outcome);
+      expect(await findHermesGateway(root, deps(command, { home: root, platform: 'linux' }).deps), command.slice(-80)).toBe(outcome === 'stopped' ? 4242 : null);
+    }
   });
 
   it('10: stops nothing when the pid now runs another program, or nothing', async () => {
