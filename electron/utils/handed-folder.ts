@@ -71,6 +71,10 @@ export const CREDENTIAL_FOLDERS: ReadonlyArray<{ readonly base: CredentialBase; 
   { base: 'home', path: ['.pi'], on: ALL },
   // opencode 1.19.3: auth.json and mcp-auth.json in its data folder.
   { base: 'data', path: ['opencode'], on: ALL },
+  // Kimi Code 2.6.3: its credentials folder, and the one of its older versions (its provider comes with the harness
+  // adapters; KIMI_CODE_HOME, which moves it, is not followed).
+  { base: 'home', path: ['.kimi-code', 'credentials'], on: ALL },
+  { base: 'home', path: ['.kimi', 'credentials'], on: ALL },
   // Tars's own Claude accounts: each folder holds its account's identity, and on Linux its login
   // (services/claude-accounts/provision.ts).
   { base: 'home', path: ['.claude-accounts'], on: ALL },
