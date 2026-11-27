@@ -89,6 +89,22 @@ export type CancelBy = keyof typeof CANCEL_CAUSES;
 export interface RequestCancel { by: CancelBy; cause: string; at: number; deliveredBytes: number }
 
 /**
+ * Given up while held: a request that never reached the endpoint. A3's cause, or a cut by the harness or Tars (an Esc,
+ * a Ctrl-C, a stop...) of a request the proxy held and never answered (status 499, after a hold). One rule, read by
+ * every count that leaves such a request out (the request counts, the model time, the first request, the export) and
+ * by `abandonedWhileHeld`, so none counts it both ways (the Audit's M1 on #680 at 9c3784838).
+ */
+export function givenUpWhileHeld(r: { cancel?: RequestCancel | null; status?: number | null; attempts?: number | null; heldMs?: number | null }): boolean {
+  if (!r.cancel) return false;
+  if (r.cancel.cause === 'abandoned_while_held') return true;
+  return (r.cancel.by === 'harness' || r.cancel.by === 'tars') && r.status === 499 && ((r.attempts ?? 1) > 1 || (r.heldMs ?? 0) > 0);
+}
+
+/** The same rule over a `requests` row, in SQL: 1 when given up while held, else 0. */
+const GIVEN_UP_WHILE_HELD_SQL = `COALESCE(cancel_json IS NOT NULL AND (json_extract(cancel_json, '$.cause') IS 'abandoned_while_held'
+  OR (json_extract(cancel_json, '$.by') IN ('harness', 'tars') AND status = 499 AND (attempts > 1 OR held_ms > 0))), 0)`;
+
+/**
  * How a turn was interrupted, a closed list (the back office checks it as an enum): a lone key from the window (`esc`,
  * `ctrl_c`), the CLI's own log (`cli`), or Tars ending the terminal while the turn was open (`stop`, `remove`, `quit`,
  * `sleep`).
@@ -611,7 +627,7 @@ export class TraceStore {
   /** The session's first request at the endpoint at or after `from`: one given up while held never reached it. */
   firstRequestAt(traceId: string, from: number = Number.MIN_SAFE_INTEGER): number | undefined {
     const r = this.db.prepare(`SELECT MIN(started_at) AS m FROM requests WHERE trace_id = ? AND started_at >= ?
-      AND (cancel_json IS NULL OR json_extract(cancel_json, '$.cause') IS NOT 'abandoned_while_held')`).get(traceId, from) as { m: number | null };
+      AND ${GIVEN_UP_WHILE_HELD_SQL} = 0`).get(traceId, from) as { m: number | null };
     return r.m ?? undefined;
   }
 
@@ -701,8 +717,7 @@ export class TraceStore {
     const r = this.db.prepare(`SELECT COALESCE(SUM(CASE WHEN attempts > 1 THEN 1 ELSE 0 END), 0) AS held,
       COALESCE(SUM(CASE WHEN (cancel_json IS NULL OR json_extract(cancel_json, '$.by') IN ('proxy', 'endpoint'))
         AND (error IS NOT NULL OR status >= 400) THEN 1 ELSE 0 END), 0) AS errors,
-      COALESCE(SUM(CASE WHEN json_extract(cancel_json, '$.cause') = 'abandoned_while_held' OR (json_extract(cancel_json, '$.by') IN ('harness', 'tars')
-        AND status = 499 AND (attempts > 1 OR held_ms > 0)) THEN 1 ELSE 0 END), 0) AS abandoned FROM requests WHERE trace_id = ?`).get(traceId) as { held: number; errors: number; abandoned: number };
+      COALESCE(SUM(${GIVEN_UP_WHILE_HELD_SQL}), 0) AS abandoned FROM requests WHERE trace_id = ?`).get(traceId) as { held: number; errors: number; abandoned: number };
     return r;
   }
 
@@ -759,9 +774,9 @@ export class TraceStore {
   private ingestNow(rec: WireRecord): string {
     const trace = this.db.prepare('SELECT * FROM traces WHERE trace_id = ?').get(rec.traceId) as Row | undefined;
     if (!trace) throw new Error('no such trace');
-    // Given up while held: the one cancel that never reached the endpoint (counted in no request count, model time or
+    // Given up while held: the one cut that never reached the endpoint (counted in no request count, model time or
     // first request). Every other cut request did, and counts.
-    const heldOnly = rec.cancel?.cause === 'abandoned_while_held';
+    const heldOnly = givenUpWhileHeld({ cancel: rec.cancel, status: rec.status, attempts: rec.attempts, heldMs: rec.heldMs });
     const req = parseRequest(rec.surface, rec.requestBody);
     const resp = parseResponse(rec.surface, rec.status, rec.contentType, rec.responseBody);
     const systemHash = req && req.system !== undefined ? hashOf(req.system) : undefined;

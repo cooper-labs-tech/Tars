@@ -301,8 +301,11 @@ from the window, or from an agent's drop file (`~/.tars/endpoint-keys/<name>.key
   `cli_interrupt`, codex's or pi's own log; `abandoned_while_held`; `unknown`), by Tars ending its terminal (`stop`,
   `restart`, `sleep`, `remove`, `quit`, `replace`), by the proxy at its hold's ceiling (`hold_ceiling`) or by the
   endpoint cutting the stream (`stream_cut`). A cut by the harness or Tars ends its turn `abandoned` and is no
-  endpoint error; the proxy's and the endpoint's are. Every cut request but one given up while held reached the
-  endpoint, and counts in its turn's and its session's request count, its turn's model time and the first request;
+  endpoint error; the proxy's and the endpoint's are. Given up while held is one rule (`givenUpWhileHeld`):
+  `abandoned_while_held`, or a cut by the harness or Tars (an Esc, a Ctrl-C, a stop...) of a request the proxy held
+  and never answered (status 499, after a hold). Such a request never reached the endpoint and counts in
+  `abandonedWhileHeld` only; every other cut request reached it, and counts in its turn's and its session's request
+  count, its turn's model time and the first request;
 - each turn carries its interventions: `interrupted` (a lone Esc or Ctrl-C from the window while the model answered
   or its tools ran, a stop, a removal or the quit while the turn was open, or the CLI's own log), `restarted`,
   `next` (who sent the next instruction, by kind, and its delay in seconds from this turn's end), `corrected` (that
