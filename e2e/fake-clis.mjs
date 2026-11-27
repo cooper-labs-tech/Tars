@@ -538,6 +538,7 @@ export async function run() {
         telemetry: has(/^ {4}offer_version: 2$/m), adoptLogins: has(/^ {2}adopt_external_logins: false$/m), updates: has(/^updates:\n {2}check: false$/m),
         modelCatalog: has(/^model_catalog:\n {2}enabled: false$/m), pluginChecks: has(/^plugins:\n {2}auto_update_check_hours: 0$/m),
         lazyInstallsOff: has(/^security:\n {2}allow_lazy_installs: false$/m), modelsDevLocal: loopbackModelsDev(hermesConfig),
+        ownToolEnv: has(/^terminal:\n {2}client_env_passthrough: \[.*"CLAUDE_AGENT_ID".*"TMPDIR".*\]$/m),
         approvals: /^approvals:\n {2}mode: "(\w+)"$/m.exec(hermesConfig)?.[1] ?? null,
       },
     });

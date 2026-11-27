@@ -178,7 +178,19 @@ export function hermesRootConfig(baseUrl: string): string {
   });
 }
 
-/** One agent's config: its endpoint, the guards, its approvals and Tars's MCP servers. */
+/**
+ * Tars's per-terminal variables that are no secret: the agent's identity, its project, its temporary folders. One
+ * gateway runs every profile's sessions with the environment of the terminal that started it, so without this a
+ * session's tools ran with that agent's (measured 27/11 on the real binary: B's tool had A's CLAUDE_AGENT_ID and
+ * TMPDIR). `terminal.client_env_passthrough` has each session's tools take these from its own chat's terminal, and
+ * unset the ones it does not hold. Its tokens are the profile's `.env`'s, never these.
+ */
+export const HERMES_PASSTHROUGH = [
+  'CLAUDE_AGENT_ID', 'CLAUDE_AGENT_NAME', 'CLAUDE_PROJECT_PATH', 'CLAUDE_SKILLS', 'CLAUDE_PROVIDER', 'CLAUDE_MGR_API_URL',
+  'TARS_INSTANCE_ID', 'TARS_CHATS_READ', 'TMPDIR', 'CLAUDE_CODE_TMPDIR',
+] as const;
+
+/** One agent's config: its endpoint, the guards, its approvals, its tools' own variables and Tars's MCP servers. */
 export function hermesProfileConfig(spec: HermesProfileSpec): string {
   const lookups = lookupsAt(spec.baseUrl);
   const servers: { [name: string]: Yaml } = {};
@@ -195,6 +207,7 @@ export function hermesProfileConfig(spec: HermesProfileSpec): string {
     ...GUARDS,
     ...lookups,
     approvals: { mode: approvalsModeFor(spec.permissionMode) },
+    terminal: { client_env_passthrough: [...HERMES_PASSTHROUGH] },
     mcp_servers: servers,
   });
 }

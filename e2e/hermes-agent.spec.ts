@@ -288,7 +288,7 @@ async function hermesAgents(real: string | undefined): Promise<void> {
       expect.soft(l?.terminal, `${name}'s terminal holds a token or an OpenAI variable, or leaves the cloud metadata lookup on`).toEqual({ token: false, endpointToken: false, openaiKey: false, openaiBase: false, awsMetadataOff: true });
       expect.soft(l?.scope, `${name}'s .env names`).toEqual(['CLAUDE_MGR_API_TOKEN', 'OPENAI_API_KEY', 'OPENAI_BASE_URL']);
       expect.soft(l?.envMode, `${name}'s .env mode`).toBe('600');
-      expect.soft(l?.guards, `${name}'s config guards`).toMatchObject({ telemetry: true, adoptLogins: true, updates: true, modelCatalog: true, pluginChecks: true, lazyInstallsOff: true, modelsDevLocal: true });
+      expect.soft(l?.guards, `${name}'s config guards`).toMatchObject({ telemetry: true, adoptLogins: true, updates: true, modelCatalog: true, pluginChecks: true, lazyInstallsOff: true, modelsDevLocal: true, ownToolEnv: true });
       // The root the gateway resolves its own provider from (the first real start's metadata calls, 27/11).
       expect.soft((l as { root?: unknown } | undefined)?.root, 'the root\'s provider and lookups').toEqual({ customProvider: true, lazyInstallsOff: true, modelsDevLocal: true });
       expect.soft(startOf(id)?.question ?? null, `a question on ${name}'s screen`).toBeNull();

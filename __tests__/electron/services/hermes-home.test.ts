@@ -52,6 +52,11 @@ import {
  *      (github.com), unless `security.allow_lazy_installs` is false, which leaves the first sync alone (measured).
  *    And a profile pointed off the loopback would send its endpoint's address, or models.dev's lookups, elsewhere
  *    than Tars's proxy.
+ * 15. (The real binary, 27/11, the Audit's blocker question.) One gateway runs every profile's sessions with the
+ *    environment of the terminal that started it: B's tools ran in B's folder but with A's CLAUDE_AGENT_ID and A's
+ *    TMPDIR. Each session's tools must take Tars's per-terminal variables from their own chat's terminal
+ *    (`terminal.client_env_passthrough`; measured on the bench, B's own values with it, A's without), and the list
+ *    must hold no name that reads as a secret (Hermes would refuse it anyway; the tokens come from the profile).
  */
 
 let tmp: string;
@@ -155,6 +160,16 @@ describe('the configs', () => {
       if (!base.includes(' ')) expect(() => hermesEnvText({ ...secretsA, OPENAI_BASE_URL: base }), `.env ${base}`).toThrow();
     }
     expect(fs.existsSync(root)).toBe(false);
+  });
+
+  it('15: each session\'s tools take the agent\'s identity and temporary folders from its own terminal', () => {
+    const text = hermesProfileConfig(spec());
+    const listed = /^terminal:\n {2}client_env_passthrough: \[(.*)\]$/m.exec(text)?.[1] ?? '';
+    const names = listed.split(', ').map(n => n.replace(/^"|"$/g, ''));
+    for (const n of ['CLAUDE_AGENT_ID', 'CLAUDE_AGENT_NAME', 'CLAUDE_PROJECT_PATH', 'TMPDIR', 'CLAUDE_CODE_TMPDIR', 'TARS_CHATS_READ', 'TARS_INSTANCE_ID']) {
+      expect(names, n).toContain(n);
+    }
+    for (const n of names) expect(n, 'a name that reads as a secret').not.toMatch(/KEY|TOKEN|SECRET|PASSWORD|CREDENTIAL|PASSWD|AUTH|DSN|WEBHOOK|CREDS|BEARER|COOKIE|^HERMES_/);
   });
 
   it('7: the approvals follow the permission mode', () => {

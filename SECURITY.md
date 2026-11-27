@@ -1261,6 +1261,16 @@ profile of that home, `~/.tars/hermes/profiles/<agent id>` (`services/hermes-hom
 - Measured with each token in its own profile's `.env` instead: every model call carried its own agent's proxy token
   (six for one agent, three for the other, none crossed), and each MCP server got its own agent's Tars token.
 - So Tars puts no token in a Hermes terminal at all, and writes each agent's tokens into its profile's `.env`.
+- The rest of the gateway's environment is the first terminal's too. Measured on the real binary (27/11): agent B's
+  tool ran in B's folder, but with A's `CLAUDE_AGENT_ID` and A's `TMPDIR`. Each profile's config now lists Tars's
+  per-terminal variables that are no secret (the agent's identity, its project, its temporary folders) in
+  `terminal.client_env_passthrough`, so a session's tools take them from its own chat's terminal and drop the ones it
+  does not hold (measured on the bench: B's own values with it, A's without).
+- The gateway process itself keeps the first terminal's environment, its agent id included. Tars's stop ends what an
+  agent started outside its terminal by that id (`core/born-processes.ts`), so stopping that agent ends the gateway
+  the other Hermes agents share (measured on the real binary); the next chat that needs one starts another, as
+  Hermes does when it finds none. Which process starts the gateway, and so whose it is, is the maintainer's to
+  decide; until then this stays as measured.
 
 **What the `.env` is.**
 - It holds exactly three variables: that terminal's endpoint proxy token (`OPENAI_API_KEY`), the proxy's loopback
