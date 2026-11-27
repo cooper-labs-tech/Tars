@@ -13,6 +13,8 @@ import { DEV_URL, apiPort } from './ports.mjs';
  * settings, never the real home. Read from the main process: how long after the app's process started the gate opened
  * (the registration's end), and how it opened.
  *
+ * A dev or E2E Tars finds no bundle under process.resourcesPath, so its start-up registration registers nothing; the
+ * work a packaged Tars does is timed by running setupMcpOrchestrator again with resourcesPath at this tree's bundles.
  * Asserted only that each registration ended before the gate's bound (MCP_REGISTRATION_WAIT_MS). The artefact:
  * values.json (each start's numbers, the CLIs found).
  *
@@ -56,7 +58,7 @@ test('the start-up registration of the MCP servers ends, and how long it takes, 
       values[`${start}Said`] = said;
       try {
         await app.firstWindow();
-        values[start] = await app.evaluate(async (_e, [dist]) => {
+        values[start] = await app.evaluate(async (_e, [dist, wt]) => {
           const req = (process as unknown as { mainModule: { require(m: string): Record<string, unknown> } }).mainModule.require;
           const gate = req(`${dist}/core/mcp-registration.js`) as {
             untilMcpRegistered(): Promise<string>; MCP_REGISTRATION_WAIT_MS: number;
@@ -78,7 +80,30 @@ test('the start-up registration of the MCP servers ends, and how long it takes, 
             codex: [...codexToml.matchAll(/^\[mcp_servers\.("?)([^\]".]+)\1\]/gm)].map((m) => m[2]),
             claude: (() => { try { return Object.keys(JSON.parse(claudeMcp).mcpServers ?? {}); } catch { return []; } })(),
           };
+          // A dev or E2E Tars finds no bundle under process.resourcesPath (Electron's own folder), so the start-up
+          // registration above registered nothing. The work a packaged Tars does is measured here: the same function,
+          // run once more with resourcesPath pointed at this tree's built bundles (mcp-*/dist/bundle.js).
+          const registeredRun: Record<string, unknown> = {};
+          const kept = Object.getOwnPropertyDescriptor(process, 'resourcesPath');
+          try {
+            Object.defineProperty(process, 'resourcesPath', { value: wt, configurable: true, writable: true });
+            const orchestrator = req(`${dist}/services/mcp-orchestrator.js`) as { setupMcpOrchestrator(s: unknown): Promise<void> };
+            const appSettings = JSON.parse(read(`${os.homedir()}/.tars/app-settings.json`) || '{}');
+            const t0 = Date.now();
+            await orchestrator.setupMcpOrchestrator(appSettings);
+            registeredRun.s = s(Date.now() - t0);
+            const codexAfter = read(`${process.env.CODEX_HOME || `${os.homedir()}/.codex`}/config.toml`);
+            registeredRun.written = {
+              codex: [...codexAfter.matchAll(/^\[mcp_servers\.("?)([^\]".]+)\1\]/gm)].map((m) => m[2]),
+              claude: (() => { try { return Object.keys(JSON.parse(read(`${os.homedir()}/.claude/mcp.json`)).mcpServers ?? {}); } catch { return []; } })(),
+            };
+          } catch (err) {
+            registeredRun.error = String(err).slice(0, 300);
+          } finally {
+            if (kept) Object.defineProperty(process, 'resourcesPath', kept);
+          }
           return {
+            registeredRun,
             written,
             outcome,
             windowAtS: s(windowAtS * 1000),
@@ -89,7 +114,7 @@ test('the start-up registration of the MCP servers ends, and how long it takes, 
             exact: openedAt !== undefined || outcome === 'registered',
             boundS: gate.MCP_REGISTRATION_WAIT_MS / 1000,
           };
-        }, [DIST] as const);
+        }, [DIST, WT] as const);
         recordValues(values);
       } finally {
         await app.close();
