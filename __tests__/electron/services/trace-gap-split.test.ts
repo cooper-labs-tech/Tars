@@ -284,6 +284,8 @@ describe('tool records', () => {
     noteToolCall('q', codexToolPartOf(commandLine(t0 + 598, 'call_c', { started: t0 + 595, completed: t0 + 597, exit: 0, status: 'completed', output: 'y'.repeat(65536) }))!);
     noteToolCall('q', codexToolPartOf(commandLine(t0 + 300, 'call_e', { started: t0 + 100, completed: t0 + 300, exit: 3, status: 'failed', output: 'B-fail\n' }))!);
     noteToolCall('q', codexToolPartOf(outputLine(t0 + 601, 'call_e', 'Chunk ID: a2793c\nWall time: 0.2000 seconds\nProcess exited with code 3\nOriginal token count: 2\nOutput:\nB-fail\n'))!);
+    // A later line contradicting what is known (another exit, another span) adds nothing: a fact said first is kept.
+    noteToolCall('q', { callId: 'call_e', itemStartedAt: t0 + 150, itemEndedAt: t0 + 900, exit: 9 });
     const byId = Object.fromEntries(lastRequest(traceId).toolCalls!.map(c => [c.toolCallId, c]));
     expect(byId.call_c).toEqual({ toolCallId: 'call_c', exit: 0, ms: 2, denied: false, timedOut: false, failed: false, truncatedBytes: 65536 - 911 });
     expect(byId.call_e).toEqual({ toolCallId: 'call_e', exit: 3, ms: 200, denied: false, timedOut: false, failed: true });
