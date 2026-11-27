@@ -33,7 +33,8 @@ import { realCliOptIn } from './real-cli-opt-in';
  * for the one test that asks: every test of that run may then start that CLI, so run the opted-in files alone.
  */
 
-const NAMES = new Set(['claude', 'tailscale', 'codex', 'gemini', 'kimi', 'opencode', 'pi', 'kilo', 'qwen', 'grok', 'amp', 'goose']);
+// hermes and cline since 27/11: a unit test started the owner's real Hermes twice (the Audit's read of QA's #671).
+const NAMES = new Set(['claude', 'tailscale', 'codex', 'gemini', 'kimi', 'opencode', 'pi', 'kilo', 'qwen', 'grok', 'amp', 'goose', 'hermes', 'cline']);
 const SHELLS = new Set(['sh', 'bash', 'zsh', 'dash', 'ksh', 'fish']);
 const START = ['spawn', 'spawnSync', 'execFile', 'execFileSync', 'exec', 'execSync'] as const;
 
