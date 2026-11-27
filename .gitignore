@@ -2,6 +2,8 @@
 
 # dependencies
 /node_modules
+# A clone scripts/worktree.mjs makes beside a node_modules, at any depth, left half made by a crash.
+node_modules.tars-clone-*
 /.pnp
 .pnp.*
 .yarn/*
