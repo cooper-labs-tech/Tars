@@ -64,7 +64,11 @@ import { personNamesOf, usablePersonName } from '../../electron/services/trace-p
  * S1. A value split across chunks: a streamed answer is stored whole (trace-store.ts), so it is masked whole; a
  *     session sent in several batches carries the same numbers in each (trace-upload.test.ts, 42).
  * S2. Not caught, and said in the notice: a value cut across two strings (two messages, two parts of one), encoded
- *     (base64, URL-encoded), or in an image; full-width digits; a name Tars does not know; a home written ~alice.
+ *     (base64, or URL-encoded but for an e-mail's %40), or in an image; full-width digits; a name Tars does not know;
+ *     a home written ~alice.
+ * E2. (The Audit on #679 at 7197cae43, written before its fix.) An e-mail written with %40, the commonest encoding
+ *     (an API URL's query, a mailto:, a URL's user part, bare), passes; or it takes another number than the same
+ *     address written plainly; or a %40 that is in no e-mail (a percentage, a handle) is masked.
  *
  * Unicode:
  * X1. A name next to an accented letter is cut (JavaScript's \b knows ASCII only); an e-mail with Unicode letters is
@@ -115,6 +119,16 @@ describe('masking personal data', () => {
     expect(one('{"author":"bram@sub.example.net"}')).toBe('{"author":"<EMAIL_1>"}');
     expect(one('contact josé.müller@exemple.fr, then')).toBe('contact <EMAIL_1>, then');
     expect(one('https://cleo@host.example.com/repo')).toBe('https://<EMAIL_1>/repo');
+  });
+
+  it('E2: an e-mail written with %40 goes, under the number of the same address written plainly; a %40 in no e-mail stays', () => {
+    const s = session();
+    expect(s.text('curl "https://api.example.org/users?email=will.pruitt%40mail.example.com&x=1"')).toBe('curl "https://api.example.org/users?email=<EMAIL_1>&x=1"');
+    expect(s.text('<a href="mailto:will.pruitt%40mail.example.com">write</a>')).toBe('<a href="mailto:<EMAIL_1>">write</a>');
+    expect(s.text('git clone https://will.pruitt%40mail.example.com:s3cr3tpass@git.example.org/r.git')).toBe('git clone https://<EMAIL_1>:<SECRET_1>@git.example.org/r.git');
+    expect(s.text('reach will.pruitt%40mail.example.com, or WILL.PRUITT%40MAIL.EXAMPLE.COM')).toBe('reach <EMAIL_1>, or <EMAIL_1>');
+    expect(s.text('the same as will.pruitt@mail.example.com; then ada%40example.org')).toBe('the same as <EMAIL_1>; then <EMAIL_2>');
+    for (const kept of ['save 30%40 today', 'width: 100%40px', 'name=%40handle and q=%40', 'ratio 1%40.5']) expect(one(kept), kept).toBe(kept);
   });
 
   it('N2: IP addresses go, IPv4 and IPv6', () => {
@@ -223,7 +237,8 @@ describe('masking personal data', () => {
   it('S2: what it cannot catch stays, as the notice says', () => {
     // A value cut across two strings, encoded, or a name Tars does not know.
     expect(scrubValue(['ada@', 'example.com'], ctx(), {})).toEqual(['ada@', 'example.com']);
-    expect(one('ada%40example.com and YWRhQGV4YW1wbGUuY29t')).toBe('ada%40example.com and YWRhQGV4YW1wbGUuY29t');
+    // Encoded otherwise than an e-mail's %40 (its dot too), or in base64.
+    expect(one('ada%40example%2Ecom and YWRhQGV4YW1wbGUuY29t')).toBe('ada%40example%2Ecom and YWRhQGV4YW1wbGUuY29t');
     expect(one('Unknown Person wrote it', ctx({ personNames: ['Ada Quill'] }))).toBe('Unknown Person wrote it');
   });
 
