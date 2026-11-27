@@ -36,12 +36,43 @@ const CLI_HOME_VARS = [
 ] as const;
 
 /**
+ * A path as the system reaches it, for the seam below to compare folders and not spellings: each part taken in turn,
+ * every link followed (one leading nowhere yet as well: a CLI would make the folder at its end), '..' climbing from
+ * where a link led, the case the disk keeps for what exists, and what does not exist yet appended as written. Throws on
+ * a loop of links.
+ */
+function reachedPath(p: string): string {
+  const absolute = path.isAbsolute(p) ? p : `${process.cwd()}${path.sep}${p}`;
+  const partsOf = (from: string) => from.slice(path.parse(from).root.length).split(/[\\/]+/).filter(Boolean);
+  const todo = partsOf(absolute);
+  let at = fs.realpathSync.native(path.parse(absolute).root);
+  for (let links = 0; todo.length;) {
+    const part = todo.shift() as string;
+    if (part === '.') continue;
+    if (part === '..') { at = path.dirname(at); continue; }
+    const next = path.join(at, part);
+    let entry: fs.Stats | null = null;
+    try { entry = fs.lstatSync(next); } catch { /* not there yet */ }
+    if (entry?.isSymbolicLink()) {
+      if (++links > 40) throw new Error(`a loop of links at ${next}`);
+      const target = fs.readlinkSync(next);
+      if (path.isAbsolute(target)) at = fs.realpathSync.native(path.parse(target).root);
+      todo.unshift(...partsOf(target));
+      continue;
+    }
+    at = entry ? fs.realpathSync.native(next) : next;
+  }
+  return at;
+}
+
+/**
  * An E2E spec's own built bundles (DOROTHY_E2E_MCP_BUNDLES), for the start-up registration to register as a packaged
  * Tars registers the app's: read under DOROTHY_E2E only, never by a packaged build, and only as an absolute folder that
  * holds the orchestrator's bundle. Null as well while HOME is the account's own home, inside it or above it (HOME=/Users,
  * or /, holds it), or while a CLI home the registration reaches (CLI_HOME_VARS) lies inside the account's home or
- * outside HOME: a dev run would write the tree's paths into the real home's CLI configs, the #201 incident. Without it
- * a dev or E2E Tars finds no bundle under process.resourcesPath (Electron's own folder) and registers nothing, by design.
+ * outside HOME, each path compared as the system reaches it (reachedPath: a link is the folder it leads to): a dev
+ * run would write the tree's paths into the real home's CLI configs, the #201 incident. Without it a dev or E2E Tars
+ * finds no bundle under process.resourcesPath (Electron's own folder) and registers nothing, by design.
  */
 export function e2eMcpBundlesDir(
   env: NodeJS.ProcessEnv,
@@ -51,19 +82,25 @@ export function e2eMcpBundlesDir(
   if (packaged || env.DOROTHY_E2E !== '1' || !env.DOROTHY_E2E_MCP_BUNDLES) return null;
   const dir = env.DOROTHY_E2E_MCP_BUNDLES;
   const refuse = (why: string): null => { console.warn(`[mcp] DOROTHY_E2E_MCP_BUNDLES ignored: ${why}`); return null; };
+  // Folders, not spellings: each path as the system reaches it (links followed, the disk's case), null on a loop.
+  const reached = (p: string): string | null => { try { return reachedPath(p); } catch { return null; } };
   const inside = (parent: string, child: string) => {
-    const rel = path.relative(path.resolve(parent), path.resolve(child));
+    const rel = path.relative(parent, child);
     return rel === '' || (!rel.startsWith('..') && !path.isAbsolute(rel));
   };
   if (!path.isAbsolute(dir)) return refuse('not an absolute folder');
   if (!fs.existsSync(path.join(dir, 'mcp-orchestrator', 'dist', 'bundle.js'))) return refuse(`no mcp-orchestrator/dist/bundle.js under ${dir}`);
-  if (inside(homes.account, homes.home)) return refuse('HOME is the account\'s own home, not a sandbox');
-  if (inside(homes.home, homes.account)) return refuse('HOME holds the account\'s own home, not a sandbox');
+  const home = reached(homes.home);
+  const account = reached(homes.account);
+  if (home === null || account === null) return refuse('HOME, or the account\'s own home, leads into a loop of links');
+  if (inside(account, home)) return refuse('HOME is the account\'s own home, not a sandbox');
+  if (inside(home, account)) return refuse('HOME holds the account\'s own home, not a sandbox');
   for (const name of CLI_HOME_VARS) {
-    const value = env[name];
-    if (!value) continue;
-    if (inside(homes.account, value)) return refuse(`${name} lies inside the account's own home`);
-    if (!inside(homes.home, value)) return refuse(`${name} lies outside the sandbox's HOME`);
+    if (!env[name]) continue;
+    const value = reached(env[name] as string);
+    if (value === null) return refuse(`${name} leads into a loop of links`);
+    if (inside(account, value)) return refuse(`${name} lies inside the account's own home`);
+    if (!inside(home, value)) return refuse(`${name} lies outside the sandbox's HOME`);
   }
   return dir;
 }
