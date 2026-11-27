@@ -19,12 +19,12 @@ import * as path from 'path';
  * 4. It is taken while HOME is the account's own: a dev run's registration writing the tree's paths into the real home's
  *    CLI configs, the #201 incident again.
  * 5. It is taken while a CLI home the registration writes into lies outside HOME: CODEX_HOME, XDG_CONFIG_HOME
- *    (opencode), GEMINI_CLI_HOME, GROK_HOME pointing at the real ones.
+ *    (opencode), GEMINI_CLI_HOME, GROK_HOME, PI_CODING_AGENT_DIR pointing at the real ones.
  * 6. Under the seam a getter still points at the app's resources (the registration would mix both), or without it one
  *    points anywhere else; the folder is set once at start, not read from the environment at each call.
  */
 
-const vars = ['DOROTHY_E2E', 'DOROTHY_E2E_MCP_BUNDLES', 'CODEX_HOME', 'XDG_CONFIG_HOME', 'GEMINI_CLI_HOME', 'GROK_HOME'] as const;
+type Var = 'DOROTHY_E2E' | 'DOROTHY_E2E_MCP_BUNDLES' | 'CODEX_HOME' | 'XDG_CONFIG_HOME' | 'GEMINI_CLI_HOME' | 'GROK_HOME' | 'PI_CODING_AGENT_DIR';
 
 vi.mock('electron', () => ({
   app: { getPath: () => os.tmpdir(), getAppPath: () => process.cwd(), getVersion: () => '0.0.0', on: vi.fn(), isPackaged: false },
@@ -57,7 +57,7 @@ afterEach(() => {
 async function seam() {
   return import('../../../electron/services/mcp-orchestrator');
 }
-const env = (extra: Partial<Record<(typeof vars)[number], string>> = {}): NodeJS.ProcessEnv => ({ DOROTHY_E2E: '1', DOROTHY_E2E_MCP_BUNDLES: tree, ...extra });
+const env = (extra: Partial<Record<Var, string>> = {}): NodeJS.ProcessEnv => ({ DOROTHY_E2E: '1', DOROTHY_E2E_MCP_BUNDLES: tree, ...extra });
 
 describe('the E2E seam naming a tree\'s own bundles', () => {
   it('takes the tree under DOROTHY_E2E, in a build that is not packaged, with every home inside the sandbox', async () => {
@@ -91,7 +91,7 @@ describe('the E2E seam naming a tree\'s own bundles', () => {
   it('5. never while a CLI home the registration writes into lies outside the sandbox\'s HOME', async () => {
     const { e2eMcpBundlesDir } = await seam();
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
-    for (const name of ['CODEX_HOME', 'XDG_CONFIG_HOME', 'GEMINI_CLI_HOME', 'GROK_HOME'] as const) {
+    for (const name of ['CODEX_HOME', 'XDG_CONFIG_HOME', 'GEMINI_CLI_HOME', 'GROK_HOME', 'PI_CODING_AGENT_DIR'] as const) {
       expect(e2eMcpBundlesDir(env({ [name]: path.join(account, '.somewhere') }), false, { home: sandbox, account }), name).toBeNull();
       expect(e2eMcpBundlesDir(env({ [name]: path.join(sandbox, '.somewhere') }), false, { home: sandbox, account }), name).toBe(tree);
     }
