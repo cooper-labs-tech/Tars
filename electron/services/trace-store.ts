@@ -25,6 +25,13 @@ import {
  * - **Cap and retention**: sweep() deletes the oldest ended sessions until the store is under its cap, and any
  *   ended session past its days; an open session is never deleted by retention. Past the cap with only open
  *   sessions left, bodies are no longer written (setBodiesDropped) and the requests' metadata still is.
+ * - **Tombstones**: every session deleted (the user's delete, retention, the cap) leaves its id, why it went and when,
+ *   in the same transaction, and nothing else of it, so every copy can follow: a reader of the loopback read API
+ *   (deletions(), GET /api/traces/deletions) and the back-office, which the uploader owes a per-session delete for a
+ *   session it sent and the user or retention deleted (`owed`; the cap frees this disk and says nothing of the data).
+ *   "Sent" is from the session's first upload call on (markSending): a delete while its batches land is owed too.
+ *   A tombstone is kept TOMBSTONE_DAYS, then pruned by the sweep; one still owed stays until it is sent, or until what
+ *   was sent is forgotten (resetUploads: a new install, or a whole deletion that went through, covers it).
  *
  * Every write here comes after the response has reached the harness: ingest() never throws to its caller.
  */
@@ -93,6 +100,11 @@ export interface TraceFilter {
 }
 
 export interface TraceTotals { count: number; bytes: number; tokensIn: number; tokensCached: number; tokensOut: number }
+
+/** Why a session went: the user deleted it, it passed its days (retention), or the store passed its cap. */
+export type TraceDeletionReason = 'user' | 'retention' | 'cap';
+/** A tombstone as a reader gets it: the back-office's deletions feed's fields (backoffice/API.md § 6.4), one install. */
+export interface TraceDeletion { sessionId: string; reason: TraceDeletionReason; at: number }
 
 /**
  * What Tars knows of how a session ended, kept with it at its end. Every field is optional: what is not known is
@@ -182,7 +194,17 @@ CREATE TABLE IF NOT EXISTS typed_inputs (
   text_norm TEXT NOT NULL, closed INTEGER NOT NULL DEFAULT 0, used_by TEXT
 );
 CREATE INDEX IF NOT EXISTS typed_inputs_agent ON typed_inputs(agent_id, at);
+CREATE TABLE IF NOT EXISTS tombstones (
+  seq INTEGER PRIMARY KEY AUTOINCREMENT, trace_id TEXT NOT NULL, reason TEXT NOT NULL, at INTEGER NOT NULL,
+  owed INTEGER NOT NULL DEFAULT 0
+);
 `;
+
+/**
+ * How long a tombstone is kept: a year, past which a reader that never came back has lost more than deletions. One
+ * whose delete is still owed to the back-office is kept until it is sent, whatever its age.
+ */
+export const TOMBSTONE_DAYS = 365;
 
 /** Per request, what the cap counts on top of its blobs: the rows themselves. */
 const ROW_BYTES = 512;
@@ -223,12 +245,12 @@ function summaryOf(r: Row): TraceSessionSummary {
   };
 }
 
-function encodeCursor(n: number): string {
-  return Buffer.from(`s:${n}`).toString('base64url');
+function encodeCursor(n: number, kind = 's'): string {
+  return Buffer.from(`${kind}:${n}`).toString('base64url');
 }
-function decodeCursor(cursor: string | undefined): number {
+function decodeCursor(cursor: string | undefined, kind = 's'): number {
   if (!cursor) return 0;
-  const m = /^s:(\d+)$/.exec(Buffer.from(cursor, 'base64url').toString());
+  const m = new RegExp(`^${kind}:(\\d+)$`).exec(Buffer.from(cursor, 'base64url').toString());
   return m ? Number(m[1]) : 0;
 }
 
@@ -351,10 +373,28 @@ export class TraceStore {
       }));
   }
 
-  /** A session uploaded as it was at `seq`. */
+  /**
+   * A session uploaded as it was at `seq`; nothing for one that is gone (deleted while its batches were landing: its
+   * tombstone already owes the back-office its delete).
+   */
   markUploaded(traceId: string, seq: number, at: number): void {
-    this.db.prepare(`INSERT INTO uploads (trace_id, uploaded_seq, uploaded_at) VALUES (?, ?, ?)
-      ON CONFLICT(trace_id) DO UPDATE SET uploaded_seq = MAX(uploaded_seq, excluded.uploaded_seq), uploaded_at = excluded.uploaded_at`).run(traceId, seq, at);
+    this.db.prepare(`INSERT INTO uploads (trace_id, uploaded_seq, uploaded_at) SELECT ?, ?, ? WHERE EXISTS (SELECT 1 FROM traces WHERE trace_id = ?)
+      ON CONFLICT(trace_id) DO UPDATE SET uploaded_seq = MAX(uploaded_seq, excluded.uploaded_seq), uploaded_at = excluded.uploaded_at`).run(traceId, seq, at, traceId);
+  }
+
+  /**
+   * Before a session's first upload call: the back-office may hold it from now on, whole or in part, so a delete at
+   * any moment owes it one (the Audit's M1 at 98e921347). An upload row at sequence 0: the queue still sends the
+   * session, and the sent count leaves it out. Nothing for a session that is gone, or one already marked.
+   */
+  markSending(traceId: string, at: number): void {
+    this.db.prepare(`INSERT INTO uploads (trace_id, uploaded_seq, uploaded_at) SELECT ?, 0, ? WHERE EXISTS (SELECT 1 FROM traces WHERE trace_id = ?)
+      ON CONFLICT(trace_id) DO NOTHING`).run(traceId, at, traceId);
+  }
+
+  /** The install the deletes were owed to is gone (forgotten by the back-office, or its file removed): none can go. */
+  forgetOwedDeletes(): void {
+    this.db.prepare('UPDATE tombstones SET owed = 0 WHERE owed = 1').run();
   }
 
   /** A session's change sequence: what an upload of it now is keyed on. */
@@ -369,9 +409,45 @@ export class TraceStore {
     return r.m ?? undefined;
   }
 
-  /** Forget every upload (the back-office deleted them, or the address changed). */
+  /**
+   * Forget every upload (the back-office deleted them, or a new install registered), and with them the per-session
+   * deletes owed to the install they went to: a whole deletion covered them, or that install's token is gone.
+   */
   resetUploads(): void {
-    this.db.prepare('DELETE FROM uploads').run();
+    this.db.transaction(() => {
+      this.db.prepare('DELETE FROM uploads').run();
+      this.db.prepare('UPDATE tombstones SET owed = 0 WHERE owed = 1').run();
+    })();
+  }
+
+  /**
+   * The tombstones after a cursor, oldest first, a page at a time: the back-office's deletions feed's shape and cursor
+   * rules (backoffice/API.md § 6.4), `nextCursor` even on an empty page, `more` when the page was cut at its limit
+   * (1 to 500, 100 by default). No `install`: the loopback is one install.
+   */
+  deletions(q: { cursor?: string; limit?: number } = {}): { deletions: TraceDeletion[]; nextCursor: string; more: boolean } {
+    const after = decodeCursor(q.cursor, 'd');
+    const asked = typeof q.limit === 'number' && Number.isFinite(q.limit) ? Math.floor(q.limit) : 100;
+    const limit = Math.min(500, Math.max(1, asked));
+    const rows = this.db.prepare('SELECT seq, trace_id, reason, at FROM tombstones WHERE seq > ? ORDER BY seq ASC LIMIT ?').all(after, limit + 1) as Row[];
+    const page = rows.slice(0, limit);
+    const last = page.length ? num(page[page.length - 1].seq) : after;
+    return {
+      deletions: page.map(r => ({ sessionId: String(r.trace_id), reason: String(r.reason) as TraceDeletionReason, at: num(r.at) })),
+      nextCursor: encodeCursor(last, 'd'),
+      more: rows.length > limit,
+    };
+  }
+
+  /** The per-session deletes owed to the back-office, oldest first. */
+  owedDeletes(limit: number): Array<{ seq: number; traceId: string }> {
+    return (this.db.prepare('SELECT seq, trace_id FROM tombstones WHERE owed = 1 ORDER BY seq ASC LIMIT ?').all(limit) as Row[])
+      .map(r => ({ seq: num(r.seq), traceId: String(r.trace_id) }));
+  }
+
+  /** The back-office took this delete: owed no more, and still in the reader's feed. */
+  deleteSent(seq: number): void {
+    this.db.prepare('UPDATE tombstones SET owed = 0 WHERE seq = ?').run(seq);
   }
 
   /**
@@ -380,7 +456,8 @@ export class TraceStore {
    * change not sent, opted in or not; the uploader counts what it would really send (TraceUploader.state).
    */
   uploadCounts(since?: number): { sent: number; pending: number; lastAt?: number } {
-    const sent = this.db.prepare('SELECT COUNT(*) AS n, MAX(uploaded_at) AS at FROM uploads u JOIN traces t ON t.trace_id = u.trace_id WHERE t.started_at > ?')
+    // A session marked before its first upload call (markSending, sequence 0) is not sent yet.
+    const sent = this.db.prepare('SELECT COUNT(*) AS n, MAX(uploaded_at) AS at FROM uploads u JOIN traces t ON t.trace_id = u.trace_id WHERE t.started_at > ? AND u.uploaded_seq > 0')
       .get(since ?? Number.MIN_SAFE_INTEGER) as { n: number; at: number | null };
     const pending = this.db.prepare('SELECT COUNT(*) AS n FROM traces t LEFT JOIN uploads u ON u.trace_id = t.trace_id WHERE t.updated_seq > COALESCE(u.uploaded_seq, 0)').get() as { n: number };
     return { sent: sent.n, pending: pending.n, lastAt: sent.at ?? undefined };
@@ -648,21 +725,31 @@ export class TraceStore {
       AND hash NOT IN (SELECT tools_hash FROM requests WHERE tools_hash IS NOT NULL)`).run();
   }
 
-  private deleteTraces(ids: string[]): number {
+  /**
+   * Deletes the sessions, and buries each one that was there: its tombstone, owed to the back-office when the session
+   * had been sent there and the reason is the user's or retention's. Called inside a transaction.
+   */
+  private deleteTraces(ids: string[], reason: TraceDeletionReason, at: number): number {
     let deleted = 0;
     for (const traceId of ids) {
+      const sent = !!this.db.prepare('SELECT 1 FROM uploads WHERE trace_id = ?').get(traceId);
       this.db.prepare('DELETE FROM request_messages WHERE request_id IN (SELECT request_id FROM requests WHERE trace_id = ?)').run(traceId);
       this.db.prepare('DELETE FROM requests WHERE trace_id = ?').run(traceId);
       this.db.prepare('DELETE FROM typed_inputs WHERE used_by IN (SELECT turn_id FROM turns WHERE trace_id = ?)').run(traceId);
       this.db.prepare('DELETE FROM turns WHERE trace_id = ?').run(traceId);
       this.db.prepare('DELETE FROM uploads WHERE trace_id = ?').run(traceId);
-      deleted += this.db.prepare('DELETE FROM traces WHERE trace_id = ?').run(traceId).changes;
+      const gone = this.db.prepare('DELETE FROM traces WHERE trace_id = ?').run(traceId).changes;
+      if (gone) {
+        this.db.prepare('INSERT INTO tombstones (trace_id, reason, at, owed) VALUES (?, ?, ?, ?)')
+          .run(traceId, reason, at, sent && reason !== 'cap' ? 1 : 0);
+      }
+      deleted += gone;
     }
     return deleted;
   }
 
   /** Deletes the sessions named, or every session a filter selects; what they alone used goes with them. */
-  remove(sel: { traceIds: string[] } | { filter: TraceFilter }): { deleted: number; bytesFreed: number } {
+  remove(sel: { traceIds: string[] } | { filter: TraceFilter }, now = Date.now()): { deleted: number; bytesFreed: number } {
     return this.db.transaction(() => {
       const before = this.stats().bytes;
       let ids: string[];
@@ -671,24 +758,28 @@ export class TraceStore {
         const w = this.where(sel.filter ?? {});
         ids = (this.db.prepare(`SELECT trace_id FROM traces WHERE ${w.sql}`).all(...w.args) as Row[]).map(r => String(r.trace_id));
       }
-      const deleted = this.deleteTraces(ids);
+      const deleted = this.deleteTraces(ids, 'user', now);
       this.dropOrphanBlobs();
       return { deleted, bytesFreed: Math.max(0, before - this.stats().bytes) };
     })();
   }
 
-  /** Retention, then the cap, oldest ended session first. Past the cap with only open sessions, bodies stop. */
+  /**
+   * Retention, then the cap, oldest ended session first. Past the cap with only open sessions, bodies stop. Then the
+   * tombstones past TOMBSTONE_DAYS go, but for those still owed to the back-office.
+   */
   sweep(o: { capBytes: number; retentionDays: number; now: number }): { deleted: number; bodiesDropped: boolean } {
     return this.db.transaction(() => {
       const expired = (this.db.prepare('SELECT trace_id FROM traces WHERE ended_at IS NOT NULL AND ended_at < ?')
         .all(o.now - o.retentionDays * 86_400_000) as Row[]).map(r => String(r.trace_id));
-      let deleted = this.deleteTraces(expired);
+      let deleted = this.deleteTraces(expired, 'retention', o.now);
       this.dropOrphanBlobs();
       const candidates = (this.db.prepare('SELECT trace_id FROM traces WHERE ended_at IS NOT NULL ORDER BY started_at ASC').all() as Row[]).map(r => String(r.trace_id));
       while (this.stats().bytes > o.capBytes && candidates.length) {
-        deleted += this.deleteTraces([candidates.shift()!]);
+        deleted += this.deleteTraces([candidates.shift()!], 'cap', o.now);
         this.dropOrphanBlobs();
       }
+      this.db.prepare('DELETE FROM tombstones WHERE owed = 0 AND at < ?').run(o.now - TOMBSTONE_DAYS * 86_400_000);
       this.bodiesDropped = this.stats().bytes > o.capBytes;
       return { deleted, bodiesDropped: this.bodiesDropped };
     })();
