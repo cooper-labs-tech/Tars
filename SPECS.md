@@ -281,7 +281,10 @@ reader reads it through `GET /api/traces/*`, with its own token, as the reader's
 
 **Upload** (`trace-upload.ts`, `trace-scrub.ts`). With a back-office address set (empty by default) and the user's
 consent, opted-in sessions are uploaded:
-- each string scrubbed;
+- each string scrubbed: secrets, home paths, e-mail addresses, IP addresses, phone numbers and the names Tars knows
+  (the project's git authors and committers, the account's own name) become placeholders numbered within the
+  session (`<SECRET_1>`, `<EMAIL_2>`...), and the session carries `maskingVersion` and `maskCounts` by type. The
+  back-office takes both fields before a Tars that sends them ships;
 - projects and endpoints as HMAC keys;
 - blobs by the hash of their scrubbed content, sent once;
 - one idempotent batch per session state;
