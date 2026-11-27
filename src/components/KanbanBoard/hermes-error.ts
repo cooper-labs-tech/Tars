@@ -30,13 +30,15 @@ function unwrap(raw: string): string {
 /**
  * The gateway as a sentence names it: its protocol, host and path, never the saved URL whole, whose user name,
  * password, query and hash may hold a credential or a token. The shape of the main process's own sentence (#660,
- * noAnswerSentence). A URL that does not parse is not quoted at all: what was saved there may be a token pasted in
- * the wrong field.
+ * noAnswerSentence). Only an http: or https: URL is quoted, the rule of the main process's gatewayUrl (#660), mirrored
+ * here: a value that does not parse, or parses with any other scheme ("user:s3cretpw" reads as the scheme user:), is
+ * not quoted at all, since what was saved there may be a credential or a token pasted in the wrong field.
  */
 function gatewayOf(baseUrl: string | null): string {
   if (!baseUrl) return '';
   try {
-    const url = new URL(baseUrl);
+    const url = new URL(baseUrl.trim());
+    if (url.protocol !== 'http:' && url.protocol !== 'https:') return '';
     return ` at ${url.protocol}//${url.host}${url.pathname.replace(/\/+$/, '')}`;
   } catch {
     return '';
