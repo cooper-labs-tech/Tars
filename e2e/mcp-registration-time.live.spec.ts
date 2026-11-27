@@ -60,7 +60,18 @@ test('the start-up registration of the MCP servers ends, and how long it takes, 
           const openedAt = gate.mcpGateOpenedAt?.();
           const beganAt = gate.mcpRegistrationBeganAt?.();
           const s = (ms: number) => Math.round(ms / 100) / 10;
+          // What the registration wrote by the time the gate opened: the servers codex and claude were given.
+          const fs = req('fs') as typeof import('fs');
+          const os = req('os') as typeof import('os');
+          const read = (file: string) => { try { return fs.readFileSync(file, 'utf8'); } catch { return ''; } };
+          const codexToml = read(`${process.env.CODEX_HOME || `${os.homedir()}/.codex`}/config.toml`);
+          const claudeMcp = read(`${os.homedir()}/.claude/mcp.json`);
+          const written = {
+            codex: [...codexToml.matchAll(/^\[mcp_servers\.("?)([^\]".]+)\1\]/gm)].map((m) => m[2]),
+            claude: (() => { try { return Object.keys(JSON.parse(claudeMcp).mcpServers ?? {}); } catch { return []; } })(),
+          };
           return {
+            written,
             outcome,
             windowAtS: s(windowAtS * 1000),
             // The gate's own record where it keeps one; else the moment this wait ended, the end itself when it waited.
