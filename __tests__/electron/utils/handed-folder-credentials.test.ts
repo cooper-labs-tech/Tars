@@ -167,6 +167,12 @@ describe('6. the list on each system', () => {
     expect(list.some(f => /Library|keyrings|\.config/.test(f))).toBe(false);
   });
 
+  it('Kimi Code\'s credentials folder, and its older one, on every system (its provider comes with the harness adapters)', () => {
+    expect(credentialFolders('darwin', {}, '/Users/a')).toEqual(expect.arrayContaining(['/Users/a/.kimi-code/credentials', '/Users/a/.kimi/credentials']));
+    expect(credentialFolders('linux', {}, '/home/a')).toEqual(expect.arrayContaining(['/home/a/.kimi-code/credentials', '/home/a/.kimi/credentials']));
+    expect(credentialFolders('win32', {}, 'C:\\Users\\a')).toEqual(expect.arrayContaining(['C:\\Users\\a\\.kimi-code\\credentials', 'C:\\Users\\a\\.kimi\\credentials']));
+  });
+
   it('follows CODEX_HOME and PI_CODING_AGENT_DIR, as Tars itself does', () => {
     const list = credentialFolders('darwin', { CODEX_HOME: '/Volumes/x/codex', PI_CODING_AGENT_DIR: '/Volumes/x/pi-agent' }, '/Users/a');
     expect(list).toEqual(expect.arrayContaining(['/Volumes/x/codex', '/Volumes/x/pi-agent', '/Users/a/.codex']));
