@@ -27,6 +27,9 @@ import { DEV_URL, apiPort } from './ports.mjs';
  * 4. On, registered with the back-office: INSTALL(1), on every request of both harnesses.
  * 5. After "delete everything" at the back-office (a DELETE answered 200): no X-Install-Id, INSTALL(1) never again.
  * 6. Sharing given again, a new registration: INSTALL(2), and INSTALL(1) nowhere after step 5.
+ * 6b. (Added after the code of af510050a, and shown red on the code before it.) Deleted and shared again with a
+ *     back-office that issues an id the upload takes but that is no canonical uuid (install.3): no X-Install-Id, and
+ *     the app's log says why once, in a line that names no id.
  * 7. The switch off again: no X-Install-Id.
  * And the upload notice names the install id an endpoint may be told.
  * The artefact: values.json (each step's headers as the endpoint saw them, per agent), the endpoint's request log,
@@ -57,6 +60,8 @@ test('an endpoint is told the install\'s back-office id only with the owner\'s s
 
   // The back-office: numbers the installs it registers, takes what is sent, and deletes an install it knows.
   let installs = 0;
+  // Step 6b: the back-office issues an id the upload takes but that is no canonical uuid.
+  let notUuid = false;
   const tokens = new Map<string, string>();
   const backOffice = http.createServer((req, res) => {
     const chunks: Buffer[] = [];
@@ -68,7 +73,7 @@ test('an endpoint is told the install\'s back-office id only with the owner\'s s
       if (req.method === 'POST' && req.url === '/v1/installs') {
         const t = `e2e-install-token-${randomBytes(6).toString('hex')}`;
         // A canonical uuid with capitals, as a back-office may store one: the endpoint is told it in lower case.
-        tokens.set(t, INSTALL(++installs).toUpperCase());
+        tokens.set(t, notUuid ? `install.${++installs}` : INSTALL(++installs).toUpperCase());
         [status, body] = [201, { installId: tokens.get(t), token: t, limits: {}, retentionDays: 90 }];
       } else if (!tokens.has(token)) {
         [status, body] = [401, { error: 'unauthorized' }];
@@ -189,6 +194,20 @@ test('an endpoint is told the install\'s back-office id only with the owner\'s s
     expect.soft(again.ok, `consent again: ${again.error}`).toBe(true);
     const reRegistered = await turn('6-registered-again');
     expect.soft(reRegistered, 'step 6: the new id').toEqual(reRegistered.map(() => INSTALL(2)));
+
+    // 6b. A back-office that issues an id that is no canonical uuid (install.3): no header, and one neutral log line.
+    const deletedAgain = await api<{ ok: boolean; error?: string }>('traces', 'deleteEverywhere');
+    notUuid = true;
+    const thirdConsent = await api<{ ok: boolean; error?: string }>('traces', 'giveUploadConsent');
+    const thirdPass = await pass();
+    keep({ deletedAgain, thirdConsent, thirdPass });
+    expect.soft(deletedAgain.ok && thirdConsent.ok, `step 6b: deleted and shared again: ${deletedAgain.error ?? thirdConsent.error ?? ''}`).toBe(true);
+    const notAUuid = await turn('6b-not-a-uuid');
+    expect.soft(notAUuid.every(v => v === null), 'step 6b: an id that is no canonical uuid sends no header').toBe(true);
+    const said = fs.readFileSync(appLog, 'utf8').split('\n').filter(l => /not a canonical uuid/i.test(l));
+    keep({ notUuidLog: said });
+    expect.soft(said, 'step 6b: the log says why, once').toHaveLength(1);
+    expect.soft(said.join('\n'), 'step 6b: the line names no id').not.toContain('install.3');
 
     // 7. The switch off again.
     const off = await api<{ ok: boolean; error?: string }>('endpoints', 'save', { ...owned, sendSessionHeaders: true, sendInstallHeader: false });
