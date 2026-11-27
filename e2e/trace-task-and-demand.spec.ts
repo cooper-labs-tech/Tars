@@ -26,7 +26,8 @@ import { DEV_URL, apiPort } from './ports.mjs';
  * 4. Q is stopped: the outcome holds the ledger's task (its id, where it came from, who asked, how it ended) and the
  *    request given up.
  * 5. The branch's pull request is merged: the stand-in gh says so, and the ended session takes it, its change
- *    sequence moved; gh is asked nothing but `pr list --state closed`.
+ *    sequence moved; gh is asked nothing but `pr list --state closed`. macOS and Linux: the stand-in gh is a script
+ *    with a shebang, which execFile cannot run on Windows.
  * 6. What leaves: the upload's preview carries every new field and neither task's words; the notice has a line for
  *    each.
  * The artefact: values.json, the session as exported, the preview, the stand-in endpoint's and gh's logs, the app's log.
@@ -68,8 +69,12 @@ test('a traced session records what started it, its task and its times, its star
   const key = `e2e-endpoint-key-${randomBytes(6).toString('hex')}`;
   const standin = await startStandIn({ key, log: standinLog, failFirst: [503, 503, 503, 503, 503, 503] });
 
-  // The stand-in gh: one merged pull request for the branch, at the moment it is asked. Every call is logged.
+  // The stand-in gh: no closed pull request until the spec says the branch's is merged (the flag file), then one, at
+  // the moment it is asked. Every call is logged. A script with a shebang, which execFile cannot run on Windows (as
+  // github-watch.test.ts notes for its own): the pull request's step is macOS's and Linux's.
+  const prStep = process.platform !== 'win32';
   const ghLog = test.info().outputPath('gh-calls.jsonl');
+  const merged = path.join(home, 'pr-merged.flag');
   const gh = path.join(home, 'bin', 'gh');
   fs.mkdirSync(path.dirname(gh), { recursive: true });
   fs.writeFileSync(gh, `#!${process.execPath}
@@ -78,7 +83,7 @@ const args = process.argv.slice(2);
 fs.appendFileSync(${JSON.stringify(ghLog)}, JSON.stringify(args) + '\\n');
 if (args[0] === 'pr' && args[1] === 'list' && args[args.indexOf('--state') + 1] === 'closed' && args[args.indexOf('--repo') + 1] === 'e2e-owner/e2e-probe') {
   const at = new Date().toISOString();
-  process.stdout.write(JSON.stringify([{ number: 42, state: 'MERGED', headRefName: 'feat/probe', mergedAt: at, closedAt: at }]));
+  process.stdout.write(JSON.stringify(fs.existsSync(${JSON.stringify(merged)}) ? [{ number: 42, state: 'MERGED', headRefName: 'feat/probe', mergedAt: at, closedAt: at }] : []));
   process.exit(0);
 }
 process.stderr.write('stand-in gh: not something Tars asks');
@@ -113,7 +118,7 @@ process.exit(1);
   let app: ElectronApplication | undefined;
   try {
     app = await launchSandboxed(electron, home, {
-      env: { NODE_ENV: 'development', DOROTHY_DEV_URL: DEV_URL, DOROTHY_API_PORT: port, DOROTHY_E2E: '1', DOROTHY_E2E_GH: gh, DOROTHY_PR_EVERY_MS: '500' },
+      env: { NODE_ENV: 'development', DOROTHY_DEV_URL: DEV_URL, DOROTHY_API_PORT: port, DOROTHY_E2E: '1', DOROTHY_PR_EVERY_MS: '500', ...(prStep ? { DOROTHY_E2E_GH: gh } : {}) },
     });
     const appLog = test.info().outputPath('app.log');
     app.process().stdout?.on('data', (d) => fs.appendFileSync(appLog, d));
@@ -167,11 +172,21 @@ process.exit(1);
     const traceId = (await evaluate<string>(traceIdOf, { q: Q }))!;
     const sessionOf = `return req(dist + '/services/traces-runtime.js').traceStore().session(arg.id);`;
     await expect.poll(async () => ((await evaluate<Row>(sessionOf, { id: traceId }))?.session as Row | undefined)?.endedAt, { timeout: 30_000 }).toBeTruthy();
-    const seqAtEnd = await evaluate<number>(`return req(dist + '/services/traces-runtime.js').traceStore().seqOf(arg.id);`, { id: traceId });
+    const seqOf = `return req(dist + '/services/traces-runtime.js').traceStore().seqOf(arg.id);`;
+    // The session's change sequence once its end is written: until the flag, gh has no closed pull request to give.
+    const seqAtEnd = await evaluate<number>(seqOf, { id: traceId });
 
-    // 5. The branch's pull request, read by the stand-in gh, into the ended session.
-    await expect.poll(async () => ((await evaluate<Row>(sessionOf, { id: traceId }))?.outcome as Row | undefined)?.pr, { timeout: 30_000 }).toBeTruthy();
-    const seqAfterPr = await evaluate<number>(`return req(dist + '/services/traces-runtime.js').traceStore().seqOf(arg.id);`, { id: traceId });
+    // 5. The branch's pull request is merged now, read by the stand-in gh, into the ended session. Waited for without
+    // a throw, so that a build without it fails on every field below, not on this one alone.
+    let seqAfterPr = seqAtEnd;
+    if (prStep) {
+      fs.writeFileSync(merged, '1');
+      for (const until = Date.now() + 30_000; Date.now() < until;) {
+        if (((await evaluate<Row>(sessionOf, { id: traceId }))?.outcome as Row | undefined)?.pr) break;
+        await new Promise(r => setTimeout(r, 300));
+      }
+      seqAfterPr = await evaluate<number>(seqOf, { id: traceId });
+    }
 
     const session = await evaluate<Row & { start?: Row; outcome?: Row; lostDemand?: Row[]; turns: Array<{ requests: Row[] }> }>(sessionOf, { id: traceId });
     const requests = session.turns.flatMap(t => t.requests);
@@ -207,16 +222,18 @@ process.exit(1);
     expect.soft(outcome, 'the outcome').toMatchObject({ abandonedWhileHeld: 1, requestErrors: 0, branch: 'feat/probe', head });
 
     // 5. The pull request, its change sequence moved, and gh asked nothing else.
-    expect.soft(outcome.pr, 'the pull request').toMatchObject({ number: 42, state: 'merged' });
-    expect.soft(seqAfterPr, 'the change sequence after the pull request').toBeGreaterThan(seqAtEnd);
-    expect.soft(ghCalls().length, 'gh was asked').toBeGreaterThan(0);
-    for (const args of ghCalls()) expect.soft(args.slice(0, 2).concat(args[args.indexOf('--state') + 1]), `gh ${args.join(' ')}`).toEqual(['pr', 'list', 'closed']);
+    if (prStep) {
+      expect.soft(outcome.pr, 'the pull request').toMatchObject({ number: 42, state: 'merged' });
+      expect.soft(seqAfterPr, 'the change sequence after the pull request').toBeGreaterThan(seqAtEnd);
+      expect.soft(ghCalls().length, 'gh was asked').toBeGreaterThan(0);
+      for (const args of ghCalls()) expect.soft(args.slice(0, 2).concat(args[args.indexOf('--state') + 1]), `gh ${args.join(' ')}`).toEqual(['pr', 'list', 'closed']);
+    }
 
     // 6. What leaves, and the notice's lines.
     expect.soft(sent?.sessions?.[0], 'the preview\'s session').toMatchObject({
       start: expect.objectContaining({ trigger: 'task', taskRef: ref1, commit: head }),
       lostDemand: [expect.objectContaining({ kind: 'queue_drop', reason: 'cancelled' })],
-      outcome: expect.objectContaining({ pr: expect.objectContaining({ number: 42, state: 'merged' }), task: expect.objectContaining({ ref: ref1 }) }),
+      outcome: expect.objectContaining({ task: expect.objectContaining({ ref: ref1 }), ...(prStep ? { pr: expect.objectContaining({ number: 42, state: 'merged' }) } : {}) }),
     });
     expect.soft(sent?.requests?.some(r => (r.cancel as Row | undefined)?.cause === 'abandoned_while_held'), 'the preview\'s request cancel').toBe(true);
     const leaving = JSON.stringify(preview);
