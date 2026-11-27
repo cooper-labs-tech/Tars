@@ -2913,7 +2913,7 @@ export interface ElectronAPI {
   };
 
   /**
-   * The load window (trace feature C3, electron/services/load-window.ts, frames of #672). Approve, grant, notNow and
+   * The load window (trace feature C3, electron/services/load-window.ts, the frames of PR 672). Approve, grant, notNow and
    * stop are the owner's alone: main takes them from this window only.
    */
   load?: {
@@ -3112,7 +3112,7 @@ export type LoadProjectState =
 /** As gh says; `not_asked` for a project allowed by name, with traces off or no work tree; `none`: no GitHub remote. */
 export type LoadRepoVisibility = 'public' | 'private' | 'unknown' | 'none' | 'not_asked';
 
-/** A project in the Projects view of #672's frames. */
+/** A project in the Projects view of PR 672's frames. */
 export interface LoadProjectView {
   path: string;
   name: string;
