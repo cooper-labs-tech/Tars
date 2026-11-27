@@ -7,7 +7,7 @@ vi.setConfig({ testTimeout: 30_000 });
 import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
-import { execFileSync } from 'node:child_process';
+import { execFileSync, spawnSync } from 'node:child_process';
 import { cannotSymlink } from '../setup/symlink-privilege';
 import {
   openRepo,
@@ -97,6 +97,18 @@ import {
  *     nothing, and a new with --no-deps counts no clone;
  * 32. a .next below the root (landing/.next) is taken for a file to keep, and
  *     remove refuses the worktree.
+ * And from the Audit's second gate of #662 (M1, 27/11): a crash during a clone
+ * (Ctrl-C, a kill of the agent's tree, a power cut) leaves
+ * node_modules.tars-clone-* behind for good:
+ * 33. git does not ignore it (the repository's .gitignore names /node_modules
+ *     and mcp-*\/node_modules exactly), so the worktree reads as dirty;
+ * 34. remove refuses it as an ignored file to keep, and remove --save's
+ *     `git add -A` commits hundreds of MB of node_modules onto wip/<name>;
+ * 35. nothing looks for it: prune and new never remove one whose clone is
+ *     gone (its pid dead), and one whose clone still runs (its pid alive) is
+ *     taken away under it;
+ * 36. (I-a) a source with no hidden lock yet (a first install running) is
+ *     taken for settled: the folder and the hidden lock were read in one try.
  *
  * Every repository here is a throwaway one in the temp directory. Free space,
  * the processes' working directories, the clock, npm and gh are handed in, so
@@ -151,7 +163,7 @@ function install(at: string, version: string, fresh = false): void {
 function makeRepo(opts: { installed?: string | null; subs?: Record<string, string | null>; bare?: string[] } = {}): string {
   const root = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'tars-wt-')));
   git(root, 'init', '-q', '-b', 'main');
-  fs.writeFileSync(path.join(root, '.gitignore'), '/node_modules\nnode_modules/\n/.next/\n.worktrees/\n.env*\ntest-results/\n');
+  fs.writeFileSync(path.join(root, '.gitignore'), '/node_modules\nnode_modules/\nnode_modules.tars-clone-*\n/.next/\n.worktrees/\n.env*\ntest-results/\n');
   fs.writeFileSync(path.join(root, 'package-lock.json'), LOCK('1.0.0'));
   fs.writeFileSync(path.join(root, 'README.md'), 'hello\n');
   for (const sub of Object.keys(opts.subs ?? {})) {
@@ -452,6 +464,60 @@ describe('dependencies', () => {
     const none = world({ free: 31 * GB, copyCost: () => 5 * GB });
     await createWorktree(repo, 'subs-nodeps', { from: 'main', deps: false }, none.ctx);
     expect(none.costed).toEqual([]);
+  });
+
+  it("33. the repository's own .gitignore ignores a clone left half made, at the root and in a sub-package", () => {
+    const repoRoot = path.resolve(__dirname, '..', '..');
+    for (const p of ['node_modules.tars-clone-123-456', 'mcp-x/node_modules.tars-clone-123-456/a.js', 'landing/node_modules.tars-clone-1-2']) {
+      expect(() => execFileSync('git', ['check-ignore', '-q', p], { cwd: repoRoot }), p).not.toThrow();
+    }
+  });
+
+  it('34. remove takes a worktree holding a clone left half made, and --save commits none of it', async () => {
+    const root = makeRepo({ subs: { 'mcp-x': '1.0.0' } });
+    const { ctx } = world();
+    const repo = await openRepo(root);
+    const wt = await createWorktree(repo, 'subs-left', { branch: 'feat/left', from: 'main' }, ctx);
+    // Its clone still running for all the sweep knows (this process's pid): left where it is, and still no file to keep.
+    const left = path.join(wt.path, 'mcp-x', `node_modules.tars-clone-${process.pid}-1`);
+    fs.mkdirSync(path.join(left, 'left-pad'), { recursive: true });
+    fs.writeFileSync(path.join(left, 'left-pad', 'index.js'), 'module.exports = 1;\n');
+    fs.writeFileSync(path.join(wt.path, 'README.md'), 'changed\n');
+
+    await removeWorktree(repo, 'subs-left', { save: true }, world().ctx);
+
+    expect(fs.existsSync(wt.path)).toBe(false);
+    expect(git(root, 'show', 'wip/subs-left:README.md')).toBe('changed');
+    expect(git(root, 'ls-tree', '-r', '--name-only', 'wip/subs-left')).not.toMatch(/tars-clone/);
+  });
+
+  it('35. prune removes a clone left half made whose clone is gone, in a worktree and in the main checkout, and keeps one still running', async () => {
+    const root = makeRepo({ subs: { 'mcp-x': '1.0.0' } });
+    const repo = await openRepo(root);
+    const wt = await createWorktree(repo, 'subs-sweep', { from: 'main' }, world().ctx);
+    const gone = spawnSync(process.execPath, ['-e', '']).pid;
+    const dead = [path.join(wt.path, `node_modules.tars-clone-${gone}-1`), path.join(root, 'mcp-x', `node_modules.tars-clone-${gone}-2`)];
+    const running = path.join(wt.path, 'mcp-x', `node_modules.tars-clone-${process.pid}-3`);
+    for (const p of [...dead, running]) { fs.mkdirSync(p, { recursive: true }); fs.writeFileSync(path.join(p, 'f'), 'x'); }
+
+    const dry = await prune(repo, { olderThanDays: 7, dryRun: true, github: false }, world().ctx);
+    expect(dry.swept.sort()).toEqual([...dead].sort());
+    for (const p of dead) expect(fs.existsSync(p), p).toBe(true);
+
+    const real = await prune(repo, { olderThanDays: 7, github: false }, world().ctx);
+    expect(real.swept.sort()).toEqual([...dead].sort());
+    for (const p of dead) expect(fs.existsSync(p), p).toBe(false);
+    expect(fs.existsSync(running)).toBe(true);
+  });
+
+  it('36. a source with no hidden lock yet, its folder just written, is not taken', async () => {
+    const root = makeRepo({ installed: null });
+    fs.mkdirSync(path.join(root, 'node_modules', 'left-pad'), { recursive: true });
+    const { ctx, calls } = world();
+    const repo = await openRepo(root);
+    const wt = await createWorktree(repo, 'subs-first', { from: 'main' }, ctx);
+
+    expect(calls).toContainEqual(expect.objectContaining({ command: 'npm', args: expect.arrayContaining(['ci']), cwd: wt.path }));
   });
 
   it('reads an installed tree against a lock', () => {
