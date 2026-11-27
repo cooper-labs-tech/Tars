@@ -97,7 +97,10 @@ export function startRestartRecovery(previous: PreviousRun | null): { flush: () 
         // Resumed after Tars stopped abruptly: a restart, for its traced session (core/session-start.ts).
         launch: (id, note) => {
           noteSessionStart(id, { trigger: 'restart', via: 'tars' });
-          return launchAgent(id, note).finally(() => clearSessionStart(id));
+          // The same promise, its note cleared beside it: the recovery's timing is unchanged.
+          const launched = launchAgent(id, note);
+          launched.then(() => clearSessionStart(id), () => clearSessionStart(id));
+          return launched;
         },
         typeNote,
         sessionUp: (id, ms) => {

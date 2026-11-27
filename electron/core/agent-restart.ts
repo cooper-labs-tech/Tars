@@ -412,7 +412,10 @@ async function restartNow(agent: AgentStatus, cause: 'settings' | 'asked'): Prom
 
     // Started again, for its traced session (core/session-start.ts): for a settings change, or asked.
     noteSessionStart(agent.id, { trigger: 'restart', via: cause });
-    const result = await launchAgent(agent.id, '', { resumeSessionId: conversation }).finally(() => clearSessionStart(agent.id));
+    const launched = launchAgent(agent.id, '', { resumeSessionId: conversation });
+    // The note goes once the launch is over, beside it: awaited as it was, the restart keeps its timing.
+    launched.then(() => clearSessionStart(agent.id), () => clearSessionStart(agent.id));
+    const result = await launched;
     if (!result.success) throw new Error(result.error);
     return { success: true };
   } catch (err) {
