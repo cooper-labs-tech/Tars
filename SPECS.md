@@ -372,13 +372,17 @@ max_concurrent a project. They run codex, pi, qwen-code or opencode on the grant
 the checks now give another proposal, it is refused as stale, and the card shows the new one. The owner may change
 the window's values before approving. The approved bytes are written as the run's snapshot,
 `~/.tars/load-runs/<run>/tasks.snapshot.jsonl`, and the arrivals are planned from them and the approved seed. Nothing
-reads the live pool after that. The approval itself is kept in `~/.tars-private/load-approved.json`. A run counts
-only when it is there: a run record under `~/.tars` that no approval names is no window. A snapshot changed after
-the approval stops its run with an error. One window runs at a time. "Not now" sets a pool aside until its file
-changes. The Stop switch ends the window (`switch`), and so do the window's end (`window_end`), the 15 GB disk floor
-(`disk_floor`) and an error. The run record, `run.json`, holds the window, the tasks with their split and train_ok,
-the planned arrivals, each arrival as it went (blocked and why: `max_concurrent`, `busy_cap`, `heavy_slot` or
-`no_harness`), the agents, the worktrees and the stop.
+reads the live pool after that. The approval itself is kept in `~/.tars-private/load-approved.json`, with everything
+a decision about the run reads: its pool, the snapshot's sha256, the approved task lines, the window, when, and its
+stop. A run counts only when it is there: a run record under `~/.tars` that no approval names is no window. The
+run's tasks and planned arrivals are derived from the verified snapshot, the approved lines and the approved window
+(the seed makes them the same each time). A snapshot changed after the approval, or a run record whose tasks or
+planned arrivals are no longer those, stops its run with an error. One window runs at a time. "Not now" sets a pool
+aside until its file changes, kept in `~/.tars-private/load-set-aside.json`. The Stop switch ends the window
+(`switch`), and so do the window's end (`window_end`), the 15 GB disk floor (`disk_floor`) and an error, each kept with
+the approval. The run record, `run.json`, is the run's log, read for what the window shows of it and for no decision:
+the window, the tasks with their split and train_ok, the planned arrivals, each arrival as it went (blocked and why:
+`max_concurrent`, `busy_cap`, `heavy_slot` or `no_harness`), the agents, the worktrees and a copy of the stop.
 
 ### Alt-provider safety gate
 

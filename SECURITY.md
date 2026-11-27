@@ -1240,10 +1240,14 @@ would be sent.
 - **Only the owner's click.** `load:approve`, `load:grant`, `load:notNow` and `load:stop` are IPC channels of the
   window. Each is refused unless it comes from the main window's own web contents. No API route, MCP tool, agent token
   or message reaches them. Nothing else in the main process holds the window's runtime or writes a grant.
-- **Kept where agents are not handed.** The grants (`~/.tars-private/load-grants.json`, 0600) and the approvals
-  (`load-approved.json`, 0600). A run record under `~/.tars/load-runs`, which any agent can write, is a record and
-  never an approval. A run counts only when the private file names its id, and its pool, sha256 and window are read
-  from there.
+- **Kept where agents are not handed.** The grants (`~/.tars-private/load-grants.json`, 0600), the approvals
+  (`load-approved.json`, 0600) and the pools set aside (`load-set-aside.json`, 0600). A run record under
+  `~/.tars/load-runs`, which any agent can write, is a log, read for no decision. A run counts only when the private
+  file names its id. Its pool, sha256, approved task lines, window and stop are read from there. Its tasks and planned
+  arrivals are derived from the verified snapshot. A record whose stop an agent removes stays stopped, and a stop an
+  agent writes there stops nothing. A record whose tasks or planned arrivals were changed stops its run with an error.
+- **The main window's top frame.** The handlers check the sender's frame as well as its web contents. A subframe
+  shares the window's web contents.
 - **What was shown is what is approved.** Approve carries the pool's sha256 and the proposal's id. A pool or a
   proposal changed since is refused as stale, and shown again. The approved bytes are the run's snapshot, and nothing
   reads the live pool after them. A snapshot that no longer matches the approved sha256 stops its run with an error.
