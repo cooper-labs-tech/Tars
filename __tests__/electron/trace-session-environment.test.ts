@@ -38,6 +38,12 @@ import type { SessionEnvironment } from '../../electron/services/session-environ
  * S9. The proxy counts the live sessions at the end of a request rather than when it was sent; it does not take the
  *     harness's session id from codex's session-id header, or keeps a value that is not an id (too long, control
  *     characters); codex's installation id header does not reach the endpoint, or reaches the record.
+ * From the Audit of #677 (27/11), written before the fix:
+ * S10. The proxy keeps a session id the back-office does not take (over 128 characters; it kept up to 200), or drops
+ *      one of exactly 128.
+ * S11. The upload sends a harness version over 40 characters or a session id over 128 that a store already holds, and
+ *      the back-office refuses the whole batch; or it cuts them, which makes another version and another session's id.
+ *      A value over the limit is left out; one at the limit is sent.
  */
 
 const INSTALL_ID = '6f1c2b7e-0d3a-4e5f-9a8b-7c6d5e4f3a2b';
@@ -264,6 +270,25 @@ describe('a session\'s environment in the store', () => {
     expect(body.requests[0]).toMatchObject({ liveSessions: 2 });
   });
 
+  it('S11: the upload leaves out a version over 40 characters and a session id over 128, and sends them at the limit', () => {
+    const sent = (version: string, sessionId: string) => {
+      const s = new TraceStore(path.join(dir, `limit-${version.length}.db`));
+      try {
+        s.openTrace(meta('t1'));
+        s.setHarnessVersion('t1', version);
+        s.ingest(rec('t1', 1_000_100, { nativeSessionId: sessionId }));
+        const body = uploader(s).preview('t1')!.document.batches[0].body as { sessions: Array<Record<string, unknown>> };
+        return body.sessions[0];
+      } finally {
+        s.close();
+      }
+    };
+    const over = sent('v'.repeat(41), 'i'.repeat(129));
+    expect(over).not.toHaveProperty('harnessVersion');
+    expect(over).not.toHaveProperty('nativeSessionId');
+    expect(sent('v'.repeat(40), 'i'.repeat(128))).toMatchObject({ harnessVersion: 'v'.repeat(40), nativeSessionId: 'i'.repeat(128) });
+  });
+
   it('S8: a session with none of it says so plainly in the export (null and empty), and sends nothing made up', () => {
     store.openTrace(meta('t1'));
     store.ingest(rec('t1', 1_000_100));
@@ -341,6 +366,13 @@ describe('the proxy', () => {
     const { requestBody, responseBody, ...rest } = records[0];
     void requestBody; void responseBody;
     expect(JSON.stringify(rest)).not.toContain(INSTALL_ID);
+  });
+
+  it('S10: a session id of 128 characters is kept, one of 129 is not', async () => {
+    await send({ 'session-id': 's'.repeat(128) });
+    await send({ 'session-id': 's'.repeat(129) });
+    await settle();
+    expect(records.map(r => r.nativeSessionId?.length)).toEqual([128, undefined]);
   });
 
   it('S9: a session-id that is not an id is not kept', async () => {

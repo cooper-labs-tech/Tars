@@ -157,6 +157,10 @@ test('each traced session keeps its harness version, its environment, its power 
     expect.soft(String(versionProbe?.home), "the --version probe's HOME").toMatch(/tars-version-probe-/);
     expect.soft(String(versionProbe?.home).startsWith(home), "the --version probe's HOME is the sandbox's own").toBe(false);
     expect.soft(String(versionProbe?.npmPrefix).startsWith(path.dirname(String(versionProbe?.home))), "npm's prefix in the probe's own folder").toBe(true);
+    // The Audit's M1 on #677: the probe's working folder is its throwaway folder too, never Tars's own.
+    // Compared by the throwaway folder's own name: the folder is gone by now, and /var and /private/var name one place.
+    const probeFolder = path.basename(path.dirname(String(versionProbe?.home)));
+    expect.soft(String(versionProbe?.cwd).includes(`${path.sep}${probeFolder}${path.sep}`), `the probe's working folder: ${versionProbe?.cwd}`).toBe(true);
 
     // 3. Power, while both are open.
     await power(['suspend', 'resume', 'on-battery', 'on-ac']);
