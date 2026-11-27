@@ -916159,6 +916159,32 @@
         },
         {
           "type": "text",
+          "id": "jULvc",
+          "name": "t",
+          "fill": "$text-secondary",
+          "textGrowth": "fixed-width",
+          "width": 1240,
+          "content": "Projects. The card's second view, behind the Window | Projects switch in its head, sets each project's load grant, and only there: no agent, token or message can. A grant holds whether the project is allowed for load windows, its endpoint and model, and the harnesses its load agents may use (codex, qwen-code, pi, opencode). A public repository is allowed by your toggle like any other; a private one only by its name. A project without an endpoint cannot be allowed until one is chosen. The grants are kept in ~/.tars-private, which no agent is handed.",
+          "lineHeight": 1.5,
+          "fontFamily": "$font-ui",
+          "fontSize": 13,
+          "fontWeight": "normal"
+        },
+        {
+          "type": "text",
+          "id": "WRfQA",
+          "name": "t",
+          "fill": "$text-secondary",
+          "textGrowth": "fixed-width",
+          "width": 1240,
+          "content": "Traces off. A project that is not opted in to traces cannot be allowed: its row has no controls, says why, and links to its traces opt-in. In a proposed window its tasks are refused whole, like those of a private repository not allowed by name, and the approval links each refused project to its row in Projects.",
+          "lineHeight": 1.5,
+          "fontFamily": "$font-ui",
+          "fontSize": 13,
+          "fontWeight": "normal"
+        },
+        {
+          "type": "text",
           "id": "m3iaYS",
           "name": "t",
           "fill": "$text-muted",
@@ -919422,7 +919448,7 @@
                       "id": "bVYeg",
                       "name": "t",
                       "fill": "$text-muted",
-                      "content": "5 projects · 2 allowed",
+                      "content": "6 projects · 3 allowed",
                       "lineHeight": 1.4,
                       "fontFamily": "$font-mono",
                       "fontSize": 10.5,
@@ -919804,7 +919830,7 @@
                           "fill": "$text-secondary",
                           "textGrowth": "fixed-width",
                           "width": "fill_container",
-                          "content": "Allowed: its repository is public. Its load agents run on Shared vLLM, coder-32b.",
+                          "content": "Allowed by you; its repository is public. Its load agents run on Shared vLLM, coder-32b.",
                           "lineHeight": 1.4,
                           "fontFamily": "$font-ui",
                           "fontSize": 11.5,
@@ -920648,7 +920674,7 @@
                 },
                 {
                   "type": "frame",
-                  "id": "cPHdD",
+                  "id": "RJv6K",
                   "name": "grant meridian",
                   "width": "fill_container",
                   "stroke": "$border",
@@ -920662,7 +920688,7 @@
                   "children": [
                     {
                       "type": "frame",
-                      "id": "P8Eoo8",
+                      "id": "savzV",
                       "name": "head",
                       "width": "fill_container",
                       "gap": 10,
@@ -920670,7 +920696,7 @@
                       "children": [
                         {
                           "type": "text",
-                          "id": "ykduO",
+                          "id": "k459gw",
                           "name": "t",
                           "fill": "$text-primary",
                           "content": "meridian",
@@ -920681,7 +920707,7 @@
                         },
                         {
                           "type": "text",
-                          "id": "b1iot",
+                          "id": "XIM1H",
                           "name": "t",
                           "fill": "$text-muted",
                           "content": "github.com/example-org/meridian",
@@ -920692,7 +920718,7 @@
                         },
                         {
                           "type": "frame",
-                          "id": "acZ5e",
+                          "id": "mCx2F",
                           "name": "chip public",
                           "fill": "$surface-raised",
                           "gap": 5,
@@ -920704,7 +920730,7 @@
                           "children": [
                             {
                               "type": "text",
-                              "id": "W3u4W",
+                              "id": "B4AHc",
                               "name": "t",
                               "fill": "$text-secondary",
                               "content": "public",
@@ -920717,16 +920743,16 @@
                         },
                         {
                           "type": "frame",
-                          "id": "I8y3A",
+                          "id": "L7iwVL",
                           "name": "spacer",
                           "width": "fill_container",
                           "height": 1
                         },
                         {
                           "type": "text",
-                          "id": "HponO",
+                          "id": "Rl7VC",
                           "name": "t",
-                          "fill": "$text-muted",
+                          "fill": "$text-secondary",
                           "content": "load windows",
                           "lineHeight": 1.4,
                           "fontFamily": "$font-ui",
@@ -920735,23 +920761,22 @@
                         },
                         {
                           "type": "frame",
-                          "id": "Olk12",
-                          "name": "Toggle off",
-                          "opacity": 0.4,
+                          "id": "IUekn",
+                          "name": "Toggle on",
                           "width": 30,
                           "height": 16,
-                          "fill": "$surface-raised",
-                          "stroke": "$border",
+                          "fill": "$accent-dim",
+                          "stroke": "$accent",
                           "strokeWidth": 1,
                           "layout": "none",
                           "children": [
                             {
                               "type": "rectangle",
-                              "id": "SRO9S",
-                              "x": 2,
+                              "id": "vKhwY",
+                              "x": 16,
                               "y": 1,
                               "name": "knob",
-                              "fill": "$text-secondary",
+                              "fill": "$accent",
                               "width": 12,
                               "height": 12
                             }
@@ -920761,7 +920786,7 @@
                     },
                     {
                       "type": "frame",
-                      "id": "DX1ow",
+                      "id": "chiBi",
                       "name": "controls",
                       "width": "fill_container",
                       "gap": 8,
@@ -920769,7 +920794,7 @@
                       "children": [
                         {
                           "type": "text",
-                          "id": "KOQxU",
+                          "id": "B33vHR",
                           "name": "t",
                           "fill": "$text-secondary",
                           "textGrowth": "fixed-width",
@@ -920782,7 +920807,7 @@
                         },
                         {
                           "type": "frame",
-                          "id": "igGvQ",
+                          "id": "NydbY",
                           "name": "select",
                           "width": 200,
                           "height": 26,
@@ -920798,12 +920823,12 @@
                           "children": [
                             {
                               "type": "text",
-                              "id": "TJEcT",
+                              "id": "qbPtM",
                               "name": "t",
-                              "fill": "$text-muted",
+                              "fill": "$text-primary",
                               "textGrowth": "fixed-width",
                               "width": "fill_container",
-                              "content": "choose one",
+                              "content": "Shared vLLM",
                               "lineHeight": 1.4,
                               "fontFamily": "$font-mono",
                               "fontSize": 11.5,
@@ -920811,7 +920836,7 @@
                             },
                             {
                               "type": "icon",
-                              "id": "qmGZB",
+                              "id": "i70uLn",
                               "name": "chevron-down",
                               "width": 12,
                               "height": 12,
@@ -920823,7 +920848,7 @@
                         },
                         {
                           "type": "text",
-                          "id": "a14YwD",
+                          "id": "x8FFPL",
                           "name": "t",
                           "fill": "$text-secondary",
                           "textGrowth": "fixed-width",
@@ -920836,7 +920861,7 @@
                         },
                         {
                           "type": "frame",
-                          "id": "X8nMdR",
+                          "id": "QpS5V",
                           "name": "select",
                           "width": 170,
                           "height": 26,
@@ -920852,12 +920877,12 @@
                           "children": [
                             {
                               "type": "text",
-                              "id": "gXU35",
+                              "id": "cmRm0",
                               "name": "t",
-                              "fill": "$text-muted",
+                              "fill": "$text-primary",
                               "textGrowth": "fixed-width",
                               "width": "fill_container",
-                              "content": "choose one",
+                              "content": "coder-32b",
                               "lineHeight": 1.4,
                               "fontFamily": "$font-mono",
                               "fontSize": 11.5,
@@ -920865,7 +920890,7 @@
                             },
                             {
                               "type": "icon",
-                              "id": "HLnWq",
+                              "id": "IuwNq",
                               "name": "chevron-down",
                               "width": 12,
                               "height": 12,
@@ -920877,7 +920902,7 @@
                         },
                         {
                           "type": "text",
-                          "id": "qvN7I",
+                          "id": "h87D0",
                           "name": "t",
                           "fill": "$text-secondary",
                           "textGrowth": "fixed-width",
@@ -920890,7 +920915,7 @@
                         },
                         {
                           "type": "frame",
-                          "id": "WAiFq",
+                          "id": "WF2Ug",
                           "name": "harness codex",
                           "height": 26,
                           "fill": "$surface",
@@ -920904,7 +920929,7 @@
                           "children": [
                             {
                               "type": "text",
-                              "id": "jzVNx",
+                              "id": "q5Jic2",
                               "name": "t",
                               "fill": "$text-muted",
                               "content": "codex",
@@ -920917,7 +920942,7 @@
                         },
                         {
                           "type": "frame",
-                          "id": "hjPZx",
+                          "id": "rW49L",
                           "name": "harness qwen-code",
                           "height": 26,
                           "fill": "$surface",
@@ -920931,7 +920956,7 @@
                           "children": [
                             {
                               "type": "text",
-                              "id": "jik5B",
+                              "id": "ZK4JA",
                               "name": "t",
                               "fill": "$text-muted",
                               "content": "qwen-code",
@@ -920944,7 +920969,7 @@
                         },
                         {
                           "type": "frame",
-                          "id": "alEgk",
+                          "id": "xrinm",
                           "name": "harness pi",
                           "height": 26,
                           "fill": "$surface",
@@ -920958,7 +920983,7 @@
                           "children": [
                             {
                               "type": "text",
-                              "id": "R6XxSu",
+                              "id": "dEKQH",
                               "name": "t",
                               "fill": "$text-muted",
                               "content": "pi",
@@ -920971,7 +920996,7 @@
                         },
                         {
                           "type": "frame",
-                          "id": "noGND",
+                          "id": "y8GdM6",
                           "name": "harness opencode",
                           "height": 26,
                           "fill": "$accent-dim",
@@ -920985,7 +921010,7 @@
                           "children": [
                             {
                               "type": "text",
-                              "id": "veOnT",
+                              "id": "S86kWd",
                               "name": "t",
                               "fill": "$text-primary",
                               "content": "opencode",
@@ -921000,7 +921025,7 @@
                     },
                     {
                       "type": "frame",
-                      "id": "kOEgZ",
+                      "id": "lIZL4",
                       "name": "state",
                       "width": "fill_container",
                       "gap": 8,
@@ -921008,7 +921033,392 @@
                       "children": [
                         {
                           "type": "rectangle",
-                          "id": "K8mLl",
+                          "id": "ueMzR",
+                          "name": "square",
+                          "fill": "$status-running",
+                          "width": 6,
+                          "height": 6
+                        },
+                        {
+                          "type": "text",
+                          "id": "YuFFR",
+                          "name": "t",
+                          "fill": "$text-secondary",
+                          "textGrowth": "fixed-width",
+                          "width": "fill_container",
+                          "content": "Allowed by you; its repository is public. Its load agents run on Shared vLLM, coder-32b.",
+                          "lineHeight": 1.4,
+                          "fontFamily": "$font-ui",
+                          "fontSize": 11.5,
+                          "fontWeight": "normal"
+                        }
+                      ]
+                    }
+                  ]
+                },
+                {
+                  "type": "frame",
+                  "id": "NOYit",
+                  "name": "grant quarry-ui",
+                  "width": "fill_container",
+                  "stroke": "$border",
+                  "strokeWidth": 1,
+                  "layout": "vertical",
+                  "gap": 8,
+                  "padding": [
+                    10,
+                    12
+                  ],
+                  "children": [
+                    {
+                      "type": "frame",
+                      "id": "aVXrm",
+                      "name": "head",
+                      "width": "fill_container",
+                      "gap": 10,
+                      "alignItems": "center",
+                      "children": [
+                        {
+                          "type": "text",
+                          "id": "E2a3mY",
+                          "name": "t",
+                          "fill": "$text-primary",
+                          "content": "quarry-ui",
+                          "lineHeight": 1.4,
+                          "fontFamily": "$font-ui",
+                          "fontSize": 13,
+                          "fontWeight": "500"
+                        },
+                        {
+                          "type": "text",
+                          "id": "g61mj",
+                          "name": "t",
+                          "fill": "$text-muted",
+                          "content": "github.com/example-org/quarry-ui",
+                          "lineHeight": 1.4,
+                          "fontFamily": "$font-mono",
+                          "fontSize": 11,
+                          "fontWeight": "normal"
+                        },
+                        {
+                          "type": "frame",
+                          "id": "PaAXY",
+                          "name": "chip public",
+                          "fill": "$surface-raised",
+                          "gap": 5,
+                          "padding": [
+                            2,
+                            6
+                          ],
+                          "alignItems": "center",
+                          "children": [
+                            {
+                              "type": "text",
+                              "id": "atBjS",
+                              "name": "t",
+                              "fill": "$text-secondary",
+                              "content": "public",
+                              "lineHeight": 1.4,
+                              "fontFamily": "$font-mono",
+                              "fontSize": 10.5,
+                              "fontWeight": "normal"
+                            }
+                          ]
+                        },
+                        {
+                          "type": "frame",
+                          "id": "IBZqC",
+                          "name": "spacer",
+                          "width": "fill_container",
+                          "height": 1
+                        },
+                        {
+                          "type": "text",
+                          "id": "z3EED",
+                          "name": "t",
+                          "fill": "$text-muted",
+                          "content": "load windows",
+                          "lineHeight": 1.4,
+                          "fontFamily": "$font-ui",
+                          "fontSize": 11.5,
+                          "fontWeight": "normal"
+                        },
+                        {
+                          "type": "frame",
+                          "id": "hXWf7",
+                          "name": "Toggle off",
+                          "opacity": 0.4,
+                          "width": 30,
+                          "height": 16,
+                          "fill": "$surface-raised",
+                          "stroke": "$border",
+                          "strokeWidth": 1,
+                          "layout": "none",
+                          "children": [
+                            {
+                              "type": "rectangle",
+                              "id": "Ffjhv",
+                              "x": 2,
+                              "y": 1,
+                              "name": "knob",
+                              "fill": "$text-secondary",
+                              "width": 12,
+                              "height": 12
+                            }
+                          ]
+                        }
+                      ]
+                    },
+                    {
+                      "type": "frame",
+                      "id": "P3KvE",
+                      "name": "controls",
+                      "width": "fill_container",
+                      "gap": 8,
+                      "alignItems": "center",
+                      "children": [
+                        {
+                          "type": "text",
+                          "id": "EMRk9",
+                          "name": "t",
+                          "fill": "$text-secondary",
+                          "textGrowth": "fixed-width",
+                          "width": 60,
+                          "content": "endpoint",
+                          "lineHeight": 1.4,
+                          "fontFamily": "$font-ui",
+                          "fontSize": 11.5,
+                          "fontWeight": "normal"
+                        },
+                        {
+                          "type": "frame",
+                          "id": "fbkVt",
+                          "name": "select",
+                          "width": 200,
+                          "height": 26,
+                          "fill": "$bg",
+                          "stroke": "$border-strong",
+                          "strokeWidth": 1,
+                          "gap": 6,
+                          "padding": [
+                            0,
+                            8
+                          ],
+                          "alignItems": "center",
+                          "children": [
+                            {
+                              "type": "text",
+                              "id": "UeFEP",
+                              "name": "t",
+                              "fill": "$text-muted",
+                              "textGrowth": "fixed-width",
+                              "width": "fill_container",
+                              "content": "choose one",
+                              "lineHeight": 1.4,
+                              "fontFamily": "$font-mono",
+                              "fontSize": 11.5,
+                              "fontWeight": "normal"
+                            },
+                            {
+                              "type": "icon",
+                              "id": "crKV9",
+                              "name": "chevron-down",
+                              "width": 12,
+                              "height": 12,
+                              "icon": "chevron-down",
+                              "library": "lucide",
+                              "fill": "$text-muted"
+                            }
+                          ]
+                        },
+                        {
+                          "type": "text",
+                          "id": "TdMtz",
+                          "name": "t",
+                          "fill": "$text-secondary",
+                          "textGrowth": "fixed-width",
+                          "width": 40,
+                          "content": "model",
+                          "lineHeight": 1.4,
+                          "fontFamily": "$font-ui",
+                          "fontSize": 11.5,
+                          "fontWeight": "normal"
+                        },
+                        {
+                          "type": "frame",
+                          "id": "aQZcL",
+                          "name": "select",
+                          "width": 170,
+                          "height": 26,
+                          "fill": "$bg",
+                          "stroke": "$border-strong",
+                          "strokeWidth": 1,
+                          "gap": 6,
+                          "padding": [
+                            0,
+                            8
+                          ],
+                          "alignItems": "center",
+                          "children": [
+                            {
+                              "type": "text",
+                              "id": "l0Sbw",
+                              "name": "t",
+                              "fill": "$text-muted",
+                              "textGrowth": "fixed-width",
+                              "width": "fill_container",
+                              "content": "choose one",
+                              "lineHeight": 1.4,
+                              "fontFamily": "$font-mono",
+                              "fontSize": 11.5,
+                              "fontWeight": "normal"
+                            },
+                            {
+                              "type": "icon",
+                              "id": "DmHdt",
+                              "name": "chevron-down",
+                              "width": 12,
+                              "height": 12,
+                              "icon": "chevron-down",
+                              "library": "lucide",
+                              "fill": "$text-muted"
+                            }
+                          ]
+                        },
+                        {
+                          "type": "text",
+                          "id": "CPKFA",
+                          "name": "t",
+                          "fill": "$text-secondary",
+                          "textGrowth": "fixed-width",
+                          "width": 62,
+                          "content": "harnesses",
+                          "lineHeight": 1.4,
+                          "fontFamily": "$font-ui",
+                          "fontSize": 11.5,
+                          "fontWeight": "normal"
+                        },
+                        {
+                          "type": "frame",
+                          "id": "w9HolK",
+                          "name": "harness codex",
+                          "height": 26,
+                          "fill": "$surface",
+                          "stroke": "$border",
+                          "strokeWidth": 1,
+                          "padding": [
+                            0,
+                            9
+                          ],
+                          "alignItems": "center",
+                          "children": [
+                            {
+                              "type": "text",
+                              "id": "fH6lE",
+                              "name": "t",
+                              "fill": "$text-muted",
+                              "content": "codex",
+                              "lineHeight": 1.4,
+                              "fontFamily": "$font-mono",
+                              "fontSize": 11,
+                              "fontWeight": "normal"
+                            }
+                          ]
+                        },
+                        {
+                          "type": "frame",
+                          "id": "STEaK",
+                          "name": "harness qwen-code",
+                          "height": 26,
+                          "fill": "$surface",
+                          "stroke": "$border",
+                          "strokeWidth": 1,
+                          "padding": [
+                            0,
+                            9
+                          ],
+                          "alignItems": "center",
+                          "children": [
+                            {
+                              "type": "text",
+                              "id": "y8NRt",
+                              "name": "t",
+                              "fill": "$text-muted",
+                              "content": "qwen-code",
+                              "lineHeight": 1.4,
+                              "fontFamily": "$font-mono",
+                              "fontSize": 11,
+                              "fontWeight": "normal"
+                            }
+                          ]
+                        },
+                        {
+                          "type": "frame",
+                          "id": "h0s8By",
+                          "name": "harness pi",
+                          "height": 26,
+                          "fill": "$surface",
+                          "stroke": "$border",
+                          "strokeWidth": 1,
+                          "padding": [
+                            0,
+                            9
+                          ],
+                          "alignItems": "center",
+                          "children": [
+                            {
+                              "type": "text",
+                              "id": "Mlmn7",
+                              "name": "t",
+                              "fill": "$text-muted",
+                              "content": "pi",
+                              "lineHeight": 1.4,
+                              "fontFamily": "$font-mono",
+                              "fontSize": 11,
+                              "fontWeight": "normal"
+                            }
+                          ]
+                        },
+                        {
+                          "type": "frame",
+                          "id": "huyPR",
+                          "name": "harness opencode",
+                          "height": 26,
+                          "fill": "$accent-dim",
+                          "stroke": "$accent",
+                          "strokeWidth": 1,
+                          "padding": [
+                            0,
+                            9
+                          ],
+                          "alignItems": "center",
+                          "children": [
+                            {
+                              "type": "text",
+                              "id": "OSsRa",
+                              "name": "t",
+                              "fill": "$text-primary",
+                              "content": "opencode",
+                              "lineHeight": 1.4,
+                              "fontFamily": "$font-mono",
+                              "fontSize": 11,
+                              "fontWeight": "normal"
+                            }
+                          ]
+                        }
+                      ]
+                    },
+                    {
+                      "type": "frame",
+                      "id": "o2Xrkt",
+                      "name": "state",
+                      "width": "fill_container",
+                      "gap": 8,
+                      "alignItems": "center",
+                      "children": [
+                        {
+                          "type": "rectangle",
+                          "id": "qwXY1",
                           "name": "square",
                           "fill": "$status-waiting",
                           "width": 6,
@@ -921016,7 +921426,7 @@
                         },
                         {
                           "type": "text",
-                          "id": "YjHl0",
+                          "id": "dBsQn",
                           "name": "t",
                           "fill": "$text-secondary",
                           "textGrowth": "fixed-width",
@@ -924482,7 +924892,7 @@
                       "id": "t2sf7",
                       "name": "t",
                       "fill": "$text-muted",
-                      "content": "5 projects · 2 allowed",
+                      "content": "6 projects · 3 allowed",
                       "lineHeight": 1.4,
                       "fontFamily": "$font-mono",
                       "fontSize": 10.5,
@@ -924864,7 +925274,7 @@
                           "fill": "$text-secondary",
                           "textGrowth": "fixed-width",
                           "width": "fill_container",
-                          "content": "Allowed: its repository is public. Its load agents run on Shared vLLM, coder-32b.",
+                          "content": "Allowed by you; its repository is public. Its load agents run on Shared vLLM, coder-32b.",
                           "lineHeight": 1.4,
                           "fontFamily": "$font-ui",
                           "fontSize": 11.5,
@@ -925708,7 +926118,7 @@
                 },
                 {
                   "type": "frame",
-                  "id": "FTybw",
+                  "id": "W71oAJ",
                   "name": "grant meridian",
                   "width": "fill_container",
                   "stroke": "$border",
@@ -925722,7 +926132,7 @@
                   "children": [
                     {
                       "type": "frame",
-                      "id": "dHcy7",
+                      "id": "F5FZq",
                       "name": "head",
                       "width": "fill_container",
                       "gap": 10,
@@ -925730,7 +926140,7 @@
                       "children": [
                         {
                           "type": "text",
-                          "id": "R8f4HQ",
+                          "id": "lPLHQ",
                           "name": "t",
                           "fill": "$text-primary",
                           "content": "meridian",
@@ -925741,7 +926151,7 @@
                         },
                         {
                           "type": "text",
-                          "id": "r6Eeu",
+                          "id": "IbGCH",
                           "name": "t",
                           "fill": "$text-muted",
                           "content": "github.com/example-org/meridian",
@@ -925752,7 +926162,7 @@
                         },
                         {
                           "type": "frame",
-                          "id": "CRfYr",
+                          "id": "fwfuh",
                           "name": "chip public",
                           "fill": "$surface-raised",
                           "gap": 5,
@@ -925764,7 +926174,7 @@
                           "children": [
                             {
                               "type": "text",
-                              "id": "p345qY",
+                              "id": "PmTnQ",
                               "name": "t",
                               "fill": "$text-secondary",
                               "content": "public",
@@ -925777,16 +926187,16 @@
                         },
                         {
                           "type": "frame",
-                          "id": "tIgPH",
+                          "id": "uAlnq",
                           "name": "spacer",
                           "width": "fill_container",
                           "height": 1
                         },
                         {
                           "type": "text",
-                          "id": "vY80o",
+                          "id": "t4LCna",
                           "name": "t",
-                          "fill": "$text-muted",
+                          "fill": "$text-secondary",
                           "content": "load windows",
                           "lineHeight": 1.4,
                           "fontFamily": "$font-ui",
@@ -925795,23 +926205,22 @@
                         },
                         {
                           "type": "frame",
-                          "id": "lZOZ2",
-                          "name": "Toggle off",
-                          "opacity": 0.4,
+                          "id": "Lm421",
+                          "name": "Toggle on",
                           "width": 30,
                           "height": 16,
-                          "fill": "$surface-raised",
-                          "stroke": "$border",
+                          "fill": "$accent-dim",
+                          "stroke": "$accent",
                           "strokeWidth": 1,
                           "layout": "none",
                           "children": [
                             {
                               "type": "rectangle",
-                              "id": "L79OPA",
-                              "x": 2,
+                              "id": "OiCdH",
+                              "x": 16,
                               "y": 1,
                               "name": "knob",
-                              "fill": "$text-secondary",
+                              "fill": "$accent",
                               "width": 12,
                               "height": 12
                             }
@@ -925821,7 +926230,7 @@
                     },
                     {
                       "type": "frame",
-                      "id": "S2roz",
+                      "id": "Q9szii",
                       "name": "controls",
                       "width": "fill_container",
                       "gap": 8,
@@ -925829,7 +926238,7 @@
                       "children": [
                         {
                           "type": "text",
-                          "id": "FUaCB",
+                          "id": "zFkU8",
                           "name": "t",
                           "fill": "$text-secondary",
                           "textGrowth": "fixed-width",
@@ -925842,7 +926251,7 @@
                         },
                         {
                           "type": "frame",
-                          "id": "yYfYn",
+                          "id": "UGLt0",
                           "name": "select",
                           "width": 200,
                           "height": 26,
@@ -925858,12 +926267,12 @@
                           "children": [
                             {
                               "type": "text",
-                              "id": "l4IHJ4",
+                              "id": "z09tnJ",
                               "name": "t",
-                              "fill": "$text-muted",
+                              "fill": "$text-primary",
                               "textGrowth": "fixed-width",
                               "width": "fill_container",
-                              "content": "choose one",
+                              "content": "Shared vLLM",
                               "lineHeight": 1.4,
                               "fontFamily": "$font-mono",
                               "fontSize": 11.5,
@@ -925871,7 +926280,7 @@
                             },
                             {
                               "type": "icon",
-                              "id": "d8ydT",
+                              "id": "YG55g",
                               "name": "chevron-down",
                               "width": 12,
                               "height": 12,
@@ -925883,7 +926292,7 @@
                         },
                         {
                           "type": "text",
-                          "id": "lEiPC",
+                          "id": "StNJ0",
                           "name": "t",
                           "fill": "$text-secondary",
                           "textGrowth": "fixed-width",
@@ -925896,7 +926305,7 @@
                         },
                         {
                           "type": "frame",
-                          "id": "lgnvq",
+                          "id": "kv9Kq",
                           "name": "select",
                           "width": 170,
                           "height": 26,
@@ -925912,12 +926321,12 @@
                           "children": [
                             {
                               "type": "text",
-                              "id": "T0SjK",
+                              "id": "W3M82s",
                               "name": "t",
-                              "fill": "$text-muted",
+                              "fill": "$text-primary",
                               "textGrowth": "fixed-width",
                               "width": "fill_container",
-                              "content": "choose one",
+                              "content": "coder-32b",
                               "lineHeight": 1.4,
                               "fontFamily": "$font-mono",
                               "fontSize": 11.5,
@@ -925925,7 +926334,7 @@
                             },
                             {
                               "type": "icon",
-                              "id": "JbhHO",
+                              "id": "KbK9v",
                               "name": "chevron-down",
                               "width": 12,
                               "height": 12,
@@ -925937,7 +926346,7 @@
                         },
                         {
                           "type": "text",
-                          "id": "SMkE9",
+                          "id": "uzAry",
                           "name": "t",
                           "fill": "$text-secondary",
                           "textGrowth": "fixed-width",
@@ -925950,7 +926359,7 @@
                         },
                         {
                           "type": "frame",
-                          "id": "G444c",
+                          "id": "Is5wz",
                           "name": "harness codex",
                           "height": 26,
                           "fill": "$surface",
@@ -925964,7 +926373,7 @@
                           "children": [
                             {
                               "type": "text",
-                              "id": "m8pjA",
+                              "id": "l9FlOx",
                               "name": "t",
                               "fill": "$text-muted",
                               "content": "codex",
@@ -925977,7 +926386,7 @@
                         },
                         {
                           "type": "frame",
-                          "id": "knslj",
+                          "id": "K2BNb",
                           "name": "harness qwen-code",
                           "height": 26,
                           "fill": "$surface",
@@ -925991,7 +926400,7 @@
                           "children": [
                             {
                               "type": "text",
-                              "id": "aHLyd",
+                              "id": "rRu0B",
                               "name": "t",
                               "fill": "$text-muted",
                               "content": "qwen-code",
@@ -926004,7 +926413,7 @@
                         },
                         {
                           "type": "frame",
-                          "id": "irzQi",
+                          "id": "mEZg7",
                           "name": "harness pi",
                           "height": 26,
                           "fill": "$surface",
@@ -926018,7 +926427,7 @@
                           "children": [
                             {
                               "type": "text",
-                              "id": "wDi4d",
+                              "id": "Jkxj5",
                               "name": "t",
                               "fill": "$text-muted",
                               "content": "pi",
@@ -926031,7 +926440,7 @@
                         },
                         {
                           "type": "frame",
-                          "id": "P4aa3p",
+                          "id": "bQNL8",
                           "name": "harness opencode",
                           "height": 26,
                           "fill": "$accent-dim",
@@ -926045,7 +926454,7 @@
                           "children": [
                             {
                               "type": "text",
-                              "id": "W4eZqK",
+                              "id": "q5UR7",
                               "name": "t",
                               "fill": "$text-primary",
                               "content": "opencode",
@@ -926060,7 +926469,7 @@
                     },
                     {
                       "type": "frame",
-                      "id": "WkwfX",
+                      "id": "ZtObb",
                       "name": "state",
                       "width": "fill_container",
                       "gap": 8,
@@ -926068,7 +926477,392 @@
                       "children": [
                         {
                           "type": "rectangle",
-                          "id": "WyNDq",
+                          "id": "vDIQM",
+                          "name": "square",
+                          "fill": "$status-running",
+                          "width": 6,
+                          "height": 6
+                        },
+                        {
+                          "type": "text",
+                          "id": "x0QO2c",
+                          "name": "t",
+                          "fill": "$text-secondary",
+                          "textGrowth": "fixed-width",
+                          "width": "fill_container",
+                          "content": "Allowed by you; its repository is public. Its load agents run on Shared vLLM, coder-32b.",
+                          "lineHeight": 1.4,
+                          "fontFamily": "$font-ui",
+                          "fontSize": 11.5,
+                          "fontWeight": "normal"
+                        }
+                      ]
+                    }
+                  ]
+                },
+                {
+                  "type": "frame",
+                  "id": "VidBO",
+                  "name": "grant quarry-ui",
+                  "width": "fill_container",
+                  "stroke": "$border",
+                  "strokeWidth": 1,
+                  "layout": "vertical",
+                  "gap": 8,
+                  "padding": [
+                    10,
+                    12
+                  ],
+                  "children": [
+                    {
+                      "type": "frame",
+                      "id": "r2o4R",
+                      "name": "head",
+                      "width": "fill_container",
+                      "gap": 10,
+                      "alignItems": "center",
+                      "children": [
+                        {
+                          "type": "text",
+                          "id": "OweyU",
+                          "name": "t",
+                          "fill": "$text-primary",
+                          "content": "quarry-ui",
+                          "lineHeight": 1.4,
+                          "fontFamily": "$font-ui",
+                          "fontSize": 13,
+                          "fontWeight": "500"
+                        },
+                        {
+                          "type": "text",
+                          "id": "zWMxL",
+                          "name": "t",
+                          "fill": "$text-muted",
+                          "content": "github.com/example-org/quarry-ui",
+                          "lineHeight": 1.4,
+                          "fontFamily": "$font-mono",
+                          "fontSize": 11,
+                          "fontWeight": "normal"
+                        },
+                        {
+                          "type": "frame",
+                          "id": "cnq8u",
+                          "name": "chip public",
+                          "fill": "$surface-raised",
+                          "gap": 5,
+                          "padding": [
+                            2,
+                            6
+                          ],
+                          "alignItems": "center",
+                          "children": [
+                            {
+                              "type": "text",
+                              "id": "aBff2",
+                              "name": "t",
+                              "fill": "$text-secondary",
+                              "content": "public",
+                              "lineHeight": 1.4,
+                              "fontFamily": "$font-mono",
+                              "fontSize": 10.5,
+                              "fontWeight": "normal"
+                            }
+                          ]
+                        },
+                        {
+                          "type": "frame",
+                          "id": "nEIMI",
+                          "name": "spacer",
+                          "width": "fill_container",
+                          "height": 1
+                        },
+                        {
+                          "type": "text",
+                          "id": "ovxPN",
+                          "name": "t",
+                          "fill": "$text-muted",
+                          "content": "load windows",
+                          "lineHeight": 1.4,
+                          "fontFamily": "$font-ui",
+                          "fontSize": 11.5,
+                          "fontWeight": "normal"
+                        },
+                        {
+                          "type": "frame",
+                          "id": "e7ElS",
+                          "name": "Toggle off",
+                          "opacity": 0.4,
+                          "width": 30,
+                          "height": 16,
+                          "fill": "$surface-raised",
+                          "stroke": "$border",
+                          "strokeWidth": 1,
+                          "layout": "none",
+                          "children": [
+                            {
+                              "type": "rectangle",
+                              "id": "mI3HR",
+                              "x": 2,
+                              "y": 1,
+                              "name": "knob",
+                              "fill": "$text-secondary",
+                              "width": 12,
+                              "height": 12
+                            }
+                          ]
+                        }
+                      ]
+                    },
+                    {
+                      "type": "frame",
+                      "id": "RSJkw",
+                      "name": "controls",
+                      "width": "fill_container",
+                      "gap": 8,
+                      "alignItems": "center",
+                      "children": [
+                        {
+                          "type": "text",
+                          "id": "q9shh",
+                          "name": "t",
+                          "fill": "$text-secondary",
+                          "textGrowth": "fixed-width",
+                          "width": 60,
+                          "content": "endpoint",
+                          "lineHeight": 1.4,
+                          "fontFamily": "$font-ui",
+                          "fontSize": 11.5,
+                          "fontWeight": "normal"
+                        },
+                        {
+                          "type": "frame",
+                          "id": "aaLsO",
+                          "name": "select",
+                          "width": 200,
+                          "height": 26,
+                          "fill": "$bg",
+                          "stroke": "$border-strong",
+                          "strokeWidth": 1,
+                          "gap": 6,
+                          "padding": [
+                            0,
+                            8
+                          ],
+                          "alignItems": "center",
+                          "children": [
+                            {
+                              "type": "text",
+                              "id": "OAMz1",
+                              "name": "t",
+                              "fill": "$text-muted",
+                              "textGrowth": "fixed-width",
+                              "width": "fill_container",
+                              "content": "choose one",
+                              "lineHeight": 1.4,
+                              "fontFamily": "$font-mono",
+                              "fontSize": 11.5,
+                              "fontWeight": "normal"
+                            },
+                            {
+                              "type": "icon",
+                              "id": "q5sUL9",
+                              "name": "chevron-down",
+                              "width": 12,
+                              "height": 12,
+                              "icon": "chevron-down",
+                              "library": "lucide",
+                              "fill": "$text-muted"
+                            }
+                          ]
+                        },
+                        {
+                          "type": "text",
+                          "id": "ZD2ox",
+                          "name": "t",
+                          "fill": "$text-secondary",
+                          "textGrowth": "fixed-width",
+                          "width": 40,
+                          "content": "model",
+                          "lineHeight": 1.4,
+                          "fontFamily": "$font-ui",
+                          "fontSize": 11.5,
+                          "fontWeight": "normal"
+                        },
+                        {
+                          "type": "frame",
+                          "id": "aquWw",
+                          "name": "select",
+                          "width": 170,
+                          "height": 26,
+                          "fill": "$bg",
+                          "stroke": "$border-strong",
+                          "strokeWidth": 1,
+                          "gap": 6,
+                          "padding": [
+                            0,
+                            8
+                          ],
+                          "alignItems": "center",
+                          "children": [
+                            {
+                              "type": "text",
+                              "id": "W5Dyng",
+                              "name": "t",
+                              "fill": "$text-muted",
+                              "textGrowth": "fixed-width",
+                              "width": "fill_container",
+                              "content": "choose one",
+                              "lineHeight": 1.4,
+                              "fontFamily": "$font-mono",
+                              "fontSize": 11.5,
+                              "fontWeight": "normal"
+                            },
+                            {
+                              "type": "icon",
+                              "id": "z5BH22",
+                              "name": "chevron-down",
+                              "width": 12,
+                              "height": 12,
+                              "icon": "chevron-down",
+                              "library": "lucide",
+                              "fill": "$text-muted"
+                            }
+                          ]
+                        },
+                        {
+                          "type": "text",
+                          "id": "d3mfe",
+                          "name": "t",
+                          "fill": "$text-secondary",
+                          "textGrowth": "fixed-width",
+                          "width": 62,
+                          "content": "harnesses",
+                          "lineHeight": 1.4,
+                          "fontFamily": "$font-ui",
+                          "fontSize": 11.5,
+                          "fontWeight": "normal"
+                        },
+                        {
+                          "type": "frame",
+                          "id": "Imjcp",
+                          "name": "harness codex",
+                          "height": 26,
+                          "fill": "$surface",
+                          "stroke": "$border",
+                          "strokeWidth": 1,
+                          "padding": [
+                            0,
+                            9
+                          ],
+                          "alignItems": "center",
+                          "children": [
+                            {
+                              "type": "text",
+                              "id": "T7eYsV",
+                              "name": "t",
+                              "fill": "$text-muted",
+                              "content": "codex",
+                              "lineHeight": 1.4,
+                              "fontFamily": "$font-mono",
+                              "fontSize": 11,
+                              "fontWeight": "normal"
+                            }
+                          ]
+                        },
+                        {
+                          "type": "frame",
+                          "id": "x4kVR",
+                          "name": "harness qwen-code",
+                          "height": 26,
+                          "fill": "$surface",
+                          "stroke": "$border",
+                          "strokeWidth": 1,
+                          "padding": [
+                            0,
+                            9
+                          ],
+                          "alignItems": "center",
+                          "children": [
+                            {
+                              "type": "text",
+                              "id": "BpZdo",
+                              "name": "t",
+                              "fill": "$text-muted",
+                              "content": "qwen-code",
+                              "lineHeight": 1.4,
+                              "fontFamily": "$font-mono",
+                              "fontSize": 11,
+                              "fontWeight": "normal"
+                            }
+                          ]
+                        },
+                        {
+                          "type": "frame",
+                          "id": "ICcVF",
+                          "name": "harness pi",
+                          "height": 26,
+                          "fill": "$surface",
+                          "stroke": "$border",
+                          "strokeWidth": 1,
+                          "padding": [
+                            0,
+                            9
+                          ],
+                          "alignItems": "center",
+                          "children": [
+                            {
+                              "type": "text",
+                              "id": "bcUx7",
+                              "name": "t",
+                              "fill": "$text-muted",
+                              "content": "pi",
+                              "lineHeight": 1.4,
+                              "fontFamily": "$font-mono",
+                              "fontSize": 11,
+                              "fontWeight": "normal"
+                            }
+                          ]
+                        },
+                        {
+                          "type": "frame",
+                          "id": "aLsmJ",
+                          "name": "harness opencode",
+                          "height": 26,
+                          "fill": "$accent-dim",
+                          "stroke": "$accent",
+                          "strokeWidth": 1,
+                          "padding": [
+                            0,
+                            9
+                          ],
+                          "alignItems": "center",
+                          "children": [
+                            {
+                              "type": "text",
+                              "id": "PIbc9",
+                              "name": "t",
+                              "fill": "$text-primary",
+                              "content": "opencode",
+                              "lineHeight": 1.4,
+                              "fontFamily": "$font-mono",
+                              "fontSize": 11,
+                              "fontWeight": "normal"
+                            }
+                          ]
+                        }
+                      ]
+                    },
+                    {
+                      "type": "frame",
+                      "id": "ws2ut",
+                      "name": "state",
+                      "width": "fill_container",
+                      "gap": 8,
+                      "alignItems": "center",
+                      "children": [
+                        {
+                          "type": "rectangle",
+                          "id": "kVy68",
                           "name": "square",
                           "fill": "$status-waiting",
                           "width": 6,
@@ -926076,7 +926870,7 @@
                         },
                         {
                           "type": "text",
-                          "id": "WUVgy",
+                          "id": "WXkVk",
                           "name": "t",
                           "fill": "$text-secondary",
                           "textGrowth": "fixed-width",
