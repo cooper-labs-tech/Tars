@@ -9,9 +9,9 @@ import { launchSandboxed, listenForErrors, markWhatsNewSeen, recordValues, remov
 import { DEV_URL, apiPort } from './ports.mjs';
 
 /**
- * The API follows the role's MCP list (services/mcp-roles.ts; the Audit's P-1 on #657). A worker's CLI is started
- * without the X server. A process of that worker holding the agent's own token (CLAUDE_MGR_API_TOKEN, which every
- * agent terminal gets) must not get X's work done by calling the route itself: POST /api/x/request.
+ * The API follows the role's MCP list (services/mcp-roles.ts). A worker's CLI is started without the X server. A
+ * process of that worker holding the agent's own token (CLAUDE_MGR_API_TOKEN, which every agent terminal gets) must not
+ * get X's work done by calling the route itself: POST /api/x/request.
  *
  * In the real app, in a sandbox with posting on and made-up X keys, X's API is a recording stand-in on the loopback
  * (DOROTHY_X_API_URL, read under DOROTHY_E2E only). The project's orchestrator (claude) and a worker of each CLI
@@ -24,8 +24,8 @@ import { DEV_URL, apiPort } from './ports.mjs';
  * 2. the orchestrator's post is answered 200 and reaches the stand-in of X, signed;
  * 3. each worker's post is refused 403 with the door's words, "dorothy-x is an orchestrator's server", and nothing
  *    of it reaches the stand-in of X.
- * Red on main's electron/ with only the stand-in's seam added (the commit before the fix): every worker's post goes to
- * the stand-in of X. Never run it on an electron/ that does not read DOROTHY_X_API_URL: its posts would go to X itself.
+ * Red at the commit before the fix (the stand-in's seam only), green at the fix. Never run it on an electron/ that does
+ * not read DOROTHY_X_API_URL: its posts would go to X itself.
  * The artefact: values.json (each agent's provider, whether it had a token, the route's status and answer, the line
  * its CLI was started with, and what the stand-in of X received).
  */

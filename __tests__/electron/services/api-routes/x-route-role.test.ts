@@ -10,8 +10,7 @@ import type { AddressInfo } from 'node:net';
  * worker either. The same goes for any route that does the work of a server the list withholds from a role.
  *
  * Every way it can fail, written before the code (27/11):
- *  1. A worker's own token posts on X. The route checks only the posting switch, so what the worker's MCP list withholds,
- *     the API gives back (the Audit's P-1 on #657).
+ *  1. A worker's own token gets the X server's work done through the route, which its MCP list does not give it.
  *  2. A worker's delegated run token (not its terminal's) passes where its terminal's token is refused.
  *  3. An agent no longer in the fleet, whose token outlived it, is taken for one with the powers.
  *  4. The refusal tells a worker more than the door does: whether posting is on, whether the keys are set, what X
