@@ -43,6 +43,10 @@ import { TraceUploader, type UploaderDeps } from '../../electron/services/trace-
  * Added before its code after the Audit's Low at 9a1e9e8c4 (27/11):
  * 16. An install file that is there but cannot be read for a moment (its JSON caught mid-write, a read refused) is taken
  *     for gone, and every delete owed to it is forgotten for good.
+ * Added before its code after the Audit's pre-existing Low at fff13140c (27/11):
+ * 17. The same with a whole deletion the user asked for ("delete everything sent", owed while its DELETE has not gone
+ *     through): a moment's bad read forgets it, and sharing may start again with the copy still there. Only a file
+ *     truly gone (absent, or emptied as Tars empties one it cannot remove) forgets it.
  */
 
 type Seen = { method: string; url: string; auth?: string };
@@ -401,6 +405,33 @@ describe('the per-session delete owed to the back-office', () => {
     await u.runOnce();
     expect(bo.deletesOf()).toEqual(['s-1']);
     expect(store.owedDeletes(10)).toEqual([]);
+  });
+
+  it('17: a whole deletion owed survives a bad read of the install file, goes once it reads again, and only a file gone forgets it', async () => {
+    const u = uploader();
+    await sendThenDelete(u, ['s-1'], []);
+    bo.failNext.push({ status: 503 });
+    expect(await u.deleteEverywhere()).toMatchObject({ ok: false });
+    expect(deletion.owed, 'owed after the refused DELETE').toBe(true);
+    const file = path.join(dir, 'private', 'traces-install.json');
+    const whole = fs.readFileSync(file, 'utf8');
+    fs.writeFileSync(file, whole.slice(0, Math.floor(whole.length / 2)));
+    expect(u.isDeletionOwed(), 'a file caught mid-write').toBe(true);
+    expect(deletion.owed).toBe(true);
+    fs.writeFileSync(file, whole);
+    expect(await u.deleteEverywhere()).toMatchObject({ ok: true });
+    expect(bo.seen.filter(s => s.method === 'DELETE' && s.url === '/v1/installs/me')).toHaveLength(2);
+    // Owed again, then the file truly gone: forgotten, the deletion's moment kept.
+    seed('s-2', 5000, 6000);
+    settings.consentAt = '2026-11-27T03:00:00Z';
+    await u.runOnce();
+    bo.failNext.push({ status: 503 });
+    await u.deleteEverywhere();
+    expect(deletion.owed).toBe(true);
+    fs.rmSync(file);
+    expect(u.isDeletionOwed()).toBe(false);
+    expect(deletion.owed).toBe(false);
+    expect(deletion.since).toBeDefined();
   });
 
   it('10: after "delete everything" went through, a delete owed before it is never sent', async () => {
