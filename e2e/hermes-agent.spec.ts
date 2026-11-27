@@ -1,10 +1,12 @@
 import { test, expect, _electron as electron, type ElectronApplication, type Page } from '@playwright/test';
 import * as fs from 'fs';
+import * as os from 'os';
 import * as path from 'path';
 import { createHash, randomBytes } from 'crypto';
 import { execFileSync, spawn, type ChildProcessWithoutNullStreams } from 'child_process';
 import { launchSandboxed, recordValues, removeHome } from './fixture.mjs';
 import { writeFakeClis } from './fake-clis.mjs';
+import { installTree, treeChanges } from './install-tree.mjs';
 import { startStandIn, MODEL_ID } from './stand-in-openai-endpoint.mjs';
 import { DEV_URL, apiPort } from './ports.mjs';
 
@@ -57,6 +59,31 @@ test('a real Hermes runs a task on an inference endpoint in its own profile, and
   await hermesAgents(REAL);
 });
 
+/**
+ * The real binary runs the account's installed Hermes: its launcher, its checkout and its bundled Python in ~/.hermes.
+ * Its launcher starts Python with -I, which ignores PYTHONDONTWRITEBYTECODE and PYTHONPYCACHEPREFIX (measured 27/11
+ * with that Python), and two runs left 106 bytecode files in that checkout. On macOS every Hermes process the spec
+ * starts goes through this wrapper, whose fence refuses any write into ~/.hermes (Python skips a cache it cannot
+ * write) and any connection to the account's own gateway: the chats, the gateway Tars starts with the agents' binary,
+ * the outside chat. The bench's measurements of 27/11 ran chats and a gateway under the same refusal.
+ */
+function fencedHermes(home: string, real: string, install: string): string {
+  const dir = path.join(home, 'hermes-fence');
+  fs.mkdirSync(dir, { recursive: true });
+  const ownInstall = fs.existsSync(install) ? fs.realpathSync(install) : install;
+  const profile = path.join(dir, 'fence.sb');
+  fs.writeFileSync(profile, [
+    '(version 1)',
+    '(allow default)',
+    `(deny file-write* (subpath ${JSON.stringify(ownInstall)}))`,
+    `(deny network-outbound (remote unix-socket (path-literal ${JSON.stringify(path.join(ownInstall, 'gateway.sock'))})))`,
+    '',
+  ].join('\n'));
+  const wrapper = path.join(dir, 'hermes');
+  fs.writeFileSync(wrapper, `#!/bin/sh\nexec /usr/bin/sandbox-exec -f '${profile}' '${real}' "$@"\n`, { mode: 0o755 });
+  return wrapper;
+}
+
 async function hermesAgents(real: string | undefined): Promise<void> {
   test.setTimeout(real ? 30 * 60_000 : 4 * 60_000);
   const home = fs.mkdtempSync('/tmp/dorothy-e2e-hermes-agent-');
@@ -79,6 +106,12 @@ async function hermesAgents(real: string | undefined): Promise<void> {
   const proxy = real && process.env.TARS_HARNESS_HERMES_PROXY
     ? { HTTPS_PROXY: process.env.TARS_HARNESS_HERMES_PROXY, HTTP_PROXY: process.env.TARS_HARNESS_HERMES_PROXY, https_proxy: process.env.TARS_HARNESS_HERMES_PROXY, http_proxy: process.env.TARS_HARNESS_HERMES_PROXY, NO_PROXY: '127.0.0.1,localhost', no_proxy: '127.0.0.1,localhost' }
     : {};
+  // The account's own Hermes install, which the real binary executes: fenced on macOS (fencedHermes), and its files
+  // compared before and after the run on every system (e2e/install-tree.mjs).
+  const install = path.join(os.homedir(), '.hermes');
+  const installDirs = ['hermes-agent', 'tools', 'installs'].map(d => path.join(install, d));
+  const installBefore = real ? installTree(installDirs) : null;
+  const hermesBin = real && process.platform === 'darwin' ? fencedHermes(home, real, install) : real;
 
   const agent = (id: string, name: string, extra: Record<string, unknown>) => ({
     id, name, character: 'robot', status: 'idle', projectPath: project, skills: [],
@@ -86,8 +119,8 @@ async function hermesAgents(real: string | undefined): Promise<void> {
   });
   fs.writeFileSync(path.join(dir, 'agents.json'), JSON.stringify([
     agent(LEAD, 'Lead', { provider: 'claude', role: 'orchestrator', permissionMode: 'bypass' }),
-    agent(A, 'Hermes A', { provider: 'hermes', model: MODEL_ID, endpointId: EP, permissionMode: 'normal', cliPath: real ?? fakes.hermes }),
-    agent(B, 'Hermes B', { provider: 'hermes', model: MODEL_ID, endpointId: EP, permissionMode: 'bypass', worktreePath: bTree, cliPath: real ?? fakes.hermes }),
+    agent(A, 'Hermes A', { provider: 'hermes', model: MODEL_ID, endpointId: EP, permissionMode: 'normal', cliPath: hermesBin ?? fakes.hermes }),
+    agent(B, 'Hermes B', { provider: 'hermes', model: MODEL_ID, endpointId: EP, permissionMode: 'bypass', worktreePath: bTree, cliPath: hermesBin ?? fakes.hermes }),
   ], null, 2));
   fs.writeFileSync(path.join(dir, 'projects.json'), JSON.stringify([project]));
   fs.writeFileSync(path.join(dir, 'hermes-connection.json'), JSON.stringify({ mode: 'local', localPort: 9, authMode: 'token' }));
@@ -206,7 +239,7 @@ async function hermesAgents(real: string | undefined): Promise<void> {
       const of = (id: string) => ran.find(p => p.by === id);
       // Any process of the user, holding no token: `HERMES_HOME=<A's profile> hermes chat -q`, as anything could run it.
       const outsideLog = test.info().outputPath('outside-chat.txt');
-      const outside = spawn(real, ['chat', '-q', 'Run the probe and report what it printed.', '--oneshot', '--format', 'stream-json', '--source', 'tool'], {
+      const outside = spawn(hermesBin!, ['chat', '-q', 'Run the probe and report what it printed.', '--oneshot', '--format', 'stream-json', '--source', 'tool'], {
         cwd: home, env: { PATH: process.env.PATH ?? '', HOME: home, HERMES_HOME: profile(A), ...proxy },
       });
       outside.stdout.on('data', (d) => fs.appendFileSync(outsideLog, d));
@@ -262,6 +295,12 @@ async function hermesAgents(real: string | undefined): Promise<void> {
       expect.soft(afterA, 'the gateway with B\'s terminal still open').toBe(true);
       expect.soft(againBefore, 'a gateway again for A restarted').toBe(true);
       if (outsideHosts) expect.soft(outsideHosts, 'requests outside PyPI, or refused').toEqual([]);
+      // Nothing of the account's own Hermes install written during the run (the account's own gateway may write in its
+      // home meanwhile, never in these three folders but its own bytecode: a change is listed, to be read).
+      const installChanges = treeChanges(installBefore!, installTree(installDirs));
+      const tilde = (p: string) => p.replace(os.homedir(), '~');
+      keep({ install: { dirs: installDirs.map(tilde), files: installBefore!.size, fenced: hermesBin !== real }, installChanges: installChanges.slice(0, 100).map(tilde) });
+      expect.soft(installChanges.map(tilde), 'files of the account\'s own Hermes install written during the run').toEqual([]);
       expect.soft(done[A].text, "A's answer").toContain(`PROBE-OK ${standin.marker}`);
       expect.soft(Object.keys(env[A]).sort(), "A's .env names").toEqual(['CLAUDE_MGR_API_TOKEN', 'OPENAI_API_KEY', 'OPENAI_BASE_URL']);
       expect.soft(fs.existsSync(path.join(profile(A), 'state.db')), "A's state.db in its profile").toBe(true);
