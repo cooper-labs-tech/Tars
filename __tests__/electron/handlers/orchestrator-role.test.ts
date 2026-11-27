@@ -29,6 +29,10 @@ import * as path from 'node:path';
  *     runner starts over the RAM's limit, and the window's words are kept as
  *     its brief. The start takes the gate, a refused one opens nothing and
  *     says why, and a runner's words are a turn.
+ * L1. (Trace feature C3, part 2, 27/11, written before its code.) A load agent is made by the window's form (its
+ *     `load` taken from the window), or the load window makes its agents another way than the window's own creation.
+ *     The creation is one function (core/agent-create.ts): the window's handler drops `load`, the registered creation
+ *     keeps it, and both make the same record and terminal.
  */
 
 const { tmpHome } = vi.hoisted(() => ({
@@ -333,6 +337,18 @@ describe('one orchestrator per project', () => {
     expect(current).toMatchObject({ role: 'worker', orchestratorMode: false });
     expect(terminal.kill).toHaveBeenCalled();
     expect(launchedAs(current)).not.toContain('--disallowed-tools');
+  });
+});
+
+describe('a load agent (L1)', () => {
+  it('is never made by the window\'s form; the one creation makes it for the load window, the same record and terminal', async () => {
+    const before = spawned.length;
+    const fromForm = await create({ name: 'Load 1', load: true });
+    expect(agents.get(fromForm.id)!.load).toBeUndefined();
+    const { createAgent } = await import('../../../electron/core/agent-create');
+    const made = await createAgent({ projectPath: project, skills: [], name: 'Load 2', load: true });
+    expect(agents.get(made.id)).toMatchObject({ load: true, name: 'Load 2', role: 'worker', projectPath: project });
+    expect(spawned.length).toBe(before + 2);
   });
 });
 
