@@ -464,7 +464,9 @@ function ensureProxy(): void {
   try { ensureDropFolder(); } catch { /* made again when an agent drops a key */ }
   startEndpointProxy(ENDPOINT_PROXY_PORT, {
     sessionOf: (token) => sessions.get(token),
-    targetOf: (endpointId) => endpointTarget(d.getSettings(), endpointId),
+    // The install's back-office id, read at each request: an endpoint whose owner turned its install header on is told
+    // it while the install is registered, and never once it is deleted (trace-upload.ts currentInstallId).
+    targetOf: (endpointId) => endpointTarget(d.getSettings(), endpointId, traceUploader().currentInstallId()),
     record: (rec) => {
       if (traceStore().ingest(rec)) {
         changed();

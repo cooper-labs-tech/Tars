@@ -110,6 +110,8 @@ class FakeBackOffice {
   base = '';
   seen: Seen[] = [];
   installs = new Map<string, string>(); // token -> installId
+  /** Registrations so far: a back-office never gives a deleted install's id or token again. */
+  registered = 0;
   blobs = new Map<string, Buffer>();
   batches = new Map<string, string>();
   sessions = new Map<string, Record<string, unknown>>();
@@ -145,8 +147,9 @@ class FakeBackOffice {
     const fail = this.failNext.shift();
     if (fail) { this.send(res, fail.status, { error: fail.code ?? 'rate_limited' }, fail.retryAfter ? { 'Retry-After': fail.retryAfter } : {}); return; }
     if (req.method === 'POST' && url === '/v1/installs') {
-      const token = `tbi_${this.installs.size + 1}`;
-      this.installs.set(token, `inst-${this.installs.size + 1}`);
+      const n = ++this.registered;
+      const token = `tbi_${n}`;
+      this.installs.set(token, `inst-${n}`);
       this.send(res, 201, { installId: this.installs.get(token), token, limits: {}, retentionDays: 90 });
       return;
     }

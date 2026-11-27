@@ -61,6 +61,9 @@ export interface UploaderDeps {
 
 interface Install { url: string; installId: string; token: string; secret: string; registeredAt: number }
 
+/** What an install id may be to go on a request to an endpoint (a back-office gives a uuid). */
+const PLAIN_INSTALL_ID = /^[A-Za-z0-9._-]{1,128}$/;
+
 export interface UploadStateView {
   configured: boolean;
   consentAt?: string;
@@ -125,6 +128,8 @@ export class TraceUploader {
   private halts = 0;
   /** An owed deletion cleared by itself, not yet acknowledged by the window. */
   private clearedUnsaid = false;
+  /** The ids of the installs this run deleted or forgot: never told to an endpoint again (currentInstallId). */
+  private readonly retired = new Set<string>();
 
   constructor(private readonly deps: UploaderDeps) {
     this.now = deps.now ?? Date.now;
@@ -146,6 +151,9 @@ export class TraceUploader {
    * the reason, which the log says too.
    */
   private dropInstall(): string | null {
+    // Its id is never told to an endpoint again in this run, even when the file will not go (currentInstallId).
+    const old = this.readInstall();
+    if (old && typeof old.installId === 'string') this.retired.add(old.installId);
     try {
       fs.unlinkSync(this.deps.installFile);
       return null;
@@ -190,6 +198,24 @@ export class TraceUploader {
     this.forgetSent('the deletion was given up');
     this.deps.setDeletion({ owed: false, since: this.deps.settings().since });
     return { ok: true };
+  }
+
+  /**
+   * The install's back-office id, which the endpoint proxy tells an endpoint whose owner turned its install header on
+   * (X-Install-Id, trace feature A4), so that a deletion of the whole install can reach that endpoint's own copy. Null
+   * unless this install is registered with the back-office the settings name now, with no deletion owed, and was
+   * registered after the latest deletion's moment (so an install file that could not be removed after a deletion is
+   * never told again, in a later run either), and not deleted or forgotten in this run. Only a plain token goes on a
+   * request: a back-office answer with a line break or a space in it is never a header.
+   */
+  currentInstallId(): string | null {
+    const s = this.deps.settings();
+    if (!s.url || s.deletionOwed) return null;
+    const install = this.readInstall();
+    if (!install || install.url !== s.url || typeof install.installId !== 'string' || !PLAIN_INSTALL_ID.test(install.installId)) return null;
+    if (this.retired.has(install.installId)) return null;
+    if (s.since !== undefined && !(typeof install.registeredAt === 'number' && install.registeredAt > s.since)) return null;
+    return install.installId;
   }
 
   /** Whether a deletion is owed now: for the consent check, which must not touch what the window is told. */

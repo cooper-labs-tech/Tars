@@ -2889,7 +2889,7 @@ export interface ElectronAPI {
      *  Set-Cookie, Host, Content-Length, Content-Type, Content-Encoding, Transfer-Encoding, Connection, Keep-Alive, TE,
      *  Trailer, Upgrade, Expect, Accept-Encoding, X-Session-Id, X-Agent-Id, any `Proxy-` header, and two names equal
      *  but for case. Every agent reads them: say in the window never to put a credential there. */
-    save: (e: { id?: string; name: string; baseUrl: string; allowTraces: boolean; holdMaxSeconds?: number; sendSessionHeaders?: boolean; allowPlainHttp?: boolean; extraHeaders?: Record<string, string>; shown?: { baseUrl: string; extraHeaders: Record<string, string> } }) => Promise<{ ok: true; endpoint: EndpointView; unsaved?: string } | { ok: false; error: string }>;
+    save: (e: { id?: string; name: string; baseUrl: string; allowTraces: boolean; holdMaxSeconds?: number; sendSessionHeaders?: boolean; sendInstallHeader?: boolean; allowPlainHttp?: boolean; extraHeaders?: Record<string, string>; shown?: { baseUrl: string; extraHeaders: Record<string, string> } }) => Promise<{ ok: true; endpoint: EndpointView; unsaved?: string } | { ok: false; error: string }>;
     /** Approves exactly what the window showed: `seen` is the view's `baseUrl` and `extraHeaders` as displayed in the
      *  notice. Refused (`ok: false`, `error` a plain sentence) when either is not the endpoint's now (an agent changed
      *  it again while the notice was open: read `endpoints.list` and show the change), or when `seen` is missing. The
@@ -3005,6 +3005,11 @@ export interface EndpointView {
   approvedExtraHeaders?: Record<string, string>;
   /** Adds X-Session-Id and X-Agent-Id to every request: off by default (they name the agent and its session). */
   sendSessionHeaders: boolean;
+  /**
+   * Adds X-Install-Id, the install's back-office id, to every request while the install is registered: off by default,
+   * only with the session headers (a save asking for it without them is refused, and turning them off turns it off).
+   */
+  sendInstallHeader: boolean;
   /** The traffic is plain http, not encrypted at the HTTP level: show it. */
   plainHttp: boolean;
   /** The owner allowed plain http to this public address. */

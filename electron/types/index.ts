@@ -1020,6 +1020,13 @@ export interface InferenceEndpoint {
   /** Add X-Session-Id and X-Agent-Id to every request (off by default: they name the agent and its session). */
   sendSessionHeaders?: boolean;
   /**
+   * Add X-Install-Id, the install's back-office id, to every request (window only, off by default, and only with the
+   * session headers): so that a deletion of the whole install can reach the endpoint's own copy of what it served.
+   * Sent only while the install is registered with the back-office, never after a deletion (trace-upload.ts
+   * currentInstallId).
+   */
+  sendInstallHeader?: boolean;
+  /**
    * Fixed headers added to every request the proxy sends to it, at most 16 (inference-endpoints.ts cleanExtraHeaders).
    * Not a secret: agents read them, so never a credential. An agent's change waits for the owner's approval.
    */
