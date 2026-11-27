@@ -863870,7 +863870,9 @@
                               "id": "Gzghn",
                               "name": "t",
                               "fill": "$text-muted",
-                              "content": "The load agents are kept between windows.",
+                              "textGrowth": "fixed-width",
+                              "width": "fill_container",
+                              "content": "Kept between windows. Each load agent starts every task without the memory earlier load tasks wrote, and writes none.",
                               "lineHeight": 1.4,
                               "fontFamily": "$font-ui",
                               "fontSize": 11,
@@ -868822,7 +868824,9 @@
                               "id": "DNzjx",
                               "name": "t",
                               "fill": "$text-muted",
-                              "content": "The load agents are kept between windows.",
+                              "textGrowth": "fixed-width",
+                              "width": "fill_container",
+                              "content": "Kept between windows. Each load agent starts every task without the memory earlier load tasks wrote, and writes none.",
                               "lineHeight": 1.4,
                               "fontFamily": "$font-ui",
                               "fontSize": 11,
@@ -873974,7 +873978,9 @@
                               "id": "N5Kuia",
                               "name": "t",
                               "fill": "$text-muted",
-                              "content": "The load agents are kept between windows.",
+                              "textGrowth": "fixed-width",
+                              "width": "fill_container",
+                              "content": "Kept between windows. Each load agent starts every task without the memory earlier load tasks wrote, and writes none.",
                               "lineHeight": 1.4,
                               "fontFamily": "$font-ui",
                               "fontSize": 11,
@@ -879126,7 +879132,9 @@
                               "id": "QMXaE",
                               "name": "t",
                               "fill": "$text-muted",
-                              "content": "The load agents are kept between windows.",
+                              "textGrowth": "fixed-width",
+                              "width": "fill_container",
+                              "content": "Kept between windows. Each load agent starts every task without the memory earlier load tasks wrote, and writes none.",
                               "lineHeight": 1.4,
                               "fontFamily": "$font-ui",
                               "fontSize": 11,
@@ -884194,7 +884202,9 @@
                               "id": "CLGfh",
                               "name": "t",
                               "fill": "$text-muted",
-                              "content": "The load agents are kept between windows.",
+                              "textGrowth": "fixed-width",
+                              "width": "fill_container",
+                              "content": "Kept between windows. Each load agent starts every task without the memory earlier load tasks wrote, and writes none.",
                               "lineHeight": 1.4,
                               "fontFamily": "$font-ui",
                               "fontSize": 11,
@@ -889262,7 +889272,9 @@
                               "id": "aZzhA",
                               "name": "t",
                               "fill": "$text-muted",
-                              "content": "The load agents are kept between windows.",
+                              "textGrowth": "fixed-width",
+                              "width": "fill_container",
+                              "content": "Kept between windows. Each load agent starts every task without the memory earlier load tasks wrote, and writes none.",
                               "lineHeight": 1.4,
                               "fontFamily": "$font-ui",
                               "fontSize": 11,
@@ -899043,16 +899055,16 @@
               "children": [
                 {
                   "type": "frame",
-                  "id": "MIa5a",
+                  "id": "obc76",
                   "name": "Left",
                   "width": "fill_container",
                   "height": "fill_container",
                   "layout": "vertical",
-                  "gap": 12,
+                  "gap": 8,
                   "children": [
                     {
                       "type": "frame",
-                      "id": "b2sDd",
+                      "id": "VgAuW",
                       "name": "time",
                       "width": "fill_container",
                       "layout": "vertical",
@@ -899060,7 +899072,7 @@
                       "children": [
                         {
                           "type": "frame",
-                          "id": "Quksh",
+                          "id": "ph9iy",
                           "name": "line",
                           "width": "fill_container",
                           "gap": 10,
@@ -899068,7 +899080,7 @@
                           "children": [
                             {
                               "type": "text",
-                              "id": "ue4sY",
+                              "id": "Gd654",
                               "name": "t",
                               "fill": "$text-primary",
                               "content": "38 min left",
@@ -899079,7 +899091,7 @@
                             },
                             {
                               "type": "text",
-                              "id": "Om34c",
+                              "id": "DTghk",
                               "name": "t",
                               "fill": "$text-muted",
                               "content": "running since 14:06, approved by you · ends at 15:36",
@@ -899092,7 +899104,7 @@
                         },
                         {
                           "type": "frame",
-                          "id": "K6551G",
+                          "id": "Q51yQ9",
                           "name": "bar",
                           "width": 720,
                           "height": 4,
@@ -899101,7 +899113,7 @@
                           "children": [
                             {
                               "type": "rectangle",
-                              "id": "b76Io",
+                              "id": "Q8W3B4",
                               "x": 0,
                               "y": 0,
                               "name": "used",
@@ -899115,14 +899127,14 @@
                     },
                     {
                       "type": "frame",
-                      "id": "m5wuM",
+                      "id": "bB1g2",
                       "name": "tiles",
                       "width": "fill_container",
                       "gap": 10,
                       "children": [
                         {
                           "type": "frame",
-                          "id": "O75JOY",
+                          "id": "WeZUu",
                           "name": "tile PLANNED",
                           "width": "fill_container",
                           "stroke": "$border",
@@ -899130,13 +899142,13 @@
                           "layout": "vertical",
                           "gap": 6,
                           "padding": [
-                            10,
+                            9,
                             12
                           ],
                           "children": [
                             {
                               "type": "text",
-                              "id": "V1IYut",
+                              "id": "JPxgE",
                               "name": "caption",
                               "fill": "$text-muted",
                               "content": "PLANNED",
@@ -899148,7 +899160,7 @@
                             },
                             {
                               "type": "text",
-                              "id": "RXCDK",
+                              "id": "V1oVJH",
                               "name": "t",
                               "fill": "$text-primary",
                               "content": "18",
@@ -899159,7 +899171,7 @@
                             },
                             {
                               "type": "text",
-                              "id": "fXNHg",
+                              "id": "jvvFC",
                               "name": "t",
                               "fill": "$text-muted",
                               "textGrowth": "fixed-width",
@@ -899174,7 +899186,7 @@
                         },
                         {
                           "type": "frame",
-                          "id": "oWB2e",
+                          "id": "U1iTk",
                           "name": "tile STARTED",
                           "width": "fill_container",
                           "stroke": "$border",
@@ -899182,13 +899194,13 @@
                           "layout": "vertical",
                           "gap": 6,
                           "padding": [
-                            10,
+                            9,
                             12
                           ],
                           "children": [
                             {
                               "type": "text",
-                              "id": "ivfiN",
+                              "id": "q2DxxV",
                               "name": "caption",
                               "fill": "$text-muted",
                               "content": "STARTED",
@@ -899200,7 +899212,7 @@
                             },
                             {
                               "type": "text",
-                              "id": "hEhHW",
+                              "id": "ndtIF",
                               "name": "t",
                               "fill": "$text-primary",
                               "content": "9",
@@ -899211,7 +899223,7 @@
                             },
                             {
                               "type": "text",
-                              "id": "DZCPS",
+                              "id": "gQG3E",
                               "name": "t",
                               "fill": "$text-muted",
                               "textGrowth": "fixed-width",
@@ -899226,7 +899238,7 @@
                         },
                         {
                           "type": "frame",
-                          "id": "T4Thp",
+                          "id": "br43A",
                           "name": "tile BLOCKED",
                           "width": "fill_container",
                           "stroke": "$border",
@@ -899234,13 +899246,13 @@
                           "layout": "vertical",
                           "gap": 6,
                           "padding": [
-                            10,
+                            9,
                             12
                           ],
                           "children": [
                             {
                               "type": "text",
-                              "id": "EGn0Y",
+                              "id": "R8aWG",
                               "name": "caption",
                               "fill": "$text-muted",
                               "content": "BLOCKED",
@@ -899252,10 +899264,10 @@
                             },
                             {
                               "type": "text",
-                              "id": "wa4qC",
+                              "id": "hrzje",
                               "name": "t",
                               "fill": "$status-waiting",
-                              "content": "2",
+                              "content": "3",
                               "lineHeight": 1,
                               "fontFamily": "$font-display",
                               "fontSize": 26,
@@ -899263,12 +899275,12 @@
                             },
                             {
                               "type": "text",
-                              "id": "YKCIt",
+                              "id": "dmUld",
                               "name": "t",
                               "fill": "$text-muted",
                               "textGrowth": "fixed-width",
                               "width": "fill_container",
-                              "content": "1 at the cap, 1 at the slot",
+                              "content": "by reason, below",
                               "lineHeight": 1.4,
                               "fontFamily": "$font-mono",
                               "fontSize": 10.5,
@@ -899280,28 +899292,28 @@
                     },
                     {
                       "type": "frame",
-                      "id": "CrMxF",
+                      "id": "keUL4",
                       "name": "section LOAD AGENTS",
                       "width": "fill_container",
                       "stroke": "$border",
                       "strokeWidth": 1,
                       "layout": "vertical",
-                      "gap": 8,
+                      "gap": 7,
                       "padding": [
-                        10,
+                        9,
                         12
                       ],
                       "children": [
                         {
                           "type": "frame",
-                          "id": "oOzC8",
+                          "id": "p9ARYs",
                           "name": "head",
                           "width": "fill_container",
                           "alignItems": "center",
                           "children": [
                             {
                               "type": "text",
-                              "id": "BQ67e",
+                              "id": "I5XsAp",
                               "name": "caption",
                               "fill": "$text-muted",
                               "content": "LOAD AGENTS",
@@ -899313,14 +899325,14 @@
                             },
                             {
                               "type": "frame",
-                              "id": "u0eJkF",
+                              "id": "sHVJk",
                               "name": "spacer",
                               "width": "fill_container",
                               "height": 1
                             },
                             {
                               "type": "text",
-                              "id": "qAT8M",
+                              "id": "JcEQH",
                               "name": "t",
                               "fill": "$text-muted",
                               "content": "3 of 4 at work",
@@ -899333,7 +899345,7 @@
                         },
                         {
                           "type": "frame",
-                          "id": "Y1XoQ",
+                          "id": "S34UVh",
                           "name": "load Load 1",
                           "width": "fill_container",
                           "stroke": "$border",
@@ -899342,14 +899354,14 @@
                           },
                           "gap": 12,
                           "padding": [
-                            7,
+                            3,
                             0
                           ],
                           "alignItems": "center",
                           "children": [
                             {
                               "type": "rectangle",
-                              "id": "agjli",
+                              "id": "r0HAtt",
                               "name": "square",
                               "fill": "$status-running",
                               "width": 6,
@@ -899357,7 +899369,7 @@
                             },
                             {
                               "type": "frame",
-                              "id": "SOgbM",
+                              "id": "MytdU",
                               "name": "who",
                               "width": 170,
                               "layout": "vertical",
@@ -899365,7 +899377,7 @@
                               "children": [
                                 {
                                   "type": "text",
-                                  "id": "Ho5pO",
+                                  "id": "iPYaz",
                                   "name": "t",
                                   "fill": "$text-primary",
                                   "content": "Load 1",
@@ -899376,7 +899388,7 @@
                                 },
                                 {
                                   "type": "text",
-                                  "id": "syKvY",
+                                  "id": "sf0oW",
                                   "name": "t",
                                   "fill": "$text-muted",
                                   "content": "atlas-api · claude",
@@ -899389,7 +899401,7 @@
                             },
                             {
                               "type": "text",
-                              "id": "rqw7T",
+                              "id": "G4mvUl",
                               "name": "t",
                               "fill": "$text-primary",
                               "textGrowth": "fixed-width",
@@ -899402,7 +899414,7 @@
                             },
                             {
                               "type": "frame",
-                              "id": "yYfvy",
+                              "id": "LU0l7",
                               "name": "cap",
                               "width": 190,
                               "layout": "vertical",
@@ -899410,7 +899422,7 @@
                               "children": [
                                 {
                                   "type": "text",
-                                  "id": "Ezsmm",
+                                  "id": "SvKyF",
                                   "name": "t",
                                   "fill": "$text-secondary",
                                   "content": "22 of 45 min of its cap",
@@ -899421,7 +899433,7 @@
                                 },
                                 {
                                   "type": "frame",
-                                  "id": "a4h3P",
+                                  "id": "x2T3XI",
                                   "name": "bar",
                                   "width": 190,
                                   "height": 4,
@@ -899430,7 +899442,7 @@
                                   "children": [
                                     {
                                       "type": "rectangle",
-                                      "id": "a5SOp",
+                                      "id": "h4ReMK",
                                       "x": 0,
                                       "y": 0,
                                       "name": "used",
@@ -899446,7 +899458,7 @@
                         },
                         {
                           "type": "frame",
-                          "id": "hgVDT",
+                          "id": "VstOw",
                           "name": "load Load 2",
                           "width": "fill_container",
                           "stroke": "$border",
@@ -899455,14 +899467,14 @@
                           },
                           "gap": 12,
                           "padding": [
-                            7,
+                            3,
                             0
                           ],
                           "alignItems": "center",
                           "children": [
                             {
                               "type": "rectangle",
-                              "id": "BnITX",
+                              "id": "Gi1TI",
                               "name": "square",
                               "fill": "$status-running",
                               "width": 6,
@@ -899470,7 +899482,7 @@
                             },
                             {
                               "type": "frame",
-                              "id": "yXmFu",
+                              "id": "jMT8m",
                               "name": "who",
                               "width": 170,
                               "layout": "vertical",
@@ -899478,7 +899490,7 @@
                               "children": [
                                 {
                                   "type": "text",
-                                  "id": "N0Yrim",
+                                  "id": "UWYT3",
                                   "name": "t",
                                   "fill": "$text-primary",
                                   "content": "Load 2",
@@ -899489,7 +899501,7 @@
                                 },
                                 {
                                   "type": "text",
-                                  "id": "gSU0B",
+                                  "id": "BoBgs",
                                   "name": "t",
                                   "fill": "$text-muted",
                                   "content": "atlas-api · codex",
@@ -899502,7 +899514,7 @@
                             },
                             {
                               "type": "text",
-                              "id": "kqJLZ",
+                              "id": "fIfF9",
                               "name": "t",
                               "fill": "$text-primary",
                               "textGrowth": "fixed-width",
@@ -899515,7 +899527,7 @@
                             },
                             {
                               "type": "frame",
-                              "id": "KG2Yl",
+                              "id": "WjXUW",
                               "name": "cap",
                               "width": 190,
                               "layout": "vertical",
@@ -899523,7 +899535,7 @@
                               "children": [
                                 {
                                   "type": "text",
-                                  "id": "XXFea",
+                                  "id": "xf2qx",
                                   "name": "t",
                                   "fill": "$status-waiting",
                                   "content": "27 of 30 min of its cap",
@@ -899534,7 +899546,7 @@
                                 },
                                 {
                                   "type": "frame",
-                                  "id": "tVHlz",
+                                  "id": "kJzvD",
                                   "name": "bar",
                                   "width": 190,
                                   "height": 4,
@@ -899543,7 +899555,7 @@
                                   "children": [
                                     {
                                       "type": "rectangle",
-                                      "id": "E0y89",
+                                      "id": "XfOHJ",
                                       "x": 0,
                                       "y": 0,
                                       "name": "used",
@@ -899559,7 +899571,7 @@
                         },
                         {
                           "type": "frame",
-                          "id": "ouyU4",
+                          "id": "FWD1z",
                           "name": "load Load 3",
                           "width": "fill_container",
                           "stroke": "$border",
@@ -899568,14 +899580,14 @@
                           },
                           "gap": 12,
                           "padding": [
-                            7,
+                            3,
                             0
                           ],
                           "alignItems": "center",
                           "children": [
                             {
                               "type": "rectangle",
-                              "id": "cYcSX",
+                              "id": "uciRL",
                               "name": "square",
                               "fill": "$status-running",
                               "width": 6,
@@ -899583,7 +899595,7 @@
                             },
                             {
                               "type": "frame",
-                              "id": "f3Gwa",
+                              "id": "hCqez",
                               "name": "who",
                               "width": 170,
                               "layout": "vertical",
@@ -899591,7 +899603,7 @@
                               "children": [
                                 {
                                   "type": "text",
-                                  "id": "Jbsjr",
+                                  "id": "rHtTM",
                                   "name": "t",
                                   "fill": "$text-primary",
                                   "content": "Load 3",
@@ -899602,7 +899614,7 @@
                                 },
                                 {
                                   "type": "text",
-                                  "id": "I5RHCj",
+                                  "id": "en6G4",
                                   "name": "t",
                                   "fill": "$text-muted",
                                   "content": "harbor-billing · claude",
@@ -899615,7 +899627,7 @@
                             },
                             {
                               "type": "text",
-                              "id": "hdf4C",
+                              "id": "c9cPn",
                               "name": "t",
                               "fill": "$text-primary",
                               "textGrowth": "fixed-width",
@@ -899628,7 +899640,7 @@
                             },
                             {
                               "type": "frame",
-                              "id": "ZKIO2",
+                              "id": "Sh1Zy",
                               "name": "cap",
                               "width": 190,
                               "layout": "vertical",
@@ -899636,7 +899648,7 @@
                               "children": [
                                 {
                                   "type": "text",
-                                  "id": "Y6rYbb",
+                                  "id": "yTUuj",
                                   "name": "t",
                                   "fill": "$text-secondary",
                                   "content": "9 of 60 min of its cap",
@@ -899647,7 +899659,7 @@
                                 },
                                 {
                                   "type": "frame",
-                                  "id": "l6DpDB",
+                                  "id": "Sh5Sj",
                                   "name": "bar",
                                   "width": 190,
                                   "height": 4,
@@ -899656,7 +899668,7 @@
                                   "children": [
                                     {
                                       "type": "rectangle",
-                                      "id": "eLhfc",
+                                      "id": "kZ4Uo",
                                       "x": 0,
                                       "y": 0,
                                       "name": "used",
@@ -899672,7 +899684,7 @@
                         },
                         {
                           "type": "frame",
-                          "id": "sNAYA",
+                          "id": "wvXRy",
                           "name": "load Load 4",
                           "width": "fill_container",
                           "stroke": "$border",
@@ -899681,14 +899693,14 @@
                           },
                           "gap": 12,
                           "padding": [
-                            7,
+                            3,
                             0
                           ],
                           "alignItems": "center",
                           "children": [
                             {
                               "type": "rectangle",
-                              "id": "y65Ww",
+                              "id": "NoWDi",
                               "name": "square",
                               "fill": "$status-idle",
                               "width": 6,
@@ -899696,7 +899708,7 @@
                             },
                             {
                               "type": "frame",
-                              "id": "M1OJN",
+                              "id": "CELZe",
                               "name": "who",
                               "width": 170,
                               "layout": "vertical",
@@ -899704,7 +899716,7 @@
                               "children": [
                                 {
                                   "type": "text",
-                                  "id": "Kl4EI",
+                                  "id": "Q2KroV",
                                   "name": "t",
                                   "fill": "$text-primary",
                                   "content": "Load 4",
@@ -899715,7 +899727,7 @@
                                 },
                                 {
                                   "type": "text",
-                                  "id": "vyY75",
+                                  "id": "S0RyjJ",
                                   "name": "t",
                                   "fill": "$text-muted",
                                   "content": "meridian · claude",
@@ -899728,7 +899740,7 @@
                             },
                             {
                               "type": "text",
-                              "id": "V91KM",
+                              "id": "SXdun",
                               "name": "t",
                               "fill": "$text-muted",
                               "textGrowth": "fixed-width",
@@ -899741,7 +899753,7 @@
                             },
                             {
                               "type": "frame",
-                              "id": "qI5Bu",
+                              "id": "ShB18",
                               "name": "cap",
                               "width": 190,
                               "height": "fit_content(0)",
@@ -899749,33 +899761,375 @@
                               "gap": 4
                             }
                           ]
+                        },
+                        {
+                          "type": "text",
+                          "id": "d5LHv",
+                          "name": "t",
+                          "fill": "$text-muted",
+                          "textGrowth": "fixed-width",
+                          "width": "fill_container",
+                          "content": "Each load agent starts every task without the memory earlier load tasks wrote, and writes none.",
+                          "lineHeight": 1.4,
+                          "fontFamily": "$font-ui",
+                          "fontSize": 11,
+                          "fontWeight": "normal"
                         }
                       ]
                     },
                     {
                       "type": "frame",
-                      "id": "A8JbWE",
-                      "name": "section BLOCKED ARRIVALS",
+                      "id": "Ydvqf",
+                      "name": "section FINISHED",
                       "width": "fill_container",
                       "stroke": "$border",
                       "strokeWidth": 1,
                       "layout": "vertical",
-                      "gap": 8,
+                      "gap": 7,
                       "padding": [
-                        10,
+                        9,
                         12
                       ],
                       "children": [
                         {
                           "type": "frame",
-                          "id": "e03Dgm",
+                          "id": "JOfvG",
                           "name": "head",
                           "width": "fill_container",
                           "alignItems": "center",
                           "children": [
                             {
                               "type": "text",
-                              "id": "HqQOr",
+                              "id": "fXm2g",
+                              "name": "caption",
+                              "fill": "$text-muted",
+                              "content": "FINISHED",
+                              "lineHeight": 1.4,
+                              "fontFamily": "$font-ui",
+                              "fontSize": 10,
+                              "fontWeight": "normal",
+                              "letterSpacing": 0.8
+                            },
+                            {
+                              "type": "frame",
+                              "id": "rulta",
+                              "name": "spacer",
+                              "width": "fill_container",
+                              "height": 1
+                            },
+                            {
+                              "type": "text",
+                              "id": "JzQcG",
+                              "name": "t",
+                              "fill": "$text-muted",
+                              "content": "6, newest first",
+                              "lineHeight": 1.4,
+                              "fontFamily": "$font-mono",
+                              "fontSize": 10.5,
+                              "fontWeight": "normal"
+                            }
+                          ]
+                        },
+                        {
+                          "type": "frame",
+                          "id": "B4RrTj",
+                          "name": "finished #04 meridian · report-export",
+                          "width": "fill_container",
+                          "stroke": "$border",
+                          "strokeWidth": {
+                            "top": 1
+                          },
+                          "gap": 10,
+                          "padding": [
+                            4,
+                            0
+                          ],
+                          "alignItems": "center",
+                          "children": [
+                            {
+                              "type": "text",
+                              "id": "z9IBj",
+                              "name": "t",
+                              "fill": "$text-primary",
+                              "textGrowth": "fixed-width",
+                              "width": 200,
+                              "content": "#04 meridian · report-export",
+                              "lineHeight": 1.4,
+                              "fontFamily": "$font-ui",
+                              "fontSize": 12,
+                              "fontWeight": "normal"
+                            },
+                            {
+                              "type": "frame",
+                              "id": "s4mx8",
+                              "name": "chip passed",
+                              "fill": "$surface-raised",
+                              "gap": 5,
+                              "padding": [
+                                2,
+                                6
+                              ],
+                              "alignItems": "center",
+                              "children": [
+                                {
+                                  "type": "rectangle",
+                                  "id": "d1nbX",
+                                  "name": "square",
+                                  "fill": "$status-running",
+                                  "width": 6,
+                                  "height": 6
+                                },
+                                {
+                                  "type": "text",
+                                  "id": "V4k3af",
+                                  "name": "t",
+                                  "fill": "$status-running",
+                                  "content": "passed",
+                                  "lineHeight": 1.4,
+                                  "fontFamily": "$font-mono",
+                                  "fontSize": 10.5,
+                                  "fontWeight": "normal"
+                                }
+                              ]
+                            },
+                            {
+                              "type": "text",
+                              "id": "tQgqA",
+                              "name": "t",
+                              "fill": "$text-muted",
+                              "textGrowth": "fixed-width",
+                              "width": "fill_container",
+                              "lineHeight": 1.4,
+                              "fontFamily": "$font-ui",
+                              "fontSize": 11,
+                              "fontWeight": "normal"
+                            },
+                            {
+                              "type": "text",
+                              "id": "hK4Dp",
+                              "name": "t",
+                              "fill": "$text-secondary",
+                              "content": "session 12 min · slot wait 0 min",
+                              "lineHeight": 1.4,
+                              "fontFamily": "$font-mono",
+                              "fontSize": 10.5,
+                              "fontWeight": "normal"
+                            }
+                          ]
+                        },
+                        {
+                          "type": "frame",
+                          "id": "UBQsb",
+                          "name": "finished #01 atlas-api · retry-header",
+                          "width": "fill_container",
+                          "stroke": "$border",
+                          "strokeWidth": {
+                            "top": 1
+                          },
+                          "gap": 10,
+                          "padding": [
+                            4,
+                            0
+                          ],
+                          "alignItems": "center",
+                          "children": [
+                            {
+                              "type": "text",
+                              "id": "mwxnc",
+                              "name": "t",
+                              "fill": "$text-primary",
+                              "textGrowth": "fixed-width",
+                              "width": 200,
+                              "content": "#01 atlas-api · retry-header",
+                              "lineHeight": 1.4,
+                              "fontFamily": "$font-ui",
+                              "fontSize": 12,
+                              "fontWeight": "normal"
+                            },
+                            {
+                              "type": "frame",
+                              "id": "qQzQA",
+                              "name": "chip not run",
+                              "fill": "$surface-raised",
+                              "gap": 5,
+                              "padding": [
+                                2,
+                                6
+                              ],
+                              "alignItems": "center",
+                              "children": [
+                                {
+                                  "type": "rectangle",
+                                  "id": "vEU3W",
+                                  "name": "square",
+                                  "fill": "$text-muted",
+                                  "width": 6,
+                                  "height": 6
+                                },
+                                {
+                                  "type": "text",
+                                  "id": "W0lJOK",
+                                  "name": "t",
+                                  "fill": "$text-muted",
+                                  "content": "not run",
+                                  "lineHeight": 1.4,
+                                  "fontFamily": "$font-mono",
+                                  "fontSize": 10.5,
+                                  "fontWeight": "normal"
+                                }
+                              ]
+                            },
+                            {
+                              "type": "text",
+                              "id": "Hwzlw",
+                              "name": "t",
+                              "fill": "$text-muted",
+                              "textGrowth": "fixed-width",
+                              "width": "fill_container",
+                              "content": "the slot was not free within its 30 min cap",
+                              "lineHeight": 1.4,
+                              "fontFamily": "$font-ui",
+                              "fontSize": 11,
+                              "fontWeight": "normal"
+                            },
+                            {
+                              "type": "text",
+                              "id": "eiuxn",
+                              "name": "t",
+                              "fill": "$text-secondary",
+                              "content": "session 18 min · slot wait 12 min",
+                              "lineHeight": 1.4,
+                              "fontFamily": "$font-mono",
+                              "fontSize": 10.5,
+                              "fontWeight": "normal"
+                            }
+                          ]
+                        },
+                        {
+                          "type": "frame",
+                          "id": "GS8Yi",
+                          "name": "finished #06 atlas-api · error-codes",
+                          "width": "fill_container",
+                          "stroke": "$border",
+                          "strokeWidth": {
+                            "top": 1
+                          },
+                          "gap": 10,
+                          "padding": [
+                            4,
+                            0
+                          ],
+                          "alignItems": "center",
+                          "children": [
+                            {
+                              "type": "text",
+                              "id": "xMSJJ",
+                              "name": "t",
+                              "fill": "$text-primary",
+                              "textGrowth": "fixed-width",
+                              "width": 200,
+                              "content": "#06 atlas-api · error-codes",
+                              "lineHeight": 1.4,
+                              "fontFamily": "$font-ui",
+                              "fontSize": 12,
+                              "fontWeight": "normal"
+                            },
+                            {
+                              "type": "frame",
+                              "id": "e05kS",
+                              "name": "chip failed",
+                              "fill": "$surface-raised",
+                              "gap": 5,
+                              "padding": [
+                                2,
+                                6
+                              ],
+                              "alignItems": "center",
+                              "children": [
+                                {
+                                  "type": "rectangle",
+                                  "id": "udxdc",
+                                  "name": "square",
+                                  "fill": "$status-error",
+                                  "width": 6,
+                                  "height": 6
+                                },
+                                {
+                                  "type": "text",
+                                  "id": "QtxGo",
+                                  "name": "t",
+                                  "fill": "$status-error",
+                                  "content": "failed",
+                                  "lineHeight": 1.4,
+                                  "fontFamily": "$font-mono",
+                                  "fontSize": 10.5,
+                                  "fontWeight": "normal"
+                                }
+                              ]
+                            },
+                            {
+                              "type": "text",
+                              "id": "PiNO1",
+                              "name": "t",
+                              "fill": "$text-muted",
+                              "textGrowth": "fixed-width",
+                              "width": "fill_container",
+                              "content": "exit 1, 3 of 41 tests",
+                              "lineHeight": 1.4,
+                              "fontFamily": "$font-ui",
+                              "fontSize": 11,
+                              "fontWeight": "normal"
+                            },
+                            {
+                              "type": "text",
+                              "id": "n7uoc",
+                              "name": "t",
+                              "fill": "$text-secondary",
+                              "content": "session 21 min · slot wait 3 min",
+                              "lineHeight": 1.4,
+                              "fontFamily": "$font-mono",
+                              "fontSize": 10.5,
+                              "fontWeight": "normal"
+                            }
+                          ]
+                        },
+                        {
+                          "type": "text",
+                          "id": "mcXZS",
+                          "name": "t",
+                          "fill": "$text-muted",
+                          "content": "3 more. A test not run is not a failure, and never stops the window.",
+                          "lineHeight": 1.4,
+                          "fontFamily": "$font-ui",
+                          "fontSize": 11,
+                          "fontWeight": "normal"
+                        }
+                      ]
+                    },
+                    {
+                      "type": "frame",
+                      "id": "QKWnz",
+                      "name": "section BLOCKED ARRIVALS",
+                      "width": "fill_container",
+                      "stroke": "$border",
+                      "strokeWidth": 1,
+                      "layout": "vertical",
+                      "gap": 7,
+                      "padding": [
+                        9,
+                        12
+                      ],
+                      "children": [
+                        {
+                          "type": "frame",
+                          "id": "pOyjH",
+                          "name": "head",
+                          "width": "fill_container",
+                          "alignItems": "center",
+                          "children": [
+                            {
+                              "type": "text",
+                              "id": "r5Hl6x",
                               "name": "caption",
                               "fill": "$text-muted",
                               "content": "BLOCKED ARRIVALS",
@@ -899787,14 +900141,14 @@
                             },
                             {
                               "type": "frame",
-                              "id": "YzdHq",
+                              "id": "Ui8bp",
                               "name": "spacer",
                               "width": "fill_container",
                               "height": 1
                             },
                             {
                               "type": "text",
-                              "id": "krcBM",
+                              "id": "Y4SnL",
                               "name": "t",
                               "fill": "$text-muted",
                               "content": "recorded, not queued",
@@ -899806,8 +900160,142 @@
                           ]
                         },
                         {
+                          "type": "frame",
+                          "id": "D2c2i",
+                          "name": "by reason",
+                          "width": "fill_container",
+                          "gap": 6,
+                          "alignItems": "center",
+                          "children": [
+                            {
+                              "type": "frame",
+                              "id": "ZM79W",
+                              "name": "chip max concurrent full 1",
+                              "fill": "$surface-raised",
+                              "gap": 5,
+                              "padding": [
+                                2,
+                                6
+                              ],
+                              "alignItems": "center",
+                              "children": [
+                                {
+                                  "type": "rectangle",
+                                  "id": "A3Qml",
+                                  "name": "square",
+                                  "fill": "$status-waiting",
+                                  "width": 6,
+                                  "height": 6
+                                },
+                                {
+                                  "type": "text",
+                                  "id": "ELM7F",
+                                  "name": "t",
+                                  "fill": "$status-waiting",
+                                  "content": "max concurrent full 1",
+                                  "lineHeight": 1.4,
+                                  "fontFamily": "$font-mono",
+                                  "fontSize": 10.5,
+                                  "fontWeight": "normal"
+                                }
+                              ]
+                            },
+                            {
+                              "type": "frame",
+                              "id": "CGTjL",
+                              "name": "chip busy-agent cap full 0",
+                              "fill": "$surface-raised",
+                              "gap": 5,
+                              "padding": [
+                                2,
+                                6
+                              ],
+                              "alignItems": "center",
+                              "children": [
+                                {
+                                  "type": "text",
+                                  "id": "tKka1",
+                                  "name": "t",
+                                  "fill": "$text-secondary",
+                                  "content": "busy-agent cap full 0",
+                                  "lineHeight": 1.4,
+                                  "fontFamily": "$font-mono",
+                                  "fontSize": 10.5,
+                                  "fontWeight": "normal"
+                                }
+                              ]
+                            },
+                            {
+                              "type": "frame",
+                              "id": "msFZi",
+                              "name": "chip heavy-run slot taken 1",
+                              "fill": "$surface-raised",
+                              "gap": 5,
+                              "padding": [
+                                2,
+                                6
+                              ],
+                              "alignItems": "center",
+                              "children": [
+                                {
+                                  "type": "rectangle",
+                                  "id": "LkQ9h",
+                                  "name": "square",
+                                  "fill": "$status-waiting",
+                                  "width": 6,
+                                  "height": 6
+                                },
+                                {
+                                  "type": "text",
+                                  "id": "s0KpOm",
+                                  "name": "t",
+                                  "fill": "$status-waiting",
+                                  "content": "heavy-run slot taken 1",
+                                  "lineHeight": 1.4,
+                                  "fontFamily": "$font-mono",
+                                  "fontSize": 10.5,
+                                  "fontWeight": "normal"
+                                }
+                              ]
+                            },
+                            {
+                              "type": "frame",
+                              "id": "PGEbq",
+                              "name": "chip no_harness 1",
+                              "fill": "$surface-raised",
+                              "gap": 5,
+                              "padding": [
+                                2,
+                                6
+                              ],
+                              "alignItems": "center",
+                              "children": [
+                                {
+                                  "type": "rectangle",
+                                  "id": "YWxub",
+                                  "name": "square",
+                                  "fill": "$status-waiting",
+                                  "width": 6,
+                                  "height": 6
+                                },
+                                {
+                                  "type": "text",
+                                  "id": "tpniu",
+                                  "name": "t",
+                                  "fill": "$status-waiting",
+                                  "content": "no_harness 1",
+                                  "lineHeight": 1.4,
+                                  "fontFamily": "$font-mono",
+                                  "fontSize": 10.5,
+                                  "fontWeight": "normal"
+                                }
+                              ]
+                            }
+                          ]
+                        },
+                        {
                           "type": "text",
-                          "id": "NyKnc",
+                          "id": "cuRzZ",
                           "name": "t",
                           "fill": "$text-secondary",
                           "content": "14:31   #07 atlas-api · error-envelope    max concurrent full, 4 of 4",
@@ -899818,10 +900306,21 @@
                         },
                         {
                           "type": "text",
-                          "id": "ECuEL",
+                          "id": "KwVmZ",
                           "name": "t",
                           "fill": "$text-secondary",
-                          "content": "14:52   #09 meridian · csv-quote          the heavy-run slot was full",
+                          "content": "14:52   #09 meridian · csv-quote          heavy-run slot taken",
+                          "lineHeight": 1.4,
+                          "fontFamily": "$font-mono",
+                          "fontSize": 11,
+                          "fontWeight": "normal"
+                        },
+                        {
+                          "type": "text",
+                          "id": "c8Xxj7",
+                          "name": "t",
+                          "fill": "$text-secondary",
+                          "content": "15:03   #11 atlas-api · lint-rules        no_harness: it accepts codex, and Load 2 was at work",
                           "lineHeight": 1.4,
                           "fontFamily": "$font-mono",
                           "fontSize": 11,
@@ -903534,16 +904033,16 @@
               "children": [
                 {
                   "type": "frame",
-                  "id": "JQr4G",
+                  "id": "iVPUD",
                   "name": "Left",
                   "width": "fill_container",
                   "height": "fill_container",
                   "layout": "vertical",
-                  "gap": 12,
+                  "gap": 8,
                   "children": [
                     {
                       "type": "frame",
-                      "id": "UFFvx",
+                      "id": "q3Cqkd",
                       "name": "time",
                       "width": "fill_container",
                       "layout": "vertical",
@@ -903551,7 +904050,7 @@
                       "children": [
                         {
                           "type": "frame",
-                          "id": "bWRB8",
+                          "id": "dbfOa",
                           "name": "line",
                           "width": "fill_container",
                           "gap": 10,
@@ -903559,7 +904058,7 @@
                           "children": [
                             {
                               "type": "text",
-                              "id": "nJ5Gz",
+                              "id": "k21M9",
                               "name": "t",
                               "fill": "$text-primary",
                               "content": "38 min left",
@@ -903570,7 +904069,7 @@
                             },
                             {
                               "type": "text",
-                              "id": "Xs1FJ",
+                              "id": "Hcywu",
                               "name": "t",
                               "fill": "$text-muted",
                               "content": "running since 14:06, approved by you · ends at 15:36",
@@ -903583,7 +904082,7 @@
                         },
                         {
                           "type": "frame",
-                          "id": "rFuLe",
+                          "id": "KnRvY",
                           "name": "bar",
                           "width": 720,
                           "height": 4,
@@ -903592,7 +904091,7 @@
                           "children": [
                             {
                               "type": "rectangle",
-                              "id": "fq5HF",
+                              "id": "j51Cbh",
                               "x": 0,
                               "y": 0,
                               "name": "used",
@@ -903606,14 +904105,14 @@
                     },
                     {
                       "type": "frame",
-                      "id": "DSHRu",
+                      "id": "XIfrr",
                       "name": "tiles",
                       "width": "fill_container",
                       "gap": 10,
                       "children": [
                         {
                           "type": "frame",
-                          "id": "Et96z",
+                          "id": "kkiJJ",
                           "name": "tile PLANNED",
                           "width": "fill_container",
                           "stroke": "$border",
@@ -903621,13 +904120,13 @@
                           "layout": "vertical",
                           "gap": 6,
                           "padding": [
-                            10,
+                            9,
                             12
                           ],
                           "children": [
                             {
                               "type": "text",
-                              "id": "ymhoZ",
+                              "id": "GTFbP",
                               "name": "caption",
                               "fill": "$text-muted",
                               "content": "PLANNED",
@@ -903639,7 +904138,7 @@
                             },
                             {
                               "type": "text",
-                              "id": "R69FZ",
+                              "id": "AnnwS",
                               "name": "t",
                               "fill": "$text-primary",
                               "content": "18",
@@ -903650,7 +904149,7 @@
                             },
                             {
                               "type": "text",
-                              "id": "j2Q557",
+                              "id": "KxuEw",
                               "name": "t",
                               "fill": "$text-muted",
                               "textGrowth": "fixed-width",
@@ -903665,7 +904164,7 @@
                         },
                         {
                           "type": "frame",
-                          "id": "RQvEZ",
+                          "id": "iAk2B",
                           "name": "tile STARTED",
                           "width": "fill_container",
                           "stroke": "$border",
@@ -903673,13 +904172,13 @@
                           "layout": "vertical",
                           "gap": 6,
                           "padding": [
-                            10,
+                            9,
                             12
                           ],
                           "children": [
                             {
                               "type": "text",
-                              "id": "YaKz1",
+                              "id": "u06Rn",
                               "name": "caption",
                               "fill": "$text-muted",
                               "content": "STARTED",
@@ -903691,7 +904190,7 @@
                             },
                             {
                               "type": "text",
-                              "id": "YP1Km",
+                              "id": "Hn5Kd",
                               "name": "t",
                               "fill": "$text-primary",
                               "content": "9",
@@ -903702,7 +904201,7 @@
                             },
                             {
                               "type": "text",
-                              "id": "I8vReV",
+                              "id": "jHK3j",
                               "name": "t",
                               "fill": "$text-muted",
                               "textGrowth": "fixed-width",
@@ -903717,7 +904216,7 @@
                         },
                         {
                           "type": "frame",
-                          "id": "hlzaA",
+                          "id": "gLrAy",
                           "name": "tile BLOCKED",
                           "width": "fill_container",
                           "stroke": "$border",
@@ -903725,13 +904224,13 @@
                           "layout": "vertical",
                           "gap": 6,
                           "padding": [
-                            10,
+                            9,
                             12
                           ],
                           "children": [
                             {
                               "type": "text",
-                              "id": "IShGQ",
+                              "id": "GQPYe",
                               "name": "caption",
                               "fill": "$text-muted",
                               "content": "BLOCKED",
@@ -903743,10 +904242,10 @@
                             },
                             {
                               "type": "text",
-                              "id": "A089Yw",
+                              "id": "b8Eufq",
                               "name": "t",
                               "fill": "$status-waiting",
-                              "content": "2",
+                              "content": "3",
                               "lineHeight": 1,
                               "fontFamily": "$font-display",
                               "fontSize": 26,
@@ -903754,12 +904253,12 @@
                             },
                             {
                               "type": "text",
-                              "id": "zVrZk",
+                              "id": "viBwN",
                               "name": "t",
                               "fill": "$text-muted",
                               "textGrowth": "fixed-width",
                               "width": "fill_container",
-                              "content": "1 at the cap, 1 at the slot",
+                              "content": "by reason, below",
                               "lineHeight": 1.4,
                               "fontFamily": "$font-mono",
                               "fontSize": 10.5,
@@ -903771,28 +904270,28 @@
                     },
                     {
                       "type": "frame",
-                      "id": "PfxvZ",
+                      "id": "cVHD6",
                       "name": "section LOAD AGENTS",
                       "width": "fill_container",
                       "stroke": "$border",
                       "strokeWidth": 1,
                       "layout": "vertical",
-                      "gap": 8,
+                      "gap": 7,
                       "padding": [
-                        10,
+                        9,
                         12
                       ],
                       "children": [
                         {
                           "type": "frame",
-                          "id": "HlonE",
+                          "id": "Qxni8",
                           "name": "head",
                           "width": "fill_container",
                           "alignItems": "center",
                           "children": [
                             {
                               "type": "text",
-                              "id": "uNsoK",
+                              "id": "r5NT0",
                               "name": "caption",
                               "fill": "$text-muted",
                               "content": "LOAD AGENTS",
@@ -903804,14 +904303,14 @@
                             },
                             {
                               "type": "frame",
-                              "id": "G1OIxx",
+                              "id": "y0Exv",
                               "name": "spacer",
                               "width": "fill_container",
                               "height": 1
                             },
                             {
                               "type": "text",
-                              "id": "U5tr6",
+                              "id": "ohci9",
                               "name": "t",
                               "fill": "$text-muted",
                               "content": "3 of 4 at work",
@@ -903824,7 +904323,7 @@
                         },
                         {
                           "type": "frame",
-                          "id": "hpgDl",
+                          "id": "h4IeE",
                           "name": "load Load 1",
                           "width": "fill_container",
                           "stroke": "$border",
@@ -903833,14 +904332,14 @@
                           },
                           "gap": 12,
                           "padding": [
-                            7,
+                            3,
                             0
                           ],
                           "alignItems": "center",
                           "children": [
                             {
                               "type": "rectangle",
-                              "id": "u3fi0",
+                              "id": "aEMam",
                               "name": "square",
                               "fill": "$status-running",
                               "width": 6,
@@ -903848,7 +904347,7 @@
                             },
                             {
                               "type": "frame",
-                              "id": "NPwrQ",
+                              "id": "U7Xts",
                               "name": "who",
                               "width": 170,
                               "layout": "vertical",
@@ -903856,7 +904355,7 @@
                               "children": [
                                 {
                                   "type": "text",
-                                  "id": "WRUfO",
+                                  "id": "k9ilvq",
                                   "name": "t",
                                   "fill": "$text-primary",
                                   "content": "Load 1",
@@ -903867,7 +904366,7 @@
                                 },
                                 {
                                   "type": "text",
-                                  "id": "pXbPC",
+                                  "id": "oknLs",
                                   "name": "t",
                                   "fill": "$text-muted",
                                   "content": "atlas-api · claude",
@@ -903880,7 +904379,7 @@
                             },
                             {
                               "type": "text",
-                              "id": "Nh8TW",
+                              "id": "W89ZXM",
                               "name": "t",
                               "fill": "$text-primary",
                               "textGrowth": "fixed-width",
@@ -903893,7 +904392,7 @@
                             },
                             {
                               "type": "frame",
-                              "id": "o7EX5",
+                              "id": "b03BZp",
                               "name": "cap",
                               "width": 190,
                               "layout": "vertical",
@@ -903901,7 +904400,7 @@
                               "children": [
                                 {
                                   "type": "text",
-                                  "id": "w5cFM",
+                                  "id": "OpPds",
                                   "name": "t",
                                   "fill": "$text-secondary",
                                   "content": "22 of 45 min of its cap",
@@ -903912,7 +904411,7 @@
                                 },
                                 {
                                   "type": "frame",
-                                  "id": "omECM",
+                                  "id": "A1I75g",
                                   "name": "bar",
                                   "width": 190,
                                   "height": 4,
@@ -903921,7 +904420,7 @@
                                   "children": [
                                     {
                                       "type": "rectangle",
-                                      "id": "fjhED",
+                                      "id": "OCDrt",
                                       "x": 0,
                                       "y": 0,
                                       "name": "used",
@@ -903937,7 +904436,7 @@
                         },
                         {
                           "type": "frame",
-                          "id": "reOvA",
+                          "id": "ijfnr",
                           "name": "load Load 2",
                           "width": "fill_container",
                           "stroke": "$border",
@@ -903946,14 +904445,14 @@
                           },
                           "gap": 12,
                           "padding": [
-                            7,
+                            3,
                             0
                           ],
                           "alignItems": "center",
                           "children": [
                             {
                               "type": "rectangle",
-                              "id": "ihXzl",
+                              "id": "W63KFZ",
                               "name": "square",
                               "fill": "$status-running",
                               "width": 6,
@@ -903961,7 +904460,7 @@
                             },
                             {
                               "type": "frame",
-                              "id": "a6Tod",
+                              "id": "VLnDu",
                               "name": "who",
                               "width": 170,
                               "layout": "vertical",
@@ -903969,7 +904468,7 @@
                               "children": [
                                 {
                                   "type": "text",
-                                  "id": "vif19",
+                                  "id": "Ia8df",
                                   "name": "t",
                                   "fill": "$text-primary",
                                   "content": "Load 2",
@@ -903980,7 +904479,7 @@
                                 },
                                 {
                                   "type": "text",
-                                  "id": "e6Mg5",
+                                  "id": "R7Guq",
                                   "name": "t",
                                   "fill": "$text-muted",
                                   "content": "atlas-api · codex",
@@ -903993,7 +904492,7 @@
                             },
                             {
                               "type": "text",
-                              "id": "HNtuM",
+                              "id": "Jcyys",
                               "name": "t",
                               "fill": "$text-primary",
                               "textGrowth": "fixed-width",
@@ -904006,7 +904505,7 @@
                             },
                             {
                               "type": "frame",
-                              "id": "W6aTgH",
+                              "id": "viKIF",
                               "name": "cap",
                               "width": 190,
                               "layout": "vertical",
@@ -904014,7 +904513,7 @@
                               "children": [
                                 {
                                   "type": "text",
-                                  "id": "Sgy1D",
+                                  "id": "katXj",
                                   "name": "t",
                                   "fill": "$status-waiting",
                                   "content": "27 of 30 min of its cap",
@@ -904025,7 +904524,7 @@
                                 },
                                 {
                                   "type": "frame",
-                                  "id": "jw4aQ",
+                                  "id": "rNDSu",
                                   "name": "bar",
                                   "width": 190,
                                   "height": 4,
@@ -904034,7 +904533,7 @@
                                   "children": [
                                     {
                                       "type": "rectangle",
-                                      "id": "Be0MF",
+                                      "id": "H7OcLU",
                                       "x": 0,
                                       "y": 0,
                                       "name": "used",
@@ -904050,7 +904549,7 @@
                         },
                         {
                           "type": "frame",
-                          "id": "oX5Ll",
+                          "id": "tdpHx",
                           "name": "load Load 3",
                           "width": "fill_container",
                           "stroke": "$border",
@@ -904059,14 +904558,14 @@
                           },
                           "gap": 12,
                           "padding": [
-                            7,
+                            3,
                             0
                           ],
                           "alignItems": "center",
                           "children": [
                             {
                               "type": "rectangle",
-                              "id": "k2fwz4",
+                              "id": "hTM5H",
                               "name": "square",
                               "fill": "$status-running",
                               "width": 6,
@@ -904074,7 +904573,7 @@
                             },
                             {
                               "type": "frame",
-                              "id": "bAzSg",
+                              "id": "bviO9",
                               "name": "who",
                               "width": 170,
                               "layout": "vertical",
@@ -904082,7 +904581,7 @@
                               "children": [
                                 {
                                   "type": "text",
-                                  "id": "k3yqB",
+                                  "id": "xOfdt",
                                   "name": "t",
                                   "fill": "$text-primary",
                                   "content": "Load 3",
@@ -904093,7 +904592,7 @@
                                 },
                                 {
                                   "type": "text",
-                                  "id": "HeCbV",
+                                  "id": "OZboH",
                                   "name": "t",
                                   "fill": "$text-muted",
                                   "content": "harbor-billing · claude",
@@ -904106,7 +904605,7 @@
                             },
                             {
                               "type": "text",
-                              "id": "eId9M",
+                              "id": "KzIwk",
                               "name": "t",
                               "fill": "$text-primary",
                               "textGrowth": "fixed-width",
@@ -904119,7 +904618,7 @@
                             },
                             {
                               "type": "frame",
-                              "id": "hFSmU",
+                              "id": "iBY57",
                               "name": "cap",
                               "width": 190,
                               "layout": "vertical",
@@ -904127,7 +904626,7 @@
                               "children": [
                                 {
                                   "type": "text",
-                                  "id": "j6sZPN",
+                                  "id": "ahKwj",
                                   "name": "t",
                                   "fill": "$text-secondary",
                                   "content": "9 of 60 min of its cap",
@@ -904138,7 +904637,7 @@
                                 },
                                 {
                                   "type": "frame",
-                                  "id": "MFOjK",
+                                  "id": "P1gSQi",
                                   "name": "bar",
                                   "width": 190,
                                   "height": 4,
@@ -904147,7 +904646,7 @@
                                   "children": [
                                     {
                                       "type": "rectangle",
-                                      "id": "OZNry",
+                                      "id": "k8vXby",
                                       "x": 0,
                                       "y": 0,
                                       "name": "used",
@@ -904163,7 +904662,7 @@
                         },
                         {
                           "type": "frame",
-                          "id": "R3Y63",
+                          "id": "r3Pja",
                           "name": "load Load 4",
                           "width": "fill_container",
                           "stroke": "$border",
@@ -904172,14 +904671,14 @@
                           },
                           "gap": 12,
                           "padding": [
-                            7,
+                            3,
                             0
                           ],
                           "alignItems": "center",
                           "children": [
                             {
                               "type": "rectangle",
-                              "id": "YVEHR",
+                              "id": "j28RCV",
                               "name": "square",
                               "fill": "$status-idle",
                               "width": 6,
@@ -904187,7 +904686,7 @@
                             },
                             {
                               "type": "frame",
-                              "id": "VYGvr",
+                              "id": "pYWH5",
                               "name": "who",
                               "width": 170,
                               "layout": "vertical",
@@ -904195,7 +904694,7 @@
                               "children": [
                                 {
                                   "type": "text",
-                                  "id": "O2UDNB",
+                                  "id": "ZttT5",
                                   "name": "t",
                                   "fill": "$text-primary",
                                   "content": "Load 4",
@@ -904206,7 +904705,7 @@
                                 },
                                 {
                                   "type": "text",
-                                  "id": "hmIvG",
+                                  "id": "r1jhhK",
                                   "name": "t",
                                   "fill": "$text-muted",
                                   "content": "meridian · claude",
@@ -904219,7 +904718,7 @@
                             },
                             {
                               "type": "text",
-                              "id": "wVLCP",
+                              "id": "s1dThH",
                               "name": "t",
                               "fill": "$text-muted",
                               "textGrowth": "fixed-width",
@@ -904232,7 +904731,7 @@
                             },
                             {
                               "type": "frame",
-                              "id": "CiVhH",
+                              "id": "pp8Sc",
                               "name": "cap",
                               "width": 190,
                               "height": "fit_content(0)",
@@ -904240,33 +904739,375 @@
                               "gap": 4
                             }
                           ]
+                        },
+                        {
+                          "type": "text",
+                          "id": "uABlo",
+                          "name": "t",
+                          "fill": "$text-muted",
+                          "textGrowth": "fixed-width",
+                          "width": "fill_container",
+                          "content": "Each load agent starts every task without the memory earlier load tasks wrote, and writes none.",
+                          "lineHeight": 1.4,
+                          "fontFamily": "$font-ui",
+                          "fontSize": 11,
+                          "fontWeight": "normal"
                         }
                       ]
                     },
                     {
                       "type": "frame",
-                      "id": "dl9gV",
-                      "name": "section BLOCKED ARRIVALS",
+                      "id": "hCdEK",
+                      "name": "section FINISHED",
                       "width": "fill_container",
                       "stroke": "$border",
                       "strokeWidth": 1,
                       "layout": "vertical",
-                      "gap": 8,
+                      "gap": 7,
                       "padding": [
-                        10,
+                        9,
                         12
                       ],
                       "children": [
                         {
                           "type": "frame",
-                          "id": "yPryR",
+                          "id": "OrFQ2",
                           "name": "head",
                           "width": "fill_container",
                           "alignItems": "center",
                           "children": [
                             {
                               "type": "text",
-                              "id": "loS8X",
+                              "id": "oYfsO",
+                              "name": "caption",
+                              "fill": "$text-muted",
+                              "content": "FINISHED",
+                              "lineHeight": 1.4,
+                              "fontFamily": "$font-ui",
+                              "fontSize": 10,
+                              "fontWeight": "normal",
+                              "letterSpacing": 0.8
+                            },
+                            {
+                              "type": "frame",
+                              "id": "b0Ga5",
+                              "name": "spacer",
+                              "width": "fill_container",
+                              "height": 1
+                            },
+                            {
+                              "type": "text",
+                              "id": "R0bBEy",
+                              "name": "t",
+                              "fill": "$text-muted",
+                              "content": "6, newest first",
+                              "lineHeight": 1.4,
+                              "fontFamily": "$font-mono",
+                              "fontSize": 10.5,
+                              "fontWeight": "normal"
+                            }
+                          ]
+                        },
+                        {
+                          "type": "frame",
+                          "id": "jwvKh",
+                          "name": "finished #04 meridian · report-export",
+                          "width": "fill_container",
+                          "stroke": "$border",
+                          "strokeWidth": {
+                            "top": 1
+                          },
+                          "gap": 10,
+                          "padding": [
+                            4,
+                            0
+                          ],
+                          "alignItems": "center",
+                          "children": [
+                            {
+                              "type": "text",
+                              "id": "Wwjkg",
+                              "name": "t",
+                              "fill": "$text-primary",
+                              "textGrowth": "fixed-width",
+                              "width": 200,
+                              "content": "#04 meridian · report-export",
+                              "lineHeight": 1.4,
+                              "fontFamily": "$font-ui",
+                              "fontSize": 12,
+                              "fontWeight": "normal"
+                            },
+                            {
+                              "type": "frame",
+                              "id": "qloec",
+                              "name": "chip passed",
+                              "fill": "$surface-raised",
+                              "gap": 5,
+                              "padding": [
+                                2,
+                                6
+                              ],
+                              "alignItems": "center",
+                              "children": [
+                                {
+                                  "type": "rectangle",
+                                  "id": "XH0gI",
+                                  "name": "square",
+                                  "fill": "$status-running",
+                                  "width": 6,
+                                  "height": 6
+                                },
+                                {
+                                  "type": "text",
+                                  "id": "vugzK",
+                                  "name": "t",
+                                  "fill": "$status-running",
+                                  "content": "passed",
+                                  "lineHeight": 1.4,
+                                  "fontFamily": "$font-mono",
+                                  "fontSize": 10.5,
+                                  "fontWeight": "normal"
+                                }
+                              ]
+                            },
+                            {
+                              "type": "text",
+                              "id": "xUnOq",
+                              "name": "t",
+                              "fill": "$text-muted",
+                              "textGrowth": "fixed-width",
+                              "width": "fill_container",
+                              "lineHeight": 1.4,
+                              "fontFamily": "$font-ui",
+                              "fontSize": 11,
+                              "fontWeight": "normal"
+                            },
+                            {
+                              "type": "text",
+                              "id": "FauRa",
+                              "name": "t",
+                              "fill": "$text-secondary",
+                              "content": "session 12 min · slot wait 0 min",
+                              "lineHeight": 1.4,
+                              "fontFamily": "$font-mono",
+                              "fontSize": 10.5,
+                              "fontWeight": "normal"
+                            }
+                          ]
+                        },
+                        {
+                          "type": "frame",
+                          "id": "WS9Jx",
+                          "name": "finished #01 atlas-api · retry-header",
+                          "width": "fill_container",
+                          "stroke": "$border",
+                          "strokeWidth": {
+                            "top": 1
+                          },
+                          "gap": 10,
+                          "padding": [
+                            4,
+                            0
+                          ],
+                          "alignItems": "center",
+                          "children": [
+                            {
+                              "type": "text",
+                              "id": "KiR8V",
+                              "name": "t",
+                              "fill": "$text-primary",
+                              "textGrowth": "fixed-width",
+                              "width": 200,
+                              "content": "#01 atlas-api · retry-header",
+                              "lineHeight": 1.4,
+                              "fontFamily": "$font-ui",
+                              "fontSize": 12,
+                              "fontWeight": "normal"
+                            },
+                            {
+                              "type": "frame",
+                              "id": "T5dzV4",
+                              "name": "chip not run",
+                              "fill": "$surface-raised",
+                              "gap": 5,
+                              "padding": [
+                                2,
+                                6
+                              ],
+                              "alignItems": "center",
+                              "children": [
+                                {
+                                  "type": "rectangle",
+                                  "id": "wfDAh",
+                                  "name": "square",
+                                  "fill": "$text-muted",
+                                  "width": 6,
+                                  "height": 6
+                                },
+                                {
+                                  "type": "text",
+                                  "id": "pI4pQ",
+                                  "name": "t",
+                                  "fill": "$text-muted",
+                                  "content": "not run",
+                                  "lineHeight": 1.4,
+                                  "fontFamily": "$font-mono",
+                                  "fontSize": 10.5,
+                                  "fontWeight": "normal"
+                                }
+                              ]
+                            },
+                            {
+                              "type": "text",
+                              "id": "b2ZkrJ",
+                              "name": "t",
+                              "fill": "$text-muted",
+                              "textGrowth": "fixed-width",
+                              "width": "fill_container",
+                              "content": "the slot was not free within its 30 min cap",
+                              "lineHeight": 1.4,
+                              "fontFamily": "$font-ui",
+                              "fontSize": 11,
+                              "fontWeight": "normal"
+                            },
+                            {
+                              "type": "text",
+                              "id": "oPniM",
+                              "name": "t",
+                              "fill": "$text-secondary",
+                              "content": "session 18 min · slot wait 12 min",
+                              "lineHeight": 1.4,
+                              "fontFamily": "$font-mono",
+                              "fontSize": 10.5,
+                              "fontWeight": "normal"
+                            }
+                          ]
+                        },
+                        {
+                          "type": "frame",
+                          "id": "L9XKD",
+                          "name": "finished #06 atlas-api · error-codes",
+                          "width": "fill_container",
+                          "stroke": "$border",
+                          "strokeWidth": {
+                            "top": 1
+                          },
+                          "gap": 10,
+                          "padding": [
+                            4,
+                            0
+                          ],
+                          "alignItems": "center",
+                          "children": [
+                            {
+                              "type": "text",
+                              "id": "rMN4y",
+                              "name": "t",
+                              "fill": "$text-primary",
+                              "textGrowth": "fixed-width",
+                              "width": 200,
+                              "content": "#06 atlas-api · error-codes",
+                              "lineHeight": 1.4,
+                              "fontFamily": "$font-ui",
+                              "fontSize": 12,
+                              "fontWeight": "normal"
+                            },
+                            {
+                              "type": "frame",
+                              "id": "sgoA8",
+                              "name": "chip failed",
+                              "fill": "$surface-raised",
+                              "gap": 5,
+                              "padding": [
+                                2,
+                                6
+                              ],
+                              "alignItems": "center",
+                              "children": [
+                                {
+                                  "type": "rectangle",
+                                  "id": "JQFip",
+                                  "name": "square",
+                                  "fill": "$status-error",
+                                  "width": 6,
+                                  "height": 6
+                                },
+                                {
+                                  "type": "text",
+                                  "id": "ykcPN",
+                                  "name": "t",
+                                  "fill": "$status-error",
+                                  "content": "failed",
+                                  "lineHeight": 1.4,
+                                  "fontFamily": "$font-mono",
+                                  "fontSize": 10.5,
+                                  "fontWeight": "normal"
+                                }
+                              ]
+                            },
+                            {
+                              "type": "text",
+                              "id": "n6IEfS",
+                              "name": "t",
+                              "fill": "$text-muted",
+                              "textGrowth": "fixed-width",
+                              "width": "fill_container",
+                              "content": "exit 1, 3 of 41 tests",
+                              "lineHeight": 1.4,
+                              "fontFamily": "$font-ui",
+                              "fontSize": 11,
+                              "fontWeight": "normal"
+                            },
+                            {
+                              "type": "text",
+                              "id": "p7XCaY",
+                              "name": "t",
+                              "fill": "$text-secondary",
+                              "content": "session 21 min · slot wait 3 min",
+                              "lineHeight": 1.4,
+                              "fontFamily": "$font-mono",
+                              "fontSize": 10.5,
+                              "fontWeight": "normal"
+                            }
+                          ]
+                        },
+                        {
+                          "type": "text",
+                          "id": "BE0Bv",
+                          "name": "t",
+                          "fill": "$text-muted",
+                          "content": "3 more. A test not run is not a failure, and never stops the window.",
+                          "lineHeight": 1.4,
+                          "fontFamily": "$font-ui",
+                          "fontSize": 11,
+                          "fontWeight": "normal"
+                        }
+                      ]
+                    },
+                    {
+                      "type": "frame",
+                      "id": "RsKy3",
+                      "name": "section BLOCKED ARRIVALS",
+                      "width": "fill_container",
+                      "stroke": "$border",
+                      "strokeWidth": 1,
+                      "layout": "vertical",
+                      "gap": 7,
+                      "padding": [
+                        9,
+                        12
+                      ],
+                      "children": [
+                        {
+                          "type": "frame",
+                          "id": "SAi4e",
+                          "name": "head",
+                          "width": "fill_container",
+                          "alignItems": "center",
+                          "children": [
+                            {
+                              "type": "text",
+                              "id": "cJOuv",
                               "name": "caption",
                               "fill": "$text-muted",
                               "content": "BLOCKED ARRIVALS",
@@ -904278,14 +905119,14 @@
                             },
                             {
                               "type": "frame",
-                              "id": "P6Ao5r",
+                              "id": "hB8n4",
                               "name": "spacer",
                               "width": "fill_container",
                               "height": 1
                             },
                             {
                               "type": "text",
-                              "id": "wr56N",
+                              "id": "wlGc7",
                               "name": "t",
                               "fill": "$text-muted",
                               "content": "recorded, not queued",
@@ -904297,8 +905138,142 @@
                           ]
                         },
                         {
+                          "type": "frame",
+                          "id": "H7pXZ",
+                          "name": "by reason",
+                          "width": "fill_container",
+                          "gap": 6,
+                          "alignItems": "center",
+                          "children": [
+                            {
+                              "type": "frame",
+                              "id": "BE1SU",
+                              "name": "chip max concurrent full 1",
+                              "fill": "$surface-raised",
+                              "gap": 5,
+                              "padding": [
+                                2,
+                                6
+                              ],
+                              "alignItems": "center",
+                              "children": [
+                                {
+                                  "type": "rectangle",
+                                  "id": "SteDJ",
+                                  "name": "square",
+                                  "fill": "$status-waiting",
+                                  "width": 6,
+                                  "height": 6
+                                },
+                                {
+                                  "type": "text",
+                                  "id": "i3FLK",
+                                  "name": "t",
+                                  "fill": "$status-waiting",
+                                  "content": "max concurrent full 1",
+                                  "lineHeight": 1.4,
+                                  "fontFamily": "$font-mono",
+                                  "fontSize": 10.5,
+                                  "fontWeight": "normal"
+                                }
+                              ]
+                            },
+                            {
+                              "type": "frame",
+                              "id": "iQUDx",
+                              "name": "chip busy-agent cap full 0",
+                              "fill": "$surface-raised",
+                              "gap": 5,
+                              "padding": [
+                                2,
+                                6
+                              ],
+                              "alignItems": "center",
+                              "children": [
+                                {
+                                  "type": "text",
+                                  "id": "N3vJZB",
+                                  "name": "t",
+                                  "fill": "$text-secondary",
+                                  "content": "busy-agent cap full 0",
+                                  "lineHeight": 1.4,
+                                  "fontFamily": "$font-mono",
+                                  "fontSize": 10.5,
+                                  "fontWeight": "normal"
+                                }
+                              ]
+                            },
+                            {
+                              "type": "frame",
+                              "id": "U4iHec",
+                              "name": "chip heavy-run slot taken 1",
+                              "fill": "$surface-raised",
+                              "gap": 5,
+                              "padding": [
+                                2,
+                                6
+                              ],
+                              "alignItems": "center",
+                              "children": [
+                                {
+                                  "type": "rectangle",
+                                  "id": "hCnv6",
+                                  "name": "square",
+                                  "fill": "$status-waiting",
+                                  "width": 6,
+                                  "height": 6
+                                },
+                                {
+                                  "type": "text",
+                                  "id": "AYuxM",
+                                  "name": "t",
+                                  "fill": "$status-waiting",
+                                  "content": "heavy-run slot taken 1",
+                                  "lineHeight": 1.4,
+                                  "fontFamily": "$font-mono",
+                                  "fontSize": 10.5,
+                                  "fontWeight": "normal"
+                                }
+                              ]
+                            },
+                            {
+                              "type": "frame",
+                              "id": "Y3w93L",
+                              "name": "chip no_harness 1",
+                              "fill": "$surface-raised",
+                              "gap": 5,
+                              "padding": [
+                                2,
+                                6
+                              ],
+                              "alignItems": "center",
+                              "children": [
+                                {
+                                  "type": "rectangle",
+                                  "id": "I86sv",
+                                  "name": "square",
+                                  "fill": "$status-waiting",
+                                  "width": 6,
+                                  "height": 6
+                                },
+                                {
+                                  "type": "text",
+                                  "id": "hdHdD",
+                                  "name": "t",
+                                  "fill": "$status-waiting",
+                                  "content": "no_harness 1",
+                                  "lineHeight": 1.4,
+                                  "fontFamily": "$font-mono",
+                                  "fontSize": 10.5,
+                                  "fontWeight": "normal"
+                                }
+                              ]
+                            }
+                          ]
+                        },
+                        {
                           "type": "text",
-                          "id": "AmFyD",
+                          "id": "NGFkW",
                           "name": "t",
                           "fill": "$text-secondary",
                           "content": "14:31   #07 atlas-api · error-envelope    max concurrent full, 4 of 4",
@@ -904309,10 +905284,21 @@
                         },
                         {
                           "type": "text",
-                          "id": "A5rzS7",
+                          "id": "KC0dV",
                           "name": "t",
                           "fill": "$text-secondary",
-                          "content": "14:52   #09 meridian · csv-quote          the heavy-run slot was full",
+                          "content": "14:52   #09 meridian · csv-quote          heavy-run slot taken",
+                          "lineHeight": 1.4,
+                          "fontFamily": "$font-mono",
+                          "fontSize": 11,
+                          "fontWeight": "normal"
+                        },
+                        {
+                          "type": "text",
+                          "id": "ow8jn",
+                          "name": "t",
+                          "fill": "$text-secondary",
+                          "content": "15:03   #11 atlas-api · lint-rules        no_harness: it accepts codex, and Load 2 was at work",
                           "lineHeight": 1.4,
                           "fontFamily": "$font-mono",
                           "fontSize": 11,
@@ -907946,16 +908932,16 @@
               "children": [
                 {
                   "type": "frame",
-                  "id": "cmpl7",
+                  "id": "XLTZL",
                   "name": "Left",
                   "width": "fill_container",
                   "height": "fill_container",
                   "layout": "vertical",
-                  "gap": 12,
+                  "gap": 10,
                   "children": [
                     {
                       "type": "frame",
-                      "id": "f6vEf",
+                      "id": "BOqeV",
                       "name": "reason",
                       "width": "fill_container",
                       "fill": "$surface-raised",
@@ -907970,7 +908956,7 @@
                       "children": [
                         {
                           "type": "rectangle",
-                          "id": "aqeKz",
+                          "id": "XBhWW",
                           "name": "square",
                           "fill": "$status-idle",
                           "width": 6,
@@ -907978,7 +908964,7 @@
                         },
                         {
                           "type": "text",
-                          "id": "oGzKS",
+                          "id": "KOHBb",
                           "name": "t",
                           "fill": "$text-primary",
                           "textGrowth": "fixed-width",
@@ -907991,7 +908977,7 @@
                         },
                         {
                           "type": "text",
-                          "id": "j6Saa",
+                          "id": "iB4Ai",
                           "name": "t",
                           "fill": "$text-muted",
                           "content": "window end",
@@ -908004,14 +908990,14 @@
                     },
                     {
                       "type": "frame",
-                      "id": "u4hJOq",
+                      "id": "zm0h4",
                       "name": "tiles",
                       "width": "fill_container",
                       "gap": 10,
                       "children": [
                         {
                           "type": "frame",
-                          "id": "N2GGX",
+                          "id": "Zx7fp",
                           "name": "tile PLANNED",
                           "width": "fill_container",
                           "stroke": "$border",
@@ -908019,13 +909005,13 @@
                           "layout": "vertical",
                           "gap": 6,
                           "padding": [
-                            10,
+                            9,
                             12
                           ],
                           "children": [
                             {
                               "type": "text",
-                              "id": "eqn0C",
+                              "id": "uFYJu",
                               "name": "caption",
                               "fill": "$text-muted",
                               "content": "PLANNED",
@@ -908037,7 +909023,7 @@
                             },
                             {
                               "type": "text",
-                              "id": "ZLRBF",
+                              "id": "HEbnF",
                               "name": "t",
                               "fill": "$text-primary",
                               "content": "18",
@@ -908048,7 +909034,7 @@
                             },
                             {
                               "type": "text",
-                              "id": "QTuBU",
+                              "id": "AMzm6",
                               "name": "t",
                               "fill": "$text-muted",
                               "textGrowth": "fixed-width",
@@ -908063,7 +909049,7 @@
                         },
                         {
                           "type": "frame",
-                          "id": "yHOSI",
+                          "id": "EM2Su",
                           "name": "tile STARTED",
                           "width": "fill_container",
                           "stroke": "$border",
@@ -908071,13 +909057,13 @@
                           "layout": "vertical",
                           "gap": 6,
                           "padding": [
-                            10,
+                            9,
                             12
                           ],
                           "children": [
                             {
                               "type": "text",
-                              "id": "zlift",
+                              "id": "YZ4zE",
                               "name": "caption",
                               "fill": "$text-muted",
                               "content": "STARTED",
@@ -908089,7 +909075,7 @@
                             },
                             {
                               "type": "text",
-                              "id": "iZSIb",
+                              "id": "e6jI5b",
                               "name": "t",
                               "fill": "$text-primary",
                               "content": "15",
@@ -908100,12 +909086,12 @@
                             },
                             {
                               "type": "text",
-                              "id": "pkApI",
+                              "id": "m4q9Ra",
                               "name": "t",
                               "fill": "$text-muted",
                               "textGrowth": "fixed-width",
                               "width": "fill_container",
-                              "content": "13 passed their test",
+                              "content": "tests below",
                               "lineHeight": 1.4,
                               "fontFamily": "$font-mono",
                               "fontSize": 10.5,
@@ -908115,7 +909101,7 @@
                         },
                         {
                           "type": "frame",
-                          "id": "WPQ6l",
+                          "id": "gW65M",
                           "name": "tile BLOCKED",
                           "width": "fill_container",
                           "stroke": "$border",
@@ -908123,13 +909109,13 @@
                           "layout": "vertical",
                           "gap": 6,
                           "padding": [
-                            10,
+                            9,
                             12
                           ],
                           "children": [
                             {
                               "type": "text",
-                              "id": "ILKCV",
+                              "id": "mo1Jb",
                               "name": "caption",
                               "fill": "$text-muted",
                               "content": "BLOCKED",
@@ -908141,7 +909127,7 @@
                             },
                             {
                               "type": "text",
-                              "id": "bpePU",
+                              "id": "GxRZF",
                               "name": "t",
                               "fill": "$status-waiting",
                               "content": "3",
@@ -908152,12 +909138,12 @@
                             },
                             {
                               "type": "text",
-                              "id": "ZbBUg",
+                              "id": "gxLMq",
                               "name": "t",
                               "fill": "$text-muted",
                               "textGrowth": "fixed-width",
                               "width": "fill_container",
-                              "content": "recorded, not run",
+                              "content": "by reason, below",
                               "lineHeight": 1.4,
                               "fontFamily": "$font-mono",
                               "fontSize": 10.5,
@@ -908167,7 +909153,7 @@
                         },
                         {
                           "type": "frame",
-                          "id": "c2w6FN",
+                          "id": "GfRm1",
                           "name": "tile AT CAP",
                           "width": "fill_container",
                           "stroke": "$border",
@@ -908175,13 +909161,13 @@
                           "layout": "vertical",
                           "gap": 6,
                           "padding": [
-                            10,
+                            9,
                             12
                           ],
                           "children": [
                             {
                               "type": "text",
-                              "id": "hEzD1",
+                              "id": "Xahy7",
                               "name": "caption",
                               "fill": "$text-muted",
                               "content": "AT CAP",
@@ -908193,7 +909179,7 @@
                             },
                             {
                               "type": "text",
-                              "id": "LZ4ch",
+                              "id": "qyUTb",
                               "name": "t",
                               "fill": "$status-waiting",
                               "content": "1",
@@ -908204,7 +909190,7 @@
                             },
                             {
                               "type": "text",
-                              "id": "Sszrd",
+                              "id": "in6XS",
                               "name": "t",
                               "fill": "$text-muted",
                               "textGrowth": "fixed-width",
@@ -908221,28 +909207,427 @@
                     },
                     {
                       "type": "frame",
-                      "id": "REe4R",
-                      "name": "section BY PROJECT",
+                      "id": "DRwWJ",
+                      "name": "section TESTS",
                       "width": "fill_container",
                       "stroke": "$border",
                       "strokeWidth": 1,
                       "layout": "vertical",
-                      "gap": 8,
+                      "gap": 7,
                       "padding": [
-                        10,
+                        9,
                         12
                       ],
                       "children": [
                         {
                           "type": "frame",
-                          "id": "qhMmr",
+                          "id": "qJ4X8",
                           "name": "head",
                           "width": "fill_container",
                           "alignItems": "center",
                           "children": [
                             {
                               "type": "text",
-                              "id": "ovGvY",
+                              "id": "i6ZvB0",
+                              "name": "caption",
+                              "fill": "$text-muted",
+                              "content": "TESTS",
+                              "lineHeight": 1.4,
+                              "fontFamily": "$font-ui",
+                              "fontSize": 10,
+                              "fontWeight": "normal",
+                              "letterSpacing": 0.8
+                            },
+                            {
+                              "type": "frame",
+                              "id": "LqVGm",
+                              "name": "spacer",
+                              "width": "fill_container",
+                              "height": 1
+                            },
+                            {
+                              "type": "text",
+                              "id": "NfjwC",
+                              "name": "t",
+                              "fill": "$text-muted",
+                              "content": "15 started",
+                              "lineHeight": 1.4,
+                              "fontFamily": "$font-mono",
+                              "fontSize": 10.5,
+                              "fontWeight": "normal"
+                            }
+                          ]
+                        },
+                        {
+                          "type": "frame",
+                          "id": "eFSSB",
+                          "name": "results",
+                          "width": "fill_container",
+                          "gap": 6,
+                          "alignItems": "center",
+                          "children": [
+                            {
+                              "type": "frame",
+                              "id": "TJNKG",
+                              "name": "chip passed 11",
+                              "fill": "$surface-raised",
+                              "gap": 5,
+                              "padding": [
+                                2,
+                                6
+                              ],
+                              "alignItems": "center",
+                              "children": [
+                                {
+                                  "type": "rectangle",
+                                  "id": "iaJgG",
+                                  "name": "square",
+                                  "fill": "$status-running",
+                                  "width": 6,
+                                  "height": 6
+                                },
+                                {
+                                  "type": "text",
+                                  "id": "wPnnT",
+                                  "name": "t",
+                                  "fill": "$status-running",
+                                  "content": "passed 11",
+                                  "lineHeight": 1.4,
+                                  "fontFamily": "$font-mono",
+                                  "fontSize": 10.5,
+                                  "fontWeight": "normal"
+                                }
+                              ]
+                            },
+                            {
+                              "type": "frame",
+                              "id": "NgQuA",
+                              "name": "chip failed 1",
+                              "fill": "$surface-raised",
+                              "gap": 5,
+                              "padding": [
+                                2,
+                                6
+                              ],
+                              "alignItems": "center",
+                              "children": [
+                                {
+                                  "type": "rectangle",
+                                  "id": "QLP2n",
+                                  "name": "square",
+                                  "fill": "$status-error",
+                                  "width": 6,
+                                  "height": 6
+                                },
+                                {
+                                  "type": "text",
+                                  "id": "prMB9",
+                                  "name": "t",
+                                  "fill": "$status-error",
+                                  "content": "failed 1",
+                                  "lineHeight": 1.4,
+                                  "fontFamily": "$font-mono",
+                                  "fontSize": 10.5,
+                                  "fontWeight": "normal"
+                                }
+                              ]
+                            },
+                            {
+                              "type": "frame",
+                              "id": "djgNE",
+                              "name": "chip not run 2",
+                              "fill": "$surface-raised",
+                              "gap": 5,
+                              "padding": [
+                                2,
+                                6
+                              ],
+                              "alignItems": "center",
+                              "children": [
+                                {
+                                  "type": "rectangle",
+                                  "id": "uapJD",
+                                  "name": "square",
+                                  "fill": "$text-muted",
+                                  "width": 6,
+                                  "height": 6
+                                },
+                                {
+                                  "type": "text",
+                                  "id": "u2dVI",
+                                  "name": "t",
+                                  "fill": "$text-muted",
+                                  "content": "not run 2",
+                                  "lineHeight": 1.4,
+                                  "fontFamily": "$font-mono",
+                                  "fontSize": 10.5,
+                                  "fontWeight": "normal"
+                                }
+                              ]
+                            },
+                            {
+                              "type": "frame",
+                              "id": "dwmTV",
+                              "name": "chip at cap 1",
+                              "fill": "$surface-raised",
+                              "gap": 5,
+                              "padding": [
+                                2,
+                                6
+                              ],
+                              "alignItems": "center",
+                              "children": [
+                                {
+                                  "type": "rectangle",
+                                  "id": "CAVTe",
+                                  "name": "square",
+                                  "fill": "$status-waiting",
+                                  "width": 6,
+                                  "height": 6
+                                },
+                                {
+                                  "type": "text",
+                                  "id": "O7B6QL",
+                                  "name": "t",
+                                  "fill": "$status-waiting",
+                                  "content": "at cap 1",
+                                  "lineHeight": 1.4,
+                                  "fontFamily": "$font-mono",
+                                  "fontSize": 10.5,
+                                  "fontWeight": "normal"
+                                }
+                              ]
+                            }
+                          ]
+                        },
+                        {
+                          "type": "text",
+                          "id": "xwamo",
+                          "name": "t",
+                          "fill": "$text-muted",
+                          "textGrowth": "fixed-width",
+                          "width": "fill_container",
+                          "content": "Not run: the slot was not free within the task's time cap (2). Not a failure. Sessions 4 h 12 min in all; waiting for the slot 38 min, counted apart.",
+                          "lineHeight": 1.4,
+                          "fontFamily": "$font-ui",
+                          "fontSize": 11,
+                          "fontWeight": "normal"
+                        }
+                      ]
+                    },
+                    {
+                      "type": "frame",
+                      "id": "aRO8a",
+                      "name": "section BLOCKED, BY REASON",
+                      "width": "fill_container",
+                      "stroke": "$border",
+                      "strokeWidth": 1,
+                      "layout": "vertical",
+                      "gap": 7,
+                      "padding": [
+                        9,
+                        12
+                      ],
+                      "children": [
+                        {
+                          "type": "frame",
+                          "id": "NwOw3",
+                          "name": "head",
+                          "width": "fill_container",
+                          "alignItems": "center",
+                          "children": [
+                            {
+                              "type": "text",
+                              "id": "F6eTl",
+                              "name": "caption",
+                              "fill": "$text-muted",
+                              "content": "BLOCKED, BY REASON",
+                              "lineHeight": 1.4,
+                              "fontFamily": "$font-ui",
+                              "fontSize": 10,
+                              "fontWeight": "normal",
+                              "letterSpacing": 0.8
+                            },
+                            {
+                              "type": "frame",
+                              "id": "vFI4B",
+                              "name": "spacer",
+                              "width": "fill_container",
+                              "height": 1
+                            },
+                            {
+                              "type": "text",
+                              "id": "v11N4q",
+                              "name": "t",
+                              "fill": "$text-muted",
+                              "content": "3, recorded, not queued",
+                              "lineHeight": 1.4,
+                              "fontFamily": "$font-mono",
+                              "fontSize": 10.5,
+                              "fontWeight": "normal"
+                            }
+                          ]
+                        },
+                        {
+                          "type": "frame",
+                          "id": "ErBtz",
+                          "name": "by reason",
+                          "width": "fill_container",
+                          "gap": 6,
+                          "alignItems": "center",
+                          "children": [
+                            {
+                              "type": "frame",
+                              "id": "P4KE5d",
+                              "name": "chip max concurrent full 1",
+                              "fill": "$surface-raised",
+                              "gap": 5,
+                              "padding": [
+                                2,
+                                6
+                              ],
+                              "alignItems": "center",
+                              "children": [
+                                {
+                                  "type": "rectangle",
+                                  "id": "qrGkL",
+                                  "name": "square",
+                                  "fill": "$status-waiting",
+                                  "width": 6,
+                                  "height": 6
+                                },
+                                {
+                                  "type": "text",
+                                  "id": "sdFHt",
+                                  "name": "t",
+                                  "fill": "$status-waiting",
+                                  "content": "max concurrent full 1",
+                                  "lineHeight": 1.4,
+                                  "fontFamily": "$font-mono",
+                                  "fontSize": 10.5,
+                                  "fontWeight": "normal"
+                                }
+                              ]
+                            },
+                            {
+                              "type": "frame",
+                              "id": "y0Bxx",
+                              "name": "chip busy-agent cap full 1",
+                              "fill": "$surface-raised",
+                              "gap": 5,
+                              "padding": [
+                                2,
+                                6
+                              ],
+                              "alignItems": "center",
+                              "children": [
+                                {
+                                  "type": "rectangle",
+                                  "id": "IyHXz",
+                                  "name": "square",
+                                  "fill": "$status-waiting",
+                                  "width": 6,
+                                  "height": 6
+                                },
+                                {
+                                  "type": "text",
+                                  "id": "GCEtY",
+                                  "name": "t",
+                                  "fill": "$status-waiting",
+                                  "content": "busy-agent cap full 1",
+                                  "lineHeight": 1.4,
+                                  "fontFamily": "$font-mono",
+                                  "fontSize": 10.5,
+                                  "fontWeight": "normal"
+                                }
+                              ]
+                            },
+                            {
+                              "type": "frame",
+                              "id": "w2Sn5",
+                              "name": "chip heavy-run slot taken 0",
+                              "fill": "$surface-raised",
+                              "gap": 5,
+                              "padding": [
+                                2,
+                                6
+                              ],
+                              "alignItems": "center",
+                              "children": [
+                                {
+                                  "type": "text",
+                                  "id": "Z6its",
+                                  "name": "t",
+                                  "fill": "$text-secondary",
+                                  "content": "heavy-run slot taken 0",
+                                  "lineHeight": 1.4,
+                                  "fontFamily": "$font-mono",
+                                  "fontSize": 10.5,
+                                  "fontWeight": "normal"
+                                }
+                              ]
+                            },
+                            {
+                              "type": "frame",
+                              "id": "n1b9Z",
+                              "name": "chip no_harness 1",
+                              "fill": "$surface-raised",
+                              "gap": 5,
+                              "padding": [
+                                2,
+                                6
+                              ],
+                              "alignItems": "center",
+                              "children": [
+                                {
+                                  "type": "rectangle",
+                                  "id": "Tz1QG",
+                                  "name": "square",
+                                  "fill": "$status-waiting",
+                                  "width": 6,
+                                  "height": 6
+                                },
+                                {
+                                  "type": "text",
+                                  "id": "b2IdW",
+                                  "name": "t",
+                                  "fill": "$status-waiting",
+                                  "content": "no_harness 1",
+                                  "lineHeight": 1.4,
+                                  "fontFamily": "$font-mono",
+                                  "fontSize": 10.5,
+                                  "fontWeight": "normal"
+                                }
+                              ]
+                            }
+                          ]
+                        }
+                      ]
+                    },
+                    {
+                      "type": "frame",
+                      "id": "RAiie",
+                      "name": "section BY PROJECT",
+                      "width": "fill_container",
+                      "stroke": "$border",
+                      "strokeWidth": 1,
+                      "layout": "vertical",
+                      "gap": 7,
+                      "padding": [
+                        9,
+                        12
+                      ],
+                      "children": [
+                        {
+                          "type": "frame",
+                          "id": "c3eKfC",
+                          "name": "head",
+                          "width": "fill_container",
+                          "alignItems": "center",
+                          "children": [
+                            {
+                              "type": "text",
+                              "id": "nc01V",
                               "name": "caption",
                               "fill": "$text-muted",
                               "content": "BY PROJECT",
@@ -908254,7 +909639,7 @@
                             },
                             {
                               "type": "frame",
-                              "id": "ENgFt",
+                              "id": "iE1bg",
                               "name": "spacer",
                               "width": "fill_container",
                               "height": 1
@@ -908263,7 +909648,7 @@
                         },
                         {
                           "type": "frame",
-                          "id": "qmpET",
+                          "id": "G6Ct1",
                           "name": "by atlas-api",
                           "width": "fill_container",
                           "stroke": "$border",
@@ -908272,13 +909657,13 @@
                           },
                           "gap": 10,
                           "padding": [
-                            5,
+                            4,
                             0
                           ],
                           "children": [
                             {
                               "type": "text",
-                              "id": "cCZgJ",
+                              "id": "ShgTc",
                               "name": "t",
                               "fill": "$text-primary",
                               "textGrowth": "fixed-width",
@@ -908291,12 +909676,12 @@
                             },
                             {
                               "type": "text",
-                              "id": "CQBlf",
+                              "id": "NvsdT",
                               "name": "t",
                               "fill": "$text-secondary",
                               "textGrowth": "fixed-width",
                               "width": "fill_container",
-                              "content": "8 started · 7 passed · 1 at cap · 2 blocked",
+                              "content": "8 started · 6 passed · 1 not run · 1 at cap · 2 blocked",
                               "lineHeight": 1.4,
                               "fontFamily": "$font-mono",
                               "fontSize": 11,
@@ -908306,7 +909691,7 @@
                         },
                         {
                           "type": "frame",
-                          "id": "krY94",
+                          "id": "vRZZM",
                           "name": "by harbor-billing",
                           "width": "fill_container",
                           "stroke": "$border",
@@ -908315,13 +909700,13 @@
                           },
                           "gap": 10,
                           "padding": [
-                            5,
+                            4,
                             0
                           ],
                           "children": [
                             {
                               "type": "text",
-                              "id": "W0l5s",
+                              "id": "szePn",
                               "name": "t",
                               "fill": "$text-primary",
                               "textGrowth": "fixed-width",
@@ -908334,7 +909719,7 @@
                             },
                             {
                               "type": "text",
-                              "id": "oP3yT",
+                              "id": "IsnDK",
                               "name": "t",
                               "fill": "$text-secondary",
                               "textGrowth": "fixed-width",
@@ -908349,7 +909734,7 @@
                         },
                         {
                           "type": "frame",
-                          "id": "tkPmF",
+                          "id": "UBvjA",
                           "name": "by meridian",
                           "width": "fill_container",
                           "stroke": "$border",
@@ -908358,13 +909743,13 @@
                           },
                           "gap": 10,
                           "padding": [
-                            5,
+                            4,
                             0
                           ],
                           "children": [
                             {
                               "type": "text",
-                              "id": "K2QLn",
+                              "id": "D7Ahx",
                               "name": "t",
                               "fill": "$text-primary",
                               "textGrowth": "fixed-width",
@@ -908377,12 +909762,12 @@
                             },
                             {
                               "type": "text",
-                              "id": "oeIKl",
+                              "id": "M6cVn",
                               "name": "t",
                               "fill": "$text-secondary",
                               "textGrowth": "fixed-width",
                               "width": "fill_container",
-                              "content": "3 started · 2 passed · 1 failed its test · 1 blocked",
+                              "content": "3 started · 1 passed · 1 failed · 1 not run · 1 blocked",
                               "lineHeight": 1.4,
                               "fontFamily": "$font-mono",
                               "fontSize": 11,
@@ -908394,28 +909779,28 @@
                     },
                     {
                       "type": "frame",
-                      "id": "KWAC1",
+                      "id": "XDV5n",
                       "name": "section LOAD AGENTS",
                       "width": "fill_container",
                       "stroke": "$border",
                       "strokeWidth": 1,
                       "layout": "vertical",
-                      "gap": 8,
+                      "gap": 7,
                       "padding": [
-                        10,
+                        9,
                         12
                       ],
                       "children": [
                         {
                           "type": "frame",
-                          "id": "VGvhE",
+                          "id": "W0s0I",
                           "name": "head",
                           "width": "fill_container",
                           "alignItems": "center",
                           "children": [
                             {
                               "type": "text",
-                              "id": "m5V5L",
+                              "id": "jsSMq",
                               "name": "caption",
                               "fill": "$text-muted",
                               "content": "LOAD AGENTS",
@@ -908427,14 +909812,14 @@
                             },
                             {
                               "type": "frame",
-                              "id": "S9kI1H",
+                              "id": "BApaK",
                               "name": "spacer",
                               "width": "fill_container",
                               "height": 1
                             },
                             {
                               "type": "text",
-                              "id": "jcdKo",
+                              "id": "oDC6w",
                               "name": "t",
                               "fill": "$text-muted",
                               "content": "kept for the next window",
@@ -908447,7 +909832,7 @@
                         },
                         {
                           "type": "text",
-                          "id": "Z3y3y",
+                          "id": "jHT1C",
                           "name": "t",
                           "fill": "$text-secondary",
                           "content": "Load 1   atlas-api · claude   free",
@@ -908458,7 +909843,7 @@
                         },
                         {
                           "type": "text",
-                          "id": "R9BGbw",
+                          "id": "GabcH",
                           "name": "t",
                           "fill": "$text-secondary",
                           "content": "Load 2   atlas-api · codex   free",
@@ -908469,7 +909854,7 @@
                         },
                         {
                           "type": "text",
-                          "id": "qW2Qc",
+                          "id": "R9h9L",
                           "name": "t",
                           "fill": "$text-secondary",
                           "content": "Load 3   harbor-billing · claude   free",
@@ -908480,12 +909865,25 @@
                         },
                         {
                           "type": "text",
-                          "id": "FTqXr",
+                          "id": "k14G70",
                           "name": "t",
                           "fill": "$text-secondary",
                           "content": "Load 4   meridian · claude   free",
                           "lineHeight": 1.4,
                           "fontFamily": "$font-mono",
+                          "fontSize": 11,
+                          "fontWeight": "normal"
+                        },
+                        {
+                          "type": "text",
+                          "id": "OXkDi",
+                          "name": "t",
+                          "fill": "$text-muted",
+                          "textGrowth": "fixed-width",
+                          "width": "fill_container",
+                          "content": "Each load agent starts every task without the memory earlier load tasks wrote, and writes none.",
+                          "lineHeight": 1.4,
+                          "fontFamily": "$font-ui",
                           "fontSize": 11,
                           "fontWeight": "normal"
                         }
@@ -912014,16 +913412,16 @@
               "children": [
                 {
                   "type": "frame",
-                  "id": "uxSts",
+                  "id": "z5EULj",
                   "name": "Left",
                   "width": "fill_container",
                   "height": "fill_container",
                   "layout": "vertical",
-                  "gap": 12,
+                  "gap": 10,
                   "children": [
                     {
                       "type": "frame",
-                      "id": "Kh7B9",
+                      "id": "F3YlmE",
                       "name": "reason",
                       "width": "fill_container",
                       "fill": "$surface-raised",
@@ -912038,7 +913436,7 @@
                       "children": [
                         {
                           "type": "rectangle",
-                          "id": "P9Rzj",
+                          "id": "Su6D0",
                           "name": "square",
                           "fill": "$status-idle",
                           "width": 6,
@@ -912046,7 +913444,7 @@
                         },
                         {
                           "type": "text",
-                          "id": "chANP",
+                          "id": "VCcYQ",
                           "name": "t",
                           "fill": "$text-primary",
                           "textGrowth": "fixed-width",
@@ -912059,7 +913457,7 @@
                         },
                         {
                           "type": "text",
-                          "id": "HVGQ0",
+                          "id": "U8TyKn",
                           "name": "t",
                           "fill": "$text-muted",
                           "content": "window end",
@@ -912072,14 +913470,14 @@
                     },
                     {
                       "type": "frame",
-                      "id": "qktwV",
+                      "id": "RnPBX",
                       "name": "tiles",
                       "width": "fill_container",
                       "gap": 10,
                       "children": [
                         {
                           "type": "frame",
-                          "id": "lF1QE",
+                          "id": "BSqlY",
                           "name": "tile PLANNED",
                           "width": "fill_container",
                           "stroke": "$border",
@@ -912087,13 +913485,13 @@
                           "layout": "vertical",
                           "gap": 6,
                           "padding": [
-                            10,
+                            9,
                             12
                           ],
                           "children": [
                             {
                               "type": "text",
-                              "id": "KBExw",
+                              "id": "WelnJ",
                               "name": "caption",
                               "fill": "$text-muted",
                               "content": "PLANNED",
@@ -912105,7 +913503,7 @@
                             },
                             {
                               "type": "text",
-                              "id": "DSjUZ",
+                              "id": "agaCz",
                               "name": "t",
                               "fill": "$text-primary",
                               "content": "18",
@@ -912116,7 +913514,7 @@
                             },
                             {
                               "type": "text",
-                              "id": "gg6SY",
+                              "id": "xrBKv",
                               "name": "t",
                               "fill": "$text-muted",
                               "textGrowth": "fixed-width",
@@ -912131,7 +913529,7 @@
                         },
                         {
                           "type": "frame",
-                          "id": "m19g9O",
+                          "id": "fZkAQ",
                           "name": "tile STARTED",
                           "width": "fill_container",
                           "stroke": "$border",
@@ -912139,13 +913537,13 @@
                           "layout": "vertical",
                           "gap": 6,
                           "padding": [
-                            10,
+                            9,
                             12
                           ],
                           "children": [
                             {
                               "type": "text",
-                              "id": "f8QVN",
+                              "id": "LtrsC",
                               "name": "caption",
                               "fill": "$text-muted",
                               "content": "STARTED",
@@ -912157,7 +913555,7 @@
                             },
                             {
                               "type": "text",
-                              "id": "Qpnw7",
+                              "id": "HGXBP",
                               "name": "t",
                               "fill": "$text-primary",
                               "content": "15",
@@ -912168,12 +913566,12 @@
                             },
                             {
                               "type": "text",
-                              "id": "ie3sl",
+                              "id": "DC2Ub",
                               "name": "t",
                               "fill": "$text-muted",
                               "textGrowth": "fixed-width",
                               "width": "fill_container",
-                              "content": "13 passed their test",
+                              "content": "tests below",
                               "lineHeight": 1.4,
                               "fontFamily": "$font-mono",
                               "fontSize": 10.5,
@@ -912183,7 +913581,7 @@
                         },
                         {
                           "type": "frame",
-                          "id": "FQTLU",
+                          "id": "UCpOV",
                           "name": "tile BLOCKED",
                           "width": "fill_container",
                           "stroke": "$border",
@@ -912191,13 +913589,13 @@
                           "layout": "vertical",
                           "gap": 6,
                           "padding": [
-                            10,
+                            9,
                             12
                           ],
                           "children": [
                             {
                               "type": "text",
-                              "id": "KaZmW",
+                              "id": "OxBr9",
                               "name": "caption",
                               "fill": "$text-muted",
                               "content": "BLOCKED",
@@ -912209,7 +913607,7 @@
                             },
                             {
                               "type": "text",
-                              "id": "LNbOc",
+                              "id": "e48ay",
                               "name": "t",
                               "fill": "$status-waiting",
                               "content": "3",
@@ -912220,12 +913618,12 @@
                             },
                             {
                               "type": "text",
-                              "id": "AnDEX",
+                              "id": "p4Gw4P",
                               "name": "t",
                               "fill": "$text-muted",
                               "textGrowth": "fixed-width",
                               "width": "fill_container",
-                              "content": "recorded, not run",
+                              "content": "by reason, below",
                               "lineHeight": 1.4,
                               "fontFamily": "$font-mono",
                               "fontSize": 10.5,
@@ -912235,7 +913633,7 @@
                         },
                         {
                           "type": "frame",
-                          "id": "m3f5D",
+                          "id": "WNHzj",
                           "name": "tile AT CAP",
                           "width": "fill_container",
                           "stroke": "$border",
@@ -912243,13 +913641,13 @@
                           "layout": "vertical",
                           "gap": 6,
                           "padding": [
-                            10,
+                            9,
                             12
                           ],
                           "children": [
                             {
                               "type": "text",
-                              "id": "Q8Oyw",
+                              "id": "w9HRAi",
                               "name": "caption",
                               "fill": "$text-muted",
                               "content": "AT CAP",
@@ -912261,7 +913659,7 @@
                             },
                             {
                               "type": "text",
-                              "id": "xvJjr",
+                              "id": "nINjG",
                               "name": "t",
                               "fill": "$status-waiting",
                               "content": "1",
@@ -912272,7 +913670,7 @@
                             },
                             {
                               "type": "text",
-                              "id": "JtO62",
+                              "id": "HjC5D",
                               "name": "t",
                               "fill": "$text-muted",
                               "textGrowth": "fixed-width",
@@ -912289,28 +913687,427 @@
                     },
                     {
                       "type": "frame",
-                      "id": "N0wWTm",
-                      "name": "section BY PROJECT",
+                      "id": "HO5uj",
+                      "name": "section TESTS",
                       "width": "fill_container",
                       "stroke": "$border",
                       "strokeWidth": 1,
                       "layout": "vertical",
-                      "gap": 8,
+                      "gap": 7,
                       "padding": [
-                        10,
+                        9,
                         12
                       ],
                       "children": [
                         {
                           "type": "frame",
-                          "id": "c7TtV",
+                          "id": "FkwMY",
                           "name": "head",
                           "width": "fill_container",
                           "alignItems": "center",
                           "children": [
                             {
                               "type": "text",
-                              "id": "ZRl2v",
+                              "id": "X0HpI5",
+                              "name": "caption",
+                              "fill": "$text-muted",
+                              "content": "TESTS",
+                              "lineHeight": 1.4,
+                              "fontFamily": "$font-ui",
+                              "fontSize": 10,
+                              "fontWeight": "normal",
+                              "letterSpacing": 0.8
+                            },
+                            {
+                              "type": "frame",
+                              "id": "nGtIc",
+                              "name": "spacer",
+                              "width": "fill_container",
+                              "height": 1
+                            },
+                            {
+                              "type": "text",
+                              "id": "WMZ1x",
+                              "name": "t",
+                              "fill": "$text-muted",
+                              "content": "15 started",
+                              "lineHeight": 1.4,
+                              "fontFamily": "$font-mono",
+                              "fontSize": 10.5,
+                              "fontWeight": "normal"
+                            }
+                          ]
+                        },
+                        {
+                          "type": "frame",
+                          "id": "eyh9w",
+                          "name": "results",
+                          "width": "fill_container",
+                          "gap": 6,
+                          "alignItems": "center",
+                          "children": [
+                            {
+                              "type": "frame",
+                              "id": "xqoks",
+                              "name": "chip passed 11",
+                              "fill": "$surface-raised",
+                              "gap": 5,
+                              "padding": [
+                                2,
+                                6
+                              ],
+                              "alignItems": "center",
+                              "children": [
+                                {
+                                  "type": "rectangle",
+                                  "id": "sDBFU",
+                                  "name": "square",
+                                  "fill": "$status-running",
+                                  "width": 6,
+                                  "height": 6
+                                },
+                                {
+                                  "type": "text",
+                                  "id": "j4ciPW",
+                                  "name": "t",
+                                  "fill": "$status-running",
+                                  "content": "passed 11",
+                                  "lineHeight": 1.4,
+                                  "fontFamily": "$font-mono",
+                                  "fontSize": 10.5,
+                                  "fontWeight": "normal"
+                                }
+                              ]
+                            },
+                            {
+                              "type": "frame",
+                              "id": "tQmVf",
+                              "name": "chip failed 1",
+                              "fill": "$surface-raised",
+                              "gap": 5,
+                              "padding": [
+                                2,
+                                6
+                              ],
+                              "alignItems": "center",
+                              "children": [
+                                {
+                                  "type": "rectangle",
+                                  "id": "ViiNV",
+                                  "name": "square",
+                                  "fill": "$status-error",
+                                  "width": 6,
+                                  "height": 6
+                                },
+                                {
+                                  "type": "text",
+                                  "id": "C1i2Ia",
+                                  "name": "t",
+                                  "fill": "$status-error",
+                                  "content": "failed 1",
+                                  "lineHeight": 1.4,
+                                  "fontFamily": "$font-mono",
+                                  "fontSize": 10.5,
+                                  "fontWeight": "normal"
+                                }
+                              ]
+                            },
+                            {
+                              "type": "frame",
+                              "id": "SjaRs",
+                              "name": "chip not run 2",
+                              "fill": "$surface-raised",
+                              "gap": 5,
+                              "padding": [
+                                2,
+                                6
+                              ],
+                              "alignItems": "center",
+                              "children": [
+                                {
+                                  "type": "rectangle",
+                                  "id": "uIccn",
+                                  "name": "square",
+                                  "fill": "$text-muted",
+                                  "width": 6,
+                                  "height": 6
+                                },
+                                {
+                                  "type": "text",
+                                  "id": "Ly2cJ",
+                                  "name": "t",
+                                  "fill": "$text-muted",
+                                  "content": "not run 2",
+                                  "lineHeight": 1.4,
+                                  "fontFamily": "$font-mono",
+                                  "fontSize": 10.5,
+                                  "fontWeight": "normal"
+                                }
+                              ]
+                            },
+                            {
+                              "type": "frame",
+                              "id": "n2JkI",
+                              "name": "chip at cap 1",
+                              "fill": "$surface-raised",
+                              "gap": 5,
+                              "padding": [
+                                2,
+                                6
+                              ],
+                              "alignItems": "center",
+                              "children": [
+                                {
+                                  "type": "rectangle",
+                                  "id": "IImgB",
+                                  "name": "square",
+                                  "fill": "$status-waiting",
+                                  "width": 6,
+                                  "height": 6
+                                },
+                                {
+                                  "type": "text",
+                                  "id": "rUl0Q",
+                                  "name": "t",
+                                  "fill": "$status-waiting",
+                                  "content": "at cap 1",
+                                  "lineHeight": 1.4,
+                                  "fontFamily": "$font-mono",
+                                  "fontSize": 10.5,
+                                  "fontWeight": "normal"
+                                }
+                              ]
+                            }
+                          ]
+                        },
+                        {
+                          "type": "text",
+                          "id": "yNLvN",
+                          "name": "t",
+                          "fill": "$text-muted",
+                          "textGrowth": "fixed-width",
+                          "width": "fill_container",
+                          "content": "Not run: the slot was not free within the task's time cap (2). Not a failure. Sessions 4 h 12 min in all; waiting for the slot 38 min, counted apart.",
+                          "lineHeight": 1.4,
+                          "fontFamily": "$font-ui",
+                          "fontSize": 11,
+                          "fontWeight": "normal"
+                        }
+                      ]
+                    },
+                    {
+                      "type": "frame",
+                      "id": "MGD1u",
+                      "name": "section BLOCKED, BY REASON",
+                      "width": "fill_container",
+                      "stroke": "$border",
+                      "strokeWidth": 1,
+                      "layout": "vertical",
+                      "gap": 7,
+                      "padding": [
+                        9,
+                        12
+                      ],
+                      "children": [
+                        {
+                          "type": "frame",
+                          "id": "S2luxP",
+                          "name": "head",
+                          "width": "fill_container",
+                          "alignItems": "center",
+                          "children": [
+                            {
+                              "type": "text",
+                              "id": "Pcp5H",
+                              "name": "caption",
+                              "fill": "$text-muted",
+                              "content": "BLOCKED, BY REASON",
+                              "lineHeight": 1.4,
+                              "fontFamily": "$font-ui",
+                              "fontSize": 10,
+                              "fontWeight": "normal",
+                              "letterSpacing": 0.8
+                            },
+                            {
+                              "type": "frame",
+                              "id": "oxR22",
+                              "name": "spacer",
+                              "width": "fill_container",
+                              "height": 1
+                            },
+                            {
+                              "type": "text",
+                              "id": "nxe9G",
+                              "name": "t",
+                              "fill": "$text-muted",
+                              "content": "3, recorded, not queued",
+                              "lineHeight": 1.4,
+                              "fontFamily": "$font-mono",
+                              "fontSize": 10.5,
+                              "fontWeight": "normal"
+                            }
+                          ]
+                        },
+                        {
+                          "type": "frame",
+                          "id": "M5T10A",
+                          "name": "by reason",
+                          "width": "fill_container",
+                          "gap": 6,
+                          "alignItems": "center",
+                          "children": [
+                            {
+                              "type": "frame",
+                              "id": "ziHag",
+                              "name": "chip max concurrent full 1",
+                              "fill": "$surface-raised",
+                              "gap": 5,
+                              "padding": [
+                                2,
+                                6
+                              ],
+                              "alignItems": "center",
+                              "children": [
+                                {
+                                  "type": "rectangle",
+                                  "id": "PK7xx",
+                                  "name": "square",
+                                  "fill": "$status-waiting",
+                                  "width": 6,
+                                  "height": 6
+                                },
+                                {
+                                  "type": "text",
+                                  "id": "j4IV33",
+                                  "name": "t",
+                                  "fill": "$status-waiting",
+                                  "content": "max concurrent full 1",
+                                  "lineHeight": 1.4,
+                                  "fontFamily": "$font-mono",
+                                  "fontSize": 10.5,
+                                  "fontWeight": "normal"
+                                }
+                              ]
+                            },
+                            {
+                              "type": "frame",
+                              "id": "lGl00",
+                              "name": "chip busy-agent cap full 1",
+                              "fill": "$surface-raised",
+                              "gap": 5,
+                              "padding": [
+                                2,
+                                6
+                              ],
+                              "alignItems": "center",
+                              "children": [
+                                {
+                                  "type": "rectangle",
+                                  "id": "tfdih",
+                                  "name": "square",
+                                  "fill": "$status-waiting",
+                                  "width": 6,
+                                  "height": 6
+                                },
+                                {
+                                  "type": "text",
+                                  "id": "t9enn",
+                                  "name": "t",
+                                  "fill": "$status-waiting",
+                                  "content": "busy-agent cap full 1",
+                                  "lineHeight": 1.4,
+                                  "fontFamily": "$font-mono",
+                                  "fontSize": 10.5,
+                                  "fontWeight": "normal"
+                                }
+                              ]
+                            },
+                            {
+                              "type": "frame",
+                              "id": "Ji4II",
+                              "name": "chip heavy-run slot taken 0",
+                              "fill": "$surface-raised",
+                              "gap": 5,
+                              "padding": [
+                                2,
+                                6
+                              ],
+                              "alignItems": "center",
+                              "children": [
+                                {
+                                  "type": "text",
+                                  "id": "COW4k",
+                                  "name": "t",
+                                  "fill": "$text-secondary",
+                                  "content": "heavy-run slot taken 0",
+                                  "lineHeight": 1.4,
+                                  "fontFamily": "$font-mono",
+                                  "fontSize": 10.5,
+                                  "fontWeight": "normal"
+                                }
+                              ]
+                            },
+                            {
+                              "type": "frame",
+                              "id": "TIgi9",
+                              "name": "chip no_harness 1",
+                              "fill": "$surface-raised",
+                              "gap": 5,
+                              "padding": [
+                                2,
+                                6
+                              ],
+                              "alignItems": "center",
+                              "children": [
+                                {
+                                  "type": "rectangle",
+                                  "id": "W1R2h",
+                                  "name": "square",
+                                  "fill": "$status-waiting",
+                                  "width": 6,
+                                  "height": 6
+                                },
+                                {
+                                  "type": "text",
+                                  "id": "PPW8c",
+                                  "name": "t",
+                                  "fill": "$status-waiting",
+                                  "content": "no_harness 1",
+                                  "lineHeight": 1.4,
+                                  "fontFamily": "$font-mono",
+                                  "fontSize": 10.5,
+                                  "fontWeight": "normal"
+                                }
+                              ]
+                            }
+                          ]
+                        }
+                      ]
+                    },
+                    {
+                      "type": "frame",
+                      "id": "JxsvP",
+                      "name": "section BY PROJECT",
+                      "width": "fill_container",
+                      "stroke": "$border",
+                      "strokeWidth": 1,
+                      "layout": "vertical",
+                      "gap": 7,
+                      "padding": [
+                        9,
+                        12
+                      ],
+                      "children": [
+                        {
+                          "type": "frame",
+                          "id": "hnjAK",
+                          "name": "head",
+                          "width": "fill_container",
+                          "alignItems": "center",
+                          "children": [
+                            {
+                              "type": "text",
+                              "id": "poiwU",
                               "name": "caption",
                               "fill": "$text-muted",
                               "content": "BY PROJECT",
@@ -912322,7 +914119,7 @@
                             },
                             {
                               "type": "frame",
-                              "id": "s5AiV",
+                              "id": "nrXuy",
                               "name": "spacer",
                               "width": "fill_container",
                               "height": 1
@@ -912331,7 +914128,7 @@
                         },
                         {
                           "type": "frame",
-                          "id": "bP2fq",
+                          "id": "qfjO8",
                           "name": "by atlas-api",
                           "width": "fill_container",
                           "stroke": "$border",
@@ -912340,13 +914137,13 @@
                           },
                           "gap": 10,
                           "padding": [
-                            5,
+                            4,
                             0
                           ],
                           "children": [
                             {
                               "type": "text",
-                              "id": "Y2EsG",
+                              "id": "WM5fx",
                               "name": "t",
                               "fill": "$text-primary",
                               "textGrowth": "fixed-width",
@@ -912359,12 +914156,12 @@
                             },
                             {
                               "type": "text",
-                              "id": "cgsRv",
+                              "id": "myniE",
                               "name": "t",
                               "fill": "$text-secondary",
                               "textGrowth": "fixed-width",
                               "width": "fill_container",
-                              "content": "8 started · 7 passed · 1 at cap · 2 blocked",
+                              "content": "8 started · 6 passed · 1 not run · 1 at cap · 2 blocked",
                               "lineHeight": 1.4,
                               "fontFamily": "$font-mono",
                               "fontSize": 11,
@@ -912374,7 +914171,7 @@
                         },
                         {
                           "type": "frame",
-                          "id": "TTIbx",
+                          "id": "hdONw",
                           "name": "by harbor-billing",
                           "width": "fill_container",
                           "stroke": "$border",
@@ -912383,13 +914180,13 @@
                           },
                           "gap": 10,
                           "padding": [
-                            5,
+                            4,
                             0
                           ],
                           "children": [
                             {
                               "type": "text",
-                              "id": "Y56D65",
+                              "id": "T46J7L",
                               "name": "t",
                               "fill": "$text-primary",
                               "textGrowth": "fixed-width",
@@ -912402,7 +914199,7 @@
                             },
                             {
                               "type": "text",
-                              "id": "URgKA",
+                              "id": "S4lJe",
                               "name": "t",
                               "fill": "$text-secondary",
                               "textGrowth": "fixed-width",
@@ -912417,7 +914214,7 @@
                         },
                         {
                           "type": "frame",
-                          "id": "iC7YH",
+                          "id": "xiETM",
                           "name": "by meridian",
                           "width": "fill_container",
                           "stroke": "$border",
@@ -912426,13 +914223,13 @@
                           },
                           "gap": 10,
                           "padding": [
-                            5,
+                            4,
                             0
                           ],
                           "children": [
                             {
                               "type": "text",
-                              "id": "E6wCS",
+                              "id": "h4uGJc",
                               "name": "t",
                               "fill": "$text-primary",
                               "textGrowth": "fixed-width",
@@ -912445,12 +914242,12 @@
                             },
                             {
                               "type": "text",
-                              "id": "x0niS",
+                              "id": "uZ7c7",
                               "name": "t",
                               "fill": "$text-secondary",
                               "textGrowth": "fixed-width",
                               "width": "fill_container",
-                              "content": "3 started · 2 passed · 1 failed its test · 1 blocked",
+                              "content": "3 started · 1 passed · 1 failed · 1 not run · 1 blocked",
                               "lineHeight": 1.4,
                               "fontFamily": "$font-mono",
                               "fontSize": 11,
@@ -912462,28 +914259,28 @@
                     },
                     {
                       "type": "frame",
-                      "id": "QtKbw",
+                      "id": "fovjA",
                       "name": "section LOAD AGENTS",
                       "width": "fill_container",
                       "stroke": "$border",
                       "strokeWidth": 1,
                       "layout": "vertical",
-                      "gap": 8,
+                      "gap": 7,
                       "padding": [
-                        10,
+                        9,
                         12
                       ],
                       "children": [
                         {
                           "type": "frame",
-                          "id": "Drnc9",
+                          "id": "bIyBF",
                           "name": "head",
                           "width": "fill_container",
                           "alignItems": "center",
                           "children": [
                             {
                               "type": "text",
-                              "id": "o2SL48",
+                              "id": "Gsn2V",
                               "name": "caption",
                               "fill": "$text-muted",
                               "content": "LOAD AGENTS",
@@ -912495,14 +914292,14 @@
                             },
                             {
                               "type": "frame",
-                              "id": "Jh09Z",
+                              "id": "W3Dc8B",
                               "name": "spacer",
                               "width": "fill_container",
                               "height": 1
                             },
                             {
                               "type": "text",
-                              "id": "f9Jjyp",
+                              "id": "p5lu5U",
                               "name": "t",
                               "fill": "$text-muted",
                               "content": "kept for the next window",
@@ -912515,7 +914312,7 @@
                         },
                         {
                           "type": "text",
-                          "id": "RMpDf",
+                          "id": "x6aXp",
                           "name": "t",
                           "fill": "$text-secondary",
                           "content": "Load 1   atlas-api · claude   free",
@@ -912526,7 +914323,7 @@
                         },
                         {
                           "type": "text",
-                          "id": "CAXS4",
+                          "id": "o6cQiH",
                           "name": "t",
                           "fill": "$text-secondary",
                           "content": "Load 2   atlas-api · codex   free",
@@ -912537,7 +914334,7 @@
                         },
                         {
                           "type": "text",
-                          "id": "s2i5G",
+                          "id": "bAz0c",
                           "name": "t",
                           "fill": "$text-secondary",
                           "content": "Load 3   harbor-billing · claude   free",
@@ -912548,12 +914345,25 @@
                         },
                         {
                           "type": "text",
-                          "id": "qGd7c",
+                          "id": "p48Dk",
                           "name": "t",
                           "fill": "$text-secondary",
                           "content": "Load 4   meridian · claude   free",
                           "lineHeight": 1.4,
                           "fontFamily": "$font-mono",
+                          "fontSize": 11,
+                          "fontWeight": "normal"
+                        },
+                        {
+                          "type": "text",
+                          "id": "d33vQ",
+                          "name": "t",
+                          "fill": "$text-muted",
+                          "textGrowth": "fixed-width",
+                          "width": "fill_container",
+                          "content": "Each load agent starts every task without the memory earlier load tasks wrote, and writes none.",
+                          "lineHeight": 1.4,
+                          "fontFamily": "$font-ui",
                           "fontSize": 11,
                           "fontWeight": "normal"
                         }
@@ -913034,6 +914844,45 @@
           "lineHeight": 1.5,
           "fontFamily": "$font-mono",
           "fontSize": 12,
+          "fontWeight": "normal"
+        },
+        {
+          "type": "text",
+          "id": "m3fyd",
+          "name": "t",
+          "fill": "$text-secondary",
+          "textGrowth": "fixed-width",
+          "width": 1240,
+          "content": "Blocked, by reason. An arrival is blocked, recorded and dropped, never queued, for one of four reasons, and the running and ended window count them apart: max concurrent full; busy-agent cap full; heavy-run slot taken; no_harness, no free load agent has a harness the task accepts.",
+          "lineHeight": 1.5,
+          "fontFamily": "$font-ui",
+          "fontSize": 13,
+          "fontWeight": "normal"
+        },
+        {
+          "type": "text",
+          "id": "cv450",
+          "name": "t",
+          "fill": "$text-secondary",
+          "textGrowth": "fixed-width",
+          "width": 1240,
+          "content": "A task's test. Passed, failed, or not run with its reason (the slot was not free within the task's time cap, for one). A test not run is not a failure and never stops the window. Where a task shows its test, the time it waited for the slot is said apart from its session's own time.",
+          "lineHeight": 1.5,
+          "fontFamily": "$font-ui",
+          "fontSize": 13,
+          "fontWeight": "normal"
+        },
+        {
+          "type": "text",
+          "id": "mgcu1",
+          "name": "t",
+          "fill": "$text-secondary",
+          "textGrowth": "fixed-width",
+          "width": 1240,
+          "content": "No memory between load tasks. A load agent starts each task without the memory earlier load tasks wrote, and writes none. Where its card or its list shows, one line says so. No control for it.",
+          "lineHeight": 1.5,
+          "fontFamily": "$font-ui",
+          "fontSize": 13,
           "fontWeight": "normal"
         },
         {
