@@ -1,0 +1,244 @@
+import { describe, it, expect, vi, beforeAll, afterEach } from 'vitest';
+import * as net from 'node:net';
+import * as http from 'node:http';
+
+/**
+ * A call to the Hermes gateway that never gets an answer is a refusal with its
+ * reason, never a throw through IPC.
+ *
+ * The defect (found by the Frontend on 27/11): Schedules showed Electron's raw
+ * "Error invoking remote method 'hermes:crons:list'". hermesRequest rejects on a
+ * network failure (the request's 'error', Tars's own timeout, a URL it cannot
+ * call), and viaGateway, in hermes-handlers.ts, handed the rejection to IPC as
+ * it was, where every other refusal (not configured, unusable) answers
+ * { success: false, error }.
+ *
+ * How it can fail, written before the fix (2026-11-27):
+ * 1. A channel that reaches the gateway through viaGateway rejects through IPC
+ *    when nothing listens at the gateway's address (ECONNREFUSED): the window
+ *    shows Electron's words (Schedules), or nothing, the rejection unhandled (a
+ *    Schedules action, a Kanban task action, the memory providers).
+ * 2. The same when the gateway takes the connection and never answers: Tars's
+ *    own timeout, 10 s.
+ * 3. The same when what answers is not HTTP (an SSH server on a tunnel's port),
+ *    or closes the connection without answering.
+ * 4. The same when the saved gateway URL is not one Tars can call.
+ * 5. The refusal that replaces the throw says nothing a user can act on: not
+ *    which gateway, or not why.
+ * 6. The refusal carries a secret: the URL's user name or password, its query
+ *    string, or the dashboard token.
+ * 7. The overseer's channels that reach the gateway (its model list, its
+ *    reasoning effort read and written, a model chosen in its settings) reject
+ *    the same way.
+ * 8. A question to the overseer whose gateway answers its status and then stops
+ *    answering mid-turn rejects through IPC, where a gateway that does not
+ *    answer already has its reason: gateway_unreachable.
+ * 9. The Kanban board's own read stops rejecting, or rejects with other words:
+ *    HermesBoard.load reads that rejection and says which gateway went silent
+ *    and how (describeHermesFailure), so its contract is kept as it is.
+ * 10. A failure that is not the network's (a bug reading an answer) is passed
+ *    off as "could not reach Hermes".
+ */
+
+const handlers = vi.hoisted(() => new Map<string, (...args: unknown[]) => Promise<unknown>>());
+vi.mock('electron', () => ({
+  ipcMain: { handle: (channel: string, fn: (...args: unknown[]) => Promise<unknown>) => { handlers.set(channel, fn); } },
+  app: { getPath: () => '/tmp', getAppPath: () => process.cwd(), isPackaged: false, getVersion: () => '2.0.6' },
+  BrowserWindow: Object.assign(vi.fn(), { getAllWindows: () => [] }),
+  dialog: { showOpenDialog: vi.fn() },
+}));
+vi.mock('../../../electron/core/window-manager', () => ({ getMainWindow: () => null }));
+vi.mock('child_process', async importOriginal => ({
+  ...(await importOriginal<typeof import('child_process')>()),
+  execFile: (_file: string, _args: string[], _opts: unknown, cb: (err: Error) => void) => cb(Object.assign(new Error('not installed'), { code: 'ENOENT' })),
+}));
+
+type Refusal = { success?: boolean; ok?: boolean; reason?: string; error?: string; settings?: unknown };
+let writeHermesConnection: (conn: object) => void;
+
+beforeAll(async () => {
+  ({ writeHermesConnection } = await import('../../../electron/services/hermes-config') as never);
+  (await import('../../../electron/handlers/hermes-handlers')).registerHermesHandlers();
+  (await import('../../../electron/handlers/overseer-handlers')).registerOverseerHandlers();
+}, 120_000);
+
+const call = (channel: string, ...args: unknown[]) => handlers.get(channel)!(null, ...args) as Promise<Refusal>;
+
+/** The gateway the connection file names, in token mode with a token, as Settings saves it. */
+function gatewayAt(url: string): void {
+  writeHermesConnection({ mode: 'remote', url, authMode: 'token', token: 'tok-secret-123' });
+}
+
+/** A loopback port nothing listens on. */
+async function refusingPort(): Promise<number> {
+  const server = net.createServer();
+  await new Promise<void>(resolve => server.listen(0, '127.0.0.1', resolve));
+  const { port } = server.address() as net.AddressInfo;
+  await new Promise(resolve => server.close(resolve));
+  return port;
+}
+
+const open: Array<() => Promise<void>> = [];
+afterEach(async () => { await Promise.all(open.splice(0).map(close => close())); });
+
+/** A loopback server that does `onSocket` with each connection, closed after the test. */
+async function standIn(onSocket: (socket: net.Socket) => void): Promise<number> {
+  const sockets = new Set<net.Socket>();
+  const server = net.createServer(socket => {
+    sockets.add(socket);
+    socket.on('error', () => {});
+    socket.on('close', () => sockets.delete(socket));
+    onSocket(socket);
+  });
+  await new Promise<void>(resolve => server.listen(0, '127.0.0.1', resolve));
+  open.push(() => new Promise<void>(resolve => { for (const s of sockets) s.destroy(); server.close(() => resolve()); }));
+  return (server.address() as net.AddressInfo).port;
+}
+
+/** The gateway's channels that go through viaGateway, with what a page sends them. The board is apart (9). */
+const VIA_GATEWAY: Array<[string, ...unknown[]]> = [
+  ['hermes:crons:list'],
+  ['hermes:crons:action', { action: 'pause', jobId: 'j1' }],
+  ['hermes:crons:update', { jobId: 'j1', updates: { name: 'n' } }],
+  ['hermes:crons:delete', { jobId: 'j1' }],
+  ['hermes:kanban:createTask', { title: 't' }],
+  ['hermes:kanban:updateTask', { taskId: 't1', patch: { status: 'done' } }],
+  ['hermes:kanban:getTask', { taskId: 't1' }],
+  ['hermes:kanban:deleteTask', { taskId: 't1' }],
+  ['hermes:kanban:addComment', { taskId: 't1', body: 'b' }],
+  ['hermes:mcp:servers'],
+  ['hermes:memory:providers'],
+  ['hermes:memory:setProvider', { provider: 'holographic' }],
+];
+
+/** The overseer's channels that reach the gateway (7). */
+const OVERSEER: Array<[string, ...unknown[]]> = [
+  ['overseer:modelOptions'],
+  ['overseer:effort'],
+  ['overseer:setEffort', 'high'],
+  ['overseer:setSettings', { provider: 'anthropic', model: 'claude-opus-5-5' }],
+];
+
+describe('nothing listens at the gateway address (1, 5, 7)', () => {
+  for (const [channel, ...args] of [...VIA_GATEWAY, ...OVERSEER]) {
+    it(`${channel} refuses, naming the gateway and the reason`, async () => {
+      const port = await refusingPort();
+      gatewayAt(`http://127.0.0.1:${port}`);
+
+      const result = await call(channel, ...args);
+
+      expect(result.success).toBe(false);
+      expect(result.error).toBe(`Tars could not reach Hermes at http://127.0.0.1:${port}: connect ECONNREFUSED 127.0.0.1:${port}`);
+    });
+  }
+
+  it('overseer:setSettings still answers the settings it stored, with the refusal', async () => {
+    const port = await refusingPort();
+    gatewayAt(`http://127.0.0.1:${port}`);
+
+    const result = await call('overseer:setSettings', { provider: 'anthropic', model: 'claude-opus-5-5' });
+
+    expect(result.settings).toMatchObject({ provider: 'anthropic', model: 'claude-opus-5-5' });
+  });
+});
+
+describe('the gateway takes the connection and never answers (2)', () => {
+  it('hermes:crons:list refuses after Tars\'s 10 s, and says so', async () => {
+    const port = await standIn(() => { /* never answers */ });
+    gatewayAt(`http://127.0.0.1:${port}`);
+
+    const result = await call('hermes:crons:list');
+
+    expect(result).toEqual({ success: false, error: `Tars could not reach Hermes at http://127.0.0.1:${port}: no answer within 10 s` });
+  }, 20_000);
+});
+
+describe('what answers is not HTTP, or hangs up (3)', () => {
+  for (const [channel, ...args] of VIA_GATEWAY) {
+    it(`${channel} refuses an SSH server on the gateway port as an answer that is not HTTP`, async () => {
+      const port = await standIn(socket => socket.end('SSH-2.0-OpenSSH_9.6\r\n'));
+      gatewayAt(`http://127.0.0.1:${port}`);
+
+      const result = await call(channel, ...args);
+
+      expect(result.success).toBe(false);
+      expect(result.error).toMatch(new RegExp(`^Tars could not reach Hermes at http://127\\.0\\.0\\.1:${port}: its answer is not HTTP \\(.+\\)$`));
+    });
+  }
+
+  it('hermes:crons:list refuses a gateway that closes the connection without answering', async () => {
+    const port = await standIn(socket => socket.destroy());
+    gatewayAt(`http://127.0.0.1:${port}`);
+
+    const result = await call('hermes:crons:list');
+
+    expect(result.success).toBe(false);
+    expect(result.error).toMatch(new RegExp(`^Tars could not reach Hermes at http://127\\.0\\.0\\.1:${port}: \\S`));
+  });
+});
+
+describe('a saved gateway URL Tars cannot call (4, 6)', () => {
+  it('refuses without quoting what was saved', async () => {
+    gatewayAt('hermes box tok-secret-123');
+
+    const result = await call('hermes:crons:list');
+
+    expect(result).toEqual({ success: false, error: 'Tars could not reach Hermes: the gateway URL saved in Settings, Hermes is not one it can call.' });
+  });
+});
+
+describe('no secret in the refusal (6)', () => {
+  it('names the gateway without its user name, password or query, and never the token', async () => {
+    const port = await refusingPort();
+    gatewayAt(`http://jean:pw-secret@127.0.0.1:${port}/gw?key=q-secret`);
+
+    const result = await call('hermes:crons:list');
+
+    expect(result.error).toBe(`Tars could not reach Hermes at http://127.0.0.1:${port}/gw: connect ECONNREFUSED 127.0.0.1:${port}`);
+    for (const secret of ['jean', 'pw-secret', 'q-secret', 'tok-secret-123']) expect(result.error).not.toContain(secret);
+  });
+});
+
+describe('a question to the overseer when the gateway stops answering mid-turn (8)', () => {
+  it('answers gateway_unreachable with the reason, never a throw', async () => {
+    // Its public status answers, so the probe passes; every other request is cut.
+    const server = http.createServer((req, res) => {
+      if (req.url === '/api/status') {
+        res.setHeader('Content-Type', 'application/json');
+        res.end(JSON.stringify({ version: '0.23.4', auth_required: false }));
+        return;
+      }
+      req.socket.destroy();
+    });
+    server.on('upgrade', (_req, socket) => socket.destroy());
+    await new Promise<void>(resolve => server.listen(0, '127.0.0.1', resolve));
+    open.push(() => new Promise<void>(resolve => { server.closeAllConnections(); server.close(() => resolve()); }));
+    const { port } = server.address() as net.AddressInfo;
+    gatewayAt(`http://127.0.0.1:${port}`);
+
+    const result = await call('overseer:send', 'How is the fleet?');
+
+    expect(result.ok).toBe(false);
+    expect(result.reason).toBe('gateway_unreachable');
+    expect(result.error).toMatch(new RegExp(`^Tars could not reach Hermes at http://127\\.0\\.0\\.1:${port}: \\S`));
+  }, 30_000);
+});
+
+describe('the Kanban board keeps its contract (9)', () => {
+  it('still rejects, with the transport\'s own words, which HermesBoard reads', async () => {
+    const port = await refusingPort();
+    gatewayAt(`http://127.0.0.1:${port}`);
+
+    await expect(call('hermes:kanban:board')).rejects.toThrow(new RegExp(`^connect ECONNREFUSED 127\\.0\\.0\\.1:${port}$`));
+  });
+});
+
+describe('only a call that got no answer is a refusal (10)', () => {
+  it('a failure that is not the network\'s still throws', async () => {
+    const { reachingHermes } = await import('../../../electron/services/hermes-client') as { reachingHermes?: (call: () => Promise<unknown>) => Promise<unknown> };
+    expect(typeof reachingHermes).toBe('function');
+
+    await expect(reachingHermes!(() => Promise.reject(new TypeError('Cannot read properties of null (reading \'name\')'))))
+      .rejects.toThrow(TypeError);
+  });
+});
