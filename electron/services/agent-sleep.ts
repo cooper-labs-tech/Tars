@@ -2,6 +2,7 @@ import { hasClaudeHooks } from '../core/end-of-turn';
 import type { AgentStatus } from '../types';
 import { agents, saveAgents } from '../core/agent-manager';
 import { ptyProcesses, endTerminalTree, fieldInUse } from '../core/pty-manager';
+import { noteTarsEnding } from './traces-runtime';
 import { cliRunningIn } from '../core/agent-pty';
 import { cliLaunchedAt, sessionStarting } from '../core/agent-launch';
 import { fallAsleep, waitsOnItself } from '../core/agent-asleep';
@@ -183,6 +184,7 @@ async function putToSleep(agent: AgentStatus, now: number, why = 'no turn for 30
   broadcastToAllWindows('agent:status', { type: 'status', agentId: agent.id, status: agent.status, timestamp: agent.asleepSince });
   scheduleTick();
   console.log(`[sleep] ${agent.name || agent.id}: asleep, ${why}; its CLI ends, its conversation is kept`);
+  noteTarsEnding(agent.id, 'sleep');
   await endTerminalTree(terminal);
 }
 

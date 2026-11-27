@@ -400,6 +400,8 @@ export class TraceUploader {
       tokensCached: Number(x.tokens_cached), tokensOut: Number(x.tokens_out), finalStatus: opt(x.final_status as string),
       // Who wrote the turn, by kind only: the detail holds names, which the back-office never gets.
       author: String(x.author),
+      // Its interventions (trace feature B3): kinds, times, delays and a session id, never words.
+      ...(x.interventions ? { interventions: x.interventions as Record<string, unknown> } : {}),
     }));
     const links = new Map<string, Array<{ position: number; message_hash: string; direction: string }>>();
     for (const l of doc.request_messages) {

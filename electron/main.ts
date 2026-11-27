@@ -79,7 +79,7 @@ import { readFleetResources } from './services/fleet-resources-runtime';
 // Services
 import { startApiServer } from './services/api-server';
 import { startOpenAIBridgeServer, stopOpenAIBridgeServer } from './services/openai-bridge';
-import { startTracesRuntime, stopTracesRuntime } from './services/traces-runtime';
+import { noteCliInterrupt, startTracesRuntime, stopTracesRuntime } from './services/traces-runtime';
 import {
   initSlackBot,
   getSlackApp,
@@ -878,7 +878,8 @@ app.whenReady().then(async () => {
   startPiSessionWatch({
     dirOf: (agentId) => piSessionDir(DATA_DIR, agentId),
     post: postAsTerminal('pi-sessions'),
-    interrupted: (agentId, sessionId) => turnInterrupted(agentId, sessionId),
+    // A turn pi's log says was interrupted: its traced session ties it to the request it cut (trace feature B3).
+    interrupted: (agentId, sessionId) => { if (turnInterrupted(agentId, sessionId)) noteCliInterrupt(agentId); },
   });
   startCodexSessionWatch({
     post: postAsTerminal('codex-sessions'),
@@ -886,7 +887,8 @@ app.whenReady().then(async () => {
       const agent = agents.get(agentId);
       return codexDialogOnScreen(agent?.ptyId ? ptyProcesses.get(agent.ptyId) : undefined);
     },
-    interrupted: (agentId, sessionId) => turnInterrupted(agentId, sessionId),
+    // codex's turn_aborted, the same (trace feature B3).
+    interrupted: (agentId, sessionId) => { if (turnInterrupted(agentId, sessionId)) noteCliInterrupt(agentId); },
     resumableSessionOf: (agentId) => agents.get(agentId)?.resumableSessionId,
     codexRunning: (agentId) => {
       const agent = agents.get(agentId);

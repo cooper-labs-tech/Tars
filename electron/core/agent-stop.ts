@@ -4,6 +4,7 @@ import { dropPermissionAsks } from '../services/permission-asks';
 import { emitAgentStatus } from '../services/agent-events';
 import { oneLine } from '../utils/waiting-on';
 import { ptyProcesses, endTerminalTree } from './pty-manager';
+import { noteTarsEnding } from '../services/traces-runtime';
 import { endWorkerRequests } from './task-requests';
 import { describeBorn, endBornProcesses, stopLabelledContainers } from './born-processes';
 import { oneTaskQueue } from './one-task';
@@ -103,7 +104,11 @@ export async function stopAgent(
   emitAgentStatus(agent.id);
   notify.announce(agent);
 
-  if (terminal) await endTerminalTree(terminal);
+  if (terminal) {
+    // Its traced session told first: the cut of a request in flight is Tars's, the open turn interrupted (B3).
+    noteTarsEnding(agent.id, 'stop');
+    await endTerminalTree(terminal);
+  }
   const ended = await endBornOf(agent, { terminal: () => (agent.ptyId ? ptyProcesses.get(agent.ptyId)?.pid : undefined) });
   // On the record and in what whoever asked is told (stopOf), unless a start came first (the Audit's L2 on #523).
   if (ended && agent.status === 'stopped') {

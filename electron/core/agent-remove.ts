@@ -4,6 +4,7 @@ import * as path from 'path';
 import type { AgentStatus } from '../types';
 import { agents, saveAgents } from './agent-manager';
 import { ptyProcesses, endTerminalTree } from './pty-manager';
+import { noteTarsEnding } from '../services/traces-runtime';
 import { endWorkerRequests } from './task-requests';
 import { forgetRestart } from './agent-restart';
 import { stopAcpRuns } from '../services/acp/delegate';
@@ -54,7 +55,11 @@ export async function removeAgent(id: string): Promise<RemovedAgent> {
     agent.ptyId = undefined;
     // Its whole tree, as a stop ends it (pty-manager.ts): the hangup alone left a CLI deaf to it, and its child,
     // running with no agent to name them (the Audit's L4 on #523).
-    if (ptyProcess) await endTerminalTree(ptyProcess);
+    if (ptyProcess) {
+      // Its traced session told first: the cut of a request in flight is Tars's (trace feature B3).
+      noteTarsEnding(id, 'remove');
+      await endTerminalTree(ptyProcess);
+    }
   }
   // What it started outside its terminal, as a stop ends it: once it has left the fleet, nothing would ever
   // name it again (the Audit's Info 2 on #523; Tars's own e2e left 20 `my-cli` orphans that way).
