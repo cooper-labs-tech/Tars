@@ -13,7 +13,10 @@ import { DEV_URL, apiPort } from './ports.mjs';
  * The real app on a sandbox HOME, and the real orchestrator MCP server (mcp-orchestrator/dist/bundle.js) run with
  * the identity Tars hands agent o1 (a token of its own, its id, its project, Tars's instance), spoken to over stdio
  * as Claude Code speaks to it. Settings name a recording stand-in as codex's CLI; a second stand-in is a CLI of
- * the agent's own choosing. Both record their argv and stay up, as a CLI would.
+ * the agent's own choosing. Both record their argv and stay up, as a CLI would, in an agent's terminal. Run by Tars
+ * outside one (its codex probes, `--help` and `login status`, which time out at 10 s), a stand-in ends by itself after
+ * 60 s: a probe the app's close left running, its timeout gone with the app, no longer outlives the spec (QA, 27/11,
+ * 34 such stand-ins found running with no parent).
  *
  * Asserted:
  * 1. create_agent makes a codex agent with its model, effort and permission mode, and agents.json keeps them;
@@ -39,6 +42,7 @@ test('an agent makes and starts an agent on any provider and any CLI through its
 require('fs').appendFileSync(${JSON.stringify(launchesFile)}, JSON.stringify({ bin: ${JSON.stringify(name)}, argv: process.argv.slice(2), cwd: process.cwd(), agent: process.env.CLAUDE_AGENT_ID || null }) + '\\n');
 process.stdout.write('${name} ready\\r\\n');
 setInterval(() => {}, 1 << 30);
+if (!process.env.CLAUDE_AGENT_ID) setTimeout(() => process.exit(0), 60000);
 `, { mode: 0o755 });
     return file;
   };
