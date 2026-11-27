@@ -24,7 +24,7 @@ import {
  *     initial_sessions over max_concurrent); or one bad value throws the whole file away. Each is refused as
  *     `window.json:<key>` and its default kept. A missing or unreadable file is the defaults.
  *  7. The plan: not the same for the same seed; the initial sessions not at the start; a gap not exponential (the
- *     mean of many gaps far from 1/rate); a task picked past its max_runs, or one of weight 0 picked; an arrival
+ *     mean of many gaps far from 1/rate, or the right mean but another spread); a task picked past its max_runs, or one of weight 0 picked; an arrival
  *     planned at or past the window's end; the pick not weighted (a task of weight 3 not about three times as often
  *     as one of weight 1); the plan going on once every run is used.
  *  8. A huge file or line is read whole into memory (the file is 4 MiB at most, a line 64 KiB).
@@ -134,6 +134,11 @@ describe('the plan of arrivals', () => {
     expect(mean / 60_000).toBeLessThan(1.1);
     expect(plan.length).toBeGreaterThan(1300);
     expect(plan.length).toBeLessThan(1600);
+    // Spread as an exponential, not only its mean: e^-2, about 13.5 %, of the gaps over twice the mean (none for
+    // gaps uniform on 0 to twice the mean, which have the same mean: found by the mutation bench).
+    const long = gaps.filter(g => g > 2 * mean).length / gaps.length;
+    expect(long).toBeGreaterThan(0.09);
+    expect(long).toBeLessThan(0.19);
   });
 
   it('7: weighted, without replacement: max_runs never passed, weight 0 never picked, weight 3 about three times weight 1, the plan ends when all are used', () => {

@@ -264,6 +264,15 @@ describe('the approval', () => {
     // A5: the switch.
     expect(await w.stop(runId)).toMatchObject({ ok: true });
     expect(readRun(path.join(dir, 'runs'), runId)!.stop).toMatchObject({ reason: 'switch', at: now });
+    // P1: a pool already run, unchanged, is not proposed again; changed, it is (found by the mutation bench: no test
+    // looked past a running window).
+    await w.notNow({ pool: 'q', sha256: sha(fs.readFileSync(path.join(dir, 'pools', 'q', 'tasks.jsonl'))) });
+    fs.writeFileSync(path.join(poolDir, 'tasks.jsonl'), approved);
+    const after = await w.refresh();
+    expect(after.proposal).toBeUndefined();
+    expect(after.last?.stop).toMatchObject({ reason: 'switch' });
+    fs.appendFileSync(path.join(poolDir, 'tasks.jsonl'), `${line({ task_id: 'pub-3' })}\n`);
+    expect((await w.refresh()).proposal?.pool).toBe('p');
   });
 
   it('A6: a run record nobody approved is no window; a snapshot changed after approval stops its run', async () => {
