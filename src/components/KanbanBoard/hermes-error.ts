@@ -27,13 +27,46 @@ function unwrap(raw: string): string {
     .trim();
 }
 
+/**
+ * The gateway as a sentence names it: its protocol, host and path, never the saved URL whole, whose user name,
+ * password, query and hash may hold a credential or a token. The shape of the main process's own sentence (#660,
+ * noAnswerSentence). Only an http: or https: URL is quoted, the rule of the main process's gatewayUrl (#660), mirrored
+ * here: a value that does not parse, or parses with any other scheme ("user:s3cretpw" reads as the scheme user:), is
+ * not quoted at all, since what was saved there may be a credential or a token pasted in the wrong field.
+ */
+function gatewayOf(baseUrl: string | null): string {
+  if (!baseUrl) return '';
+  try {
+    const url = new URL(baseUrl.trim());
+    if (url.protocol !== 'http:' && url.protocol !== 'https:') return '';
+    return ` at ${url.protocol}//${url.host}${url.pathname.replace(/\/+$/, '')}`;
+  } catch {
+    return '';
+  }
+}
+
 export function describeHermesFailure(raw: string, baseUrl: string | null): HermesFailure {
-  const where = baseUrl ? ` at ${baseUrl}` : '';
+  const where = gatewayOf(baseUrl);
   const detail = unwrap(raw);
 
   if (/Invalid gateway URL/i.test(raw) || (!baseUrl && /ERR_INVALID_URL/i.test(raw))) {
     return {
       message: 'No Hermes gateway is configured yet, so there is no board to read.',
+      detail,
+    };
+  }
+  // An answer Hermes began and never ended (#660): the main process says it in words of its own. The gateway is up,
+  // so neither is worded as a refusal, nor as the idle wait. Frame: `Shell · Kanban · Hermes broke off its answer`.
+  if (/answer was cut off before the end/i.test(raw)) {
+    return {
+      message: `Hermes began to answer${where}, but the answer was cut off before the end. Try again; if it keeps happening, check the tunnel or the network to the gateway.`,
+      detail,
+    };
+  }
+  const deadline = /answer did not end within (\d+)\s*s\b/i.exec(raw);
+  if (deadline) {
+    return {
+      message: `Hermes began to answer${where}, but did not finish within ${deadline[1]} s. The gateway may be busy: try again in a moment.`,
       detail,
     };
   }

@@ -677,8 +677,6 @@ contextBridge.exposeInMainWorld('electronAPI', {
       ipcRenderer.invoke('hermes:kanban:deleteTask', params),
     kanbanAddComment: (params: { taskId: string; body: string }) =>
       ipcRenderer.invoke('hermes:kanban:addComment', params),
-    testWebhook: (params: { agentName?: string; agentId?: string; projectPath?: string }) =>
-      ipcRenderer.invoke('hermes:testWebhook', params),
     /** The gateways Tars takes work from: each its own route and secret, and the projects it may reach. */
     gateways: {
       list: () => ipcRenderer.invoke('hermes:gateways:list'),

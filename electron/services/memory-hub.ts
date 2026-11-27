@@ -13,6 +13,7 @@ import {
   fetchHermesSessionParent,
   fetchHermesMemoryState,
   appendHermesMemory,
+  noAnswerSentence,
 } from './hermes-client';
 import type { HermesConnection } from '../types/hermes';
 
@@ -461,7 +462,8 @@ export async function searchMemory(opts: {
           errors.push({ source: 'hermes', error: res.error });
         }
       } catch (err) {
-        errors.push({ source: 'hermes', error: err instanceof Error ? err.message : String(err) });
+        // A gateway that gave no answer in the words of its other channels (#660); any other failure as it is.
+        errors.push({ source: 'hermes', error: noAnswerSentence(err) ?? (err instanceof Error ? err.message : String(err)) });
       }
     })());
   }
@@ -665,7 +667,8 @@ export async function memoryStatus(opts: {
         label: 'Hermes memory',
         configured: true,
         reachable: false,
-        detail: err instanceof Error ? err.message : String(err),
+        // Brain's Hermes row: the sentence the gateway's cards below it say (#660), not the transport's raw words.
+        detail: noAnswerSentence(err) ?? (err instanceof Error ? err.message : String(err)),
       });
     }
   })());
