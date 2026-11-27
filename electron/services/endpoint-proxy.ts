@@ -2,6 +2,7 @@ import * as http from 'http';
 import * as https from 'https';
 import { firstContentEnd, surfaceOf, type Surface } from './trace-wire';
 import type { WireRecord } from './trace-store';
+import { requestTiming, type RequestTiming } from './server-timing';
 
 /**
  * The endpoint proxy (native traces): one loopback server between every harness on an inference
@@ -33,7 +34,8 @@ import type { WireRecord } from './trace-store';
  *   path. A response that is not streamed has its first byte as its first token. With them go the number of traced
  *   sessions live on this computer when the request came, and the harness's own session id when it sends one (codex's
  *   `session-id`). No other header is recorded: codex's installation id header goes on to the endpoint as it came,
- *   and nowhere else.
+ *   and nowhere else. And the endpoint's Server-Timing, read with the times this proxy sent the answered attempt (its
+ *   request written out whole) and got its headers: the round trip and the clocks' offset (server-timing.ts).
  *
  * It speaks the three protocols the endpoints serve, chat completions, Responses and Anthropic Messages (with
  * count_tokens), plus `GET /v1/models`. Nothing else is forwarded.
@@ -158,12 +160,19 @@ function sendError(res: http.ServerResponse, surface: Surface | null, status: nu
   res.end(JSON.stringify(body));
 }
 
-interface UpstreamReply { res: http.IncomingMessage }
+/** The endpoint's answer, with when the request was written out whole (t1) and when the answer's headers came (t4). */
+interface UpstreamReply { res: http.IncomingMessage; sentAt: number; headersAt: number }
 
-function sendUpstream(url: URL, method: string, headers: http.OutgoingHttpHeaders, body: Buffer, signal: AbortSignal): Promise<UpstreamReply> {
+function sendUpstream(url: URL, method: string, headers: http.OutgoingHttpHeaders, body: Buffer, signal: AbortSignal, now: () => number): Promise<UpstreamReply> {
   return new Promise((resolve, reject) => {
     const lib = url.protocol === 'https:' ? https : http;
-    const req = lib.request(url, { method, headers, signal }, res => resolve({ res }));
+    let sentAt: number | undefined;
+    const req = lib.request(url, { method, headers, signal }, (res) => {
+      const headersAt = now();
+      resolve({ res, sentAt: sentAt ?? headersAt, headersAt });
+    });
+    // Written out whole, past any connection set-up: the round trip then holds the network and nothing of ours.
+    req.on('finish', () => { sentAt = now(); });
     req.on('error', reject);
     req.end(body.length ? body : undefined);
   });
@@ -260,6 +269,7 @@ export function createEndpointProxy(deps: ProxyDeps): http.Server {
     let attempts = 0;
     let held = false;
     let heldMs = 0;
+    let timing: RequestTiming | undefined;
     const clearHold = () => {
       if (held) deps.onHold?.({ agentId: session.agentId, endpointId: session.endpointId, cleared: true });
       held = false;
@@ -270,7 +280,7 @@ export function createEndpointProxy(deps: ProxyDeps): http.Server {
       let reply: UpstreamReply | undefined;
       let failure: NodeJS.ErrnoException | undefined;
       try {
-        reply = await sendUpstream(upstreamUrl, req.method!, headers, body, controller.signal);
+        reply = await sendUpstream(upstreamUrl, req.method!, headers, body, controller.signal, now);
       } catch (err) {
         failure = err as NodeJS.ErrnoException;
       }
@@ -308,6 +318,8 @@ export function createEndpointProxy(deps: ProxyDeps): http.Server {
       }
 
       const upstream = reply.res;
+      // The answer that reaches the harness: its round trip and the clocks' offset, from this attempt's own t1 and t4.
+      timing = requestTiming(upstream.headers['server-timing'], reply.sentAt, reply.headersAt);
       const outHeaders: http.OutgoingHttpHeaders = {};
       for (const [name, value] of Object.entries(upstream.headers)) {
         if (value !== undefined && !DROP_RESPONSE.has(name.toLowerCase())) outHeaders[name] = value;
@@ -347,7 +359,7 @@ export function createEndpointProxy(deps: ProxyDeps): http.Server {
       const rec: WireRecord = {
         traceId: session!.traceId, agentId: session!.agentId, surface, startedAt, firstByteAt, endedAt: now(),
         status: upstream?.statusCode ?? 502, contentType: upstream?.headers['content-type'], requestBody: body, responseBody,
-        upstreamRequestId, attempts, heldMs, error, liveSessions, nativeSessionId,
+        upstreamRequestId, attempts, heldMs, error, liveSessions, nativeSessionId, timing: upstream ? timing : undefined,
       };
       setImmediate(() => {
         try {

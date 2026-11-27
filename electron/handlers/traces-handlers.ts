@@ -322,6 +322,13 @@ export function registerTracesHandlers(deps: TracesHandlerDeps): void {
       'whether the computer ran on battery when the session started',
       'when the computer slept or woke, or went on battery or mains power, during a session',
       'how many traced sessions were running on this computer when each request was sent',
+      // From the endpoint's Server-Timing (server-timing.ts), when it sends one.
+      'each request\'s round trip to the endpoint, from the times the endpoint says it read the request and began its answer',
+      'for each request, how far this computer\'s clock was from the endpoint\'s',
+      'how long each request waited at the endpoint for a free slot',
+      'how long the endpoint waited for its model server, for each request',
+      'each session\'s median round trip to the endpoint',
+      'for each session, how far this computer\'s clock was from the endpoint\'s, at its fastest round trip',
       'an install id, to delete everything this install sent',
     ],
     stays: ['your keys and Tars\'s tokens (masked before upload)', 'sessions of projects and agents not opted in', 'the endpoints\' keys and addresses', 'anything outside traced sessions',

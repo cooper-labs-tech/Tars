@@ -393,6 +393,7 @@ export class TraceUploader {
       // The harness's own session id, the machine and the system, the power events: each its own line in the notice.
       nativeSessionId: opt(t.native_session_id as string), environment: opt(t.environment as Record<string, unknown>),
       events: Array.isArray(t.events) ? t.events : [],
+      rttMedianMs: opt(t.rtt_median_ms as number), clockOffsetMs: opt(t.clock_offset_ms as number),
     };
     const turns = doc.turns.map(x => ({
       turnId: String(x.turn_id), sessionId: traceId, index: Number(x.turn_index), startedAt: Number(x.started_at), endedAt: opt(x.ended_at as number),
@@ -425,7 +426,8 @@ export class TraceUploader {
         totalMs: opt(r.total_ms as number), tokensIn: Number(r.tokens_in), tokensCached: Number(r.tokens_cached), tokensOut: Number(r.tokens_out),
         status: Number(r.status), error: r.error ? String(scrub(String(r.error))).slice(0, 2000) : undefined,
         finishReason: opt(r.finish_reason as string), reqBytes: Number(r.req_bytes), respBytes: Number(r.resp_bytes), messages,
-        liveSessions: opt(r.live_sessions as number),
+        liveSessions: opt(r.live_sessions as number), rttMs: opt(r.rtt_ms as number), clockOffsetMs: opt(r.clock_offset_ms as number),
+        queueMs: opt(r.queue_ms as number), upstreamMs: opt(r.upstream_ms as number),
       };
     });
     const messages = [...remote.values()].filter(m => m.role !== 'tools').map(m => ({
