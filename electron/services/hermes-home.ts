@@ -341,6 +341,23 @@ function inThisHome(home: string, root: string): boolean {
  * are compared resolved, as Hermes resolves its home, and a home that is itself a symlink stops nothing.
  */
 export async function stopHermesGateway(root: string, deps: GatewayStopDeps): Promise<'stopped' | 'none' | 'not-this-home' | 'not-a-gateway'> {
+  const verdict = await judgeHermesGateway(root, deps);
+  if (typeof verdict !== 'object') return verdict;
+  await deps.stop(verdict.pid);
+  return 'stopped';
+}
+
+/**
+ * The live gateway of Tars's home, by the stop's own checks, or null: what Tars reuses rather than start another, and
+ * waits for before a Hermes chat starts (a chat that finds none starts its own, with its terminal's environment).
+ */
+export async function findHermesGateway(root: string, deps: Omit<GatewayStopDeps, 'stop'>): Promise<number | null> {
+  const verdict = await judgeHermesGateway(root, deps);
+  return typeof verdict === 'object' ? verdict.pid : null;
+}
+
+/** The checks of the stop (above), as one verdict: the gateway's pid, or why its record is not believed. */
+async function judgeHermesGateway(root: string, deps: Omit<GatewayStopDeps, 'stop'>): Promise<{ pid: number } | 'none' | 'not-this-home' | 'not-a-gateway'> {
   const file = path.join(root, 'gateway.pid');
   let record: unknown;
   let written: number;
@@ -364,6 +381,44 @@ export async function stopHermesGateway(root: string, deps: GatewayStopDeps): Pr
     const own = await deps.homeOf(pid);
     if (!own || !inThisHome(own, root)) return 'not-this-home';
   }
-  await deps.stop(pid);
-  return 'stopped';
+  return { pid };
+}
+
+/** What the gateway takes from Tars's own environment, when Tars has it: the user's home, locale and network proxy. */
+const GATEWAY_FROM_TARS = [
+  'HOME', 'USER', 'LOGNAME', 'SHELL', 'LANG', 'LC_ALL', 'LC_CTYPE',
+  'HTTPS_PROXY', 'HTTP_PROXY', 'ALL_PROXY', 'NO_PROXY', 'https_proxy', 'http_proxy', 'all_proxy', 'no_proxy',
+] as const;
+/** And on Windows, what Python and Hermes need of the system there. */
+const GATEWAY_FROM_TARS_WIN32 = [
+  'SYSTEMROOT', 'WINDIR', 'COMSPEC', 'PATHEXT', 'USERPROFILE', 'APPDATA', 'LOCALAPPDATA', 'PROGRAMDATA', 'HOMEDRIVE', 'HOMEPATH', 'USERNAME',
+] as const;
+
+/**
+ * The environment Tars starts its Hermes gateway with (core/hermes-gateway.ts): no agent's identity in it. One gateway
+ * runs every Hermes agent's sessions; started from an agent's terminal, as Hermes does by itself, it carried that
+ * agent's id, token, project and temporary folder (measured 27/11): every session's tools had them, and that agent's
+ * stop ended the gateway the others shared (core/born-processes.ts tags a process by the agent id in its environment).
+ * So, exactly:
+ * - PATH: Tars's own, as its agents get it, so the MCP servers a session starts (`node`) and its tools are found;
+ * - the user's home, name, shell and locale, and the user's network proxy when Tars has one (the first start syncs
+ *   Hermes's packages from PyPI); on Windows, the system variables Python needs;
+ * - HERMES_HOME, Tars's Hermes home (the root); a temporary folder of its own there, never an agent's;
+ * - AWS_EC2_METADATA_DISABLED=true (hermes-provider.ts says why).
+ * Nothing else: no agent's id, name, project or token, no Tars address or instance, no endpoint token, no provider key.
+ * It needs none: each session's model calls carry its own profile's proxy token, and the MCP servers it starts for a
+ * session get that agent's address and token from its profile (`${CLAUDE_MGR_API_TOKEN}` from its `.env`).
+ */
+export function hermesGatewayEnv(source: NodeJS.ProcessEnv, root: string, fullPath: string, platform: NodeJS.Platform = process.platform): Record<string, string> {
+  const env: Record<string, string> = {};
+  for (const name of [...GATEWAY_FROM_TARS, ...(platform === 'win32' ? GATEWAY_FROM_TARS_WIN32 : [])]) {
+    const value = source[name];
+    if (typeof value === 'string' && value) env[name] = value;
+  }
+  const tmp = path.join(root, 'tmp');
+  if (platform === 'win32') { env.TEMP = tmp; env.TMP = tmp; } else env.TMPDIR = tmp;
+  env.PATH = fullPath;
+  env.HERMES_HOME = root;
+  env.AWS_EC2_METADATA_DISABLED = 'true';
+  return env;
 }

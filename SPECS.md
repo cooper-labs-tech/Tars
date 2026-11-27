@@ -236,8 +236,12 @@ token as its key. Measured on 19/11 against a stand-in endpoint, a tool call eac
   - One gateway per home runs every profile's sessions and takes no credential from the terminal that typed the task.
     So the endpoint and the token go into the profile: the proxy and the model in its `config.yaml`, the terminal's
     two tokens in its 0600 `.env`, removed when the terminal ends (SECURITY.md § 10).
-  - Its line: `hermes chat --source tool -m <model>`, `--yolo` in bypass. Its turns are read from the profile's
-    `state.db` (`services/hermes-agent-turns.ts`).
+  - Tars starts that gateway itself at the first Hermes terminal, with no agent's identity, and each chat waits until
+    it holds its home; Tars stops it at the last terminal and at quit (`core/hermes-gateway.ts`). Each session's tools
+    take its own agent's variables from its terminal (`terminal.client_env_passthrough`).
+  - Its line: `hermes chat --source tool -m <model>`, `--yolo` in bypass, with every variable Hermes reads to find a
+    provider of its own taken out (`providers/hermes-provider-keys.ts`, generated from its source). Its turns are read
+    from the profile's `state.db` (`services/hermes-agent-turns.ts`).
   - Its first start downloads its Python packages once, about 135 MB from PyPI, about 1.2 GB on disk.
 
 The proxy:

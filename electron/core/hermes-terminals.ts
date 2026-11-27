@@ -1,17 +1,19 @@
-import { execFile } from 'child_process';
 import * as path from 'path';
 import { endpointAgentOf, endpointLaunchForAgent } from '../services/traces-runtime';
-import * as fs from 'fs';
 import {
-  HERMES_WORKER_POLICY, hermesProfileDir, hermesRoleRefusal, hermesRoot, removeHermesSecrets, stopHermesGateway, sweepHermesSecrets,
-  writeHermesProfile, type HermesWorkerPolicy,
+  HERMES_WORKER_POLICY, findHermesGateway, hermesProfileDir, hermesRoleRefusal, hermesRoot, removeHermesSecrets, stopHermesGateway,
+  sweepHermesSecrets, writeHermesProfile, type HermesWorkerPolicy,
 } from '../services/hermes-home';
 import { hermesMcpServers } from '../providers/hermes-provider';
+import { getProvider } from '../providers';
+import { readAppSettingsFromDisk } from '../providers/cli-provider';
 import { ORCHESTRATOR_ONLY_MCP } from '../services/mcp-roles';
 import { TARS_MCP_ENV } from '../services/mcp-orchestrator-env';
 import { hermesTurnWatch } from '../services/hermes-agent-turns';
+import { buildFullPath } from '../utils/path-builder';
 import { hasOrchestratorPowers } from './agent-role';
-import { envValue, killTree } from '../platform';
+import { HermesGatewaySupervisor, commandOf, homeOf, startHermesGatewayProcess, startedAt, stopTarsHermesGatewayPid } from './hermes-gateway';
+import type { AppSettings } from '../types';
 
 /**
  * The Hermes agents' terminals (services/hermes-home.ts says why each is a profile with a `.env`):
@@ -20,6 +22,8 @@ import { envValue, killTree } from '../platform';
  *   two tokens;
  * - at its exit, the `.env` goes, unless a newer terminal of the same agent wrote its own since (a restart spawns the
  *   new terminal before the old one's exit is heard);
+ * - at the first of them, Tars starts the gateway every Hermes agent shares, with no agent's identity
+ *   (core/hermes-gateway.ts), and each terminal's chat waits until it holds its home (hermesGatewayReady);
  * - when no Hermes terminal is left, and at quit, Tars's Hermes gateway is stopped by its pid, checked first;
  * - at Tars's start, every profile's `.env` is swept (no terminal survives a quit) and a gateway a previous run left
  *   is stopped.
@@ -27,6 +31,30 @@ import { envValue, killTree } from '../platform';
 
 /** The agents with a Hermes terminal open, and the endpoint token of the terminal whose `.env` is on disk. */
 const live = new Map<string, string>();
+
+const gatewayChecks = { commandOf, homeOf, startedAt };
+const gateway = new HermesGatewaySupervisor({
+  find: () => findHermesGateway(hermesRoot(), gatewayChecks),
+  start: (binary) => startHermesGatewayProcess(binary, { root: hermesRoot(), path: buildFullPath() }),
+  terminals: () => live.size,
+});
+
+/** The Hermes binary an agent's chat runs: its own, else the one the settings name (agent-routes.ts does the same). */
+function hermesBinaryOf(agentId: string): string {
+  return endpointAgentOf(agentId)?.cliPath || getProvider('hermes').resolveBinaryPath(readAppSettingsFromDisk() as AppSettings);
+}
+
+/** How long a Hermes chat waits for the gateway to hold its home: its first start syncs Hermes's packages first. */
+const GATEWAY_READY_MS = 15 * 60_000;
+
+/**
+ * Before a Hermes agent's chat starts (core/agent-manager.ts, launchIntoTerminal): the gateway Tars started holds its
+ * home, so the chat attaches to it rather than start one with its terminal's environment. True when it does; false at
+ * the timeout, or when nothing of Tars's is starting (the chat then starts its own, as Hermes does).
+ */
+export function hermesGatewayReady(timeoutMs: number = GATEWAY_READY_MS): Promise<boolean> {
+  return gateway.ready(timeoutMs);
+}
 
 /** The variables of Tars's MCP servers that are not secrets, as the terminal's environment holds them. */
 const NOT_SECRET = TARS_MCP_ENV.filter(v => v !== 'CLAUDE_MGR_API_TOKEN');
@@ -59,6 +87,7 @@ export function openHermesTerminal(
   }, { OPENAI_BASE_URL: endpoint.baseUrl, OPENAI_API_KEY: o.endpointToken, CLAUDE_MGR_API_TOKEN: o.apiToken });
   live.set(agentId, o.endpointToken);
   hermesTurnWatch.noteLaunch(agentId);
+  void gateway.ensure(hermesBinaryOf(agentId)).catch(err => console.error(`[hermes] the gateway was not started: ${(err as Error).message}`));
 }
 
 /** At the terminal's exit. `endpointToken` names the terminal: an older one's exit leaves a newer one's `.env`. */
@@ -91,66 +120,14 @@ export async function endHermesOnQuit(): Promise<void> {
   await sweepHermesAtStart();
 }
 
-/** The command line under a pid: /bin/ps on macOS and Linux, Win32_Process on Windows; null when none. */
-function commandOf(pid: number): Promise<string | null> {
-  return new Promise((resolve) => {
-    if (process.platform === 'win32') {
-      const root = envValue(process.env, 'SystemRoot', 'win32') || 'C:\\Windows';
-      const powershell = path.win32.join(root, 'System32', 'WindowsPowerShell', 'v1.0', 'powershell.exe');
-      const script = `[Console]::OutputEncoding = [Text.Encoding]::UTF8; (Get-CimInstance Win32_Process -Filter "ProcessId = ${pid}").CommandLine`;
-      execFile(powershell, ['-NoProfile', '-NonInteractive', '-Command', script], { windowsHide: true, timeout: 10_000 }, (err, out) => resolve(err ? null : (String(out).trim() || null)));
-    } else {
-      execFile('/bin/ps', ['-o', 'command=', '-p', String(pid)], { timeout: 5_000, env: { ...process.env, LC_ALL: 'C' } }, (err, out) => resolve(err ? null : (String(out).trim() || null)));
-    }
-  });
-}
-
 /**
- * The HERMES_HOME of a process's own environment (macOS and Linux), null when it has none or it cannot be read:
- * Linux /proc/<pid>/environ, exact; macOS `/bin/ps -E`, which prints the command and then the environment, readable
- * for a same-user process that is no platform binary (SECURITY.md § 3 and § 10), the last HERMES_HOME= being the
- * environment's.
+ * Tars's Hermes gateway, by the pid its record names, once checked (services/hermes-home.ts, stopHermesGateway): the
+ * one Tars started, or one a chat started when Tars's was gone. Its exit is not one Tars starts it again after.
  */
-function homeOf(pid: number): Promise<string | null> {
-  if (process.platform === 'linux') {
-    return fs.promises.readFile(`/proc/${pid}/environ`, 'utf8')
-      .then(text => text.split('\0').find(v => v.startsWith('HERMES_HOME='))?.slice('HERMES_HOME='.length) || null)
-      .catch(() => null);
-  }
-  return new Promise((resolve) => {
-    execFile('/bin/ps', ['-E', '-ww', '-o', 'command=', '-p', String(pid)], { timeout: 5_000, maxBuffer: 4 * 1024 * 1024, env: { ...process.env, LC_ALL: 'C' } }, (err, out) => {
-      if (err) return resolve(null);
-      const found = [...String(out).matchAll(/ HERMES_HOME=(.*?)(?= [A-Za-z_][A-Za-z0-9_]*=|\n|$)/g)];
-      resolve(found.length ? found[found.length - 1][1] : null);
-    });
-  });
-}
-
-/** When a process started (Windows, Win32_Process.CreationDate), null when it cannot be read. */
-function startedAt(pid: number): Promise<number | null> {
-  return new Promise((resolve) => {
-    const root = envValue(process.env, 'SystemRoot', 'win32') || 'C:\\Windows';
-    const powershell = path.win32.join(root, 'System32', 'WindowsPowerShell', 'v1.0', 'powershell.exe');
-    const script = `(Get-CimInstance Win32_Process -Filter "ProcessId = ${pid}").CreationDate.ToUniversalTime().ToString('o')`;
-    execFile(powershell, ['-NoProfile', '-NonInteractive', '-Command', script], { windowsHide: true, timeout: 10_000 }, (err, out) => {
-      const at = err ? NaN : Date.parse(String(out).trim());
-      resolve(Number.isFinite(at) ? at : null);
-    });
-  });
-}
-
-/** Tars's Hermes gateway, by the pid its record names, once checked (services/hermes-home.ts, stopHermesGateway). */
 export async function stopTarsHermesGateway(): Promise<void> {
+  gateway.stopping();
   try {
-    const outcome = await stopHermesGateway(hermesRoot(), {
-      commandOf,
-      homeOf,
-      startedAt,
-      stop: async (pid) => {
-        if (process.platform === 'win32') await killTree(pid);
-        else process.kill(pid, 'SIGTERM');
-      },
-    });
+    const outcome = await stopHermesGateway(hermesRoot(), { ...gatewayChecks, stop: stopTarsHermesGatewayPid });
     if (outcome === 'stopped') console.log('[hermes] stopped the gateway of Tars\'s Hermes home');
     else if (outcome !== 'none') console.warn(`[hermes] the gateway record of Tars's Hermes home was left alone: ${outcome}`);
   } catch (err) {

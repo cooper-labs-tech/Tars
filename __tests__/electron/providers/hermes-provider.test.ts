@@ -24,6 +24,12 @@ import { execFileSync } from 'node:child_process';
  * 10. (Measured 27/11.) The AWS SDK inside Hermes asks the cloud metadata address, 169.254.169.254, for credentials
  *    when nothing stops it: AWS_EC2_METADATA_DISABLED=true must reach Hermes, on the line where an rc file exporting
  *    another value cannot undo it (macOS, Linux), and in the terminal's environment (Windows).
+ * 11. (Measured 27/11, the orchestrator's rule: Hermes talks to the endpoint Tars gives it and to nothing else.) A
+ *    provider's key or address in the user's own environment (an rc file's OPENROUTER_API_KEY, measured with a fake
+ *    one) makes Hermes's model picker list that provider's models at its start, with that key. Every variable Hermes
+ *    reads to find a provider must be taken out, on the line and from the terminal's environment on Windows; and the
+ *    list is Hermes's own (scripts/hermes-provider-keys.mjs reads its source), so a Hermes that reads one more name
+ *    fails here, given its checkout in TARS_HERMES_TREE.
  */
 
 const AGENT = 'agent-hermes-1';
@@ -34,6 +40,7 @@ vi.mock('../../../electron/services/traces-runtime', () => ({ endpointLaunchForA
 import { getProvider } from '../../../electron/providers';
 import { DATA_DIR } from '../../../electron/constants';
 import { hermesProfileDir, hermesRoot } from '../../../electron/services/hermes-home';
+import { HERMES_PROVIDER_KEYS } from '../../../electron/providers/hermes-provider-keys';
 
 const hermes = () => getProvider('hermes' as never);
 const ONE = { args: [], env: {}, tokenVars: [], profile: { baseUrl: PROXY, model: 'open-coder-1' } };
@@ -71,6 +78,17 @@ describe.skipIf(process.platform === 'win32')('the line on macOS and Linux', () 
   it('10: the cloud metadata lookup is off on the line, whatever an rc file exports', () => {
     expect(reached(line()).aws).toBe('true');
     expect(reached(line({ prompt: 'do it', permissionMode: 'bypass' })).aws).toBe('true');
+  });
+
+  it('11: every variable Hermes reads to find a provider is taken out, whatever an rc file exports', () => {
+    const rc = path.join(tmp, 'rc-keys.sh');
+    const names = [...HERMES_PROVIDER_KEYS];
+    fs.writeFileSync(rc, names.map(n => `export ${n}=from-the-user`).join('\n') + '\n');
+    const keysPrinter = path.join(tmp, 'hermes-keys');
+    fs.writeFileSync(keysPrinter, `#!${process.execPath}\nconsole.log(JSON.stringify(${JSON.stringify(names)}.filter(n => process.env[n] !== undefined)));\n`, { mode: 0o755 });
+    const out = execFileSync('/bin/bash', ['-c', `. '${rc}'; ${hermes().buildInteractiveCommand({ agentId: AGENT, binaryPath: keysPrinter, prompt: '' } as never)}`], { encoding: 'utf8' });
+    expect(JSON.parse(out.trim().split('\n').pop()!)).toEqual([]);
+    for (const n of ['OPENROUTER_API_KEY', 'ANTHROPIC_API_KEY', 'GEMINI_API_KEY', 'AWS_PROFILE', 'LM_BASE_URL']) expect(names, n).toContain(n);
   });
 
   it('5 and 7: chat, tagged tool, the model, and the task as one argument the shell does not run', () => {
@@ -112,7 +130,15 @@ describe('on every platform', () => {
     expect(env.HERMES_HOME).toBe(hermesProfileDir(hermesRoot(), AGENT));
     expect(env.CLAUDE_AGENT_ID).toBe(AGENT);
     expect(env.AWS_EC2_METADATA_DISABLED, '10 on Windows').toBe('true');
+    expect(hermes().getEnvVarsToDelete(), '11 on Windows').toEqual(expect.arrayContaining([...HERMES_PROVIDER_KEYS]));
     expect(hermes().getEnvVarsToDelete()).toEqual(expect.arrayContaining(['OPENAI_API_KEY', 'OPENAI_BASE_URL', 'CLAUDE_MGR_API_TOKEN', 'TARS_ENDPOINT_TOKEN']));
+  });
+
+  it.skipIf(!process.env.TARS_HERMES_TREE)('11: Hermes reads no provider variable Tars does not take out (TARS_HERMES_TREE)', async () => {
+    const { hermesProviderKeys } = await import('../../../scripts/hermes-provider-keys.mjs');
+    const theirs = hermesProviderKeys(process.env.TARS_HERMES_TREE!) as string[];
+    expect(theirs.length).toBeGreaterThan(0);
+    expect(theirs.filter(n => !HERMES_PROVIDER_KEYS.includes(n)), 'read by Hermes, not taken out by Tars: regenerate with scripts/hermes-provider-keys.mjs --write').toEqual([]);
   });
 
   it('9: Tars\'s MCP servers go into a list of Tars\'s in its own Hermes home, by variable name only', async () => {

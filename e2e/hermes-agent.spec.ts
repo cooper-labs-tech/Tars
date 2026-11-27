@@ -231,6 +231,12 @@ async function hermesAgents(real: string | undefined): Promise<void> {
       await call('agent', 'stop', A);
       await sleep(5_000);
       const afterA = alive(record.pid);
+      // B, still answering after A's stop: its session ran in the gateway A's stop left alone.
+      await lead('send_message', { id: B, message: 'Run the probe again and report what it printed.' });
+      const bAgain = await lead('wait_for_agent', { id: B, timeoutSeconds: 300 });
+      expect.soft(bAgain.text, "B's answer after A stopped").toContain(`PROBE-OK ${standin.marker}`);
+      // The gateway Tars started carries no agent's identity (the reason A's stop no longer ends it).
+      expect.soft(/ CLAUDE_AGENT_ID=| CLAUDE_MGR_API_TOKEN=| CLAUDE_PROJECT_PATH=/.test(gatewayEnv), 'an agent\'s variables in the gateway\'s environment').toBe(false);
       await call('agent', 'stop', B);
       await expect.poll(() => alive(record.pid), { timeout: 30_000 }).toBe(false);
       // And at quit: A started again starts a gateway again, which the quit stops.
@@ -324,15 +330,37 @@ async function hermesAgents(real: string | undefined): Promise<void> {
 
     await page.screenshot({ path: test.info().outputPath('two-hermes-agents.png') });
 
-    // 8. A stops: its .env goes, B's stays; at quit, none is left.
+    // 9. The gateway both share, started by Tars before their chats (core/hermes-gateway.ts): one, in Tars's Hermes
+    // home, started with no agent's identity, token or project.
+    const gateways = fakeEntries().filter(e => e.gateway === true) as Array<Record<string, unknown> & { home: string; envNames: string[]; pid: number }>;
+    const notForTheGateway = ['CLAUDE_AGENT_ID', 'CLAUDE_AGENT_NAME', 'CLAUDE_PROJECT_PATH', 'CLAUDE_MGR_API_URL', 'CLAUDE_MGR_API_TOKEN', 'TARS_INSTANCE_ID', 'TARS_ENDPOINT_TOKEN', 'OPENAI_API_KEY', 'OPENAI_BASE_URL'];
+    const gwRecord = () => { try { return JSON.parse(fs.readFileSync(path.join(hermesRoot, 'gateway.pid'), 'utf8')).pid as number; } catch { return 0; } };
+    const running = (pid: number) => { if (!pid) return false; try { process.kill(pid, 0); return true; } catch { return false; } };
+    const gwPid = gwRecord();
+    keep({ gateways: gateways.map(g => ({ pid: g.pid, home: g.home, envNames: g.envNames })) });
+    expect.soft(gateways.length, 'gateways started').toBe(1);
+    expect.soft(gateways[0]?.home, 'the gateway\'s home').toBe(hermesRoot);
+    expect.soft(gateways[0]?.agent ?? null, 'the gateway\'s agent id').toBeNull();
+    expect.soft(notForTheGateway.filter(n => gateways[0]?.envNames.includes(n)), 'an agent\'s variables in the gateway\'s environment').toEqual([]);
+
+    // 8. A stops: its .env goes, B's stays, the gateway stays, and B still answers; B stops, the last Hermes terminal:
+    // the gateway goes; at quit, no .env is left.
     await call('agent', 'stop', A);
     await expect.poll(() => fs.existsSync(path.join(profile(A), '.env')), { timeout: 20_000 }).toBe(false);
     const bKept = fs.existsSync(path.join(profile(B), '.env'));
+    await sleep(2_000);
+    const gatewayAfterA = running(gwPid);
+    await lead('send_message', { id: B, message: 'Run the probe again and report what it printed.' });
+    const bAgain = await lead('wait_for_agent', { id: B, timeoutSeconds: 90 });
+    await call('agent', 'stop', B);
+    await expect.poll(() => running(gwPid), { timeout: 20_000 }).toBe(false);
     await app.close();
     app = undefined;
     const leftAtQuit = fs.readdirSync(path.join(hermesRoot, 'profiles')).filter(id => fs.existsSync(path.join(profile(id), '.env')));
-    keep({ bKeptAfterAStopped: bKept, leftAtQuit });
+    keep({ bKeptAfterAStopped: bKept, gatewayAfterA, bAgain, leftAtQuit });
     expect.soft(bKept, "B's .env after A stopped").toBe(true);
+    expect.soft(gatewayAfterA, 'the gateway after A stopped').toBe(true);
+    expect.soft(bAgain.text, "B's answer after A stopped").toContain(`PROBE-OK ${standin.marker}`);
     expect.soft(leftAtQuit, 'a .env after the quit').toEqual([]);
   } finally {
     for (const s of servers) s.kill();

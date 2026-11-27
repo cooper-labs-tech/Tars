@@ -12,6 +12,7 @@ import type {
 import { shellQuote } from './cli-provider';
 import { hermesProfileDir, hermesRoot, type HermesMcpServer } from '../services/hermes-home';
 import { updateSharedJsonSync } from '../utils/shared-file';
+import { HERMES_PROVIDER_KEYS } from './hermes-provider-keys';
 
 /**
  * Hermes Agent (Nous Research), measured on 0.23.4 (26 and 27/11), as an agent's CLI on an inference endpoint, through
@@ -61,6 +62,14 @@ const HERMES_SESSION_ID = /^local-[0-9a-f]{64}$/;
 const NOT_FROM_THE_TERMINAL = ['OPENAI_API_KEY', 'OPENAI_BASE_URL', 'CLAUDE_MGR_API_TOKEN', 'TARS_ENDPOINT_TOKEN'];
 
 /**
+ * Every variable Hermes reads to find a provider of its own (hermes-provider-keys.ts, generated from its source by
+ * scripts/hermes-provider-keys.mjs): a key or an address of the user's, from the environment or an rc file, makes its
+ * model picker list that provider's models at its start, with that key (measured 27/11). A Hermes agent talks to the
+ * endpoint Tars gives it and to nothing else, as ANTHROPIC_API_KEY is blanked for every alternative provider.
+ */
+const PROVIDER_VARS = [...new Set([...NOT_FROM_THE_TERMINAL.slice(0, 2), ...HERMES_PROVIDER_KEYS])];
+
+/**
  * Set for Hermes whatever the terminal holds: the AWS SDK inside it asks the cloud metadata address
  * (169.254.169.254) for credentials when nothing stops it (measured 27/11; the root's config names its provider
  * too, so the gateway never looks, and this covers any other path to the SDK).
@@ -93,7 +102,7 @@ export class HermesProvider implements CLIProvider {
 
     let command = process.platform === 'win32'
       ? ''
-      : `env ${NOT_FROM_THE_TERMINAL.slice(0, 2).map(v => `-u ${v}`).join(' ')} ${Object.entries(SET_FOR_HERMES).map(([k, v]) => `${k}=${v}`).join(' ')} HERMES_HOME=${shellQuote(home)} `;
+      : `env ${PROVIDER_VARS.map(v => `-u ${v}`).join(' ')} ${Object.entries(SET_FOR_HERMES).map(([k, v]) => `${k}=${v}`).join(' ')} HERMES_HOME=${shellQuote(home)} `;
     command += `${shellQuote(params.binaryPath)} chat --source tool -m ${shellQuote(endpoint.model)}`;
     if (params.permissionMode === 'bypass') command += ' --yolo';
     if (params.resumeSessionId && HERMES_SESSION_ID.test(params.resumeSessionId)) command += ` --resume ${params.resumeSessionId}`;
@@ -120,7 +129,7 @@ export class HermesProvider implements CLIProvider {
   }
 
   getEnvVarsToDelete(): string[] {
-    return [...NOT_FROM_THE_TERMINAL];
+    return [...new Set([...NOT_FROM_THE_TERMINAL, ...PROVIDER_VARS])];
   }
 
   getHookConfig(): HookConfig {

@@ -23,6 +23,7 @@ import { keptSender } from '../services/agent-queues';
 import { dialogOpen, dialogShown } from './agent-launch';
 import type * as pty from 'node-pty';
 import { cliStoppedIn, spawnAgentPty, agentShell, codexLaunching } from './agent-pty';
+import { hermesGatewayReady } from './hermes-terminals';
 import { killPty } from './pty-kill';
 import { withPath, type DirectLaunch, type Launch } from '../platform';
 import { buildFullPath } from '../utils/path-builder';
@@ -1219,6 +1220,9 @@ export async function launchIntoTerminal(
   // message gave it again, with the memory as it was then (the Audit's L-B and
   // QA's L1 on #448). A launch that owes it says so after (startAgentCli).
   oweToFirstMessage(ptyProcess, '');
+  // A Hermes agent's chat attaches to the gateway Tars started for every Hermes agent (core/hermes-gateway.ts), once it
+  // holds its home: a chat that finds none starts its own, with its terminal's environment.
+  if (getProvider(agent.provider).binaryName === 'hermes') await hermesGatewayReady();
   if (start.platform === 'win32') return startCliInTerminal(agent, start, opts);
   if (opts.ready) await opts.ready(ptyProcess);
   // codex typed into a shell already there, one reused too: noted as it starts (core/agent-pty.ts).

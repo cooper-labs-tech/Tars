@@ -279,6 +279,25 @@ export async function run() {
       else if (a === '--mode') i++;
     }
   } else if (kind === 'hermes') {
+    // `hermes gateway run --quiet`, as Tars starts the gateway every Hermes agent shares (core/hermes-gateway.ts). The
+    // gateway proper is a child whose command line reads as Hermes's (`.../hermes_cli/main.py gateway run`), which is
+    // what Tars's stop checks; this process waits for it and passes TERM on, as a launcher would.
+    if (argv[0] === 'gateway' && argv[1] === 'run') {
+      const gw = spawn(process.execPath, ['--no-warnings', process.argv[1], 'hermes_cli/main.py', ...argv], { env: process.env, stdio: 'inherit' });
+      process.on('SIGTERM', () => gw.kill('SIGTERM'));
+      gw.on('exit', (code, signal) => process.exit(code ?? (signal ? 1 : 0)));
+      return;
+    }
+    if (argv[0] === 'hermes_cli/main.py' && argv[1] === 'gateway') {
+      // It records itself in its home as Hermes does, says the names (never the values) of what it was started with,
+      // and runs until stopped.
+      const home = process.env.HERMES_HOME || '';
+      fs.writeFileSync(path.join(home, 'gateway.pid'), JSON.stringify({ pid: process.pid, hermes_home: home, kind: 'hermes-gateway', argv: argv.slice(1) }));
+      log({ gateway: true, home, envNames: Object.keys(process.env).sort() });
+      process.on('SIGTERM', () => { log({ gatewayStopped: true }); process.exit(0); });
+      setInterval(() => {}, 60_000);
+      return;
+    }
     // hermes chat [--source <tag>] [-m <model>] [--yolo] [--resume <id>] [-q <text>] [--oneshot] [--format <f>] (0.23.4).
     if (argv[0] !== 'chat') { log({ command: argv[0], argv }); out('ok\n'); process.exit(0); }
     for (let i = 1; i < argv.length; i++) {

@@ -23,7 +23,20 @@ import { spawn, type ChildProcess } from 'node:child_process';
  *    (/bin/ps -E on macOS, /proc/<pid>/environ on Linux): it must survive, and Tars's own must not.
  * 7. Hermes as a worker, while the owner has not chosen (SECURITY.md § 10): either answer is one switch. With
  *    orchestrators only, a worker's Hermes terminal is refused before anything is written; an orchestrator's opens.
+ * Written right after its code, the wiring of the gateway Tars starts (27/11; core/hermes-gateway.test.ts, written
+ * first, tests the gateway itself), and shown to bite by mutant M28:
+ * 8. A Hermes terminal opens and no gateway is asked for (the chat would start one with its terminal's environment),
+ *    or it is asked for with another binary than the agent's own (its cliPath, else the settings').
  */
+
+// The gateway's start is the boundary a real Hermes is behind: openHermesTerminal starts one (core/hermes-gateway.ts),
+// and the binary it resolves on the PATH is the account's own installed Hermes. Left unmocked on 27/11, it started the
+// real binary in a throwaway home, which began syncing its packages. Its stop checks stay real (6 needs them).
+const gatewayStarts = vi.hoisted(() => ({ binaries: [] as string[] }));
+vi.mock('../../../electron/core/hermes-gateway', async (original) => ({
+  ...(await original<typeof import('../../../electron/core/hermes-gateway')>()),
+  startHermesGatewayProcess: (binary: string) => { gatewayStarts.binaries.push(binary); return null; },
+}));
 
 const endpoint = vi.hoisted(() => ({ on: true, agent: { id: 'a', role: 'worker', permissionMode: 'normal' } as Record<string, unknown> }));
 vi.mock('../../../electron/services/traces-runtime', () => ({
@@ -125,6 +138,15 @@ describe.skipIf(process.platform === 'win32')('the gateway they share', () => {
     expect(gateway.exitCode === null && gateway.signalCode === null).toBe(true);
     closeHermesTerminal('b', 'tep_b');
     expect(await ended(gateway)).toBe(true);
+  });
+
+  it('8: a Hermes terminal asks for the gateway, with the agent\'s own binary', async () => {
+    gatewayStarts.binaries.length = 0;
+    endpoint.agent = { id: 'a', role: 'worker', permissionMode: 'normal', cliPath: '/opt/hermes-of-a/hermes' };
+    openHermesTerminal('a', { apiToken: 't', endpointToken: 'tep_a', env });
+    await new Promise(r => setTimeout(r, 300));
+    expect(gatewayStarts.binaries).toEqual(['/opt/hermes-of-a/hermes']);
+    closeHermesTerminal('a', 'tep_a');
   });
 
   it('6: a record naming the user\'s own gateway stops nothing; Tars\'s own is stopped', async () => {

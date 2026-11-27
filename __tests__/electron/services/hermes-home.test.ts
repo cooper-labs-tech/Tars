@@ -4,7 +4,8 @@ import * as os from 'node:os';
 import * as path from 'node:path';
 import {
   hermesProfileDir, hermesRootConfig, hermesProfileConfig, hermesEnvText, writeHermesProfile, removeHermesSecrets,
-  sweepHermesSecrets, stopHermesGateway, approvalsModeFor, HERMES_SECRET_VARS, type HermesProfileSpec,
+  sweepHermesSecrets, stopHermesGateway, findHermesGateway, hermesGatewayEnv, approvalsModeFor, HERMES_SECRET_VARS,
+  type HermesProfileSpec,
 } from '../../../electron/services/hermes-home';
 
 /**
@@ -57,6 +58,14 @@ import {
  *    TMPDIR. Each session's tools must take Tars's per-terminal variables from their own chat's terminal
  *    (`terminal.client_env_passthrough`; measured on the bench, B's own values with it, A's without), and the list
  *    must hold no name that reads as a secret (Hermes would refuse it anyway; the tokens come from the profile).
+ * 16. (The orchestrator's go of 27/11: a gateway with no agent's identity.) The environment Tars starts the gateway
+ *    with carries an agent's id, token, project, Tars's address or instance, an endpoint token, a provider key or the
+ *    user's OpenAI variables (any of which Tars's own process may hold when it was started from an agent's terminal),
+ *    or an agent's temporary folder; or it lacks what the gateway needs: Tars's PATH (its sessions' MCP servers run
+ *    `node`), the user's home and locale, the user's network proxy for its first sync, Windows' system variables, its
+ *    home (the root), a temporary folder of its own, and the cloud metadata lookup off.
+ * 17. A gateway is believed on its record alone when Tars looks for one to reuse, or waits for one to hold its home:
+ *    the same checks as the stop (its command line, and its own HERMES_HOME on macOS and Linux, its start on Windows).
  */
 
 let tmp: string;
@@ -237,6 +246,51 @@ describe('when the terminal is gone', () => {
   });
 });
 
+describe('the gateway\'s environment', () => {
+  // What Tars's own process may hold: an agent's, when Tars was started from an agent's terminal.
+  const tarsEnv = {
+    HOME: '/Users/u', USER: 'u', LOGNAME: 'u', SHELL: '/bin/zsh', LANG: 'fr_FR.UTF-8', LC_ALL: 'fr_FR.UTF-8', TERM: 'xterm-256color',
+    TMPDIR: '/Users/u/.tars/tmp/ab12cd34ef/t', CLAUDE_AGENT_ID: 'agent-a', CLAUDE_AGENT_NAME: 'A', CLAUDE_PROJECT_PATH: '/p',
+    CLAUDE_MGR_API_URL: 'http://127.0.0.1:31415', CLAUDE_MGR_API_TOKEN: 'tok-a', TARS_INSTANCE_ID: 'inst', TARS_ENDPOINT_TOKEN: 'tep_a',
+    OPENAI_API_KEY: 'sk-user', OPENAI_BASE_URL: 'https://api.openai.com/v1', OPENROUTER_API_KEY: 'sk-or-user', ANTHROPIC_API_KEY: 'sk-ant',
+    AWS_PROFILE: 'work', CLAUDE_CODE_TMPDIR: '/Users/u/.tars/tmp/ab12cd34ef/c', PATH: '/usr/bin',
+  };
+  const FULL_PATH = '/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin';
+
+  it('16: on macOS and Linux, exactly the home, the locale, its own temporary folder, Tars\'s PATH and its root', () => {
+    for (const platform of ['darwin', 'linux'] as const) {
+      const env = hermesGatewayEnv(tarsEnv, root, FULL_PATH, platform);
+      expect(Object.keys(env).sort(), platform).toEqual(['AWS_EC2_METADATA_DISABLED', 'HERMES_HOME', 'HOME', 'LANG', 'LC_ALL', 'LOGNAME', 'PATH', 'SHELL', 'TMPDIR', 'USER']);
+      expect(env).toMatchObject({ HERMES_HOME: root, TMPDIR: path.join(root, 'tmp'), PATH: FULL_PATH, AWS_EC2_METADATA_DISABLED: 'true', HOME: '/Users/u' });
+    }
+  });
+
+  it('16: the user\'s network proxy goes with it, for its first sync', () => {
+    const env = hermesGatewayEnv({ ...tarsEnv, HTTPS_PROXY: 'http://proxy:3128', no_proxy: 'localhost' }, root, FULL_PATH, 'linux');
+    expect(env.HTTPS_PROXY).toBe('http://proxy:3128');
+    expect(env.no_proxy).toBe('localhost');
+  });
+
+  it('16: on Windows, the system variables Python needs, and its own TEMP and TMP', () => {
+    const win = { ...tarsEnv, SYSTEMROOT: 'C:\\Windows', WINDIR: 'C:\\Windows', COMSPEC: 'C:\\Windows\\system32\\cmd.exe', PATHEXT: '.COM;.EXE',
+      USERPROFILE: 'C:\\Users\\u', APPDATA: 'C:\\Users\\u\\AppData\\Roaming', LOCALAPPDATA: 'C:\\Users\\u\\AppData\\Local', TEMP: 'C:\\agent-tmp', TMP: 'C:\\agent-tmp' };
+    const env = hermesGatewayEnv(win, root, FULL_PATH, 'win32');
+    expect(env).toMatchObject({ SYSTEMROOT: 'C:\\Windows', PATHEXT: '.COM;.EXE', USERPROFILE: 'C:\\Users\\u', TEMP: path.join(root, 'tmp'), TMP: path.join(root, 'tmp'), HERMES_HOME: root });
+    expect(env.TMPDIR).toBeUndefined();
+  });
+
+  it('16: no agent\'s identity, token, project, temporary folder, Tars\'s address, endpoint token or provider key', () => {
+    for (const platform of ['darwin', 'linux', 'win32'] as const) {
+      const env = hermesGatewayEnv(tarsEnv, root, FULL_PATH, platform);
+      for (const name of ['CLAUDE_AGENT_ID', 'CLAUDE_AGENT_NAME', 'CLAUDE_PROJECT_PATH', 'CLAUDE_MGR_API_URL', 'CLAUDE_MGR_API_TOKEN', 'TARS_INSTANCE_ID',
+        'TARS_ENDPOINT_TOKEN', 'OPENAI_API_KEY', 'OPENAI_BASE_URL', 'OPENROUTER_API_KEY', 'ANTHROPIC_API_KEY', 'AWS_PROFILE', 'CLAUDE_CODE_TMPDIR', 'TERM']) {
+        expect(env[name], `${platform} ${name}`).toBeUndefined();
+      }
+      expect(Object.values(env).some(v => v.includes('.tars/tmp/')), `${platform}: an agent's temporary folder`).toBe(false);
+    }
+  });
+});
+
 describe('the gateway it leaves', () => {
   const GATEWAY = '/x/python3 -m hermes_cli.main --profile default gateway run --quiet --idle-exit';
   const record = (o: unknown) => { fs.mkdirSync(root, { recursive: true }); fs.writeFileSync(path.join(root, 'gateway.pid'), JSON.stringify(o)); };
@@ -353,6 +407,18 @@ describe('the gateway it leaves', () => {
       expect(await stopHermesGateway(root, d.deps), own).toBe('not-this-home');
       expect(d.stopped).toEqual([]);
     }
+  });
+
+  it('17: a gateway is found by the stop\'s own checks, never by its record alone', async () => {
+    record({ pid: 4242, hermes_home: root });
+    expect(await findHermesGateway(root, deps(GATEWAY, { home: root, platform: 'linux' }).deps)).toBe(4242);
+    expect(await findHermesGateway(root, deps(GATEWAY, { home: path.join(os.homedir(), '.hermes'), platform: 'linux' }).deps)).toBeNull();
+    expect(await findHermesGateway(root, deps('/usr/bin/vim notes.txt', { platform: 'linux' }).deps)).toBeNull();
+    expect(await findHermesGateway(root, deps(null).deps)).toBeNull();
+    expect(await findHermesGateway(root, deps(GATEWAY, { platform: 'win32', startedAt: recordTime(), home: null }).deps)).toBe(4242);
+    expect(await findHermesGateway(root, deps(GATEWAY, { platform: 'win32', startedAt: recordTime() - 3600_000, home: null }).deps)).toBeNull();
+    fs.rmSync(path.join(root, 'gateway.pid'));
+    expect(await findHermesGateway(root, deps(GATEWAY).deps)).toBeNull();
   });
 
   it('10: stops nothing when the pid now runs another program, or nothing', async () => {
