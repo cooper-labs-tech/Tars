@@ -137,13 +137,15 @@ export interface SafeGitOptions {
   env?: GitEnv;
   maxBuffer?: number;
   timeout?: number;
+  /** How stdout is decoded (utf8 by default); latin1 keeps every byte, for a blob read back as a Buffer. */
+  encoding?: BufferEncoding;
 }
 
 /** git, asynchronously, with no program of the repository's: what execFile('git', ...) promisified gave. */
 export async function safeGit(cwd: string, args: string[], opts: SafeGitOptions = {}): Promise<{ stdout: string; stderr: string }> {
   const env = safeGitEnv(process.env, opts.env);
   const call = (argv: string[], o: ExecFileOptions = {}) => new Promise<{ stdout: string; stderr: string }>((resolve, reject) => {
-    execFile(gitCommand(), argv, { cwd, env, encoding: 'utf8', maxBuffer: opts.maxBuffer ?? 8 * 1024 * 1024, timeout: opts.timeout ?? 30_000, windowsHide: true, ...o }, (err, stdout, stderr) => {
+    execFile(gitCommand(), argv, { cwd, env, encoding: opts.encoding ?? 'utf8', maxBuffer: opts.maxBuffer ?? 8 * 1024 * 1024, timeout: opts.timeout ?? 30_000, windowsHide: true, ...o }, (err, stdout, stderr) => {
       if (err) reject(Object.assign(err, { stdout: String(stdout ?? ''), stderr: String(stderr ?? '') }));
       else resolve({ stdout: String(stdout), stderr: String(stderr) });
     });

@@ -51,6 +51,14 @@ export function sessionDocument(store: TraceStore, traceId: string, seen: Set<st
       tokens_in: t.requests.reduce((a, r) => a + (r.tokensIn ?? 0), 0), tokens_cached: t.requests.reduce((a, r) => a + (r.tokensCached ?? 0), 0),
       tokens_out: t.requests.reduce((a, r) => a + (r.tokensOut ?? 0), 0), final_status: t.finalStatus ?? null,
       author: t.author, author_detail: t.authorDetail ?? null,
+      // What the turn changed in the agent's repository: heads, tree hashes, counts and survival, never a path or a
+      // line of content (those stay in the store, to measure survival).
+      workspace: t.workspace ? {
+        start_head: t.workspace.startHead, end_head: t.workspace.endHead, start_tree: t.workspace.startTree, end_tree: t.workspace.endTree,
+        files: t.workspace.files, lines_added: t.workspace.linesAdded, lines_removed: t.workspace.linesRemoved,
+        changed_lines: t.workspace.changedLines, survived_lines: t.workspace.survivedLines, reverted: t.workspace.reverted,
+        survival_basis: t.workspace.survivalBasis, survival_at: t.workspace.survivalAt,
+      } : null,
     });
     for (const r of t.requests) {
       const m = store.requestMessages(r.requestId);

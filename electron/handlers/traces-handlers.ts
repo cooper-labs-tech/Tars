@@ -307,8 +307,15 @@ export function registerTracesHandlers(deps: TracesHandlerDeps): void {
       'their timing, token counts, the harness and its version, the model and the endpoint\'s name',
       'who wrote each turn (you, an orchestrator, an agent, a channel) and how the session ended (branch, commit)',
       'an install id, to delete everything this install sent',
+      'for each turn, the commit the repository was on at its start and at its end, as git names them (startHead, endHead)',
+      'for each turn, a hash of the working tree at its start and at its end, which names no file (startTree, endTree)',
+      'for each turn, how many files it changed and how many lines it added and removed (filesChanged, linesAdded, linesRemoved)',
+      'for each turn, how many of the lines it added are still there when the session ends, and again when its branch is merged or deleted (changedLines, survivedLines, reverted, survivalBasis)',
     ],
-    stays: ['your keys and Tars\'s tokens (masked before upload)', 'sessions of projects and agents not opted in', 'the endpoints\' keys and addresses', 'anything outside traced sessions'],
+    stays: [
+      'your keys and Tars\'s tokens (masked before upload)', 'sessions of projects and agents not opted in', 'the endpoints\' keys and addresses', 'anything outside traced sessions',
+      'the paths and the contents of the files a turn changed (kept on this computer only, to count what lasts, and deleted with the session)',
+    ],
     scrubbing: {
       version: SCRUB_VERSION,
       catches: ['every secret Tars holds (settings keys, endpoint keys, its own tokens)', 'the values of the project\'s .env files', 'keys by shape (OpenAI, Anthropic, GitHub, Slack, AWS, Google, Stripe, npm, Hugging Face, JWT, private keys)', 'secrets after a telling name (password=, api_key:, "token":)', 'passwords in URLs, Bearer and Basic credentials', 'your home folder, as ~'],

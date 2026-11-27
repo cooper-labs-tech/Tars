@@ -15,6 +15,7 @@ import { TraceStore } from './trace-store';
 import { defaultTracePairs, traceDecision } from './trace-gate';
 import { projectEnvValues, type ScrubContext } from './trace-scrub';
 import { TraceUploader } from './trace-upload';
+import { WorkspaceRecorder } from './turn-workspace';
 import { SECRET_FIELDS, keysKeptAfter, withKeptKeys } from './settings-secrets';
 
 /**
@@ -360,6 +361,30 @@ export function traceStore(): TraceStore {
   return store;
 }
 
+let workspace: WorkspaceRecorder | null = null;
+/** What each traced turn changed in the agent's checkout, and how much lasted (turn-workspace.ts). */
+export function turnWorkspace(): WorkspaceRecorder {
+  if (!workspace) workspace = new WorkspaceRecorder({ store: traceStore() });
+  return workspace;
+}
+
+/** The folder an agent works in: its worktree, else its project. */
+function folderOf(agentId: string): string | undefined {
+  const agent = agentOf(agentId);
+  return agent?.worktreePath || agent?.projectPath;
+}
+
+/**
+ * The ended sessions whose branch may since have merged into the default branch, or been deleted: their survival is
+ * measured again on the default branch (a few per sweep, each git call bounded).
+ */
+export async function finalizeWorkspaces(limit = 10): Promise<void> {
+  for (const s of traceStore().workspaceToFinalize(limit)) {
+    const r = await turnWorkspace().finalize(s.traceId, folderOf(s.agentId) ?? s.projectPath);
+    if (r === 'merged' || r === 'deleted') changed();
+  }
+}
+
 /** The uploader to the user's back-office (trace-upload.ts): idle while no address or no consent. */
 export function traceUploader(): TraceUploader {
   if (!uploader) {
@@ -432,6 +457,7 @@ export function sweepTraces(): void {
   } catch (err) {
     console.error(`[traces] sweep failed: ${(err as Error).message}`);
   }
+  finalizeWorkspaces().catch((err) => console.error(`[traces] a session's survival was not measured again: ${(err as Error).message}`));
 }
 
 /** The proxy on its port, and the hourly sweep. Called once at startup. */
@@ -465,6 +491,13 @@ function ensureProxy(): void {
   startEndpointProxy(ENDPOINT_PROXY_PORT, {
     sessionOf: (token) => sessions.get(token),
     targetOf: (endpointId) => endpointTarget(d.getSettings(), endpointId),
+    // A request that opens a turn: the agent's checkout is snapshot as the request is forwarded (its edits come with
+    // the answer's tools, after), the turn's start and the previous turn's end. Off the request's path: next tick.
+    onRequest: (r) => {
+      setImmediate(() => {
+        if (traceStore().opensTurnAt(r.traceId, r.surface, r.body)) void turnWorkspace().turnStarted(r.traceId, r.startedAt, folderOf(r.agentId));
+      });
+    },
     record: (rec) => {
       if (traceStore().ingest(rec)) {
         changed();
@@ -502,6 +535,7 @@ export function stopTracesRuntime(): void {
   consentHeldForRevoke = undefined;
   revokeComesBack = false;
   uploader = null;
+  workspace = null;
   store?.close();
   store = null;
 }
@@ -594,6 +628,8 @@ export function closeEndpointSession(token: string | undefined): void {
   const endedAt = Date.now();
   const agent = agentOf(live.agentId);
   const folder = agent?.worktreePath || agent?.projectPath;
+  // The last turn's end, then each turn's survival (turn-workspace.ts).
+  void turnWorkspace().sessionEnded(live.traceId, endedAt, folder);
   void gitOutcome(folder).then((git) => {
     try {
       const counts = traceStore().requestCounts(live.traceId);
