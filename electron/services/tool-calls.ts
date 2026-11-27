@@ -171,6 +171,64 @@ export function piToolLineOf(line: string): { batchAt: number } | { part: ToolCa
   };
 }
 
+/**
+ * One line of a Qwen Code 0.25.2 chat file (~/.qwen/projects/<folder>/chats/<session>.jsonl), read for its tool calls;
+ * null for any other line. Measured on 27/11: its `qwen-code.tool_call` telemetry line (`systemPayload.uiEvent`) says
+ * when the call started, how long it ran, whether it succeeded and the decision on it (`reject` for a denied or
+ * cancelled call); its `tool_result` line says, for a shell call, the exit code and whether the output was cut. It
+ * runs one answer's calls one after the other.
+ */
+export function qwenToolPartOf(line: string): ToolCallPart | null {
+  const entry = parse(line);
+  if (!entry) return null;
+  if (entry.type === 'system' && entry.subtype === 'ui_telemetry') {
+    const e = asObj(asObj(entry.systemPayload).uiEvent);
+    if (e['event.name'] !== 'qwen-code.tool_call' || typeof e.call_id !== 'string' || !e.call_id) return null;
+    return partOf({
+      callId: e.call_id, startedAt: num(e.started_at_ms), wallMs: num(e.duration_ms),
+      denied: e.decision === 'reject', failed: e.success === false,
+    });
+  }
+  if (entry.type === 'tool_result') {
+    const r = asObj(entry.toolCallResult);
+    if (typeof r.callId !== 'string' || !r.callId) return null;
+    const shell = asObj(r.resultDisplay);
+    const isShell = shell.type === 'shell_result';
+    return partOf({
+      callId: r.callId,
+      exit: isShell ? num(shell.exitCode) : undefined,
+      failed: r.status === 'error' || r.status === 'cancelled',
+      timedOut: isShell && (shell.outcome === 'timeout' || shell.outcome === 'timed_out'),
+      truncated: isShell && shell.truncated === true,
+    });
+  }
+  return null;
+}
+
+/**
+ * One part of an opencode 1.19.6 session (the `data` of a row of its database's `part` table), read for its tool
+ * call; null for any other part. Measured on 27/11: a `tool` part holds the call's id, its status (`pending`,
+ * `running`, `completed`, `error`), its own start and, once ended, its end, and for a shell call its exit code and
+ * whether its output was cut. It runs one answer's calls at once.
+ */
+export function opencodeToolPartOf(data: unknown): ToolCallPart | null {
+  const d = asObj(data);
+  if (d.type !== 'tool' || typeof d.callID !== 'string' || !d.callID) return null;
+  const state = asObj(d.state);
+  const time = asObj(state.time);
+  const meta = asObj(state.metadata);
+  const ended = state.status === 'completed' || state.status === 'error';
+  const exit = num(meta.exit);
+  return partOf({
+    callId: d.callID,
+    itemStartedAt: num(time.start),
+    itemEndedAt: ended ? num(time.end) : undefined,
+    exit,
+    failed: state.status === 'error' || (exit !== undefined && exit !== 0),
+    truncated: meta.truncated === true,
+  });
+}
+
 /** Two parts of one call as one: what the later says adds to the earlier, and a fact said once is kept. */
 export function mergeToolCall(a: ToolCallPart | undefined, b: ToolCallPart): ToolCallPart {
   return { ...b, ...partOf(a ?? b) };
