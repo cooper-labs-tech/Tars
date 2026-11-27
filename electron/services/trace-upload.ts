@@ -287,6 +287,16 @@ export class TraceUploader {
   }
 
   /** One pass: the per-session deletes owed, then what is new or grew, for sessions opted in now. Never throws. */
+  /** Whether the install file is not there at all (ENOENT), as opposed to there and unreadable for a moment. */
+  private installFileGone(): boolean {
+    try {
+      fs.statSync(this.deps.installFile);
+      return false;
+    } catch (err) {
+      return (err as NodeJS.ErrnoException).code === 'ENOENT';
+    }
+  }
+
   /** Owed deletes forgotten: their install is gone, so none can ever go. A store that refuses it is said, not thrown. */
   private forgetOwedDeletes(why: string): void {
     try {
@@ -297,9 +307,11 @@ export class TraceUploader {
   }
 
   async runOnce(): Promise<{ sent: number; failed: number; skipped?: 'off' | 'waiting' | 'busy' }> {
-    // No install file left (removed, or never put back after a 401): the deletes owed to it can never go.
+    // No install file left (removed by hand): the deletes owed to it can never go. Only a file truly absent: one read
+    // badly for a moment (its JSON caught mid-write, a read refused) still holds its debt (the Audit's Low at
+    // 9a1e9e8c4). A 401 forgets them on its own path.
     try {
-      if (!this.readInstall() && this.deps.store.owedDeletes(1).length) this.forgetOwedDeletes('this install is gone');
+      if (this.installFileGone() && this.deps.store.owedDeletes(1).length) this.forgetOwedDeletes('this install is gone');
     } catch (err) {
       console.error(`[traces] the owed deletes could not be read: ${describeSecretFileError(err)}`);
     }
