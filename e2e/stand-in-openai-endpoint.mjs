@@ -43,9 +43,8 @@ export function shellToolOf(tools) {
 }
 
 /** Arguments for that tool that print the marker, built from its schema. */
-export function shellArgsFor(tool, marker) {
+export function shellArgsFor(tool, marker, line = `echo ${marker}`) {
   const props = asObj(tool.parameters.properties);
-  const line = `echo ${marker}`;
   const args = {};
   if (asObj(props.command).type === 'array') args.command = ['sh', '-c', line];
   else if (props.cmd) args.cmd = line;
@@ -96,14 +95,16 @@ export function responsesToolResult(input) {
 }
 
 /** What the model "decides": a call to the shell tool, or the final text. */
-export function decide(body, toolResult, marker) {
+export function decide(body, toolResult, marker, command) {
   if (toolResult !== null) {
+    // A command of the spec's own: its result told back as it came, the first line.
+    if (command) return { text: `TOOL-RESULT ${String(toolResult).split('\n')[0].slice(0, 200)}` };
     const m = /TARS-PROBE-[0-9a-f]{8}/.exec(toolResult);
     return { text: m ? `PROBE-OK ${m[0]}` : 'PROBE-NO-RESULT' };
   }
   const tool = shellToolOf(toolsOf(body));
   if (!tool) return { text: 'PROBE-NO-SHELL-TOOL' };
-  return { call: { id: `call_${randomBytes(6).toString('hex')}`, name: tool.name, arguments: JSON.stringify(shellArgsFor(tool, marker)) } };
+  return { call: { id: `call_${randomBytes(6).toString('hex')}`, name: tool.name, arguments: JSON.stringify(shellArgsFor(tool, marker, command)) } };
 }
 
 const USAGE = { prompt_tokens: 120, completion_tokens: 12, total_tokens: 132, prompt_tokens_details: { cached_tokens: 100 } };
@@ -116,8 +117,8 @@ function sse(res, data, event) {
 
 const pause = (ms) => new Promise((r) => setTimeout(r, ms));
 
-async function answerChat(body, res, marker, chunkDelayMs = 0, emptyFirstChunk = false) {
-  const d = decide(body, chatToolResult(body.messages), marker);
+async function answerChat(body, res, marker, chunkDelayMs = 0, emptyFirstChunk = false, command = undefined) {
+  const d = decide(body, chatToolResult(body.messages), marker, command);
   const id = `chatcmpl-${randomBytes(6).toString('hex')}`;
   const finish = d.call ? 'tool_calls' : 'stop';
   if (!body.stream) {
@@ -154,8 +155,8 @@ async function answerChat(body, res, marker, chunkDelayMs = 0, emptyFirstChunk =
   return { lastChunkAt: Date.now(), requestId: `standin-${id}` };
 }
 
-function answerResponses(body, res, marker) {
-  const d = decide(body, responsesToolResult(body.input), marker);
+function answerResponses(body, res, marker, command = undefined) {
+  const d = decide(body, responsesToolResult(body.input), marker, command);
   const id = `resp_${randomBytes(6).toString('hex')}`;
   const item = d.call
     ? { type: 'function_call', id: `fc_${randomBytes(6).toString('hex')}`, call_id: d.call.id, name: d.call.name, arguments: d.call.arguments, status: 'completed' }
@@ -187,7 +188,11 @@ function answerResponses(body, res, marker) {
  * the model's first token. Resolves with its base URL, a close(), and failNext(...statuses), which makes the next
  * model calls fail as failFirst does.
  */
-export function startStandIn({ port = 0, key = '', log = '', failFirst = [], chunkDelayMs = 0, emptyFirstChunk = false } = {}) {
+/**
+ * `command`: the shell line its tool call asks for, instead of printing the probe marker (a spec's own, e.g. a push a
+ * load session must not get through); its result is answered back as `TOOL-RESULT <first line>`.
+ */
+export function startStandIn({ port = 0, key = '', log = '', failFirst = [], chunkDelayMs = 0, emptyFirstChunk = false, command = undefined } = {}) {
   const marker = `TARS-PROBE-${randomBytes(4).toString('hex')}`;
   const failing = [...failFirst];
   const note = (entry) => { if (log) fs.appendFileSync(log, `${JSON.stringify({ at: Date.now(), ...entry })}\n`); };
@@ -215,10 +220,10 @@ export function startStandIn({ port = 0, key = '', log = '', failFirst = [], chu
         res.end(JSON.stringify({ error: { type, message: `stand-in ${type}` } }));
         note({ answered: status });
       } else if (req.method === 'POST' && url === '/v1/chat/completions') {
-        const done = await answerChat(asObj(body), res, marker, chunkDelayMs, emptyFirstChunk);
+        const done = await answerChat(asObj(body), res, marker, chunkDelayMs, emptyFirstChunk, command);
         note({ answered: 200, ...(done ?? {}) });
       } else if (req.method === 'POST' && url === '/v1/responses') {
-        answerResponses(asObj(body), res, marker);
+        answerResponses(asObj(body), res, marker, command);
       } else {
         res.writeHead(404, { 'Content-Type': 'application/json' });
         res.end(JSON.stringify({ error: { message: `no route ${req.method} ${url}` } }));
