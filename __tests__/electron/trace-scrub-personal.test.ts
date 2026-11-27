@@ -169,6 +169,10 @@ describe('masking personal data', () => {
     const s = session(c);
     expect(s.text('plainword9secret then <PHONE_2> as text')).toBe('<SECRET_1> then <PHONE_2> as text');
     expect(s.text('/Users/someone/x and someone@example.com and someone')).toBe('<HOME_1>/x and <EMAIL_1> and <PERSON_1>');
+    // A key by its shape after a telling name: one secret under one number, the name rule not masking the placeholder
+    // again (found by the mutation bench: no test had a rule meet a placeholder an earlier rule wrote).
+    const key = `sk-proj-${'a1B2c3D4e5F6g7H8i9J0k1L2'}`;
+    expect(one(`export API_KEY=${key} and again ${key}`)).toBe('export API_KEY=<SECRET_1> and again <SECRET_1>');
   });
 
   it('U1 and U3: one value, one number, in every spelling; another value, another number', () => {
