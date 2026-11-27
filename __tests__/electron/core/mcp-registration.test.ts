@@ -19,6 +19,13 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
  *    bounded, and its end says so.
  * 4. A registration that failed holds launches: it ends the wait the same as one that succeeded.
  * 5. Every launch waiting is released by the one end, not only the first.
+ *
+ * Added on 2026-11-27 (the Audit's L-b on #657), written before the code:
+ * 6. Past the bound the gate stays shut: every later launch of the run waits its own 60 s, and says so each time. The
+ *    bound is the registration's: once it is reached, every launch waiting goes on at once, every later one too, and
+ *    the warning is said once.
+ * 7. What the card reads (core/agent-launch.ts, sessionStarting) cannot tell a launch waiting here from one whose CLI
+ *    never came: whether a registration is under way, and when the gate last opened, are this module's to say.
  */
 
 beforeEach(() => { vi.resetModules(); });
@@ -78,6 +85,39 @@ describe('a launch and the start-up registration', () => {
     expect(outcome).toBe('timed-out');
     expect(warn).toHaveBeenCalledWith(expect.stringContaining('registration'));
     warn.mockRestore();
+  });
+
+  it('6. once the bound is reached, every launch waiting and every later one goes on at once, said once', async () => {
+    vi.useFakeTimers();
+    const { mcpRegistrationBegins, untilMcpRegistered, MCP_REGISTRATION_WAIT_MS } = await gate();
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    mcpRegistrationBegins();
+    const outcomes: string[] = [];
+    void untilMcpRegistered().then((how) => { outcomes.push(`first:${how}`); });
+    await vi.advanceTimersByTimeAsync(MCP_REGISTRATION_WAIT_MS / 2);
+    // One that began waiting halfway is released with the first, at the registration's bound, not at its own.
+    void untilMcpRegistered().then((how) => { outcomes.push(`halfway:${how}`); });
+    await vi.advanceTimersByTimeAsync(MCP_REGISTRATION_WAIT_MS / 2);
+    expect(outcomes.sort()).toEqual(['first:timed-out', 'halfway:timed-out']);
+    await expect(untilMcpRegistered()).resolves.toBe('open');
+    await expect(untilMcpRegistered()).resolves.toBe('open');
+    expect(warn).toHaveBeenCalledTimes(1);
+    warn.mockRestore();
+  });
+
+  it('7. it says whether a registration is under way, and when the gate last opened, by an end or by the bound', async () => {
+    vi.useFakeTimers({ now: new Date('2026-11-27T05:00:00.000Z') });
+    const { mcpRegistrationBegins, mcpRegistrationEnds, mcpRegistrationUnderWay, mcpGateOpenedAt, MCP_REGISTRATION_WAIT_MS } = await gate();
+    vi.spyOn(console, 'warn').mockImplementation(() => {});
+    expect([mcpRegistrationUnderWay(), mcpGateOpenedAt()]).toEqual([false, undefined]);
+    mcpRegistrationBegins();
+    expect(mcpRegistrationUnderWay()).toBe(true);
+    await vi.advanceTimersByTimeAsync(2_000);
+    mcpRegistrationEnds();
+    expect([mcpRegistrationUnderWay(), mcpGateOpenedAt()]).toEqual([false, Date.parse('2026-11-27T05:00:02.000Z')]);
+    mcpRegistrationBegins();
+    await vi.advanceTimersByTimeAsync(MCP_REGISTRATION_WAIT_MS);
+    expect([mcpRegistrationUnderWay(), mcpGateOpenedAt()]).toEqual([false, Date.parse('2026-11-27T05:01:02.000Z')]);
   });
 
   it('4. an end is an end, whatever the registration did: a failed one releases the launches too', async () => {
