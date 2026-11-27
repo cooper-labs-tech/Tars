@@ -18,7 +18,13 @@ import { withoutHome } from '../../../electron/utils/without-home';
  *    "/System/Volumes/Data~", which reads as nothing. Such a path is another
  *    place than the home, and "~" would name the wrong one: it is left alone.
  * 5. A home of '/' or '' (a container's root) turns every '/' into '~'.
- * 6. Elsewhere than Windows, another letter case is another folder: left alone.
+ * 6. On Linux, another letter case is another folder: left alone.
+ * 7. A file URL keeps the home (file:///Users/acct/x, file:///C:/Users/Acct/x):
+ *    the '/' before it reads as a longer path (the Audit's I-a on #660). The
+ *    URL and its home are said `~`.
+ * 8. On macOS, the home in another letter case (/users/acct), which APFS opens
+ *    all the same, stays (the Audit's I-a on #660).
+ * 7 and 8 were added after the fix of 1 to 6.
  */
 
 describe('the home, wherever a message ends it (1)', () => {
@@ -54,6 +60,19 @@ describe('the home on Windows, in any letter case and either slash (2)', () => {
   });
 });
 
+describe('the home in a file URL, and in another letter case on macOS (7, 8)', () => {
+  const SAID: Array<[string, string, string, NodeJS.Platform]> = [
+    ['could not open file:///Users/acct/notes/a.md', '/Users/acct', 'could not open ~/notes/a.md', 'darwin'],
+    ['could not open file:///C:/Users/Acct/notes/a.md', 'C:\\Users\\Acct', 'could not open ~/notes/a.md', 'win32'],
+    ["could not open 'file:///home/acct/a.md'", '/home/acct', "could not open '~/a.md'", 'linux'],
+    ["open '/users/acct/x'", '/Users/acct', "open '~/x'", 'darwin'],
+    ['/USERS/ACCT: permission denied', '/Users/acct', '~: permission denied', 'darwin'],
+  ];
+  it.each(SAID)('%s, home %s', (message, home, said, platform) => {
+    expect(withoutHome(message, home, platform)).toBe(said);
+  });
+});
+
 describe('what is not the home stays (3, 4, 5, 6)', () => {
   const LEFT: Array<[string, string, NodeJS.Platform]> = [
     ['/Users/acct2/x', '/Users/acct', 'darwin'],
@@ -64,7 +83,9 @@ describe('what is not the home stays (3, 4, 5, 6)', () => {
     ['/Volumes/Backup/Users/acct/x', '/Users/acct', 'darwin'],
     ["open '/x/y'", '/', 'linux'],
     ["open '/x/y'", '', 'linux'],
-    ['/users/acct/x', '/Users/acct', 'darwin'],
+    ['/home/Acct/x', '/home/acct', 'linux'],
+    ['/System/Volumes/Data/users/acct/x', '/Users/acct', 'darwin'],
+    ['file:///Users/acct2/x', '/Users/acct', 'darwin'],
   ];
   it.each(LEFT)('%s, home %s on %s', (message, home, platform) => {
     expect(withoutHome(message, home, platform)).toBe(message);

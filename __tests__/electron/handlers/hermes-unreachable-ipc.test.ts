@@ -50,6 +50,10 @@ import * as http from 'node:http';
  *    one, and nothing bounds the whole request (the Audit's I-2 on #660). A
  *    whole-request deadline settles it, marked, in words, and leaves an answer
  *    that ends in time alone. Added after the fix of 1 to 11.
+ * 13. The deadline's own message is the one word "deadline": the agents'
+ *    kanban quotes it ("Hermes did not answer: deadline."), and the board's
+ *    classifier reads nothing in it (the Audit's I-b on #660). Its words are
+ *    the sentence's: "its answer did not end within N s". Added after 12.
  */
 
 const handlers = vi.hoisted(() => new Map<string, (...args: unknown[]) => Promise<unknown>>());
@@ -324,6 +328,7 @@ describe('a gateway that trickles its answer, each byte within the idle timeout 
     const settled = await within(hermesRequest(`http://127.0.0.1:${port}`, '/api/cron/jobs', { timeoutMs: 1_000, deadlineMs: 2_000 } as never).then(() => 'resolved', err => err), 5_000);
 
     expect(noAnswerSentence(settled)).toBe(`Tars could not reach Hermes at http://127.0.0.1:${port}: its answer did not end within 2 s`);
+    expect((settled as Error).message).toBe('its answer did not end within 2 s'); // 13
   }, 10_000);
 
   it('an answer that is slow but ends before its deadline is read', async () => {
