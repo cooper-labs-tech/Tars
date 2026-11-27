@@ -179,8 +179,12 @@ async function hermesAgents(real: string | undefined): Promise<void> {
     for (const id of [A, B]) {
       await call('agent', 'start', { id, prompt: '' });
       if (real) {
-        // The real one sets its home up first (its packages, once), then shows its prompt.
-        await expect.poll(async () => (await lead('get_agent_output', { id })).text.includes('❯'), { timeout: 20 * 60_000, intervals: [10_000] }).toBe(true);
+        // The real one sets its home up first (its packages, once), then shows its prompt, `❯` (hermes_cli's prompt
+        // symbol): read on its terminal's screen, as the window gets it. get_agent_output has nothing before a turn
+        // ends (the first real run waited 20 minutes on it, 27/11).
+        const screen = async () => ((await call('agent', 'get', id)) as { output?: string[] } | null)?.output?.join('') ?? '';
+        await expect.poll(async () => (await screen()).includes('❯'), { timeout: 20 * 60_000, intervals: [5_000] }).toBe(true);
+        fs.writeFileSync(test.info().outputPath(`screen-at-prompt-${id === A ? 'A' : 'B'}.txt`), await screen());
       } else {
         await expect.poll(() => fakeEntries().some(e => e.hermes && e.home === profile(id)), { timeout: 30_000 }).toBe(true);
       }
@@ -232,7 +236,8 @@ async function hermesAgents(real: string | undefined): Promise<void> {
       expect.soft(fs.existsSync(path.join(profile(A), 'state.db')), "A's state.db in its profile").toBe(true);
       expect.soft(fs.existsSync(path.join(home, '.hermes')), "the sandbox's ~/.hermes").toBe(false);
       expect.soft(gatewayBefore, 'a gateway of Tars\'s home ran').toBe(true);
-      expect.soft(record.hermes_home, 'the gateway\'s home').toBe(hermesRoot);
+      // Hermes resolves its home: under macOS's /tmp the record says /private/tmp/... (27/11).
+      expect.soft(record.hermes_home && fs.realpathSync(record.hermes_home), 'the gateway\'s home').toBe(fs.realpathSync(hermesRoot));
       expect.soft(fs.existsSync(path.join(profile(A), '.env')), 'a .env after the quit').toBe(false);
       return;
     }

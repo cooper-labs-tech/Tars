@@ -38,6 +38,11 @@ import {
  *    or one of its profiles (an environment that cannot be read stops nothing); on Windows, where it cannot be read,
  *    it must have started when the record was written (within two minutes), which neither a reused pid nor a record
  *    written after the fact does.
+ * 13. (The run on the real binary, 27/11.) Hermes resolves its home (`Path.resolve()`), so its gateway's HERMES_HOME and
+ *    its record name the real path: a home under a symlinked folder (macOS's /tmp, a home on another disk) is taken
+ *    for another, and Tars's own gateway is left running. And the reverse, once paths are resolved: the home itself
+ *    made a symlink to another home (an agent can write in ~/.tars), or a profile made one, lets that home's gateway,
+ *    the user's own, pass for Tars's.
  */
 
 let tmp: string;
@@ -257,6 +262,48 @@ describe('the gateway it leaves', () => {
     const d = deps(GATEWAY);
     expect(await stopHermesGateway(root, d.deps)).toBe('not-this-home');
     expect(d.stopped).toEqual([]);
+  });
+
+  it('13: a home under a symlinked folder is stopped by its resolved path, as Hermes names it', async () => {
+    const real = path.join(tmp, 'real');
+    fs.mkdirSync(path.join(real, 'hermes'), { recursive: true });
+    fs.symlinkSync(real, path.join(tmp, 'link'));
+    const home = path.join(tmp, 'link', 'hermes');
+    const resolved = path.join(fs.realpathSync(real), 'hermes');
+    for (const [recorded, own] of [[resolved, resolved], [home, resolved], [resolved, path.join(resolved, 'profiles', 'agent-a')]]) {
+      fs.writeFileSync(path.join(home, 'gateway.pid'), JSON.stringify({ pid: 4242, hermes_home: recorded }));
+      const d = deps(GATEWAY, { home: own, platform: 'darwin' });
+      expect(await stopHermesGateway(home, d.deps), `${recorded} ${own}`).toBe('stopped');
+      expect(d.stopped).toEqual([4242]);
+    }
+    const w = deps(GATEWAY, { platform: 'win32', startedAt: fs.statSync(path.join(home, 'gateway.pid')).mtimeMs, home: null });
+    expect(await stopHermesGateway(home, w.deps), 'Windows, the record resolved').toBe('stopped');
+  });
+
+  it('13: the home or a profile made a symlink to another home stops nothing of that home', async () => {
+    const owner = path.join(tmp, 'owner-hermes');
+    fs.mkdirSync(owner, { recursive: true });
+    const ownerReal = fs.realpathSync(owner);
+    // The whole home a symlink to the user's.
+    fs.symlinkSync(owner, root);
+    for (const recorded of [root, ownerReal]) {
+      fs.writeFileSync(path.join(owner, 'gateway.pid'), JSON.stringify({ pid: 4242, hermes_home: recorded }));
+      for (const platform of ['darwin', 'linux'] as const) {
+        const d = deps(GATEWAY, { home: ownerReal, platform });
+        expect(await stopHermesGateway(root, d.deps), `${platform} ${recorded}`).toBe('not-this-home');
+        expect(d.stopped).toEqual([]);
+      }
+    }
+    // A profile a symlink to the user's home.
+    fs.rmSync(root);
+    fs.mkdirSync(path.join(root, 'profiles'), { recursive: true });
+    fs.symlinkSync(owner, path.join(root, 'profiles', 'agent-x'));
+    record({ pid: 4242, hermes_home: root });
+    for (const own of [ownerReal, path.join(root, 'profiles', 'agent-x')]) {
+      const d = deps(GATEWAY, { home: own, platform: 'darwin' });
+      expect(await stopHermesGateway(root, d.deps), own).toBe('not-this-home');
+      expect(d.stopped).toEqual([]);
+    }
   });
 
   it('10: stops nothing when the pid now runs another program, or nothing', async () => {

@@ -239,10 +239,40 @@ const samePath = (a: string, b: string) => {
 /** A Hermes gateway's command line: `python3 -m hermes_cli.main [--profile <p>] gateway run ...` (measured). */
 const GATEWAY_COMMAND = /\bhermes_cli[./\\]main\b.*\bgateway\s+run\b/;
 
-/** This home, or a profile of it: where a gateway of Tars's runs from. */
+/** A path with every symlink resolved, its missing tail (a profile not written yet, or removed) kept as it is. */
+function resolvedPath(p: string): string {
+  const missing: string[] = [];
+  for (let at = path.resolve(p); ; at = path.dirname(at)) {
+    try {
+      return path.join(fs.realpathSync(at), ...missing.reverse());
+    } catch {
+      if (path.dirname(at) === at) return path.resolve(p);
+      missing.push(path.basename(at));
+    }
+  }
+}
+
+/**
+ * The home as Hermes names it: Hermes resolves its home (measured 27/11: a home under macOS's /tmp is
+ * /private/tmp/... in its gateway's environment and record), so the folders above it are resolved. The home itself
+ * must not be a symlink: any agent can write in ~/.tars, and one to the user's ~/.hermes would make that home's
+ * gateway pass for Tars's. Null when it is one, or is gone.
+ */
+function resolvedHome(root: string): string | null {
+  try {
+    return fs.lstatSync(root).isSymbolicLink() ? null : fs.realpathSync(root);
+  } catch {
+    return null;
+  }
+}
+
+/** This home, or a profile of it, both resolved: where a gateway of Tars's runs from. */
 function inThisHome(home: string, root: string): boolean {
-  if (samePath(home, root)) return true;
-  const rel = path.relative(path.join(root, 'profiles'), home);
+  const real = resolvedHome(root);
+  if (!real) return false;
+  const own = resolvedPath(home);
+  if (samePath(own, real)) return true;
+  const rel = path.relative(path.join(real, 'profiles'), own);
   return !!rel && !rel.startsWith('..') && !path.isAbsolute(rel) && !rel.includes(path.sep);
 }
 
@@ -252,7 +282,8 @@ function inThisHome(home: string, root: string): boolean {
  * Audit's L1 on #654): a crash can leave it while the pid goes to another process, the user's own gateway included,
  * whose command line is the same, and any agent can write it (~/.tars is in every agent's --add-dir). So the process
  * decides: on macOS and Linux its own HERMES_HOME is this home or one of its profiles; on Windows, where another
- * process's environment cannot be read, it started when the record was written. Anything else stops nothing.
+ * process's environment cannot be read, it started when the record was written. Anything else stops nothing. Paths
+ * are compared resolved, as Hermes resolves its home, and a home that is itself a symlink stops nothing.
  */
 export async function stopHermesGateway(root: string, deps: GatewayStopDeps): Promise<'stopped' | 'none' | 'not-this-home' | 'not-a-gateway'> {
   const file = path.join(root, 'gateway.pid');
@@ -266,7 +297,8 @@ export async function stopHermesGateway(root: string, deps: GatewayStopDeps): Pr
   }
   const { pid, hermes_home: home } = (record && typeof record === 'object' ? record : {}) as { pid?: unknown; hermes_home?: unknown };
   if (typeof pid !== 'number' || !Number.isSafeInteger(pid) || pid <= 1 || pid === process.pid) return 'none';
-  if (typeof home !== 'string' || !samePath(home, root)) return 'not-this-home';
+  const real = resolvedHome(root);
+  if (typeof home !== 'string' || !real || !samePath(resolvedPath(home), real)) return 'not-this-home';
   const command = await deps.commandOf(pid);
   if (!command) return 'none';
   if (!GATEWAY_COMMAND.test(command)) return 'not-a-gateway';

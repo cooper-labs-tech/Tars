@@ -1315,7 +1315,11 @@ profile of that home, `~/.tars/hermes/profiles/<agent id>` (`services/hermes-hom
 - Measured through a logging proxy: with update checks off, a chat still reached for `hermes-agent.nousresearch.com`
   (its plugin catalog), `raw.githubusercontent.com` (its model catalog) and `openrouter.ai` (a model capability list).
 - With `model_catalog.enabled: false` and `plugins.auto_update_check_hours: 0` as well, a chat and a minute of the
-  gateway idling reached no host but the proxy.
+  gateway idling reached no host but the proxy, on the bench.
+- Through the real app (27/11, a logging proxy refusing every host but PyPI), the first start still asked for three:
+  `hermes-agent.nousresearch.com` once, `models.dev` once (the endpoint model's metadata), and the link-local address
+  `169.254.169.254` six times over plain HTTP (the AWS SDK's credential lookup, as Hermes picks its auxiliary model),
+  which answers nothing on a desktop. All three were refused there; no switch Tars sets covers them yet.
 - Its first start downloads its Python packages once, from `pypi.org` and `files.pythonhosted.org` only (about 135 MB,
   measured), into Tars's Hermes home.
 
@@ -1325,7 +1329,10 @@ crash can leave it while the pid goes to another process, and any agent can writ
 same command line. So the process itself decides: on macOS and Linux its own `HERMES_HOME`, read from its environment
 (`ps -E`, `/proc/<pid>/environ`), must be Tars's home or one of its profiles; on Windows, where another process's
 environment cannot be read, it must have started within two minutes of the record's writing. Anything else stops
-nothing, and an environment that cannot be read stops nothing either.
+nothing, and an environment that cannot be read stops nothing either. Paths are compared resolved, as Hermes resolves
+its home (under a symlinked folder, macOS's `/tmp` among them, its gateway names the real path: the first run on the
+real binary left Tars's gateway running for that reason), and a home that is itself a symlink stops nothing, nor does
+a profile that resolves outside it.
 
 Measured by:
 - `__tests__/electron/services/hermes-home.test.ts` (the `.env`'s names and mode, two agents' files, the sweep, the
