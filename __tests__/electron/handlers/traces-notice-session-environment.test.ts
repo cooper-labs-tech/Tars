@@ -23,6 +23,8 @@ assertThrowaway({ DATA_DIR, PRIVATE_DIR });
  * Added before their code (27/11, the endpoint's Server-Timing):
  * N4. A request's round trip, its clock offset, its wait for a slot or its wait for the model server, or a session's
  *     median round trip or clock offset, is sent with no line of its own.
+ * N6. (Trace feature C2, before its code.) The context window and output cap given to the harness, whether it
+ *     compacts on its own, its compactions or the requests after a rewrite are sent with no line of their own.
  * Added before the rewording (27/11, the Audit's read of #681, its Info 2):
  * N5. A line leans on the one before it ("its kernel's version", "their timing"): the window lays the notice out in
  *     two columns read down then across, so a line may open the second column, and its neighbours change as other
@@ -80,6 +82,11 @@ const OTHER_LINES: Record<string, RegExp> = {
   'request.upstreamMs': /how long the endpoint waited for its model server/,
   'session.rttMedianMs': /each session's median round trip/,
   'session.clockOffsetMs': /each session, how far this computer's clock was from the endpoint's, at its fastest round trip/,
+  'session.contextWindowGiven': /the context window Tars gave the harness/,
+  'session.outputCapGiven': /the output cap Tars gave the harness/,
+  'session.autoCompaction': /whether the harness compacts its history on its own/,
+  'session.compactions': /when the harness compacted or cut its history, and the prompt's length before and after/,
+  'request.contextReset': /which requests came after the history was rewritten, and how many tokens it dropped/,
 };
 
 describe('the upload notice', () => {
