@@ -37,6 +37,21 @@ export function describeHermesFailure(raw: string, baseUrl: string | null): Herm
       detail,
     };
   }
+  // An answer Hermes began and never ended (#660): the main process says it in words of its own. The gateway is up,
+  // so neither is worded as a refusal, nor as the idle wait. Frame: `Shell · Kanban · Hermes broke off its answer`.
+  if (/answer was cut off before the end/i.test(raw)) {
+    return {
+      message: `Hermes began to answer${where}, but the answer was cut off before the end. Try again; if it keeps happening, check the tunnel or the network to the gateway.`,
+      detail,
+    };
+  }
+  const deadline = /answer did not end within (\d+)\s*s\b/i.exec(raw);
+  if (deadline) {
+    return {
+      message: `Hermes began to answer${where}, but did not finish within ${deadline[1]} s. The gateway may be busy: try again in a moment.`,
+      detail,
+    };
+  }
   if (/ECONNREFUSED/i.test(raw)) {
     return {
       message: `Hermes is not answering${where}. Nothing is listening on that address, so the gateway is probably not running or the tunnel is down.`,
