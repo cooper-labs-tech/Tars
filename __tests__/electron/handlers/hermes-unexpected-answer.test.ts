@@ -18,6 +18,13 @@ import * as net from 'node:net';
  *    the overseer's models answer success the same way, with nothing in them.
  * 3. The refusal says nothing a person can act on: not what Tars was reading.
  * 4. A gateway that answers JSON, as Hermes does, stops being read.
+ * 5. A 200 whose list holds an entry Tars cannot read a row from (null, a
+ *    number, a record without the key it is named by): the MCP servers, the
+ *    memory providers and the overseer's models throw a TypeError through IPC
+ *    on a null, and drop the others without a word; Schedules' jobs and the
+ *    board's columns and tasks go to the page as they are, where a null job
+ *    or task throws. A remote's bad answer is a refusal in words, never a
+ *    throw (#660, after I-1). Added after the fix of 1 to 4.
  */
 
 const handlers = vi.hoisted(() => new Map<string, (...args: unknown[]) => Promise<unknown>>());
@@ -77,6 +84,32 @@ describe('a 200 whose body is not JSON (1, 2, 3)', () => {
   }
 });
 
+describe('a 200 whose list holds an entry Tars cannot read a row from (5)', () => {
+  /** [what, channel, the answer around one entry]. */
+  const LISTS: Array<[string, string, (entry: unknown) => unknown]> = [
+    ['the schedules', 'hermes:crons:list', entry => ({ jobs: [{ id: 'j1' }, entry] })],
+    ['the board', 'hermes:kanban:board', entry => ({ columns: [{ name: 'todo', tasks: [] }, entry] })],
+    ['the board', 'hermes:kanban:board', entry => ({ columns: [{ name: 'todo', tasks: [{ id: 't1' }, entry] }] })],
+    ['the MCP servers', 'hermes:mcp:servers', entry => ({ servers: [{ name: 'gbrain' }, entry] })],
+    ['the memory providers', 'hermes:memory:providers', entry => ({ active: '', providers: [{ name: 'holographic' }, entry] })],
+    ['the models', 'overseer:modelOptions', entry => ({ provider: '', model: '', providers: [{ slug: 'anthropic', models: [] }, entry] })],
+  ];
+  const ENTRIES: Array<[string, unknown]> = [['null', null], ['a number', 7], ['a record without its key', { label: 'x' }]];
+
+  for (const [what, channel, answer] of LISTS) {
+    for (const [shape, entry] of ENTRIES) {
+      it(`${channel}, ${JSON.stringify(answer('ENTRY')).slice(0, 40)}..., with ${shape}: a refusal, never a throw`, async () => {
+        await gatewayAnswering('application/json', JSON.stringify(answer(entry)));
+
+        await expect(call(channel)).resolves.toEqual({
+          success: false,
+          error: `Tars could not read ${what} Hermes sent: its answer is not what Tars expected.`,
+        });
+      });
+    }
+  }
+});
+
 describe('a 200 whose body is JSON, as Hermes answers (4)', () => {
   it('hermes:crons:list reads the jobs', async () => {
     await gatewayAnswering('application/json', JSON.stringify({ jobs: [{ id: 'j1', name: 'Overseer' }] }));
@@ -88,5 +121,12 @@ describe('a 200 whose body is JSON, as Hermes answers (4)', () => {
     await gatewayAnswering('application/json', JSON.stringify({ servers: [] }));
 
     await expect(call('hermes:mcp:servers')).resolves.toEqual({ success: true, servers: [] });
+  });
+
+  it('a board whose task ids are numbers is read', async () => {
+    const board = { columns: [{ name: 'todo', tasks: [{ id: 41, title: 'first' }] }] };
+    await gatewayAnswering('application/json', JSON.stringify(board));
+
+    await expect(call('hermes:kanban:board')).resolves.toEqual({ success: true, board });
   });
 });

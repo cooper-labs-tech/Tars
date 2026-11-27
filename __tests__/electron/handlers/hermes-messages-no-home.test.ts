@@ -29,6 +29,11 @@ import * as path from 'node:path';
  *    hermes:testGateway), carry the URL's user name, password or query, or the
  *    dashboard token. The Audit measured they do not, for a URL with
  *    user:password@ and ?token=: this keeps that measured.
+ * 6. A connection file written before 1.9.2, still holding its token, whose
+ *    one-time move into hermes-token cannot be written: configuredHermesConnection
+ *    threw Node's file error through every gateway, overseer and memory channel,
+ *    Electron's words and the home's path with it. It is a refusal in words,
+ *    the home said ~, and never the token. Added after the fix of 1 to 5.
  */
 
 const handlers = vi.hoisted(() => new Map<string, (...args: unknown[]) => Promise<unknown>>());
@@ -93,6 +98,32 @@ describe('a connection file Tars cannot use (1, 2)', () => {
 
     expect(answer).toEqual({ success: false, error: `The Hermes connection file (hermes-connection.json) ${why}: save the connection again in Settings, Hermes.` });
     expect(answer.error).not.toContain(home);
+  });
+});
+
+describe('a connection file holding its token, which cannot be moved out of it (6)', () => {
+  const OLD = JSON.stringify({ mode: 'remote', url: 'http://127.0.0.1:9', authMode: 'token', token: 'old-token-secret' });
+
+  it('Schedules is told why in words, the home said ~, never the token', async () => {
+    writeConnectionFile(OLD);
+    blockWith(tokenFile);
+
+    const answer = await call('hermes:crons:list');
+
+    expect(answer.success).toBe(false);
+    expect(answer.error).toMatch(/^The Hermes connection file \(hermes-connection\.json\) holds a token Tars could not move out of it \(.*hermes-token.*\): save the connection again in Settings, Hermes\.$/);
+    expect(answer.error).not.toContain(home);
+    expect(answer.error).not.toContain('old-token-secret');
+  });
+
+  it('the overseer and memory channels refuse too, never a throw', async () => {
+    writeConnectionFile(OLD);
+    blockWith(tokenFile);
+    const { usableHermesConnection } = await import('../../../electron/services/hermes-config');
+
+    expect(usableHermesConnection()).toBeNull(); // memory:sources and memory:search read it so
+    await expect(call('hermes:connection:get')).resolves.toBeTruthy();
+    await expect(call('hermes:mcp:servers')).resolves.toMatchObject({ success: false });
   });
 });
 
