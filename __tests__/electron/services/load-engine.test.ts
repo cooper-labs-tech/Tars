@@ -28,6 +28,9 @@ import type { LoadTask } from '../../../electron/services/load-pool';
  *      agent can write it) is; a run without a stop runs on, when Tars cannot know what its sessions did ("Tars
  *      restarted during the window", an error).
  *  E7. A worktree path the guard refuses still reaches git.
+ *  E8. (Found by the E2E's first runs, written before its fix.) Two arrivals due at once (the agents' creation took
+ *      longer than their gap) are both admitted past max_concurrent, or take one agent, the second's admission running
+ *      while the first waits on git: an admitted arrival must hold its place and its agent before anything awaits.
  */
 
 let dir: string;
@@ -179,6 +182,20 @@ describe('arrivals', () => {
     expect(f.log.find(x => x.n === 2)).toMatchObject({ agentId: 'a1', harness: 'codex' });
     // a1 is busy, a2 runs qwen-code, which the task does not take.
     expect(f.log.find(x => x.n === 3)).toMatchObject({ blocked: 'no_harness' });
+  });
+});
+
+describe('two arrivals due at once', () => {
+  it('E8: the first holds its place and its agent before it awaits anything; the second is blocked, max_concurrent', async () => {
+    const p = plan([task({})], [{ n: 1, taskId: 'fix-retry', offsetMs: 0 }, { n: 2, taskId: 'fix-retry', offsetMs: 0 }], 1);
+    const due: Array<() => void> = [];
+    const e = createLoadEngine(deps(p, { setTimer: (fn) => { due.push(fn); return due.length; } }));
+    e.start(RUN);
+    // Both fire in one go, as overdue timers do, nothing awaited between them.
+    for (const fn of due) fn();
+    await c.advance(T0);
+    expect(f.launches).toHaveLength(1);
+    expect(f.log.find(x => x.n === 2)).toMatchObject({ blocked: 'max_concurrent' });
   });
 });
 
