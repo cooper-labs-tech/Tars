@@ -363,6 +363,12 @@ export class TraceStore {
     return r?.updated_seq;
   }
 
+  /** The project folder a session was recorded in, if there is such a session. */
+  projectOf(traceId: string): string | undefined {
+    const r = this.db.prepare('SELECT project_path FROM traces WHERE trace_id = ?').get(traceId) as { project_path?: string } | undefined;
+    return r?.project_path;
+  }
+
   /** The start of the newest session in the store, if any. */
   newestStartedAt(): number | undefined {
     const r = this.db.prepare('SELECT MAX(started_at) AS m FROM traces').get() as { m: number | null };
