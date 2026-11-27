@@ -1,8 +1,7 @@
-import { exec, execFile } from 'child_process';
 import { buildFullPath } from './path-builder';
 import { getProvider } from '../providers';
-import { cliInvocation } from '../providers/cli-exec';
 import { posixWords, withPath } from '../platform';
+import { CliProbeError, probeCli } from '../core/cli-probe';
 
 interface GeneratedTask {
   title: string;
@@ -12,12 +11,6 @@ interface GeneratedTask {
   priority: 'low' | 'medium' | 'high';
   labels: string[];
   requiredSkills: string[];
-}
-
-/** A provider's one-shot command line as the file to start and its argv, on win32 (cli-exec.ts). */
-function argvOf(command: string, env: NodeJS.ProcessEnv): { file: string; args: string[] } {
-  const words = posixWords(command);
-  return cliInvocation(words[0], words.slice(1), env);
 }
 
 /**
@@ -61,30 +54,23 @@ IMPORTANT: Respond with ONLY the JSON object, no markdown, no explanation, just 
   try {
     // win32: no shell. The provider's command line is read back into argv
     // (the closed grammar of platform/posix-words.ts) and the binary resolved
-    // (an npm claude.cmd), then started with execFile. Through `exec` it went
-    // to cmd.exe, where `'claude'` is no command, and the request and the
-    // project names, which are user text, split at a newline and ran what
-    // followed an `&`. darwin/linux: the line /bin/sh has always run.
+    // (an npm claude.cmd) by probeCli, hidden. Through `exec` it went to
+    // cmd.exe, where `'claude'` is no command, and the request and the project
+    // names, which are user text, split at a newline and ran what followed an
+    // `&`. darwin/linux: the line /bin/sh has always run, as `exec` ran it.
+    // Started by probeCli (core/cli-probe.ts), so that its 30 s give-up and the
+    // quit end it with what it started (27/11): `exec` signalled the shell
+    // alone at its time, and nothing ended it at the quit.
     const env = withPath(process.env, fullPath, process.platform) as NodeJS.ProcessEnv;
-    const options = {
-      env,
-      timeout: 30000, // 30 second timeout
-      maxBuffer: 1024 * 1024,
-    };
-    const windowsCli = process.platform === 'win32' ? argvOf(command, env) : undefined;
-    const claudeResult = await new Promise<string>((resolve, reject) => {
-      const done = (error: Error | null, stdout: string, stderr: string) => {
-        if (error) {
-          console.error('[Kanban] Claude CLI error:', stderr || error.message);
-          reject(error);
-        } else {
-          resolve(stdout.trim());
-        }
-      };
-      // No console window for it: Tars is a GUI program, the CLI a console one.
-      if (windowsCli) execFile(windowsCli.file, windowsCli.args, { ...options, windowsHide: true }, done);
-      else exec(command, options, done);
-    });
+    const [file, ...args] = process.platform === 'win32' ? posixWords(command) : ['/bin/sh', '-c', command];
+    let claudeResult: string;
+    try {
+      claudeResult = (await probeCli(file, args, { env, timeoutMs: 30_000, maxBuffer: 1024 * 1024 })).stdout.trim();
+    } catch (error) {
+      const stderr = error instanceof CliProbeError ? error.stderr : '';
+      console.error('[Kanban] Claude CLI error:', stderr || (error instanceof Error ? error.message : String(error)));
+      throw error;
+    }
 
     // Parse the JSON response
     let parsedTask;

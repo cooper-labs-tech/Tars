@@ -60,9 +60,16 @@ function prepare<O extends { env?: NodeJS.ProcessEnv }>(name: string, args: read
   return { ...invocation, options: env === options.env ? options : { ...options, env } };
 }
 
+/**
+ * How long a synchronous CLI call (`mcp add`, `mcp remove`) is waited for when its caller names no time. It blocks the
+ * main thread, which paints the window and pumps every terminal, so a CLI that hangs froze Tars for good (27/11). A
+ * `claude mcp add` takes about a second; past this, the child is ended and the call throws, as on any failure.
+ */
+const SYNC_CLI_TIMEOUT_MS = 20_000;
+
 /** execFileSync for a CLI named or configured by the user. Throws CliNotRunnableError before any spawn. */
 export function execCliSync(name: string, args: readonly string[], options: ExecFileSyncOptionsWithStringEncoding): string {
-  const run = prepare(name, args, options);
+  const run = prepare(name, args, options.timeout === undefined ? { ...options, timeout: SYNC_CLI_TIMEOUT_MS } : options);
   return execFileSync(run.file, run.args, run.options);
 }
 
