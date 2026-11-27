@@ -1,4 +1,5 @@
 import * as crypto from 'crypto';
+import * as http from 'http';
 import * as https from 'https';
 import { RouteApp, RouteContext, SendJson } from './types';
 
@@ -19,6 +20,24 @@ const X_API_HOST = 'api.x.com';
 const SOCIALDATA_HOST = 'api.socialdata.tools';
 /** As long as the servers waited for X or SocialData themselves (mcp-shared/src/http.ts, API_WAIT_MS). */
 const SERVICE_WAIT_MS = 60_000;
+
+/**
+ * An E2E spec's stand-in of X's API (DOROTHY_X_API_URL): read under DOROTHY_E2E only, never by a packaged build, and
+ * only as a plain http:// address on 127.0.0.1; else null, and the call goes to api.x.com.
+ */
+export function xApiTestUrl(env: NodeJS.ProcessEnv, packaged: boolean): URL | null {
+  if (packaged || env.DOROTHY_E2E !== '1' || !env.DOROTHY_X_API_URL) return null;
+  try {
+    const url = new URL(env.DOROTHY_X_API_URL);
+    return url.protocol === 'http:' && url.hostname === '127.0.0.1' ? url : null;
+  } catch {
+    return null;
+  }
+}
+
+/** Where X is reached in this run: its own host, or the stand-in main set from xApiTestUrl. */
+let xApiTest: URL | null = null;
+export function useTestXApi(url: URL | null): void { xApiTest = url; }
 
 /** The three writes the X tools make: a post or a reply, and a delete of one tweet. */
 function xCallAllowed(method: unknown, endpoint: unknown): boolean {
@@ -56,9 +75,9 @@ function oauthHeader(method: string, url: string, creds: XCredentials): string {
 }
 
 /** One https call: its status and its body as text. Rejects on a network failure or past the wait. */
-function call(options: https.RequestOptions, body?: string): Promise<{ status: number; data: string }> {
+function call(options: https.RequestOptions, body?: string, transport: Pick<typeof https, 'request'> = https): Promise<{ status: number; data: string }> {
   return new Promise((resolve, reject) => {
-    const req = https.request(options, (res) => {
+    const req = transport.request(options, (res) => {
       let data = '';
       res.setEncoding?.('utf8');
       res.on('data', (chunk) => { data += chunk; });
@@ -99,12 +118,12 @@ export function registerIntegrationRoutes(app: RouteApp, ctx: RouteContext): voi
     const url = `https://${X_API_HOST}${endpoint}`;
     try {
       const answer = await call({
-        hostname: X_API_HOST, port: 443, path: endpoint as string, method: method as string,
+        hostname: xApiTest?.hostname ?? X_API_HOST, port: xApiTest ? Number(xApiTest.port) || 80 : 443, path: endpoint as string, method: method as string,
         headers: {
           Authorization: oauthHeader(method as string, url, { apiKey: xApiKey, apiSecret: xApiSecret, accessToken: xAccessToken, accessTokenSecret: xAccessTokenSecret }),
           'Content-Type': 'application/json', Accept: 'application/json',
         },
-      }, bodyStr);
+      }, bodyStr, xApiTest ? http : https);
       sendJson(answer);
     } catch (err) {
       sendJson({ error: `X API request failed: ${failure(err)}` }, 502);
