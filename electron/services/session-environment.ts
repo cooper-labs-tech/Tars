@@ -14,7 +14,7 @@ import * as path from 'path';
  * - **Linux**: the distribution's NAME and VERSION_ID from os-release; the model from DMI (sys_vendor and
  *   product_name, readable by every user), else the device tree's (an ARM board).
  * - **Windows**: the system's version (10.0.26100); the model from the registry's BIOS key (SystemManufacturer and
- *   SystemProductName).
+ *   SystemProductName), read by `%SystemRoot%\System32\reg.exe`, never `reg` by its bare name.
  *
  * Never read: a serial number or a hardware uuid (DMI's product_serial, product_uuid, board_serial; ioreg's platform
  * serial; system_profiler; wmic), the computer's name, the user's name, an address. A value that cannot be read is
@@ -50,6 +50,8 @@ export interface SessionEnvironment extends MachineFacts {
 /** What the facts are read through: the system's files, a few commands, and node's os module, nothing else. */
 export interface EnvironmentIo {
   platform: NodeJS.Platform;
+  /** Windows: %SystemRoot%, the folder reg.exe is run from (never by its bare name, looked for in the working folder first). */
+  systemRoot?: string;
   /** The system's own version (Electron's process.getSystemVersion), when the caller has it. */
   systemVersion?(): string;
   readFile(file: string): Promise<string>;
@@ -65,6 +67,7 @@ export interface EnvironmentIo {
 export function nodeEnvironmentIo(systemVersion?: () => string): EnvironmentIo {
   return {
     platform: process.platform,
+    systemRoot: process.env.SystemRoot ?? process.env.SYSTEMROOT,
     systemVersion,
     readFile: (file) => fs.promises.readFile(file, 'utf8'),
     run: (file, args) => new Promise((resolve, reject) => {
@@ -114,6 +117,15 @@ function joinModel(vendor: string | null, product: string | null): string | null
 const DMI = '/sys/devices/virtual/dmi/id';
 const BIOS_KEY = 'HKLM\\HARDWARE\\DESCRIPTION\\System\\BIOS';
 
+/**
+ * reg.exe by its full path, as macOS's commands are run: Windows looks for a bare name in the working folder before
+ * the PATH. %SystemRoot% when it is a plain drive-absolute folder, else C:\Windows.
+ */
+function regExe(systemRoot: string | undefined): string {
+  const root = systemRoot && /^[A-Za-z]:[\\/][^:]*$/.test(systemRoot) ? systemRoot : 'C:\\Windows';
+  return path.win32.join(root, 'System32', 'reg.exe');
+}
+
 /** The machine and its system, every value read on its own: one that fails is null and leaves the rest standing. */
 export async function machineFacts(io: EnvironmentIo): Promise<MachineFacts> {
   const cpus = await attempt(() => io.cpus());
@@ -138,7 +150,8 @@ export async function machineFacts(io: EnvironmentIo): Promise<MachineFacts> {
   } else if (io.platform === 'win32') {
     facts.osName = 'Windows';
     facts.osVersion = systemVersion ?? facts.kernel;
-    const value = async (name: string) => registryValue((await attempt(() => io.run('reg', ['query', BIOS_KEY, '/v', name]))) ?? '', name);
+    const reg = regExe(io.systemRoot);
+    const value = async (name: string) => registryValue((await attempt(() => io.run(reg, ['query', BIOS_KEY, '/v', name]))) ?? '', name);
     facts.machineModel = joinModel(await value('SystemManufacturer'), await value('SystemProductName'));
   } else if (io.platform === 'linux') {
     const release = (await attempt(() => io.readFile('/etc/os-release'))) ?? (await attempt(() => io.readFile('/usr/lib/os-release'))) ?? '';

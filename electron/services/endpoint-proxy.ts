@@ -137,10 +137,13 @@ const defaultSleep = (ms: number, signal: AbortSignal): Promise<void> => new Pro
   signal.addEventListener('abort', () => { clearTimeout(timer); resolve(); }, { once: true });
 });
 
-/** A harness's session id as a header gave it: one token of printable characters, 200 at most; else none. */
+/** The longest session id the back-office takes: a longer one is not kept, never cut (a cut id is another session's). */
+export const MAX_SESSION_ID_CHARS = 128;
+
+/** A harness's session id as a header gave it: one token of printable characters, MAX_SESSION_ID_CHARS at most; else none. */
 function sessionIdOf(value: string | string[] | undefined): string | undefined {
   const v = (Array.isArray(value) ? value[0] : value)?.trim();
-  return v && v.length <= 200 && /^[\x21-\x7e]+$/.test(v) ? v : undefined;
+  return v && v.length <= MAX_SESSION_ID_CHARS && /^[\x21-\x7e]+$/.test(v) ? v : undefined;
 }
 
 function presentedToken(headers: http.IncomingHttpHeaders): { token: string; form: 'bearer' | 'x-api-key' } | null {

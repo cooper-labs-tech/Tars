@@ -276,7 +276,8 @@ from the window, or from an agent's drop file (`~/.tars/endpoint-keys/<name>.key
   Tars did not type counts in `unknown_turns`;
 - the outcome holds the branch, the head, held requests and errors;
 - each session keeps its environment: the harness's exact version, read from the binary its terminal started (an npm
-  package's own version, else its `--version` asked in a throwaway home, `harness-version.ts`), the harness's own
+  package's own version, else its `--version` asked in a throwaway folder that is its working folder and its home,
+  `harness-version.ts`), the harness's own
   session id (codex's `session-id`), the system's name, version, kernel and architecture, the machine's model, chip,
   cores and memory, exact, read by each system's own means, Tars's version, the locale, the time zone and its offset,
   and whether it ran on battery (`session-environment.ts`); and the sleeps, wakes and changes of power during it.
@@ -307,7 +308,8 @@ consent, opted-in sessions are uploaded:
 - each session with its environment, its power events, the harness's own session id, its median round trip and its
   clock offset, and each request with its live count, its round trip, its clock offset and the endpoint's queue and
   upstream times, each field on its own line of the notice; the back-office takes them before Tars sends them, as
-  for `side`;
+  for `side`. A harness version over 40 characters or a session id over 128, the back-office's limits, is left out,
+  never cut;
 - resumed after a restart, with backoff.
 
 `deleteEverywhere` asks the back-office to delete all of it.

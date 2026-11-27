@@ -1173,7 +1173,9 @@ else.
   withoutInstallIds), and the export and the upload are read from the store.
 - A session's environment (`services/session-environment.ts`) is read from the system's files and a few commands, never
   a serial number or a hardware uuid, the computer's name, the user's or an address. A harness's version, when its
-  package does not say it, is asked in a throwaway folder with its own home and npm prefix, removed after the probe.
+  package does not say it, is asked in a throwaway folder, which is its working folder, its home and its npm prefix,
+  removed after the probe. On Windows, the machine's model is read by `%SystemRoot%\System32\reg.exe`, never `reg`
+  by its bare name, which Windows looks for in the working folder first.
 - What is kept is bounded: off by default for every project and every agent, a size cap and a retention set in
   Settings, and a delete in the back-office.
 
