@@ -36,7 +36,8 @@ import * as path from 'path';
  *    not one whose name merely starts alike), and anyone's under /Users, /home or a drive's \Users (a Windows name
  *    with a space when a separator follows it), slashes escaped or not, not /Users/Shared or \Users\Public and their
  *    kin.
- * 9. `email`: an address with a dotted domain, Unicode letters included; not `git@host:` (a git remote over ssh).
+ * 9. `email`: an address with a dotted domain, Unicode letters included, its @ written plainly or as %40 (one number
+ *    for both); not `git@host:` (a git remote over ssh).
  * 10. `ip`: IPv4 and IPv6 addresses, an IPv4-mapped one whole; not the loopback, unspecified or broadcast ones, x.0.0.0,
  *     a four-part version written after v, version or build, or a package spec's (@scope/tool@1.0.0.1,
  *     vendor/lib@1.2.3.4), nor a pair of words in hex letters (add::bad). After a user's name it is an address
@@ -51,7 +52,8 @@ import * as path from 'path';
  *
  * What it cannot catch: a secret with no known shape, no telling name and not held by Tars or a .env file (a password
  * in prose, a key in a YAML file under an innocent name); a secret shorter than its rule's floor; a secret or personal
- * data cut across two strings, encoded (base64, hex, URL-encoded) or inside an image; a name Tars does not know;
+ * data cut across two strings, encoded (base64, hex, URL-encoded but for an e-mail's %40) or inside an image; a name
+ * Tars does not know;
  * another person's given or family name alone, or a name of one word that is not the account's; a phone number
  * written another way, or in full-width digits; a home written ~name. And it applies to what is uploaded only: the
  * endpoint the agent talked to, and the local store, saw the session as it was.
@@ -249,11 +251,17 @@ function homeFinders(ctx: ScrubContext): Finder[] {
   ];
 }
 
-const EMAIL = /(?<![\p{L}\p{N}._%+\-])([\p{L}\p{N}._%+\-]+)@((?:[\p{L}\p{N}](?:[\p{L}\p{N}\-]{0,61}[\p{L}\p{N}])?\.)+\p{L}{2,})(?![\p{L}\p{N}\-])/gu;
+/**
+ * An e-mail address, its @ written plainly or as %40 (an API URL's query, a mailto:), the commonest encoding (the
+ * Audit on #679 at 7197cae43). The local part takes a % but never a %40, so `a%40b.example@host` is the address
+ * a@b.example followed by @host.
+ */
+const EMAIL = /(?<![\p{L}\p{N}._%+\-])((?:[\p{L}\p{N}._+\-]|%(?!40))+)(?:@|%40)((?:[\p{L}\p{N}](?:[\p{L}\p{N}\-]{0,61}[\p{L}\p{N}])?\.)+\p{L}{2,})(?![\p{L}\p{N}\-])/gu;
 const emailFinder: Finder = part => spansOf(EMAIL, part, (m) => {
   // git@host:org/repo is a remote over ssh, no person's address.
   if (m[1] === 'git' && part[m.index! + m[0].length] === ':') return null;
-  return { key: m[0].normalize('NFC').toLowerCase() };
+  // One key for the address however its @ is written, so it takes one number.
+  return { key: m[0].replace('%40', '@').normalize('NFC').toLowerCase() };
 }, 'email', 'EMAIL');
 
 const OCTET = '(?:25[0-5]|2[0-4]\\d|1\\d\\d|[1-9]?\\d)';
