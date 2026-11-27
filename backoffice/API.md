@@ -210,6 +210,20 @@ missing blob, then `PUT` the batch, and send any `missingBlobs` it reports.
 | `mixed` | bool | no | Text written by a model the client does not trace entered the session |
 | `unknownTurns` | int ≥ 0 | no | Turns whose author the client could not attribute |
 | `outcome` | object ≤ 16 KiB | no | Free-form evidence of how the session ended (task status, branch, head, tests, gates) |
+| `environment` | Environment | no | The machine and the system at the session's start, exact values (below). Sent again without it, a session keeps the one it had |
+| `events` | array ≤ 10,000 | no | Power events during the session, `{ "at": ms, "kind": "sleep" \| "wake" \| "battery" \| "ac" }`, no other key. The list as a whole: a session sent with it replaces the list it had, sent without it keeps it |
+
+**Environment.** An object of these keys and no other; a key may be left out. Any other key (a serial number,
+a host name, a user name) refuses the batch.
+
+| Key | Type |
+|---|---|
+| `osName`, `osVersion`, `kernel`, `arch`, `machineModel`, `chip`, `tarsVersion`, `locale`, `timeZone` | string ≤ 200, or null when the client could not read it |
+| `tarsArch` | string ≤ 40: the architecture Tars itself runs as |
+| `cpuCores` | integer 0 to 4096, or null |
+| `ramBytes` | integer ≥ 0, or null |
+| `utcOffsetMinutes` | integer -840 to 840, the time zone's offset at the session's start, or null |
+| `onBattery` | bool, or null when the system does not say |
 
 ### Turn
 
@@ -249,6 +263,7 @@ missing blob, then `PUT` the batch, and send any `missingBlobs` it reports.
 | `finishReason` | string ≤ 40 | no | |
 | `streamed` | bool | no | |
 | `side` | bool | no | `true` for a harness's side request (a title request with no tools, a memory request with another system prompt), `false` for the agent's own loop. Leave it out when the client does not know. A request sent again without it keeps the mark it had |
+| `liveSessions` | int 0 to 1,000,000 | no | How many sessions were live on the install when the request was sent. Sent again without it, a request keeps the count it had |
 | `reqBytes`, `respBytes` | int ≥ 0 | no | |
 | `messages` | array ≤ 10,000 | yes | `{ "position": int, "hash": sha256, "direction": "input" \| "output" }`: what the request sent, in order, then what it produced |
 
@@ -305,6 +320,12 @@ Every request read back, here and in § 6.5, carries `side`, always present:
   so a side request is never passed off as a main one. The server never turns a missing mark into
   `false`.
 
+The fields added after a client may have been built without them are always present when read, with `null` for
+"the uploading Tars did not send it":
+
+- every session, here and in § 6.1: `environment` (the object as sent) and `events` (the list as sent);
+- every request, here and in § 6.5: `liveSessions`.
+
 ### 6.3 `GET /v1/read/blobs/{hash}`
 
 - The blob's bytes, `Content-Type: application/octet-stream`, with its SHA-256 in `ETag`.
@@ -340,6 +361,10 @@ The server stores what it is given, so privacy is decided on the client:
   names; a reader only needs to group sessions by project, which the key allows. The same project
   on two installs gets two unrelated keys.
 - **Endpoints:** an `endpointKey` of the same kind, and a display name. Never a base URL or a key.
+- **The machine:** a session's `environment` holds exact values (the model, the chip, the cores, the memory, the
+  system, the locale, the time zone), and only the keys of § 5's table, so no serial number, host name or user
+  name can come with them. The server keeps them on the session's own row: every deletion of the session or the
+  install takes them, and the operator's deletion log and the server's log never hold them.
 - **Content:** message and tool blobs, after the client's own scrubbing of secrets.
 - **Never:** API keys, tokens, environment variables, user names or email addresses as metadata,
   nor an agent's name (free text a person typed; the `agentId` is enough to join on, and a
@@ -365,3 +390,4 @@ before the clients.
 | Added | Field |
 |---|---|
 | 26/11/2026 | `side` on a request (§ 5, read back in §§ 6.2 and 6.5), migration `002_request_side` |
+| 27/11/2026 | `environment` and `events` on a session (read back in §§ 6.1 and 6.2), `liveSessions` on a request (§§ 6.2 and 6.5), migration `003_session_environment` |

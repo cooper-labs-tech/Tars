@@ -142,6 +142,7 @@ const SESSION_COLS: Col[] = [
   ['finalStatus', 'final_status', 'text'], ['turnCount', 'turn_count', 'int'], ['requestCount', 'request_count', 'int'],
   ['tokensIn', 'tokens_in', 'bigint'], ['tokensCached', 'tokens_cached', 'bigint'], ['tokensOut', 'tokens_out', 'bigint'],
   ['mixed', 'mixed', 'bool'], ['unknownTurns', 'unknown_turns', 'int'], ['outcome', 'outcome', 'jsonb'],
+  ['environment', 'environment', 'jsonb'], ['events', 'events', 'jsonb'],
 ];
 const TURN_COLS: Col[] = [
   ['sessionId', 'session_id', 'text'], ['index', 'turn_index', 'int'], T('startedAt', 'started_at'), T('endedAt', 'ended_at'),
@@ -157,7 +158,7 @@ const REQUEST_COLS: Col[] = [
   ['params', 'params', 'jsonb'], ['toolsHash', 'tools_hash', 'text'], T('startedAt', 'started_at'), ['ttftMs', 'ttft_ms', 'bigint'],
   ['totalMs', 'total_ms', 'bigint'], ['tokensIn', 'tokens_in', 'bigint'], ['tokensCached', 'tokens_cached', 'bigint'],
   ['tokensOut', 'tokens_out', 'bigint'], ['status', 'status', 'int'], ['error', 'error', 'text'], ['finishReason', 'finish_reason', 'text'],
-  ['streamed', 'streamed', 'bool'], ['side', 'side', 'bool'], ['reqBytes', 'req_bytes', 'bigint'], ['respBytes', 'resp_bytes', 'bigint'],
+  ['streamed', 'streamed', 'bool'], ['side', 'side', 'bool'], ['liveSessions', 'live_sessions', 'int'], ['reqBytes', 'req_bytes', 'bigint'], ['respBytes', 'resp_bytes', 'bigint'],
 ];
 
 /** One INSERT ... SELECT FROM jsonb_to_recordset ... ON CONFLICT per table: a batch is a few queries, never one per row. */
@@ -170,12 +171,25 @@ function upsertSql(table: string, keyField: string, keyCol: string, cols: Col[],
   return `INSERT INTO ${table} (${names}) SELECT ${values} FROM jsonb_to_recordset($2::jsonb) AS x(${rec})
           ON CONFLICT (install_id, ${keyCol}) DO UPDATE SET ${updates}`;
 }
+/**
+ * Columns a row sent again without keeps as they were: a client before them (or one that has not read them yet)
+ * leaves them out, and that must not erase what a newer one sent. Only a value replaces a value.
+ */
+function keepWhenAbsent(sql: string, table: string, columns: string[]): string {
+  let out = sql;
+  for (const c of columns) {
+    const next = out.replace(`${c} = EXCLUDED.${c}`, `${c} = coalesce(EXCLUDED.${c}, ${table}.${c})`);
+    if (next === out) throw new Error(`${table}.${c} is not an updated column`);
+    out = next;
+  }
+  return out;
+}
 const SQL = {
-  sessions: upsertSql('sessions', 'sessionId', 'session_id', SESSION_COLS, { cols: ['changed_seq'], vals: [`nextval('change_seq')`] }).replace(
-    /DO UPDATE SET /, 'DO UPDATE SET received_at = now(), '),
+  sessions: keepWhenAbsent(upsertSql('sessions', 'sessionId', 'session_id', SESSION_COLS, { cols: ['changed_seq'], vals: [`nextval('change_seq')`] }).replace(
+    /DO UPDATE SET /, 'DO UPDATE SET received_at = now(), '), 'sessions', ['environment', 'events']),
   turns: upsertSql('turns', 'turnId', 'turn_id', TURN_COLS),
   // A request sent again without its side mark keeps the one it had: only true or false replaces it.
-  requests: upsertSql('requests', 'requestId', 'request_id', REQUEST_COLS).replace('side = EXCLUDED.side', 'side = coalesce(EXCLUDED.side, requests.side)'),
+  requests: keepWhenAbsent(upsertSql('requests', 'requestId', 'request_id', REQUEST_COLS), 'requests', ['side', 'live_sessions']),
 };
 
 /** The last row of each id wins, as it would had the rows come in separate batches. */

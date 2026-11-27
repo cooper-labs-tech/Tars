@@ -4,8 +4,45 @@
 type Spec =
   | { t: 'id' } | { t: 'hash' } | { t: 'hex'; max: number } | { t: 'str'; max: number }
   | { t: 'int' } | { t: 'bool' } | { t: 'enum'; of: readonly string[] } | { t: 'obj'; maxBytes: number }
-  | { t: 'msgs' };
+  | { t: 'msgs' } | { t: 'count'; max: number } | { t: 'env' } | { t: 'events' };
 type Shape = Record<string, Spec & { req?: boolean }>;
+
+// A session's environment (27/11, the machine and the system at its start, exact values): these keys and no other,
+// so that nothing a client should not send (a serial number, a host name, a user name) can ride along. Each value
+// may be null, "the client could not read it", except the architecture Tars itself runs as.
+type EnvValue = { kind: 'str'; max: number; nullable: boolean } | { kind: 'int'; min: number; max: number } | { kind: 'bool' };
+const ENV_TEXT: EnvValue = { kind: 'str', max: 200, nullable: true };
+const ENVIRONMENT: Record<string, EnvValue> = {
+  osName: ENV_TEXT, osVersion: ENV_TEXT, kernel: ENV_TEXT, arch: ENV_TEXT, machineModel: ENV_TEXT, chip: ENV_TEXT,
+  cpuCores: { kind: 'int', min: 0, max: 4096 }, ramBytes: { kind: 'int', min: 0, max: Number.MAX_SAFE_INTEGER },
+  tarsVersion: ENV_TEXT, tarsArch: { kind: 'str', max: 40, nullable: false }, locale: ENV_TEXT, timeZone: ENV_TEXT,
+  utcOffsetMinutes: { kind: 'int', min: -840, max: 840 }, onBattery: { kind: 'bool' },
+};
+const EVENT_KINDS = ['sleep', 'wake', 'battery', 'ac'];
+const MAX_EVENTS = 10_000;
+
+function checkEnvironment(v: unknown): string | null {
+  if (!isObj(v)) return 'an object of the environment keys';
+  for (const [k, x] of Object.entries(v)) {
+    const s = ENVIRONMENT[k];
+    if (!s) return `an object of the environment keys (${k} is not one)`;
+    if (x === null && !(s.kind === 'str' && !s.nullable)) continue;
+    if (s.kind === 'str' && !(typeof x === 'string' && x.length <= s.max)) return `${k}: a string of at most ${s.max}${s.nullable ? ', or null' : ''}`;
+    if (s.kind === 'int' && !(Number.isSafeInteger(x) && (x as number) >= s.min && (x as number) <= s.max)) return `${k}: an integer from ${s.min} to ${s.max}, or null`;
+    if (s.kind === 'bool' && typeof x !== 'boolean') return `${k}: a boolean, or null`;
+  }
+  return null;
+}
+
+function checkEvents(v: unknown): string | null {
+  if (!Array.isArray(v) || v.length > MAX_EVENTS) return `an array of at most ${MAX_EVENTS} events`;
+  for (const e of v) {
+    if (!isObj(e) || Object.keys(e).some((k) => k !== 'at' && k !== 'kind') || !isInt(e.at) || !EVENT_KINDS.includes(e.kind as string)) {
+      return `items of {at: int, kind: ${EVENT_KINDS.join('|')}}`;
+    }
+  }
+  return null;
+}
 
 const ID = /^[A-Za-z0-9._:-]{1,128}$/;
 const HASH = /^[0-9a-f]{64}$/;
@@ -18,6 +55,7 @@ const SESSION: Shape = {
   nativeSessionId: str(128), endpointKey: str(64), endpointName: str(60), model: r(str(200)), startedAt: r(int), endedAt: int,
   finalStatus: r({ t: 'enum', of: ['open', 'done', 'failed', 'abandoned'] }), turnCount: r(int), requestCount: r(int),
   tokensIn: r(int), tokensCached: r(int), tokensOut: r(int), mixed: bool, unknownTurns: int, outcome: { t: 'obj', maxBytes: 16 * 1024 },
+  environment: { t: 'env' }, events: { t: 'events' },
 };
 const TURN: Shape = {
   turnId: r(id), sessionId: r(id), index: r(int), startedAt: r(int), endedAt: int, gapBeforeMs: int, requestCount: r(int),
@@ -30,6 +68,7 @@ const REQUEST: Shape = {
   modelRequested: str(200), modelServed: str(200), params: { t: 'obj', maxBytes: 16 * 1024 }, toolsHash: hash, startedAt: r(int),
   ttftMs: int, totalMs: int, tokensIn: int, tokensCached: int, tokensOut: int, status: int, error: str(2000), finishReason: str(40),
   streamed: bool, side: bool, reqBytes: int, respBytes: int, messages: r({ t: 'msgs' }),
+  liveSessions: { t: 'count', max: 1_000_000 },
 };
 const MESSAGE: Shape = {
   hash: r(hash), role: r({ t: 'enum', of: ['system', 'user', 'assistant', 'tool', 'developer'] }), createdAt: r(int), size: r(int),
@@ -60,6 +99,9 @@ function checkValue(s: Spec, v: unknown): string | null {
     case 'bool': return typeof v === 'boolean' ? null : 'a boolean';
     case 'enum': return typeof v === 'string' && s.of.includes(v) ? null : `one of ${s.of.join(', ')}`;
     case 'obj': return isObj(v) && Buffer.byteLength(JSON.stringify(v)) <= s.maxBytes ? null : `an object of at most ${s.maxBytes} bytes`;
+    case 'count': return isInt(v) && (v as number) <= s.max ? null : `an integer from 0 to ${s.max}`;
+    case 'env': return checkEnvironment(v);
+    case 'events': return checkEvents(v);
     case 'msgs': {
       if (!Array.isArray(v) || v.length > MESSAGE_REFS) return `an array of at most ${MESSAGE_REFS}`;
       for (const m of v) {

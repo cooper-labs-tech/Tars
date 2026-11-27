@@ -14,7 +14,7 @@ const HASH = /^[0-9a-f]{64}$/;
 
 const SESSION_SELECT = `install_id, session_id, agent_id, project_key, harness, harness_version, native_session_id,
   endpoint_key, endpoint_name, model, started_at, ended_at, final_status, turn_count, request_count, tokens_in, tokens_cached,
-  tokens_out, mixed, unknown_turns, outcome, received_at`;
+  tokens_out, mixed, unknown_turns, outcome, environment, events, received_at`;
 
 function session(r: QueryResultRow) {
   return {
@@ -24,6 +24,8 @@ function session(r: QueryResultRow) {
     model: r.model, startedAt: ms(r.started_at), endedAt: ms(r.ended_at), finalStatus: r.final_status, turnCount: r.turn_count,
     requestCount: r.request_count, tokensIn: r.tokens_in, tokensCached: r.tokens_cached, tokensOut: r.tokens_out, mixed: r.mixed,
     unknownTurns: r.unknown_turns, outcome: r.outcome ?? undefined, receivedAt: ms(r.received_at),
+    // Always present: null is "the uploading Tars did not send it" (one before the field, or one that could not read it).
+    environment: r.environment ?? null, events: r.events ?? null,
   };
 }
 
@@ -139,6 +141,7 @@ function request(r: QueryResultRow) {
     tokensIn: r.tokens_in ?? undefined, tokensCached: r.tokens_cached ?? undefined, tokensOut: r.tokens_out ?? undefined,
     status: r.status ?? undefined, error: r.error ?? undefined, finishReason: r.finish_reason ?? undefined, streamed: r.streamed ?? undefined,
     side: r.side ?? null, // always present: null is "the uploading Tars did not say", which readers treat as side
+    liveSessions: r.live_sessions ?? null,
     reqBytes: r.req_bytes ?? undefined, respBytes: r.resp_bytes ?? undefined,
   };
 }
