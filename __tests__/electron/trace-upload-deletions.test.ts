@@ -4,6 +4,7 @@ import * as os from 'node:os';
 import * as path from 'node:path';
 import * as http from 'node:http';
 import type { AddressInfo } from 'node:net';
+import Database from 'better-sqlite3';
 import { TraceStore } from '../../electron/services/trace-store';
 import { TraceUploader, type UploaderDeps } from '../../electron/services/trace-upload';
 
@@ -29,6 +30,16 @@ import { TraceUploader, type UploaderDeps } from '../../electron/services/trace-
  *    token may be gone).
  * 10. After "delete everything" went through, a per-session delete owed before it is still sent (with a token the
  *     back-office revoked).
+ * Added before their code after the Audit's M1 and I-2 at 98e921347 (27/11):
+ * 11. A session deleted while its first upload is under way (its batches landing after the delete) is owed nothing:
+ *     the copy stays at the back-office.
+ * 12. The same when a pass fails after some of its batches landed: a partial copy stays there, owed nothing, whether
+ *     the session is deleted during the pass or after it.
+ * 13. A session gone is marked uploaded once its batches land: a row for a session that no longer exists.
+ * 14. The mark of a session whose first upload is under way counts it as sent in the window, or takes it out of the
+ *     queue, so a pass that failed never sends it again.
+ * 15. A delete owed to an install that is gone (the back-office answered 401, or its file was removed) stays owed for
+ *     good: nothing can ever send it.
  */
 
 type Seen = { method: string; url: string; auth?: string };
@@ -44,6 +55,11 @@ class BackOffice {
   failDeletes: Array<{ status: number; retryAfter?: string; code?: string }> = [];
   /** How many batch uploads to refuse (500) before taking them again. */
   failBatches = 0;
+  /** Run as each batch arrives, before it is answered: the user's delete while an upload is under way. */
+  onBatch?: (batchId: string, nth: number) => void;
+  /** The answers to the next batches, in order (200 when the list is used up). */
+  batchPlan: number[] = [];
+  batchesSeen = 0;
   down = false;
   async start() {
     this.server = http.createServer((req, res) => {
@@ -76,6 +92,10 @@ class BackOffice {
     if (!this.tokens.has(token)) { this.send(res, 401, { error: 'unauthorized' }); return; }
     if (req.method === 'POST' && url === '/v1/blobs/missing') this.send(res, 200, { missing: [] });
     else if (req.method === 'PUT' && url.startsWith('/v1/batches/')) {
+      this.batchesSeen++;
+      this.onBatch?.(decodeURIComponent(url.slice('/v1/batches/'.length)), this.batchesSeen);
+      const planned = this.batchPlan.shift();
+      if (planned !== undefined && planned !== 200) { this.send(res, planned, { error: 'internal' }); return; }
       if (this.failBatches > 0) { this.failBatches--; this.send(res, 500, { error: 'internal' }); return; }
       this.sessions.add(decodeURIComponent(url.slice('/v1/batches/'.length)).split('.')[0]);
       this.send(res, 200, { missingBlobs: [] });
@@ -133,6 +153,32 @@ function uploader(over: Partial<UploaderDeps> = {}) {
     now: () => clock,
     ...over,
   });
+}
+
+/** A session of `n` requests, each its own turn: with a small batch limit, its upload goes in `n` batches. */
+function seedLong(traceId: string, n: number) {
+  seed(traceId, 1000);
+  const body = (v: unknown) => Buffer.from(JSON.stringify(v));
+  for (let i = 1; i < n; i++) {
+    const at = clock - 1_000_000 + 1000 + i * 10;
+    store.ingest({
+      traceId, agentId: 'agent-1', surface: 'openai_chat', startedAt: at, endedAt: at + 5, status: 200, contentType: 'application/json',
+      requestBody: body({ model: 'open-coder-1', messages: [{ role: 'user', content: `${traceId} step ${i} ${'x'.repeat(200)}` }], tools: [{ type: 'function', function: { name: 'bash' } }] }),
+      responseBody: body({ choices: [{ message: { role: 'assistant', content: 'done' }, finish_reason: 'stop' }], usage: { prompt_tokens: 5, completion_tokens: 1 } }),
+      attempts: 1, heldMs: 0,
+    });
+  }
+  store.endTrace(traceId, clock - 1_000_000 + 5000);
+}
+
+/** The store's upload marks, read beside it. */
+function uploadRows(): Array<{ trace_id: string; uploaded_seq: number }> {
+  const db = new Database(path.join(dir, 'traces.db'), { readonly: true });
+  try {
+    return db.prepare('SELECT trace_id, uploaded_seq FROM uploads ORDER BY trace_id').all() as Array<{ trace_id: string; uploaded_seq: number }>;
+  } finally {
+    db.close();
+  }
 }
 
 /** Sessions sent by a first pass, then the ones named deleted here by the user. */
@@ -263,6 +309,79 @@ describe('the per-session delete owed to the back-office', () => {
     deletion = { owed: true, since: clock };
     await u.runOnce();
     expect(bo.deletesOf()).toEqual([]);
+  });
+
+  it('11 and 13: a session deleted while its first upload lands is owed a delete, and no row is left for it', async () => {
+    const u = uploader();
+    seed('s-race', 1000, 2000);
+    bo.onBatch = () => { if (store.hasTrace('s-race')) store.remove({ traceIds: ['s-race'] }, clock); };
+    expect(await u.runOnce()).toMatchObject({ failed: 0 });
+    expect(bo.sessions.has('s-race'), 'the copy landed').toBe(true);
+    expect(store.owedDeletes(10).map(o => o.traceId)).toEqual(['s-race']);
+    expect(uploadRows(), 'a row for a session that is gone').toEqual([]);
+    bo.onBatch = undefined;
+    await u.runOnce();
+    expect(bo.deletesOf()).toEqual(['s-race']);
+    expect(bo.sessions.has('s-race')).toBe(false);
+  });
+
+  it('12: a pass that fails after a first batch landed leaves a delete owed, the session deleted during it or after', async () => {
+    const u = uploader({ maxBatchBytes: 300 });
+    seedLong('s-during', 3);
+    bo.batchPlan = [200, 500];
+    bo.onBatch = (_id, nth) => { if (nth === 1) store.remove({ traceIds: ['s-during'] }, clock); };
+    expect(await u.runOnce()).toMatchObject({ failed: 1 });
+    expect(bo.sessions.has('s-during'), 'a partial copy landed').toBe(true);
+    expect(store.owedDeletes(10).map(o => o.traceId)).toEqual(['s-during']);
+    bo.onBatch = undefined;
+    clock += 31 * 60_000;
+    await u.runOnce();
+    expect(bo.deletesOf()).toEqual(['s-during']);
+
+    seedLong('s-after', 3);
+    bo.batchPlan = [200, 500];
+    clock += 31 * 60_000;
+    expect(await u.runOnce()).toMatchObject({ failed: 1 });
+    expect(bo.sessions.has('s-after'), 'a partial copy landed').toBe(true);
+    store.remove({ traceIds: ['s-after'] }, clock);
+    expect(store.owedDeletes(10).map(o => o.traceId)).toEqual(['s-after']);
+  });
+
+  it('14: a session whose first upload is under way is not counted sent, and a failed pass sends it again', async () => {
+    const u = uploader({ maxBatchBytes: 300 });
+    seedLong('s-1', 3);
+    let sentDuring = -1;
+    bo.onBatch = (_id, nth) => { if (nth === 1) sentDuring = u.state().sentSessions; };
+    bo.batchPlan = [200, 500];
+    expect(await u.runOnce()).toMatchObject({ failed: 1 });
+    expect(sentDuring).toBe(0);
+    expect(u.state().sentSessions).toBe(0);
+    expect(store.uploadQueue(10).map(q => q.traceId)).toContain('s-1');
+    clock += 31 * 60_000;
+    expect(await u.runOnce()).toMatchObject({ sent: 1, failed: 0 });
+    expect(u.state().sentSessions).toBe(1);
+  });
+
+  it('15: a delete owed to an install that is gone is owed no more', async () => {
+    const u = uploader();
+    await sendThenDelete(u, ['s-1', 's-2'], ['s-1']);
+    bo.tokens.clear();
+    expect(await u.runOnce()).toMatchObject({ failed: 1 });
+    expect(u.state().notice).toBe('forgotten');
+    expect(store.owedDeletes(10)).toEqual([]);
+
+    // Another install, whose file is then removed by hand.
+    const v = uploader();
+    settings.consentAt = '2026-11-27T02:00:00Z';
+    seed('s-3', 3000, 4000);
+    await v.runOnce();
+    store.remove({ traceIds: ['s-3'] }, clock);
+    expect(store.owedDeletes(10).map(o => o.traceId)).toEqual(['s-3']);
+    // Sharing off, so no pass registers again (which would forget it anyway): the file's absence alone must.
+    settings.consentAt = undefined;
+    fs.rmSync(path.join(dir, 'private', 'traces-install.json'));
+    await v.runOnce();
+    expect(store.owedDeletes(10)).toEqual([]);
   });
 
   it('10: after "delete everything" went through, a delete owed before it is never sent', async () => {
