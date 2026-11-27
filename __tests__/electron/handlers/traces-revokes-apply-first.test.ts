@@ -48,6 +48,11 @@ import { assertThrowaway } from '../../setup/throwaway-dirs';
  * V15. (The Audit's M-b at c31811361, a stale form, on the path that writes a grant first.) An agent moves the
  *      endpoint to Y, the owner's form opens on Y, the agent moves it to X, and the owner's save turns traces off and
  *      session headers on, sending Y back: Y is approved and written, and the proxy sends there.
+ * Added before its code (trace feature A4, 27/11):
+ * V16. The install header turned on is a grant like the session headers: in a save that also turns the endpoint's
+ *      traces off, on settings that cannot be written, it applies before it is written (the endpoint then tells the
+ *      install's id though nothing holds the owner's choice), and the answer is ok. Or the window's save drops it,
+ *      so the owner cannot turn it on at all.
  */
 
 assertThrowaway({ DATA_DIR, PRIVATE_DIR });
@@ -262,6 +267,22 @@ describe('a revoke of sharing on settings that cannot be written applies at once
     expect(memory).toEqual(before);
     expect(disk).toEqual(before);
     expect('refused' in ie.endpointTarget(memory, EP)).toBe(true);
+  });
+
+  it('V16. the install header turned on is a grant: written first, never applied unwritten; and the window can turn it on', () => {
+    const shown = { baseUrl: BASE, extraHeaders: {} };
+    const on = call('endpoints:save', { id: EP, sendSessionHeaders: true, shown }) as { ok: boolean; error?: string };
+    expect(on.ok, on.error).toBe(true);
+    failWith = full();
+    const answer = call('endpoints:save', { id: EP, allowTraces: false, sendInstallHeader: true, shown }) as { ok: boolean };
+    const ep = (memory.inferenceEndpoints ?? []).find(e => e.id === EP);
+    expect(ep?.allowTraces, 'the revoke applies').toBe(false);
+    expect(ep?.sendInstallHeader ?? false, 'the grant does not apply unwritten').toBe(false);
+    expect(answer.ok).toBe(false);
+    failWith = null;
+    const granted = call('endpoints:save', { id: EP, sendInstallHeader: true, shown }) as { ok: boolean; endpoint?: { sendInstallHeader?: boolean } };
+    expect(granted).toMatchObject({ ok: true, endpoint: { sendInstallHeader: true } });
+    expect((disk.inferenceEndpoints ?? []).find(e => e.id === EP)?.sendInstallHeader).toBe(true);
   });
 
   describe('V14. the upload state says which note `unsaved` carries', () => {

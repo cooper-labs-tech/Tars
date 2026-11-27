@@ -89,6 +89,18 @@ import { hasPosixModes } from '../setup/platform-limits';
  * 40. A back-office older than the `side` field refuses the batch (422 invalid_batch, it refuses unknown fields), and
  *     the uploader sends it again without the mark, or with a side request marked false; or it marks the session
  *     sent; or it never sends it once the back-office knows the field. The order is the back-office first (SPECS).
+ * Added before its code (trace feature A4, 27/11): the install id an endpoint may be told, so that a deletion of the
+ * whole install reaches the endpoint's own copy of what it served.
+ * 41. An install never registered, or none for the back-office the settings name now, gives an id.
+ * 42. A registered install's id is not given.
+ * 43. After a deletion that went through, the old id is given again; or a new registration after a new consent gives
+ *     the old one, or none.
+ * 44. While a deletion is owed (its DELETE not answered), the id it is meant to remove is still given.
+ * 45. After a 401 (the back-office forgot this install), its id is still given.
+ * 46. An install file that could be neither removed nor emptied after a deletion still gives its id, in this run or in
+ *     the next one (a new uploader reading the same file).
+ * 47. An id that is not a plain token (a line break, a space, over 128 characters) is given, and would break the
+ *     request it goes on, or add a header to it.
  */
 
 type Seen = { method: string; url: string; headers: http.IncomingHttpHeaders; body: Buffer };
@@ -809,5 +821,97 @@ describe('forgetting the progress after a DELETE that went through, on a full di
     expect(await u.runOnce()).toMatchObject({ sent: 1, failed: 0 });
     const sent = bo.rows.flatMap(b => (b as { requests?: Array<{ side?: unknown }> }).requests ?? []);
     expect(sent.map(r => r.side).sort()).toEqual([false, true]);
+  });
+});
+
+describe('the install id an endpoint may be told (trace feature A4)', () => {
+  const installFile = () => path.join(dir, 'private', 'traces-install.json');
+
+  it('41 and 42: none before a registration, nor for another back-office; the registered one\'s id after', async () => {
+    const u = uploader();
+    expect(u.currentInstallId()).toBeNull();
+    settings.consentAt = undefined;
+    seed('t1', 'first');
+    await u.runOnce();
+    expect(u.currentInstallId(), 'no consent, no registration').toBeNull();
+    settings.consentAt = '2026-11-19T00:00:00Z';
+    await u.runOnce();
+    expect(u.currentInstallId()).toBe('inst-1');
+    const registered = settings.url;
+    settings.url = 'http://127.0.0.1:9';
+    expect(u.currentInstallId(), 'another back-office').toBeNull();
+    settings.url = '';
+    expect(u.currentInstallId(), 'no back-office').toBeNull();
+    settings.url = registered;
+    expect(u.currentInstallId()).toBe('inst-1');
+  });
+
+  it('43: after a deletion that went through, never the old id; a new registration gives the new one', async () => {
+    seed('t1', 'first');
+    const u = uploader();
+    await u.runOnce();
+    expect(u.currentInstallId()).toBe('inst-1');
+    expect(await u.deleteEverywhere()).toMatchObject({ ok: true });
+    expect(u.currentInstallId()).toBeNull();
+    clock += 60_000;
+    settings.consentAt = '2026-11-20T00:00:00Z';
+    seed('t2', 'second', clock);
+    clock += 1000;
+    await u.runOnce();
+    expect(u.currentInstallId()).toBe('inst-2');
+    expect(uploader().currentInstallId(), 'read again from the file').toBe('inst-2');
+  });
+
+  it('44: not while a deletion is owed', async () => {
+    seed('t1', 'first');
+    const u = uploader();
+    await u.runOnce();
+    bo.failNext.push({ status: 503, code: 'unavailable' });
+    expect((await u.deleteEverywhere()).ok).toBe(false);
+    expect(deletion.owed).toBe(true);
+    expect(fs.existsSync(installFile()), 'the install kept for the deletion still owed').toBe(true);
+    expect(u.currentInstallId()).toBeNull();
+    expect(uploader().currentInstallId(), 'in the next run').toBeNull();
+  });
+
+  it('45: not after the back-office forgot this install (401)', async () => {
+    seed('t1', 'first');
+    const u = uploader();
+    await u.runOnce();
+    bo.installs.clear();
+    seed('t2', 'second', 2000);
+    expect(await u.runOnce()).toMatchObject({ failed: 1 });
+    expect(u.currentInstallId()).toBeNull();
+  });
+
+  it.skipIf(!hasPosixModes())('46: not from an install file that could be neither removed nor emptied, in this run or the next', async () => {
+    seed('t1', 'first');
+    const u = uploader();
+    await u.runOnce();
+    fs.chmodSync(installFile(), 0o400);
+    fs.chmodSync(path.dirname(installFile()), 0o500);
+    const log = vi.spyOn(console, 'error').mockImplementation(() => {});
+    try {
+      expect(await u.deleteEverywhere()).toMatchObject({ ok: true });
+      expect(JSON.parse(fs.readFileSync(installFile(), 'utf8')).installId, 'the file is still there').toBe('inst-1');
+      expect(u.currentInstallId()).toBeNull();
+      expect(uploader().currentInstallId(), 'in the next run').toBeNull();
+    } finally {
+      fs.chmodSync(path.dirname(installFile()), 0o700);
+      fs.chmodSync(installFile(), 0o600);
+      log.mockRestore();
+    }
+  });
+
+  it('47: an id that is not a plain token is never given', async () => {
+    seed('t1', 'first');
+    await uploader().runOnce();
+    const install = JSON.parse(fs.readFileSync(installFile(), 'utf8'));
+    for (const bad of ['inst-1\r\nX-Other: 1', 'inst 1', 'i'.repeat(129), '', 42]) {
+      fs.writeFileSync(installFile(), JSON.stringify({ ...install, installId: bad }));
+      expect(uploader().currentInstallId(), JSON.stringify(bad)).toBeNull();
+    }
+    fs.writeFileSync(installFile(), JSON.stringify({ ...install, installId: '3b9f6a52-1c0e-4d8a-9f1e-7a2b4c6d8e01' }));
+    expect(uploader().currentInstallId()).toBe('3b9f6a52-1c0e-4d8a-9f1e-7a2b4c6d8e01');
   });
 });

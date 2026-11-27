@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import * as http from 'node:http';
 import type { AddressInfo } from 'node:net';
-import { createEndpointProxy, retryDelayMs, type ProxyDeps, type ProxySession, type HoldEvent } from '../../electron/services/endpoint-proxy';
+import { createEndpointProxy, retryDelayMs, isRefusedExtraHeader, type ProxyDeps, type ProxySession, type HoldEvent, type ProxyTarget } from '../../electron/services/endpoint-proxy';
 import type { WireRecord } from '../../electron/services/trace-store';
 
 /**
@@ -42,6 +42,9 @@ import type { WireRecord } from '../../electron/services/trace-store';
  *     value; an extra header naming the credential, a hop-by-hop header or a session header replaces Tars's own.
  * 23. A stream's first chunk holding only a role, or nothing, is taken as the model's first token: the record says
  *     no time for the first chunk with content, reasoning or a tool call.
+ * 24. (Trace feature A4, 27/11.) The install's back-office id does not reach an endpoint whose target carries it, on a
+ *     POST and a GET alike; or it reaches one whose target does not; or a harness's own X-Install-Id goes through,
+ *     whatever the target says, so a harness could name an install; or an extra header named so replaces Tars's.
  */
 
 type Upstream = { server: http.Server; base: string; seen: Array<{ method?: string; url?: string; headers: http.IncomingHttpHeaders; body: Buffer }>; handler: (req: http.IncomingMessage, res: http.ServerResponse, body: Buffer, n: number) => void };
@@ -381,6 +384,22 @@ describe('the endpoint proxy', () => {
     expect(rec.firstByteAt).toBeDefined();
     expect(rec.firstContentAt).toBeDefined();
     expect(rec.firstContentAt! - rec.firstByteAt!).toBeGreaterThanOrEqual(100);
+  });
+
+  it('24: the install id goes where the target carries it, and nowhere a harness or an extra header puts it', async () => {
+    const ID = '3b9f6a52-1c0e-4d8a-9f1e-7a2b4c6d8e01';
+    let target: ProxyTarget = { baseUrl: up.base, key: KEY, holdMaxSeconds: 600, sendSessionHeaders: true, installId: ID, extraHeaders: { 'X-Install-Id': 'from-extra' } };
+    await startProxy({ targetOf: () => target });
+    await call('/v1/chat/completions', { body: '{}', headers: { 'X-Install-Id': 'forged-by-harness' } });
+    await call('/v1/models', { method: 'GET', headers: { 'x-install-id': 'forged-by-harness' } });
+    expect(up.seen.map(s => s.headers['x-install-id'])).toEqual([ID, ID]);
+    up.seen.length = 0;
+    target = { baseUrl: up.base, key: KEY, holdMaxSeconds: 600, sendSessionHeaders: true };
+    await call('/v1/chat/completions', { body: '{}', headers: { 'X-Install-Id': 'forged-by-harness' } });
+    target = { baseUrl: up.base, key: KEY, holdMaxSeconds: 600 };
+    await call('/v1/chat/completions', { body: '{}', headers: { 'X-Install-Id': 'forged-by-harness' } });
+    expect(up.seen.map(s => s.headers['x-install-id'])).toEqual([undefined, undefined]);
+    expect(isRefusedExtraHeader('X-Install-Id')).toBe(true);
   });
 
   it('19: the wait read from Retry-After, an HTTP date, or nothing, capped at 60 s', () => {

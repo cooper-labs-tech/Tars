@@ -68,6 +68,14 @@ import { cannotSymlink } from '../setup/symlink-privilege';
  *     record) no longer behaves as before.
  * 27. (The window's work on #599, which shows main's words as they come.) The refusal of a save or an approval says
  *     when the agent changed the endpoint as a raw ISO time, not as the other notices do ("12:00 UTC (16:00 +04)").
+ * And the install header (trace feature A4, 27/11): an endpoint that keeps its own copy of what it serves may be told
+ * the install's back-office id, so that a deletion of the whole install reaches that copy too.
+ * 28. The install header is on by default, or on for an endpoint whose session headers are off: it goes only with
+ *     them, so a save asking for it without them is refused, and turning them off turns it off too.
+ * 29. An agent turns it on: like plain http, it is the owner's, in the window.
+ * 30. The proxy's target carries an install id when the switch is off, when the session headers are off, or when no
+ *     id is given (an install registered with no back-office); or it leaves the id out when all three hold.
+ * 31. The view does not say whether the switch is on, so the window cannot show it.
  */
 
 const NOW = '2026-11-19T12:00:00.000Z';
@@ -557,5 +565,53 @@ describe('models and health', () => {
     expect(h.health).toMatchObject({ ok: false, status: 503, latencyMs: 42, at: NOW });
     expect(JSON.stringify(h.health)).not.toContain('sk-zzz');
     expect(JSON.stringify(applyEndpointPatch(keyed.settings, r.endpoint.id, h.patch).inferenceEndpoints)).not.toContain('sk-zzz');
+  });
+});
+
+describe('the install header (trace feature A4)', () => {
+  const ID = '3b9f6a52-1c0e-4d8a-9f1e-7a2b4c6d8e01';
+  const save = (settings: AppSettings, id: string, over: Record<string, unknown>, actor: EndpointActor = OWNER) =>
+    saveEndpoint(settings, { id, ...over, ...(actor === OWNER ? { shown: seenOf(settings, id) } : {}) }, actor, NOW);
+
+  it('28: off by default, only with the session headers, and off again with them', () => {
+    const r = added(base(), OWNER);
+    expect(r.endpoint.sendInstallHeader ?? false).toBe(false);
+    const alone = save(r.settings, r.endpoint.id, { sendInstallHeader: true });
+    expect(alone.ok).toBe(false);
+    if (alone.ok) return;
+    expect(alone.error).toMatch(/session headers/i);
+    const both = save(r.settings, r.endpoint.id, { sendSessionHeaders: true, sendInstallHeader: true });
+    if (!both.ok) throw new Error(both.error);
+    expect(both.endpoint).toMatchObject({ sendSessionHeaders: true, sendInstallHeader: true });
+    const sessionOff = save(both.settings, r.endpoint.id, { sendSessionHeaders: false });
+    if (!sessionOff.ok) throw new Error(sessionOff.error);
+    expect(sessionOff.endpoint).toMatchObject({ sendSessionHeaders: false, sendInstallHeader: false });
+  });
+
+  it('29: an agent does not turn it on', () => {
+    const r = added(base(), OWNER, { sendSessionHeaders: true });
+    const byAgent = save(r.settings, r.endpoint.id, { sendInstallHeader: true }, AGENT);
+    expect(byAgent.ok).toBe(false);
+  });
+
+  it('30: the target carries the id only with both switches on and an id given', () => {
+    const r = added(base(), OWNER, { sendSessionHeaders: true });
+    const on = save(r.settings, r.endpoint.id, { sendInstallHeader: true });
+    if (!on.ok) throw new Error(on.error);
+    expect(endpointTarget(on.settings, r.endpoint.id, ID)).toMatchObject({ installId: ID });
+    expect((endpointTarget(on.settings, r.endpoint.id, null) as { installId?: string }).installId).toBeUndefined();
+    expect((endpointTarget(on.settings, r.endpoint.id) as { installId?: string }).installId).toBeUndefined();
+    expect((endpointTarget(r.settings, r.endpoint.id, ID) as { installId?: string }).installId, 'switch off').toBeUndefined();
+    const sessionOff = save(on.settings, r.endpoint.id, { sendSessionHeaders: false });
+    if (!sessionOff.ok) throw new Error(sessionOff.error);
+    expect((endpointTarget(sessionOff.settings, r.endpoint.id, ID) as { installId?: string }).installId, 'session headers off').toBeUndefined();
+  });
+
+  it('31: the view says whether it is on', () => {
+    const r = added(base(), OWNER, { sendSessionHeaders: true });
+    expect(endpointViews(r.settings, [])[0]).toMatchObject({ sendInstallHeader: false });
+    const on = save(r.settings, r.endpoint.id, { sendInstallHeader: true });
+    if (!on.ok) throw new Error(on.error);
+    expect(endpointViews(on.settings, [])[0]).toMatchObject({ sendInstallHeader: true });
   });
 });
