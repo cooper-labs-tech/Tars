@@ -24,12 +24,15 @@
 // - `codex login status` exits 0 "Logged in using ChatGPT" or 1 "Not logged in", as 0.163 does (measured). With
 //   FAKE_CODEX_SIGN_IN=1 it reads its login as codex does by default, from its home's auth.json, and a home with none
 //   shows 0.163's sign-in screen, waits for a key and writes no session (measured on 0.163); without, it is signed in.
+// - on an inference endpoint (the provider Tars names with `-c model_provider=...`), a turn is a model's through Tars's
+//   proxy, and each command the model asks for goes into the rollout in codex 0.170's lines (endpointTurn, below).
 // Every launch and turn is logged to FAKE_CODEX_LOG, one JSON line each, with whether the agent's token was in its
 // environment, never the token.
 import fs from 'node:fs';
 import path from 'node:path';
 import { randomUUID } from 'node:crypto';
 import { spawn } from 'node:child_process';
+import { runFakeCommand } from './fake-command.mjs';
 
 const LOG = process.env.FAKE_CODEX_LOG;
 const log = (entry) => { if (LOG) fs.appendFileSync(LOG, JSON.stringify({ t: new Date().toISOString(), pid: process.pid, ...entry }) + '\n'); };
@@ -264,6 +267,12 @@ async function turn(text) {
     log({ aborted: true, tag: hold[1] });
     return;
   }
+  if (endpointOf()) {
+    const answer = await endpointTurn(text, turnId);
+    out(`\n• ${answer}\n\n› `);
+    write('event_msg', { type: 'task_complete', turn_id: turnId, last_agent_message: answer });
+    return;
+  }
   let answer = 'ok';
   const approve = /APPROVE (\w+)/.exec(text);
   const send = /SEND (\S+) (.+)$/m.exec(text);
@@ -286,6 +295,74 @@ async function turn(text) {
   }
   out(`\n• ${answer}\n\n› `);
   write('event_msg', { type: 'task_complete', turn_id: turnId, last_agent_message: answer });
+}
+
+/**
+ * On an inference endpoint (trace feature C1): the provider Tars names on the command line, as codex takes it
+ * (`-c model_provider="<id>"`, `-c model_providers.<id>.base_url="..."`, its token in the variable `env_key` names).
+ */
+function endpointOf() {
+  const get = (re) => opts.configs.map(c => re.exec(c)?.[1]).find(Boolean)?.replace(/^"|"$/g, '');
+  const provider = get(/^model_provider=(.+)$/);
+  if (!provider) return null;
+  const base = get(new RegExp(`^model_providers\\.${provider}\\.base_url=(.+)$`));
+  const keyVar = get(new RegExp(`^model_providers\\.${provider}\\.env_key=(.+)$`));
+  return base ? { base: base.replace(/\/+$/, ''), key: keyVar ? process.env[keyVar] ?? '' : '' } : null;
+}
+
+/**
+ * A turn on the endpoint: the model's, through the Responses API, streamed, with codex 0.170's exec_command tool. The
+ * commands one answer asks for run together, as codex's do, each read by e2e/fake-command.mjs (no shell), and go into
+ * the rollout as codex 0.170 writes them (measured on 27/11, electron/services/tool-calls.ts): each call's
+ * `function_call` item; each command's end, as it ends, an `item_completed` CommandExecution (`started_at_ms`,
+ * `completed_at_ms`, `exit_code`, `status`, `aggregated_output`); then, once the answer's last command has ended, each
+ * call's `function_call_output` ("Wall time", "Process exited with code", "Original token count", "Output:"). Nothing
+ * is asked before a command runs.
+ */
+async function endpointTurn(text, turnId) {
+  const ep = endpointOf();
+  const tools = [{ type: 'function', name: 'exec_command', description: 'Runs a command in a PTY, returning output or a session ID for ongoing interaction.', strict: false, parameters: { type: 'object', properties: { cmd: { type: 'string', description: 'Shell command to execute.' }, yield_time_ms: { type: 'number' } }, required: ['cmd'], additionalProperties: false } }];
+  const input = [{ type: 'message', role: 'user', content: [{ type: 'input_text', text }] }];
+  for (let step = 0; step < 6; step++) {
+    const res = await fetch(`${ep.base}/responses`, { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${ep.key}` }, body: JSON.stringify({ model: opts.model, instructions: 'You are a stand-in of codex.', input, tools, tool_choice: 'auto', stream: true }) });
+    const raw = await res.text();
+    log({ model: true, status: res.status, step, keyHead: ep.key.slice(0, 4) });
+    if (!res.ok) return `the endpoint answered ${res.status}`;
+    const items = [];
+    for (const block of raw.split('\n\n')) {
+      const data = block.split('\n').filter(l => l.startsWith('data:')).map(l => l.slice(5).trim()).join('');
+      if (!data) continue;
+      let event;
+      try { event = JSON.parse(data); } catch { continue; }
+      if (event.type === 'response.output_item.done') items.push(event.item);
+    }
+    const calls = items.filter(i => i.type === 'function_call');
+    if (!calls.length) return items.filter(i => i.type === 'message').flatMap(m => m.content ?? []).map(c => c.text ?? '').join('') || 'no answer';
+    for (const c of calls) { write('response_item', c); input.push(c); }
+    const ran = await Promise.all(calls.map(async (c) => {
+      let cmd = '';
+      try { cmd = JSON.parse(c.arguments).cmd ?? ''; } catch { /* no command */ }
+      const started = Date.now();
+      const r = await runFakeCommand(cmd);
+      const completed = Date.now();
+      write('event_msg', {
+        type: 'item_completed', thread_id: sessionId, turn_id: turnId, started_at_ms: started, completed_at_ms: completed,
+        item: {
+          type: 'CommandExecution', id: c.call_id, process_id: String(process.pid), command: ['/bin/sh', '-lc', cmd], cwd: process.cwd(), parsed_cmd: [],
+          source: 'unified_exec_startup', status: r.code === 0 ? 'completed' : 'failed', aggregated_output: r.out, exit_code: r.code,
+          duration: { secs: Math.floor((completed - started) / 1000), nanos: ((completed - started) % 1000) * 1e6 },
+        },
+      });
+      log({ command: true, callId: c.call_id, ms: completed - started, exit: r.code });
+      return { c, r, ms: completed - started };
+    }));
+    for (const { c, r, ms } of ran) {
+      const output = { type: 'function_call_output', call_id: c.call_id, output: `Chunk ID: ${randomUUID().slice(0, 6)}\nWall time: ${(ms / 1000).toFixed(4)} seconds\nProcess exited with code ${r.code}\nOriginal token count: ${Math.ceil(r.out.length / 4)}\nOutput:\n${r.out}` };
+      write('response_item', { ...output, id: `fco_${randomUUID()}` });
+      input.push(output);
+    }
+  }
+  return 'too many steps';
 }
 
 let busy = Promise.resolve();
