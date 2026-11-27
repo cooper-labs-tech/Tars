@@ -18,8 +18,8 @@ import { DEV_URL, apiPort } from './ports.mjs';
  * Two harnesses run on one endpoint through the proxy: Q, a qwen-code agent, and O, an opencode agent (the stand-ins
  * of e2e/fake-clis.mjs, which call the endpoint where Tars points each: OPENAI_BASE_URL for qwen-code, the provider in
  * OPENCODE_CONFIG_CONTENT for opencode). The endpoint is e2e/stand-in-openai-endpoint.mjs, which logs every request's
- * headers; the back-office is a stand-in here that numbers the installs it registers (e2e-inst-1, e2e-inst-2) and
- * takes a deletion. Each step is one turn of each agent, and what the endpoint saw of that turn:
+ * headers; the back-office is a stand-in here that numbers the installs it registers (E2E-Inst-1, E2E-Inst-2, with
+ * capitals: the endpoint is told them in lower case) and takes a deletion. Each step is one turn of each agent, and what the endpoint saw of that turn:
  * 1. The switch off (session headers on), no registration: no X-Install-Id, the session headers there.
  * 2. The switch asked for without the session headers: refused, and the endpoint's view unchanged.
  * 3. The switch on, no registration: no X-Install-Id.
@@ -64,7 +64,8 @@ test('an endpoint is told the install\'s back-office id only with the owner\'s s
       let body: unknown = {};
       if (req.method === 'POST' && req.url === '/v1/installs') {
         const t = `e2e-install-token-${randomBytes(6).toString('hex')}`;
-        tokens.set(t, `e2e-inst-${++installs}`);
+        // With capitals, as a back-office may store a uuid: the endpoint is told it in lower case.
+        tokens.set(t, `E2E-Inst-${++installs}`);
         [status, body] = [201, { installId: tokens.get(t), token: t, limits: {}, retentionDays: 90 }];
       } else if (!tokens.has(token)) {
         [status, body] = [401, { error: 'unauthorized' }];
@@ -194,7 +195,7 @@ test('an endpoint is told the install\'s back-office id only with the owner\'s s
     const deletedAt = Object.keys(steps).indexOf('5-deleted');
     const afterDelete = Object.entries(steps).slice(deletedAt).flatMap(([, s]) => [...s['qwen-code'], ...s.opencode]);
     keep({ backOffice: lines(backOfficeLog) });
-    expect.soft(afterDelete.includes('e2e-inst-1'), 'the deleted id sent again').toBe(false);
+    expect.soft(afterDelete.some(v => v?.toLowerCase() === 'e2e-inst-1'), 'the deleted id sent again, in any case').toBe(false);
   } finally {
     await app?.close().catch(() => {});
     await standin.close();

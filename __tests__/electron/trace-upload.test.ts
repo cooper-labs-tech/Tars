@@ -104,6 +104,8 @@ import { hasPosixModes } from '../setup/platform-limits';
  * 48. (Found at 820d10452, before its fix.) Sharing stopped (the consent withdrawn, with no deletion) still gives the id:
  *     the upload notice the user agreed to is what names it. And so a 401 whose install file could be neither removed
  *     nor emptied gives the forgotten id again after a restart, where no deletion's moment dates it.
+ * 49. (The orchestrator's pin of 27/11: the value is the uuid in lower case.) An id the back-office gave with capitals
+ *     is given as stored, so the endpoint may see two spellings of one install.
  */
 
 type Seen = { method: string; url: string; headers: http.IncomingHttpHeaders; body: Buffer };
@@ -940,6 +942,14 @@ describe('the install id an endpoint may be told (trace feature A4)', () => {
       fs.chmodSync(installFile(), 0o600);
       log.mockRestore();
     }
+  });
+
+  it('49: an id with capitals is given in lower case', async () => {
+    seed('t1', 'first');
+    await uploader().runOnce();
+    const install = JSON.parse(fs.readFileSync(installFile(), 'utf8'));
+    fs.writeFileSync(installFile(), JSON.stringify({ ...install, installId: '3B9F6A52-1C0E-4D8A-9F1E-7A2B4C6D8E01' }));
+    expect(uploader().currentInstallId()).toBe('3b9f6a52-1c0e-4d8a-9f1e-7a2b4c6d8e01');
   });
 
   it('47: an id that is not a plain token is never given', async () => {
