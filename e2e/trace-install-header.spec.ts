@@ -18,14 +18,15 @@ import { DEV_URL, apiPort } from './ports.mjs';
  * Two harnesses run on one endpoint through the proxy: Q, a qwen-code agent, and O, an opencode agent (the stand-ins
  * of e2e/fake-clis.mjs, which call the endpoint where Tars points each: OPENAI_BASE_URL for qwen-code, the provider in
  * OPENCODE_CONFIG_CONTENT for opencode). The endpoint is e2e/stand-in-openai-endpoint.mjs, which logs every request's
- * headers; the back-office is a stand-in here that numbers the installs it registers (E2E-Inst-1, E2E-Inst-2, with
- * capitals: the endpoint is told them in lower case) and takes a deletion. Each step is one turn of each agent, and what the endpoint saw of that turn:
+ * headers; the back-office is a stand-in here that numbers the installs it registers with canonical uuids written in
+ * capitals (INSTALL(1), INSTALL(2) upper-cased: the endpoint is told them in lower case, the value's contract) and takes
+ * a deletion. Each step is one turn of each agent, and what the endpoint saw of that turn:
  * 1. The switch off (session headers on), no registration: no X-Install-Id, the session headers there.
  * 2. The switch asked for without the session headers: refused, and the endpoint's view unchanged.
  * 3. The switch on, no registration: no X-Install-Id.
- * 4. On, registered with the back-office: e2e-inst-1, on every request of both harnesses.
- * 5. After "delete everything" at the back-office (a DELETE answered 200): no X-Install-Id, e2e-inst-1 never again.
- * 6. Sharing given again, a new registration: e2e-inst-2, and e2e-inst-1 nowhere after step 5.
+ * 4. On, registered with the back-office: INSTALL(1), on every request of both harnesses.
+ * 5. After "delete everything" at the back-office (a DELETE answered 200): no X-Install-Id, INSTALL(1) never again.
+ * 6. Sharing given again, a new registration: INSTALL(2), and INSTALL(1) nowhere after step 5.
  * 7. The switch off again: no X-Install-Id.
  * And the upload notice names the install id an endpoint may be told.
  * The artefact: values.json (each step's headers as the endpoint saw them, per agent), the endpoint's request log,
@@ -35,6 +36,8 @@ import { DEV_URL, apiPort } from './ports.mjs';
 const Q = 'eeee5555-0000-4000-8000-0000000000f1';
 const O = 'eeee5555-0000-4000-8000-0000000000f2';
 const EP = 'ep-0e2e04';
+/** The id the back-office stand-in gives its n-th registration, as the endpoint must be told it: a lower-case uuid. */
+const INSTALL = (n: number) => `0e2e0000-0000-4000-8000-${String(n).padStart(12, '0')}`;
 type Api = { electronAPI: Record<string, Record<string, (...a: unknown[]) => Promise<unknown>>> };
 type Entry = Record<string, unknown> & { method?: string; url?: string; headers?: Record<string, string> };
 
@@ -64,8 +67,8 @@ test('an endpoint is told the install\'s back-office id only with the owner\'s s
       let body: unknown = {};
       if (req.method === 'POST' && req.url === '/v1/installs') {
         const t = `e2e-install-token-${randomBytes(6).toString('hex')}`;
-        // With capitals, as a back-office may store a uuid: the endpoint is told it in lower case.
-        tokens.set(t, `E2E-Inst-${++installs}`);
+        // A canonical uuid with capitals, as a back-office may store one: the endpoint is told it in lower case.
+        tokens.set(t, INSTALL(++installs).toUpperCase());
         [status, body] = [201, { installId: tokens.get(t), token: t, limits: {}, retentionDays: 90 }];
       } else if (!tokens.has(token)) {
         [status, body] = [401, { error: 'unauthorized' }];
@@ -170,7 +173,7 @@ test('an endpoint is told the install\'s back-office id only with the owner\'s s
     expect.soft(notice.leaves.join('\n'), 'the notice names the install id an endpoint may be told').toMatch(/endpoint/i);
     expect.soft(consent.ok, `consent: ${consent.error}`).toBe(true);
     const registered = await turn('4-registered');
-    expect.soft(registered, 'step 4: the id on every request of both harnesses').toEqual(registered.map(() => 'e2e-inst-1'));
+    expect.soft(registered, 'step 4: the id on every request of both harnesses').toEqual(registered.map(() => INSTALL(1)));
 
     // 5. Deleted everywhere.
     const deleted = await api<{ ok: boolean; error?: string }>('traces', 'deleteEverywhere');
@@ -185,7 +188,7 @@ test('an endpoint is told the install\'s back-office id only with the owner\'s s
     keep({ again, secondPass });
     expect.soft(again.ok, `consent again: ${again.error}`).toBe(true);
     const reRegistered = await turn('6-registered-again');
-    expect.soft(reRegistered, 'step 6: the new id').toEqual(reRegistered.map(() => 'e2e-inst-2'));
+    expect.soft(reRegistered, 'step 6: the new id').toEqual(reRegistered.map(() => INSTALL(2)));
 
     // 7. The switch off again.
     const off = await api<{ ok: boolean; error?: string }>('endpoints', 'save', { ...owned, sendSessionHeaders: true, sendInstallHeader: false });
@@ -195,7 +198,7 @@ test('an endpoint is told the install\'s back-office id only with the owner\'s s
     const deletedAt = Object.keys(steps).indexOf('5-deleted');
     const afterDelete = Object.entries(steps).slice(deletedAt).flatMap(([, s]) => [...s['qwen-code'], ...s.opencode]);
     keep({ backOffice: lines(backOfficeLog) });
-    expect.soft(afterDelete.some(v => v?.toLowerCase() === 'e2e-inst-1'), 'the deleted id sent again, in any case').toBe(false);
+    expect.soft(afterDelete.some(v => v?.toLowerCase() === INSTALL(1)), 'the deleted id sent again, in any case').toBe(false);
   } finally {
     await app?.close().catch(() => {});
     await standin.close();

@@ -106,9 +106,17 @@ import { hasPosixModes } from '../setup/platform-limits';
  *     nor emptied gives the forgotten id again after a restart, where no deletion's moment dates it.
  * 49. (The orchestrator's pin of 27/11: the value is the uuid in lower case.) An id the back-office gave with capitals
  *     is given as stored, so the endpoint may see two spellings of one install.
+ * 50. (The orchestrator's value contract of 27/11: a lower-case canonical uuid, 8-4-4-4-12 hex, which is all the
+ *     endpoint reads.) An id the upload takes but that is no canonical uuid (`inst-1`, `install.7`, a uuid without
+ *     its dashes, or in braces), or an empty one, is given, so the endpoint ignores it and an install-wide deletion
+ *     silently stops reaching its copy; or it is held back without a word in the log, so a new id format goes unseen;
+ *     or that line names the id, or is written at every request.
  */
 
 type Seen = { method: string; url: string; headers: http.IncomingHttpHeaders; body: Buffer };
+
+/** The install id the fake back-office gives its n-th registration: a canonical uuid, as the real one's randomUUID(). */
+const INST = (n: number) => `0b0e0000-0000-4000-8000-${String(n).padStart(12, '0')}`;
 
 class FakeBackOffice {
   server!: http.Server;
@@ -154,7 +162,7 @@ class FakeBackOffice {
     if (req.method === 'POST' && url === '/v1/installs') {
       const n = ++this.registered;
       const token = `tbi_${n}`;
-      this.installs.set(token, `inst-${n}`);
+      this.installs.set(token, INST(n));
       this.send(res, 201, { installId: this.installs.get(token), token, limits: {}, retentionDays: 90 });
       return;
     }
@@ -844,21 +852,21 @@ describe('the install id an endpoint may be told (trace feature A4)', () => {
     expect(u.currentInstallId(), 'no consent, no registration').toBeNull();
     settings.consentAt = '2026-11-19T00:00:00Z';
     await u.runOnce();
-    expect(u.currentInstallId()).toBe('inst-1');
+    expect(u.currentInstallId()).toBe(INST(1));
     const registered = settings.url;
     settings.url = 'http://127.0.0.1:9';
     expect(u.currentInstallId(), 'another back-office').toBeNull();
     settings.url = '';
     expect(u.currentInstallId(), 'no back-office').toBeNull();
     settings.url = registered;
-    expect(u.currentInstallId()).toBe('inst-1');
+    expect(u.currentInstallId()).toBe(INST(1));
   });
 
   it('43: after a deletion that went through, never the old id; a new registration gives the new one', async () => {
     seed('t1', 'first');
     const u = uploader();
     await u.runOnce();
-    expect(u.currentInstallId()).toBe('inst-1');
+    expect(u.currentInstallId()).toBe(INST(1));
     expect(await u.deleteEverywhere()).toMatchObject({ ok: true });
     expect(u.currentInstallId()).toBeNull();
     clock += 60_000;
@@ -866,8 +874,8 @@ describe('the install id an endpoint may be told (trace feature A4)', () => {
     seed('t2', 'second', clock);
     clock += 1000;
     await u.runOnce();
-    expect(u.currentInstallId()).toBe('inst-2');
-    expect(uploader().currentInstallId(), 'read again from the file').toBe('inst-2');
+    expect(u.currentInstallId()).toBe(INST(2));
+    expect(uploader().currentInstallId(), 'read again from the file').toBe(INST(2));
   });
 
   it('44: not while a deletion is owed', async () => {
@@ -901,7 +909,7 @@ describe('the install id an endpoint may be told (trace feature A4)', () => {
     const log = vi.spyOn(console, 'error').mockImplementation(() => {});
     try {
       expect(await u.deleteEverywhere()).toMatchObject({ ok: true });
-      expect(JSON.parse(fs.readFileSync(installFile(), 'utf8')).installId, 'the file is still there').toBe('inst-1');
+      expect(JSON.parse(fs.readFileSync(installFile(), 'utf8')).installId, 'the file is still there').toBe(INST(1));
       expect(u.currentInstallId()).toBeNull();
       expect(uploader().currentInstallId(), 'in the next run').toBeNull();
       // Sharing given again before a pass registers a new install, in a later run: the file still names the deleted one.
@@ -918,11 +926,11 @@ describe('the install id an endpoint may be told (trace feature A4)', () => {
     seed('t1', 'first');
     const u = uploader();
     await u.runOnce();
-    expect(u.currentInstallId()).toBe('inst-1');
+    expect(u.currentInstallId()).toBe(INST(1));
     settings.consentAt = undefined;
     expect(u.currentInstallId(), 'sharing off').toBeNull();
     settings.consentAt = '2026-11-19T00:00:00Z';
-    expect(u.currentInstallId(), 'sharing on again').toBe('inst-1');
+    expect(u.currentInstallId(), 'sharing on again').toBe(INST(1));
     if (!hasPosixModes()) return;
     bo.installs.clear();
     seed('t2', 'second', 2000);
@@ -931,7 +939,7 @@ describe('the install id an endpoint may be told (trace feature A4)', () => {
     const log = vi.spyOn(console, 'error').mockImplementation(() => {});
     try {
       expect(await u.runOnce()).toMatchObject({ failed: 1 });
-      expect(JSON.parse(fs.readFileSync(installFile(), 'utf8')).installId, 'the file is still there').toBe('inst-1');
+      expect(JSON.parse(fs.readFileSync(installFile(), 'utf8')).installId, 'the file is still there').toBe(INST(1));
       expect(u.currentInstallId()).toBeNull();
       expect(uploader().currentInstallId(), 'in the next run').toBeNull();
       // Sharing given again before a pass registers a new install: the file still names the forgotten one.
@@ -950,6 +958,30 @@ describe('the install id an endpoint may be told (trace feature A4)', () => {
     const install = JSON.parse(fs.readFileSync(installFile(), 'utf8'));
     fs.writeFileSync(installFile(), JSON.stringify({ ...install, installId: '3B9F6A52-1C0E-4D8A-9F1E-7A2B4C6D8E01' }));
     expect(uploader().currentInstallId()).toBe('3b9f6a52-1c0e-4d8a-9f1e-7a2b4c6d8e01');
+  });
+
+  it('50: only a canonical uuid is given; any other id, or none, is held back with one neutral line in the log', async () => {
+    seed('t1', 'first');
+    await uploader().runOnce();
+    const install = JSON.parse(fs.readFileSync(installFile(), 'utf8'));
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    try {
+      for (const bad of ['inst-1', 'install.7', '3b9f6a521c0e4d8a9f1e7a2b4c6d8e01', '{3b9f6a52-1c0e-4d8a-9f1e-7a2b4c6d8e01}', '3b9f6a52-1c0e-4d8a-9f1e-7a2b4c6d8e0']) {
+        fs.writeFileSync(installFile(), JSON.stringify({ ...install, installId: bad }));
+        const u = uploader();
+        warn.mockClear();
+        expect(u.currentInstallId(), bad).toBeNull();
+        expect(u.currentInstallId(), `${bad}, asked again`).toBeNull();
+        const lines = warn.mock.calls.map(c => c.join(' '));
+        expect(lines, `the log for ${bad}`).toHaveLength(1);
+        expect(lines[0]).toMatch(/canonical uuid/i);
+        expect(lines[0], 'the line names the id').not.toContain(bad);
+      }
+      fs.writeFileSync(installFile(), JSON.stringify({ ...install, installId: '' }));
+      expect(uploader().currentInstallId(), 'an empty id').toBeNull();
+    } finally {
+      warn.mockRestore();
+    }
   });
 
   it('47: an id that is not a plain token is never given', async () => {
