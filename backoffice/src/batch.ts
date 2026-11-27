@@ -4,8 +4,9 @@
 type Spec =
   | { t: 'id' } | { t: 'hash' } | { t: 'hex'; max: number } | { t: 'str'; max: number }
   | { t: 'int' } | { t: 'bool' } | { t: 'enum'; of: readonly string[] } | { t: 'obj'; maxBytes: number }
-  | { t: 'msgs' } | { t: 'count'; max: number } | { t: 'env' } | { t: 'events' };
-type Shape = Record<string, Spec & { req?: boolean }>;
+  | { t: 'msgs' } | { t: 'count'; max: number } | { t: 'env' } | { t: 'events' }
+  | { t: 'word' } | { t: 'shape'; shape: Shape } | { t: 'list'; shape: Shape; max: number };
+type Shape = { [k: string]: Spec & { req?: boolean } };
 
 // A session's environment (27/11, the machine and the system at its start, exact values): these keys and no other,
 // so that nothing a client should not send (a serial number, a host name, a user name) can ride along. Each value
@@ -50,12 +51,26 @@ const r = <S extends Spec>(s: S) => ({ ...s, req: true });
 const id = { t: 'id' } as const, hash = { t: 'hash' } as const, int = { t: 'int' } as const, bool = { t: 'bool' } as const;
 const str = (max: number) => ({ t: 'str', max }) as const;
 
+// A kind, a cause, a trigger: a lowercase word, never a name or free text.
+const word = { t: 'word' } as const;
+// What started a session (27/11): its trigger, by kind, and what is known of its task and of the commit it started
+// from. The commit is a bounded string, not hex: the client's scrubber may have replaced it.
+const START: Shape = {
+  trigger: r(word), via: word, taskRef: str(128), taskId: str(128), requesterAgentId: str(128), queuedAt: int, handedAt: int,
+  firstRequestAt: int, commit: str(80), branch: str(255), redelegatedFrom: str(128),
+};
+// A task that left the agent's queue never to start, while the session ran.
+const LOST_DEMAND: Shape = { kind: r({ t: 'enum', of: ['queue_drop'] }), ref: r(str(128)), queuedAt: r(int), at: r(int), reason: r(word) };
+// Who cut a request, why, when, and how many bytes had reached the harness.
+const CANCEL: Shape = { by: r(word), cause: r(word), at: r(int), deliveredBytes: r(int) };
+
 const SESSION: Shape = {
   sessionId: r(id), agentId: id, projectKey: { t: 'hex', max: 64 }, harness: r(str(40)), harnessVersion: str(40),
   nativeSessionId: str(128), endpointKey: str(64), endpointName: str(60), model: r(str(200)), startedAt: r(int), endedAt: int,
   finalStatus: r({ t: 'enum', of: ['open', 'done', 'failed', 'abandoned'] }), turnCount: r(int), requestCount: r(int),
   tokensIn: r(int), tokensCached: r(int), tokensOut: r(int), mixed: bool, unknownTurns: int, outcome: { t: 'obj', maxBytes: 16 * 1024 },
   environment: { t: 'env' }, events: { t: 'events' },
+  start: { t: 'shape', shape: START }, lostDemand: { t: 'list', shape: LOST_DEMAND, max: 1000 },
 };
 const TURN: Shape = {
   turnId: r(id), sessionId: r(id), index: r(int), startedAt: r(int), endedAt: int, gapBeforeMs: int, requestCount: r(int),
@@ -68,7 +83,7 @@ const REQUEST: Shape = {
   modelRequested: str(200), modelServed: str(200), params: { t: 'obj', maxBytes: 16 * 1024 }, toolsHash: hash, startedAt: r(int),
   ttftMs: int, totalMs: int, tokensIn: int, tokensCached: int, tokensOut: int, status: int, error: str(2000), finishReason: str(40),
   streamed: bool, side: bool, reqBytes: int, respBytes: int, messages: r({ t: 'msgs' }),
-  liveSessions: { t: 'count', max: 1_000_000 },
+  liveSessions: { t: 'count', max: 1_000_000 }, cancel: { t: 'shape', shape: CANCEL },
 };
 const MESSAGE: Shape = {
   hash: r(hash), role: r({ t: 'enum', of: ['system', 'user', 'assistant', 'tool', 'developer'] }), createdAt: r(int), size: r(int),
@@ -102,6 +117,16 @@ function checkValue(s: Spec, v: unknown): string | null {
     case 'count': return isInt(v) && (v as number) <= s.max ? null : `an integer from 0 to ${s.max}`;
     case 'env': return checkEnvironment(v);
     case 'events': return checkEvents(v);
+    case 'word': return typeof v === 'string' && /^[a-z][a-z_]{0,39}$/.test(v) ? null : 'a lowercase word of at most 40 (a-z, _)';
+    case 'shape': return checkShape(v, s.shape);
+    case 'list': {
+      if (!Array.isArray(v) || v.length > s.max) return `an array of at most ${s.max}`;
+      for (const item of v) {
+        const e = checkShape(item, s.shape);
+        if (e) return `items: ${e}`;
+      }
+      return null;
+    }
     case 'msgs': {
       if (!Array.isArray(v) || v.length > MESSAGE_REFS) return `an array of at most ${MESSAGE_REFS}`;
       for (const m of v) {
@@ -113,6 +138,22 @@ function checkValue(s: Spec, v: unknown): string | null {
       return null;
     }
   }
+}
+
+/** An object of the shape's keys and no other, each of its type, the required ones present: the first fault, or null. */
+function checkShape(v: unknown, shape: Shape): string | null {
+  if (!isObj(v)) return `an object of ${Object.keys(shape).join(', ')}`;
+  for (const k of Object.keys(v)) if (!(k in shape) && v[k] !== undefined) return `${k} is not a key of it`;
+  for (const [k, s] of Object.entries(shape)) {
+    const x = v[k];
+    if (x === undefined || x === null) {
+      if (s.req) return `${k} is required`;
+      continue;
+    }
+    const e = checkValue(s, x);
+    if (e) return `${k} must be ${e}`;
+  }
+  return null;
 }
 
 function checkRow(kind: string, i: number, row: unknown, shape: Shape, errors: string[]) {

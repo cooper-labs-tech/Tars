@@ -212,6 +212,21 @@ missing blob, then `PUT` the batch, and send any `missingBlobs` it reports.
 | `outcome` | object ≤ 16 KiB | no | Free-form evidence of how the session ended (task status, branch, head, tests, gates) |
 | `environment` | Environment | no | The machine and the system at the session's start, exact values (below). Sent again without it, a session keeps the one it had |
 | `events` | array ≤ 10,000 | no | Power events during the session, `{ "at": ms, "kind": "sleep" \| "wake" \| "battery" \| "ac" }`, no other key. The list as a whole: a session sent with it replaces the list it had, sent without it keeps it |
+| `start` | Start | no | What started the session (below). Sent again without it, a session keeps it |
+| `lostDemand` | array ≤ 1,000 | no | Tasks that left the agent's queue never to start while the session ran: `{ "kind": "queue_drop", "ref": string ≤ 128, "queuedAt": ms, "at": ms, "reason": word }`, all required, no other key. The list as a whole, kept when absent |
+
+A *word* is a lowercase word of at most 40 characters, `a` to `z` and `_`: a kind or a cause, never a name.
+
+**Start.** An object of these keys and no other:
+
+| Key | Type |
+|---|---|
+| `trigger` | word, required: what started it, by kind (`owner`, `task`, `channel`, `restart`, `start`, `wake`, `redelegation`, `unknown`, ...) |
+| `via` | word: how, by kind (`window`, `api`, `chat`, ...), never who |
+| `taskRef`, `taskId`, `requesterAgentId`, `redelegatedFrom` | string ≤ 128 |
+| `queuedAt`, `handedAt`, `firstRequestAt` | ms |
+| `commit` | string ≤ 80 (a commit id, or the client's placeholder if its scrubber replaced it) |
+| `branch` | string ≤ 255 |
 
 **Environment.** An object of these keys and no other; a key may be left out. Any other key (a serial number,
 a host name, a user name) refuses the batch.
@@ -264,6 +279,7 @@ a host name, a user name) refuses the batch.
 | `streamed` | bool | no | |
 | `side` | bool | no | `true` for a harness's side request (a title request with no tools, a memory request with another system prompt), `false` for the agent's own loop. Leave it out when the client does not know. A request sent again without it keeps the mark it had |
 | `liveSessions` | int 0 to 1,000,000 | no | How many sessions were live on the install when the request was sent. Sent again without it, a request keeps the count it had |
+| `cancel` | object | no | A request cut before the endpoint answered: `{ "by": word, "cause": word, "at": ms, "deliveredBytes": int }`, all required, no other key. Kept when absent |
 | `reqBytes`, `respBytes` | int ≥ 0 | no | |
 | `messages` | array ≤ 10,000 | yes | `{ "position": int, "hash": sha256, "direction": "input" \| "output" }`: what the request sent, in order, then what it produced |
 
@@ -323,8 +339,8 @@ Every request read back, here and in § 6.5, carries `side`, always present:
 The fields added after a client may have been built without them are always present when read, with `null` for
 "the uploading Tars did not send it":
 
-- every session, here and in § 6.1: `environment` (the object as sent) and `events` (the list as sent);
-- every request, here and in § 6.5: `liveSessions`.
+- every session, here and in § 6.1: `environment`, `events`, `start` and `lostDemand`, each as sent;
+- every request, here and in § 6.5: `liveSessions` and `cancel`.
 
 ### 6.3 `GET /v1/read/blobs/{hash}`
 
@@ -391,3 +407,4 @@ before the clients.
 |---|---|
 | 26/11/2026 | `side` on a request (§ 5, read back in §§ 6.2 and 6.5), migration `002_request_side` |
 | 27/11/2026 | `environment` and `events` on a session (read back in §§ 6.1 and 6.2), `liveSessions` on a request (§§ 6.2 and 6.5), migration `003_session_environment` |
+| 27/11/2026 | `start` and `lostDemand` on a session, `cancel` on a request (read back the same way), migration `004_session_start` |
