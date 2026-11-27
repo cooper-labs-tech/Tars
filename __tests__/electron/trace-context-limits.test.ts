@@ -37,6 +37,8 @@ const OWNER: EndpointActor = { window: true };
 const AGENT: EndpointActor = { agentId: 'agent-remote', agentName: 'Remote-Tuner' };
 const base = (): AppSettings => ({ inferenceEndpoints: [] } as unknown as AppSettings);
 const PROXY = 'http://127.0.0.1:31417/v1';
+/** What the window's form showed when it opened: a save of an endpoint that exists names it (the stale-form guard). */
+const shownOf = (e: { baseUrl: string; extraHeaders?: Record<string, string> }) => ({ baseUrl: e.baseUrl, extraHeaders: e.extraHeaders ?? {} });
 
 function added(over: Record<string, unknown> = {}) {
   const r = saveEndpoint(base(), { name: 'Remote host', baseUrl: 'http://192.168.50.10:9000/v1', allowTraces: false, ...over }, OWNER, NOW);
@@ -63,7 +65,7 @@ describe('an endpoint\'s limits', () => {
       if (!r.ok) expect(r.error).toMatch(/context window|output cap/);
     }
     const r = added({ contextWindow: 131_072, maxOutputTokens: 16_384 });
-    const cleared = saveEndpoint(r.settings, { id: r.endpoint.id, contextWindow: null, maxOutputTokens: null } as never, OWNER, NOW);
+    const cleared = saveEndpoint(r.settings, { id: r.endpoint.id, contextWindow: null, maxOutputTokens: null, shown: shownOf(r.endpoint) } as never, OWNER, NOW);
     expect(cleared.ok).toBe(true);
     if (cleared.ok) {
       expect(cleared.endpoint.contextWindow).toBeUndefined();
@@ -79,7 +81,7 @@ describe('an endpoint\'s limits', () => {
 
   it('L4: a save of another field keeps them', () => {
     const r = added({ contextWindow: 131_072, maxOutputTokens: 16_384 });
-    const renamed = saveEndpoint(r.settings, { id: r.endpoint.id, name: 'Renamed' }, OWNER, NOW);
+    const renamed = saveEndpoint(r.settings, { id: r.endpoint.id, name: 'Renamed', shown: shownOf(r.endpoint) }, OWNER, NOW);
     expect(renamed.ok && renamed.endpoint).toMatchObject({ name: 'Renamed', contextWindow: 131_072, maxOutputTokens: 16_384 });
   });
 });

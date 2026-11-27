@@ -34,6 +34,8 @@ import { codexCompactions, qwenCompactions, readHarnessCompactions } from '../..
  *     wire's guess.
  * C9. The logs are read beyond the agent's own: another session's codex rollout, a Qwen Code transcript when two of
  *     the project's sessions overlap the session (which is this one's cannot be told), or a file over the bound.
+ * C11. (Found by C1's run, 27/11.) A request sent again with the same history, whose last message is the summary (or
+ *     any instruction), opens a turn of its own.
  * C10. What the harness was given (`contextWindowGiven`, `outputCapGiven`, `autoCompaction`), the compactions and each
  *     request's `contextReset` are not in the export or the upload's preview; an unknown is made up.
  */
@@ -109,7 +111,7 @@ describe('a rewritten history on the wire', () => {
     store.ingest(rec(T0, [u1], 7800, { answer: call('c1') }));
     store.ingest(rec(T0 + 1000, [u1, call('c1'), result('c1'), user('Summarize the conversation.')], 7900, { tools: false }));
     store.ingest(rec(T0 + 2000, [u1, user('Another language model started to solve this problem... SUMMARY')], 600, { answer: call('c2') }));
-    // And a retry of the same history is no rewrite.
+    // And the same history sent again is no rewrite, and no turn (C11).
     store.ingest(rec(T0 + 3000, [u1, user('Another language model started to solve this problem... SUMMARY')], 600));
     expect(store.session('t1')!.session.turnCount).toBe(1);
     expect(requestsOf(store).map(r => r.contextReset ?? null)).toEqual([null, null, { kind: 'compact', droppedTokens: 7200 }, null]);
