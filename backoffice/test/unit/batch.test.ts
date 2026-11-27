@@ -237,7 +237,8 @@ test('17. masking: the version and the six counts', () => {
   const r = validateBatch(withSession({ maskingVersion: 'tars-scrub-2', maskCounts }));
   assert.ok(!('errors' in r), JSON.stringify(r));
   assert.deepEqual([r.sessions[0]!.maskingVersion, r.sessions[0]!.maskCounts], ['tars-scrub-2', maskCounts]);
-  const { PHONE: _p, ...five } = maskCounts;
+  const five: Record<string, number> = { ...maskCounts };
+  delete five.PHONE;
   const bad: Array<Record<string, unknown>> = [
     { maskingVersion: 2 }, { maskingVersion: 'v'.repeat(41) }, { maskCounts: five }, { maskCounts: { ...maskCounts, NAME: 1 } },
     { maskCounts: { ...maskCounts, EMAIL: -1 } }, { maskCounts: { ...maskCounts, IP: 1.5 } }, { maskCounts: { ...maskCounts, HOME: '4' } }, { maskCounts: [] },

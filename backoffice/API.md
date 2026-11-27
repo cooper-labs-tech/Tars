@@ -214,6 +214,8 @@ missing blob, then `PUT` the batch, and send any `missingBlobs` it reports.
 | `events` | array ≤ 10,000 | no | Power events during the session, `{ "at": ms, "kind": "sleep" \| "wake" \| "battery" \| "ac" }`, no other key. The list as a whole: a session sent with it replaces the list it had, sent without it keeps it |
 | `start` | Start | no | What started the session (below). Sent again without it, a session keeps it |
 | `lostDemand` | array ≤ 1,000 | no | Tasks that left the agent's queue never to start while the session ran: `{ "kind": "queue_drop", "ref": task ref, "queuedAt": ms, "at": ms, "reason": "cancelled" \| "taken_back" \| "dropped_with_stop" \| "queue_cleared" \| "agent_removed" \| "not_handed_again" }`, all required, no other key. The list as a whole, kept when absent |
+| `maskingVersion` | string ≤ 40 | no | The version of the masking the client applied to the content before upload. Kept when absent |
+| `maskCounts` | object | no | What that masking replaced, by type: exactly `SECRET`, `EMAIL`, `IP`, `PERSON`, `HOME` and `PHONE`, each an int ≥ 0, all required, no other key. Kept when absent |
 
 A *task ref* is `t-` and 8 lowercase hex characters. Every kind below is one of a closed list, the client's own: anything else refuses the batch.
 
@@ -260,6 +262,7 @@ a host name, a user name) refuses the batch.
 | `author` | string ≤ 40 | no | `user`, `orchestrator`, `chat`, `relay`, `agent`, `tars`, `unknown` |
 | `authorDetail` | string ≤ 128 | no | An agent or chat id; never a person's name |
 | `taskRef` | task ref | no | The task the turn's instruction came from. Sent again without it, a turn keeps it |
+| `interventions` | object | no | What was done to the turn, each key optional, no other: `interrupted {at, by, during: "answer" \| "tools"}`, `restarted {at, by}`, `next {by, delaySec}` (the next instruction's author kind and its delay in seconds, a number ≥ 0), `corrected: true`, `redelegated {to: a session id ≤ 64, at}`. Every `by` is a lowercase word (a-z, 0-9, `_`, a letter first, ≤ 40): a kind, never a name. Kept when absent |
 
 ### Request
 
@@ -342,9 +345,9 @@ Every request read back, here and in § 6.5, carries `side`, always present:
 The fields added after a client may have been built without them are always present when read, with `null` for
 "the uploading Tars did not send it":
 
-- every session, here and in § 6.1: `environment`, `events`, `start` and `lostDemand`, each as sent;
+- every session, here and in § 6.1: `environment`, `events`, `start`, `lostDemand`, `maskingVersion` and `maskCounts`, each as sent;
 - every request, here and in § 6.5: `liveSessions` and `cancel`;
-- every turn, here: `taskRef`.
+- every turn, here: `taskRef` and `interventions`.
 
 ### 6.3 `GET /v1/read/blobs/{hash}`
 
@@ -412,3 +415,4 @@ before the clients.
 | 26/11/2026 | `side` on a request (§ 5, read back in §§ 6.2 and 6.5), migration `002_request_side` |
 | 27/11/2026 | `environment` and `events` on a session (read back in §§ 6.1 and 6.2), `liveSessions` on a request (§§ 6.2 and 6.5), migration `003_session_environment` |
 | 27/11/2026 | `start` and `lostDemand` on a session, `taskRef` on a turn, `cancel` on a request (read back the same way), migration `004_session_start` |
+| 27/11/2026 | `maskingVersion` and `maskCounts` on a session, `interventions` on a turn (read back the same way), migration `005_masking_and_interventions` |

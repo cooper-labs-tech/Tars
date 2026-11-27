@@ -14,7 +14,7 @@ const HASH = /^[0-9a-f]{64}$/;
 
 const SESSION_SELECT = `install_id, session_id, agent_id, project_key, harness, harness_version, native_session_id,
   endpoint_key, endpoint_name, model, started_at, ended_at, final_status, turn_count, request_count, tokens_in, tokens_cached,
-  tokens_out, mixed, unknown_turns, outcome, environment, events, start, lost_demand, received_at`;
+  tokens_out, mixed, unknown_turns, outcome, environment, events, start, lost_demand, masking_version, mask_counts, received_at`;
 
 function session(r: QueryResultRow) {
   return {
@@ -26,6 +26,7 @@ function session(r: QueryResultRow) {
     unknownTurns: r.unknown_turns, outcome: r.outcome ?? undefined, receivedAt: ms(r.received_at),
     // Always present: null is "the uploading Tars did not send it" (one before the field, or one that could not read it).
     environment: r.environment ?? null, events: r.events ?? null, start: r.start ?? null, lostDemand: r.lost_demand ?? null,
+    maskingVersion: r.masking_version ?? null, maskCounts: r.mask_counts ?? null,
   };
 }
 
@@ -125,7 +126,7 @@ export async function getSession(ctx: Ctx, req: IncomingMessage, res: ServerResp
       toolErrorCount: t.tool_error_count, toolMs: t.tool_ms ?? undefined, modelMs: t.model_ms ?? undefined, tokensIn: t.tokens_in,
       tokensCached: t.tokens_cached, tokensOut: t.tokens_out, finalStatus: t.final_status ?? undefined,
       finalFinishReason: t.final_finish_reason ?? undefined, author: t.author ?? undefined, authorDetail: t.author_detail ?? undefined,
-      taskRef: t.task_ref ?? null,
+      taskRef: t.task_ref ?? null, interventions: t.interventions ?? null,
     })),
     requests: requests.rows.map((r) => ({ ...request(r), messages: byRequest.get(r.request_id) ?? [] })),
     messages: messages.rows.map((m) => ({

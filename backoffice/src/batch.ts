@@ -6,7 +6,8 @@ type Spec =
   | { t: 'int' } | { t: 'bool' } | { t: 'enum'; of: readonly string[] } | { t: 'obj'; maxBytes: number }
   | { t: 'msgs' } | { t: 'count'; max: number } | { t: 'env' } | { t: 'events' }
   | { t: 'shape'; shape: Shape } | { t: 'list'; shape: Shape; max: number }
-  | { t: 're'; re: RegExp; desc: string } | { t: 'bytes'; max: number } | { t: 'cancel' };
+  | { t: 're'; re: RegExp; desc: string } | { t: 'bytes'; max: number } | { t: 'cancel' }
+  | { t: 'num' } | { t: 'true' };
 type Shape = { [k: string]: Spec & { req?: boolean } };
 
 // A session's environment (27/11, the machine and the system at its start, exact values): these keys and no other,
@@ -76,6 +77,18 @@ const CANCEL_CAUSES: Record<string, readonly string[]> = {
   endpoint: ['stream_cut'],
 };
 const CANCEL: Shape = { by: r(enumOf(...Object.keys(CANCEL_CAUSES))), cause: r(str(40)), at: r(int), deliveredBytes: r(int) };
+// How a session's content was masked on the client: the masking's version and its six counts, all required.
+const MASK_COUNTS: Shape = { SECRET: r(int), EMAIL: r(int), IP: r(int), PERSON: r(int), HOME: r(int), PHONE: r(int) };
+// What was done to a turn: its first interruption and restart, the next instruction's author kind and delay, a
+// correction, and the later session that took its task. Every `by` a lowercase word: a kind, never a name.
+const WORD = { t: 're', re: /^[a-z][a-z0-9_]{0,39}$/, desc: 'a lowercase word of at most 40 (a-z, 0-9, _, a letter first)' } as const;
+const INTERVENTIONS: Shape = {
+  interrupted: { t: 'shape', shape: { at: r(int), by: r(WORD), during: r(enumOf('answer', 'tools')) } },
+  restarted: { t: 'shape', shape: { at: r(int), by: r(WORD) } },
+  next: { t: 'shape', shape: { by: r(WORD), delaySec: r({ t: 'num' }) } },
+  corrected: { t: 'true' },
+  redelegated: { t: 'shape', shape: { to: r(str(64)), at: r(int) } },
+};
 
 const SESSION: Shape = {
   sessionId: r(id), agentId: id, projectKey: { t: 'hex', max: 64 }, harness: r(str(40)), harnessVersion: str(40),
@@ -84,11 +97,13 @@ const SESSION: Shape = {
   tokensIn: r(int), tokensCached: r(int), tokensOut: r(int), mixed: bool, unknownTurns: int, outcome: { t: 'obj', maxBytes: 16 * 1024 },
   environment: { t: 'env' }, events: { t: 'events' },
   start: { t: 'shape', shape: START }, lostDemand: { t: 'list', shape: LOST_DEMAND, max: 1000 },
+  maskingVersion: str(40), maskCounts: { t: 'shape', shape: MASK_COUNTS },
 };
 const TURN: Shape = {
   turnId: r(id), sessionId: r(id), index: r(int), startedAt: r(int), endedAt: int, gapBeforeMs: int, requestCount: r(int),
   toolCallCount: r(int), toolErrorCount: r(int), toolMs: int, modelMs: int, tokensIn: r(int), tokensCached: r(int), tokensOut: r(int),
   finalStatus: str(20), finalFinishReason: str(40), author: str(40), authorDetail: str(128), taskRef: TASK_REF,
+  interventions: { t: 'shape', shape: INTERVENTIONS },
 };
 const REQUEST: Shape = {
   requestId: r(id), sessionId: r(id), turnId: r(id), seq: r(int), upstreamRequestId: str(128),
@@ -131,6 +146,8 @@ function checkValue(s: Spec, v: unknown): string | null {
     case 'env': return checkEnvironment(v);
     case 'events': return checkEvents(v);
     case 're': return typeof v === 'string' && s.re.test(v) ? null : s.desc;
+    case 'num': return typeof v === 'number' && Number.isFinite(v) && v >= 0 ? null : 'a number >= 0';
+    case 'true': return v === true ? null : 'true';
     case 'bytes': return typeof v === 'string' && Buffer.byteLength(v) <= s.max ? null : `a string of at most ${s.max} bytes`;
     case 'cancel': {
       const e = checkShape(v, CANCEL);

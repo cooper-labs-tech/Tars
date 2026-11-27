@@ -514,7 +514,8 @@ describe('trace back-office, end to end', () => {
     assert.deepEqual(note('mask.keptAfterOlder', [kept.session.maskingVersion, kept.session.maskCounts?.HOME, kept.turns[0].interventions?.next?.delaySec]),
       [MASK.maskingVersion, 4, 12.5]);
     // K5. Malformed: refused whole.
-    const { PHONE: _p, ...five } = MASK.maskCounts;
+    const five: Record<string, number> = { ...MASK.maskCounts };
+    delete five.PHONE;
     const bad: Array<[string, Record<string, unknown>, Record<string, unknown>]> = [
       ['seventhCount', { maskCounts: { ...MASK.maskCounts, NAME: 1 } }, {}],
       ['missingCount', { maskCounts: five }, {}],
