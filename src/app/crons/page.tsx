@@ -30,6 +30,9 @@ const refused = (error: string | undefined) => `${ipcReason(error, 'Hermes refus
 /** A row action, as its sentence says it (`Shell · Schedules · Hermes did not answer · notes`). */
 const VERB = { pause: 'pause', resume: 'resume', trigger: 'run' } as const;
 
+/** A schedule as its row and its notice name it. */
+const nameOf = (job: CronJob) => job.name || job.title || job.id;
+
 // Row actions are words, not glyphs (R7): 26px bordered lowercase-mono
 // buttons, 8px apart, in the same order on every row.
 const ROW_ACTION = 'font-mono lowercase';
@@ -120,6 +123,7 @@ export default function CronsPage() {
   const [error, setError] = useState<string | null>(null);
   const [needsSignIn, setNeedsSignIn] = useState(false);
   const [busyId, setBusyId] = useState<string | null>(null);
+  const [actionError, setActionError] = useState<{ jobId: string; text: string } | null>(null);
   const [draft, setDraft] = useState<EditDraft | null>(null);
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
@@ -156,14 +160,22 @@ export default function CronsPage() {
     return () => { clearInterval(id); document.removeEventListener('visibilitychange', tick); };
   }, [load]);
 
+  /**
+   * A row action's failure, in the notice above the rows (`Shell · Schedules · an action failed`): its own state,
+   * which reading the list leaves alone. It goes with its dismiss, or with the next action on that row.
+   */
+  const failed = (job: CronJob, verb: string, why: string) => setActionError({ jobId: job.id, text: `Could not ${verb} "${nameOf(job)}": ${why}` });
+  const startOn = (job: CronJob) => setActionError(shown => (shown?.jobId === job.id ? null : shown));
+
   async function act(job: CronJob, action: 'pause' | 'resume' | 'trigger') {
     setBusyId(job.id);
+    startOn(job);
     try {
       const r = await window.electronAPI?.hermes?.cronAction({ action, jobId: job.id, profile: job.profile });
-      if (r && !r.success) { setError(`Could not ${VERB[action]} the schedule: ${refused(r.error)}`); return; }
+      if (r && !r.success) { failed(job, VERB[action], refused(r.error)); return; }
       await load();
     } catch (err) {
-      setError(`Could not ${VERB[action]} the schedule: ${thrownLine(err)}`);
+      failed(job, VERB[action], thrownLine(err));
     } finally {
       setBusyId(null);
     }
@@ -211,14 +223,15 @@ export default function CronsPage() {
   }
 
   async function remove(job: CronJob) {
-    if (!confirm(`Delete the schedule "${job.name || job.title || job.id}" in Hermes?`)) return;
+    if (!confirm(`Delete the schedule "${nameOf(job)}" in Hermes?`)) return;
     setBusyId(job.id);
+    startOn(job);
     try {
       const r = await window.electronAPI?.hermes?.cronDelete({ jobId: job.id, profile: job.profile });
-      if (r && !r.success) { setError(`Could not delete the schedule: ${refused(r.error)}`); return; }
+      if (r && !r.success) { failed(job, 'delete', refused(r.error)); return; }
       await load();
     } catch (err) {
-      setError(`Could not delete the schedule: ${thrownLine(err)}`);
+      failed(job, 'delete', thrownLine(err));
     } finally {
       setBusyId(null);
     }
@@ -233,6 +246,14 @@ export default function CronsPage() {
       />
 
       <div className="flex-1 min-h-0 overflow-y-auto">
+        {actionError && (
+          <div role="status" className="flex items-center gap-2.5 mb-2 pl-3.5 pr-2 py-1.5 border border-border-accent bg-secondary">
+            <StatusSquare tone="waiting" />
+            <p className="flex-1 min-w-0 text-[12.5px] leading-[1.4] text-foreground">{actionError.text}</p>
+            <Button size="sm" className={ROW_ACTION} onClick={() => setActionError(null)}>dismiss</Button>
+          </div>
+        )}
+
         {loading && jobs.length === 0 && (
           <LoadingState
             loading
