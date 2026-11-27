@@ -223,14 +223,14 @@ describe('at a session\'s start', () => {
     const first = open('x');
     expect(startOf(first.traceId)).toMatchObject({ trigger: 'unknown' });
     closeEndpointSession(first.token);
+    // y's own note is still y's.
+    expect(startOf(open('y').traceId)).toMatchObject({ trigger: 'owner', via: 'window' });
     // A note its start never took (no terminal was opened), read by a spawn past its window.
     vi.useFakeTimers({ toFake: ['Date'] });
     noteSessionStart('x', { trigger: 'owner', via: 'window' });
     vi.setSystemTime(Date.now() + START_NOTE_MS + 1);
     const second = open('x');
     expect(startOf(second.traceId)).toMatchObject({ trigger: 'unknown' });
-    // y's own note is still y's.
-    expect(startOf(open('y').traceId)).toMatchObject({ trigger: 'owner', via: 'window' });
   });
 
   it('3. the session\'s first request at the endpoint, never one before it', () => {
