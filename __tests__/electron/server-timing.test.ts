@@ -36,6 +36,9 @@ import { TraceUploader } from '../../electron/services/trace-upload';
  * T8. The session's summary is not the offset of its fastest sample and the median of its round trips (an even count
  *     takes the mean of the two middle ones); with no sample it is not null.
  * T9. The store, the export or the upload's preview lose a value, or turn an unknown one into 0.
+ * Added after the mutation bench showed it missing (M19, 27/11):
+ * T10. A metric whose syntax breaks after a valid parameter (`recv;desc="<ms>";dur=`) is read in part, its valid
+ *      parameter kept, rather than dropped whole.
  */
 
 const T = 1_764_243_600_000;
@@ -89,6 +92,13 @@ describe('the Server-Timing header', () => {
     expect(parseServerTiming(v)).toEqual({ recv: T + 10, send: T + 30, queue: 2, upstream: null });
     // Two Server-Timing headers, as Node gives them.
     expect(parseServerTiming([`recv;desc="${T + 10}"`, `send;desc="${T + 30}", upstream;dur=5`])).toEqual({ recv: T + 10, send: T + 30, queue: null, upstream: 5 });
+  });
+
+  it('T10: a metric whose syntax breaks after a valid parameter is dropped whole', () => {
+    for (const broken of [`recv;desc="${T + 10}";dur=, send;desc="${T + 30}"`, `send;desc="${T + 30}", recv;desc="${T + 10}";dur=`, `recv;desc="${T + 10}";dur="7, send;desc="${T + 30}"`]) {
+      expect(parseServerTiming(broken).recv, broken).toBeNull();
+    }
+    expect(parseServerTiming(`recv;desc="${T + 10}";dur=, send;desc="${T + 30}"`).send).toBe(T + 30);
   });
 
   it('computes the offset and the round trip from t1 to t4', () => {

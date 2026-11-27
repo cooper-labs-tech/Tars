@@ -230,7 +230,7 @@ test('each traced session keeps its harness version, its environment, its power 
     expect.soft(timing.map(t => [t.queueMs, t.upstreamMs]), "each request's queue and upstream times").toEqual(timing.map(() => [7, 41.7]));
     expect.soft(timing[0]?.attempts, "C's first call was held").toBe(2);
     expect.soft(Number(timing[0]?.heldMs), 'the hold').toBeGreaterThanOrEqual(900);
-    expect.soft(Number(timing[0]?.rttMs), "the first call's round trip leaves the hold out").toBeLessThan(900);
+    expect.soft(typeof timing[0]?.rttMs === 'number' && timing[0].rttMs < 900, `the first call's round trip leaves the hold out: ${timing[0]?.rttMs}`).toBe(true);
     const cSummary = c2?.session;
     expect.soft(typeof cSummary?.rttMedianMs === 'number' && cSummary.rttMedianMs >= 0 && cSummary.rttMedianMs < 2000, `C's median round trip: ${cSummary?.rttMedianMs}`).toBe(true);
     expect.soft(Math.abs(Number(cSummary?.clockOffsetMs) - SKEW) <= Number(cSummary?.rttMedianMs) / 2 + 2, `C's offset: ${cSummary?.clockOffsetMs}`).toBe(true);
