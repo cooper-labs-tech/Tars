@@ -3,6 +3,7 @@ import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
 import { execFileSync } from 'node:child_process';
+import { realCliOptIn } from '../../setup/real-cli-opt-in';
 
 /**
  * A codex agent's folder is trusted before its codex starts (2.0.4), as Claude Code's is (ensureProjectTrusted).
@@ -42,7 +43,15 @@ import { hasPosixModes } from '../../setup/platform-limits';
 let codexHome: string;
 let project: string;
 const config = () => fs.readFileSync(path.join(codexHome, 'config.toml'), 'utf8');
-const codexOnPath = (() => { try { return execFileSync('which', ['codex'], { encoding: 'utf8' }).trim(); } catch { return ''; } })();
+// The installed codex, run on purpose to read the config with codex's own parser: only when TARS_TEST_REAL_CLIS names
+// codex, as __tests__/setup/no-real-cli.ts lets it through then and refuses a real codex otherwise (the Audit's I-4
+// on #616: a unit test runs no real CLI by default). Its home is this file's own folder.
+const codexOnPath = (() => {
+  const asked = realCliOptIn('codex');
+  if (!asked) return '';
+  if (asked !== 'any') return asked;
+  try { return execFileSync('which', ['codex'], { encoding: 'utf8' }).trim(); } catch { return ''; }
+})();
 /** The MCP servers codex's own parser reads in this home's config.toml: it refuses the whole file when it cannot read it. */
 const listedByCodex = () => (JSON.parse(execFileSync(codexOnPath, ['mcp', 'list', '--json'], {
   encoding: 'utf8', env: { PATH: process.env.PATH, HOME: path.dirname(codexHome), CODEX_HOME: codexHome }, stdio: ['ignore', 'pipe', 'pipe'],

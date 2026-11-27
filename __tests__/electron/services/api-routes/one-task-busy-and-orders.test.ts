@@ -106,6 +106,11 @@ import { EventEmitter } from 'node:events';
  *     task it runs (moves `workHandedAt`, or the requester link), so that task's asker is never told its end.
  * N3. A note to an agent with no session open starts one, or says nothing of why it was not sent.
  * N4. A note that also asks for a task (`intent: 'task'`) is taken as either.
+ *
+ * Added with 2.0.7, the Audit's L4 on #579 (the orchestrator decides who runs a release gate), before the code:
+ * G1. A task the orchestrator hands with `gate: true` does not mark its request so, or a task handed without it does.
+ * G2. `gate` from Tars itself or any caller without an orchestrator's powers over the agent's project is taken; or a
+ *     `gate` that is not true or false is taken as one.
  */
 
 type FakePty = { pid: number; process: string; write: ReturnType<typeof vi.fn>; kill: ReturnType<typeof vi.fn>; resize: ReturnType<typeof vi.fn>; onData: ReturnType<typeof vi.fn>; onExit: ReturnType<typeof vi.fn> };
@@ -905,5 +910,30 @@ describe('a note, from whoever sends it (2.0.6, option a)', () => {
     const n = call('POST', '/api/agents/cl/dispatch', { message: 'NOTE-TASK', mode: 'note', intent: 'task' }, 'orch');
     await n.done;
     expect(n.answer(), JSON.stringify(n.answer())).toMatchObject({ status: 400, data: { code: 'note_is_no_task' } });
+  });
+});
+
+describe('a release gate is the orchestrator\'s to hand (G)', () => {
+  it('G1. a task handed with gate marks its worker\'s link, one without does not', async () => {
+    const qa = withCli('qa', 'grok', 'idle').agent;
+    const dev = withCli('dev', 'grok', 'idle').agent;
+    const a = call('POST', '/api/agents/qa/run-task', { task: 'TASK-G run the gate', answer: 'started', gate: true }, 'orch');
+    const b = call('POST', '/api/agents/dev/run-task', { task: 'TASK-P a plain task', answer: 'started' }, 'orch');
+    await later(1500);
+    expect(a.answer()?.data, JSON.stringify(a.answer())).toMatchObject({ outcome: 'delivered' });
+    expect(b.answer()?.data, JSON.stringify(b.answer())).toMatchObject({ outcome: 'delivered' });
+    expect(qa.requestedBy).toMatchObject({ agentId: 'orch', gate: true });
+    expect(dev.requestedBy).toMatchObject({ agentId: 'orch' });
+    expect(dev.requestedBy!.gate).toBeUndefined();
+  });
+
+  it('G2. gate is refused from Tars and from any caller without the orchestrator\'s powers, and when it is not a boolean', async () => {
+    withCli('qa', 'grok', 'idle');
+    const internal = call('POST', '/api/agents/qa/run-task', { task: 'TASK-G', answer: 'started', gate: true }, undefined, { internal: true });
+    const loose = call('POST', '/api/agents/qa/run-task', { task: 'TASK-G', answer: 'started', gate: 'yes' }, 'orch');
+    await Promise.all([internal.done, loose.done]);
+    expect(internal.answer(), JSON.stringify(internal.answer())).toMatchObject({ status: 403, data: { code: 'gate_is_the_orchestrators' } });
+    expect(loose.answer(), JSON.stringify(loose.answer())).toMatchObject({ status: 400, data: { code: 'invalid_gate' } });
+    expect(runs).toHaveLength(0);
   });
 });

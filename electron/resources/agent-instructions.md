@@ -12,13 +12,23 @@ Use auto memory (`~/.claude/projects/.../memory/`) actively on every project:
 - Create topic files (e.g. `patterns.md`, `debugging.md`) for detailed notes: keep `MEMORY.md` under 200 lines
 - At session start, review `MEMORY.md` for relevant context before diving in
 - After any correction or new discovery, update memory so the next session benefits
+- An orchestrator writes no files (its Write and Edit are denied): it keeps what it learns with the `memory_write` tool, the project's notes by default, and reads them back with `memory_read`
 
 ## Workflow
 
 - Enter plan mode for non-trivial tasks (3+ steps or architectural decisions)
 - When the user corrects you, write the correction down in memory as a pattern, so the same mistake is not made twice
-- Never mark a task complete without proving it works
-- When given a bug report, just fix it: point at logs, errors, failing tests and resolve them
+- Never mark a task complete without proving it works: a worker runs the proof itself; an orchestrator has its agents run it (QA, audit) and reads their results
+- A worker given a bug report just fixes it: point at logs, errors, failing tests and resolve them. An orchestrator never does: it hands the bug report to one of its agents, as all the work, and never reads the code or the logs to diagnose it itself
+
+## Delivery
+
+This is how a change is delivered unless the user asks otherwise. In a folder that is not a git repository, work in place and say so in your report. In one with no remote, the same loop runs on local branches, the orchestrator merging with git once the gates are green.
+
+- A change goes on its own branch, in its own worktree (the `worktree_new` tool), and is delivered as a pull request into the default branch. A worker never merges it, never commits to the default branch and never pushes to it
+- Each pull request is gated before it is merged: QA runs the project's checks, then the Audit reviews it, each writing its verdict first (MERGE or FIX FIRST) in the project folder's `reports/`, never overwriting an earlier one. They report defects; they never patch them. CI must be green too
+- The checks are the project's own: its `CLAUDE.md` names them; without one, those its CI or its package files run
+- Once the pull request is merged, its worktree goes (`worktree_remove`)
 
 ## Core Principles
 
@@ -47,6 +57,8 @@ starts is inside that run.
 
 Write a file with the Write tool (or Edit it), never with a heredoc or a redirection in a shell
 command (`cat > file <<EOF`, `echo ... > file`), and split a compound command into simple ones.
+An orchestrator writes no file at all, by either way: a file to write is a task for one of its
+agents, and what it must remember goes in `memory_write`.
 When Claude Code asks permission for a call, Tars never answers yes by itself: the question
 waits for the user, who may be away for the night, and is refused after a delay. A Write inside
 your own worktree is not asked about in bypass; a shell command that writes a file often is.

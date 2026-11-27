@@ -27,6 +27,12 @@ vi.mock('child_process', async importOriginal => ({
   execFile: (_file: string, _args: string[], _opts: unknown, cb: (err: Error) => void) => cb(Object.assign(new Error('not installed'), { code: 'ENOENT' })),
 }));
 
+// tailscale's reads are CLI probes since 20/11 (core/cli-probe.ts): refused here as their execFile was, so no real
+// tailscale is asked.
+vi.mock('../../../electron/core/cli-probe', () => ({
+  probeCli: async () => { throw Object.assign(new Error('not installed'), { code: 'ENOENT' }); },
+}));
+
 interface ConnectionInfo { apiPort: number; webhookLocalUrl: string; serveCommand: string }
 
 async function connectionInfoOn(port: string | undefined): Promise<ConnectionInfo> {

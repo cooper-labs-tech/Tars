@@ -36,7 +36,8 @@ let mockApiRequest: ReturnType<typeof vi.fn>;
 async function tool(name: string) {
   const tools = new Map<string, (args: Record<string, unknown>) => Promise<unknown>>();
   const { registerAgentTools } = await import('../../mcp-orchestrator/src/tools/agents.js');
-  registerAgentTools({ tool: (n: string, _d: unknown, _s: unknown, handler: (args: Record<string, unknown>) => Promise<unknown>) => { tools.set(n, handler); } } as never);
+  // The handler is the last argument: a read-only tool passes its annotations before it (mcp-shared, #585).
+  registerAgentTools({ tool: (n: string, ...rest: unknown[]) => { tools.set(n, rest[rest.length - 1] as (args: Record<string, unknown>) => Promise<unknown>); } } as never);
   return tools.get(name)!;
 }
 

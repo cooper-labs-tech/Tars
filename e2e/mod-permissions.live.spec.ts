@@ -145,7 +145,8 @@ test('a permission claude would ask in its dialog is asked of Tars, and the wind
     await sleep(45_000);
     const stillHeld = await state('allow');
     fact('allow after 45 s', stillHeld);
-    const allowAnswer = await page.evaluate(() => window.electronAPI.agent.answerPermission('allow', 'allow'));
+    // Every allow names the fingerprint of the question read (#588's M1).
+    const allowAnswer = await page.evaluate(fp => window.electronAPI.agent.answerPermission('allow', 'allow', undefined, fp), stillHeld.permissionAsk?.fingerprint);
     await waitFor(async () => { const s = await state('allow'); return s.status === 'idle' && (s.output ?? '').startsWith('tool said'); }, 120_000, 'allow turn ends');
     const allowEnd = await state('allow');
     fact('allow end', allowEnd);

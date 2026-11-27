@@ -110,10 +110,10 @@ function world(over: Partial<{ slots: number; diskGb: number; memFreePct: number
   return w;
 }
 
-const ask = (pid: number, agentId: string, priority: 'gate' | 'normal' | 'background' = 'normal', extra: { orchestrator?: boolean; terminalPid?: number; untilTurnEnds?: boolean } = {}) => ({
+const ask = (pid: number, agentId: string, priority: 'gate' | 'normal' | 'background' = 'normal', extra: { mayGate?: boolean; terminalPid?: number; untilTurnEnds?: boolean } = {}) => ({
   ...(extra.untilTurnEnds ? { untilTurnEnds: true } : {}),
   agentId, agentName: agentId.toUpperCase(), projectPath: `/p/${agentId}`, pid, priority, label: `${agentId}'s run`,
-  orchestrator: extra.orchestrator ?? false, terminalPid: extra.terminalPid ?? (pid >= 300 ? 300 : pid >= 200 ? 200 : 100),
+  mayGate: extra.mayGate ?? false, terminalPid: extra.terminalPid ?? (pid >= 300 ? 300 : pid >= 200 ? 200 : 100),
 });
 
 describe('the queue', () => {
@@ -138,7 +138,7 @@ describe('the queue', () => {
     w.t += 1;
     const first = await slot.ask(ask(202, 'b'));
     w.t += 1;
-    const gate = await slot.ask(ask(302, 'o', 'gate', { orchestrator: true }));
+    const gate = await slot.ask(ask(302, 'o', 'gate', { mayGate: true }));
     w.t += 1;
     const second = await slot.ask(ask(201, 'b'));
     expect(slot.snapshot().waiting.map(t => t.id)).toEqual([gate.id, first.id, second.id, bg.id]);
@@ -156,7 +156,7 @@ describe('the queue', () => {
     const t = await slot.ask(ask(202, 'b', 'gate'));
     expect(t.priority).toBe('normal');
     expect(t.clamped).toBe(true);
-    const o = await slot.ask(ask(302, 'o', 'gate', { orchestrator: true }));
+    const o = await slot.ask(ask(302, 'o', 'gate', { mayGate: true }));
     expect(o.priority).toBe('gate');
     expect(o.clamped).toBeUndefined();
   });
@@ -473,7 +473,7 @@ describe('admitted by the machine\'s room (2.0.6)', () => {
   it('H25. the head of the queue is the one admitted when room comes, one a pass', async () => {
     const { w, slot } = await oneHolding();
     const bg = await slot.ask(ask(202, 'b', 'background'));
-    const gate = await slot.ask(ask(302, 'o', 'gate', { orchestrator: true }));
+    const gate = await slot.ask(ask(302, 'o', 'gate', { mayGate: true }));
     w.t += SETTLE_MS;
     await slot.pump();
     expect(slot.get(gate.id)?.grantedAt).toBeDefined();
@@ -565,7 +565,7 @@ describe('one pass at a time (the Audit\'s M1 on #573)', () => {
       const slot = new HeavySlot(w);
       const a = await slot.ask(ask(102, 'a'));
       const first = slot.pump();
-      const g = await slot.ask(ask(302, 'o', 'gate', { orchestrator: true }));
+      const g = await slot.ask(ask(302, 'o', 'gate', { mayGate: true }));
       const second = slot.pump();
       const third = slot.pump();
       for (let i = 0; i < 5; i++) await release();
@@ -586,7 +586,7 @@ describe('one pass at a time (the Audit\'s M1 on #573)', () => {
     w.t += SETTLE_MS;
     await slot.ask(ask(202, 'b'));
     const one = slot.pump();
-    await slot.ask(ask(302, 'o', 'gate', { orchestrator: true }));
+    await slot.ask(ask(302, 'o', 'gate', { mayGate: true }));
     const two = slot.pump();
     for (let i = 0; i < 5; i++) await release();
     await Promise.all([one, two]);

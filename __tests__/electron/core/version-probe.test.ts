@@ -179,7 +179,8 @@ describe('in the app', () => {
       ts.forEachChild(node, visit);
     };
     visit(source);
-    expect(first).toContain('endVersionProbes');
+    // The version probes are CLI probes since 20/11 (core/cli-probe.ts): endCliProbes ends them with every other.
+    expect(first).toContain('endCliProbes');
   });
 
   it('6. every --version probe in electron/ goes through probeVersion', () => {

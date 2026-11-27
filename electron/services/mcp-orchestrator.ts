@@ -4,7 +4,8 @@ import * as fs from 'fs';
 import * as os from 'os';
 import type { AppSettings } from '../types';
 import { getAllProviders } from '../providers';
-import { execCli, cliFailureText, nodeServerCommand, CliNotRunnableError } from '../providers/cli-exec';
+import { cliFailureText, nodeServerCommand, CliNotRunnableError } from '../providers/cli-exec';
+import { probeCli } from '../core/cli-probe';
 import { updateSharedJsonSync } from '../utils/shared-file';
 import { addMcpServerToJson, removeMcpServerFromJson } from '../utils/mcp-json';
 import { mcpNodeCommand, isTransientAppPath } from '../utils/mcp-node';
@@ -428,11 +429,9 @@ export function setupOrchestratorStatusHandler(): void {
       let mcpListConfigured = false;
       if (!mcpJsonConfigured) {
         try {
-          // Resolved first: on Windows claude is an npm claude.cmd or a claude.exe.
-          const { stdout } = await execCli('claude', ['mcp', 'list'], {
-            encoding: 'utf-8',
-            timeout: 5000,
-          });
+          // Resolved first: on Windows claude is an npm claude.cmd or a claude.exe. A CLI probe
+          // (core/cli-probe.ts): ended with what it started at its time and at the quit (the Audit's P3).
+          const { stdout } = await probeCli('claude', ['mcp', 'list'], { timeoutMs: 5000 });
           mcpListConfigured = stdout.includes('claude-mgr-orchestrator');
         } catch (err) {
           console.warn(`[orchestrator] claude mcp list failed: ${cliFailureText(err)}`);
@@ -461,9 +460,11 @@ export function setupOrchestratorStatusHandler(): void {
  * process, and bounded, as the status check's `claude mcp list` is.
  */
 // SIGKILL at the timeout: the default SIGTERM leaves a child that ignores it
-// running, and the setup waiting on it for good (the gate of #128). The name
-// is resolved first (execCli): on Windows a bare `claude` finds no npm install.
-const runClaude = (args: string[]) => execCli('claude', args, { encoding: 'utf-8', timeout: 15_000, killSignal: 'SIGKILL' });
+// running, and the setup waiting on it for good (the gate of #128). A CLI
+// probe (core/cli-probe.ts) since 20/11: its whole group SIGKILLed, at its
+// time and at the quit. The name is resolved first: on Windows a bare `claude`
+// finds no npm install.
+const runClaude = (args: string[]) => probeCli('claude', args, { timeoutMs: 15_000 });
 
 /** A remove that fails because nothing was registered is fine; a claude that cannot be started is said. */
 const reportUnrunnable = (err: unknown) => {

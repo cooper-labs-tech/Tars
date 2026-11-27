@@ -58,6 +58,13 @@ import { promisify } from 'node:util';
  *    terminal loses the parent's value.
  * 13. darwin/linux: a terminal gets another environment than the parent's
  *    (a PSModulePath removed on the way).
+ * 14. Every system: a start's prompt replaces the agent's role (savedPrompt),
+ *    which its bootstrap shows as "## Your role" at each session start: a
+ *    first task from a window, Restart's "Continue working on the previous
+ *    task", or the note Tars resumes an agent with after an abrupt stop (B2 of
+ *    the fresh-install report, 10/11/2026: 12 agents' role was a restart
+ *    notice); or an agent with no role is given the prompt as one. A launch's
+ *    prompt is a turn; a role is set by the role editor or a template only.
  */
 
 /** PSModulePath as a process started from PowerShell 7 has it: pwsh 7's modules first. */
@@ -369,7 +376,7 @@ describe.each(['darwin', 'linux'] as const)('1. on %s, what each call site start
 
   it("L2. a launch of a chat's runner by a channel's message keeps that sender for a retype (the Audit's L2 on #569)", async () => {
     const agent = await createAgent();
-    await launchAgent(agent.id, TASK, { message: true, sender: { kind: 'channel', channel: 'Slack' } });
+    await launchAgent(agent.id, TASK, { sender: { kind: 'channel', channel: 'Slack' } });
     await pause(50);
     expect((agent.pendingDelivery as { sender?: unknown } | undefined)?.sender).toEqual({ kind: 'channel', channel: 'Slack' });
   });
@@ -519,6 +526,27 @@ describe.each(['darwin', 'linux'] as const)('1. on %s, what each call site start
     const probe = children.calls.find(c => c.file === 'claude' && c.args?.[0] === '--version' && c.fn === 'spawn');
     expect((probe!.options!.env as Record<string, string>).PATH).toBe(POSIX_PATH);
     expect((await handlers.get('shell:version')!({}, { binary: X86_CLAUDE }) as { success: boolean }).success).toBe(false);
+  });
+
+  it.each([
+    ['a first task from a window', (id: string) => handlers.get('agent:start')!({}, { id, prompt: TASK })],
+    ["Restart's words", (id: string) => handlers.get('agent:start')!({}, { id, prompt: 'Continue working on the previous task' })],
+    ['the note of a resume after an abrupt stop', (id: string) => launchAgent(id, '[Tars] Tars stopped abruptly at 05:24 (it was not quit) and has started again, resuming your conversation.')],
+  ])('14. %s is a turn: the role stays as the role editor left it', async (_which, start) => {
+    const agent = await createAgent();
+    agent.savedPrompt = 'You review every PR for security defects.';
+    await start(agent.id);
+    await pause(50);
+    expect(agent.savedPrompt).toBe('You review every PR for security defects.');
+    expect(agent.status, 'the start is still a turn').toBe('running');
+  });
+
+  it('14. an agent with no role is given none by a start', async () => {
+    const agent = await createAgent();
+    await handlers.get('agent:start')!({}, { id: agent.id, prompt: TASK });
+    await pause(50);
+    expect(agent.savedPrompt).toBeUndefined();
+    expect(agent.currentTask).toBe(TASK);
   });
 });
 
@@ -794,14 +822,27 @@ describe('2-6. on win32', () => {
     expect(mcp.configured).toBe(true);
     expect(version).toEqual({ success: true, output: '2.1.301 (Claude Code)' });
     expect(children.calls.filter(c => c.fn === 'exec' || c.fn === 'execSync')).toEqual([]);
+    // `claude mcp list` is a CLI probe too since 20/11 (core/cli-probe.ts): the same resolved claude, by argv.
     expect(children.calls.filter(c => c.fn === 'spawn').map(c => [c.file, c.args, c.options?.shell])).toEqual([
       [CLAUDE_EXE, ['--version'], undefined],
+      [CLAUDE_EXE, ['mcp', 'list'], undefined],
       [X86_CLAUDE, ['--version'], undefined],
     ]);
     // None opens a console window: Tars is a GUI program, claude a console one.
     const started = children.calls.filter(c => c.fn === 'spawn' || c.args?.join(' ') === 'mcp list');
     expect(started).toHaveLength(3);
     for (const call of started) expect(call.options, `${call.file} ${call.args?.join(' ')}`).toMatchObject({ windowsHide: true });
+  });
+
+  it('14. a start with a task, from a window or a resume, keeps the role', async () => {
+    const agent = await createAgent();
+    agent.savedPrompt = 'You review every PR for security defects.';
+    await handlers.get('agent:start')!({}, { id: agent.id, prompt: TASK });
+    await pause(50);
+    expect(agent.savedPrompt).toBe('You review every PR for security defects.');
+    await launchAgent(agent.id, '[Tars] Tars stopped abruptly at 05:24 (it was not quit) and has started again, resuming your conversation.');
+    await pause(50);
+    expect(agent.savedPrompt).toBe('You review every PR for security defects.');
   });
 });
 

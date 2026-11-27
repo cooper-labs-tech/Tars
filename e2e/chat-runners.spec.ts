@@ -168,7 +168,7 @@ type Agent = {
 };
 type ChatRecord = {
   id: string; number: number; title: string; runnerId: string | null; inbox: boolean; settledAt: string | null; sessionIds: string[];
-  runner?: { id: string; live: boolean; permissionAsk?: { tool: string } | null } | null;
+  runner?: { id: string; live: boolean; permissionAsk?: { tool: string; fingerprint?: string } | null } | null;
 };
 type Answer = Record<string, unknown>;
 type Launch = {
@@ -262,7 +262,7 @@ test("chats: each runs its own conversation, within the RAM's limit, and owns it
     const release = (id: string) => fs.writeFileSync(path.join(home, `release-${id}`), '');
     type WindowAgentApi = { agent: {
       start(p: { id: string; prompt: string }): Promise<Answer>; update(p: Record<string, unknown>): Promise<Answer>;
-      answerPermission(id: string, decision: string): Promise<Answer>;
+      answerPermission(id: string, decision: string, reason?: string, fingerprint?: string): Promise<Answer>;
     } };
     const startFromWindow = (id: string, prompt: string) => page.evaluate(([id, prompt]) => (window as unknown as { electronAPI: WindowAgentApi }).electronAPI.agent.start({ id, prompt }), [id, prompt] as const);
     const updateFromWindow = (params: Record<string, unknown>) => page.evaluate((p) => (window as unknown as { electronAPI: WindowAgentApi }).electronAPI.agent.update(p), params);
@@ -638,7 +638,8 @@ test("chats: each runs its own conversation, within the RAM's limit, and owns it
     const askView = await viewOfC();
     keep({ askView });
     expect(askView).toMatchObject({ id: runnerC.id, permissionAsk: { tool: 'Bash' } });
-    await page.evaluate((id) => (window as unknown as { electronAPI: WindowAgentApi }).electronAPI.agent.answerPermission(id, 'allow'), runnerC.id);
+    // Every allow names the fingerprint of the question read (#588's M1).
+    await page.evaluate(([id, fp]) => (window as unknown as { electronAPI: WindowAgentApi }).electronAPI.agent.answerPermission(id, 'allow', undefined, fp), [runnerC.id, askView?.permissionAsk?.fingerprint] as const);
     await expect.poll(() => lines<{ id: string; answer: { decision?: string } }>(permissionsFile).filter((l) => l.id === runnerC.id).map((l) => l.answer.decision).pop() ?? null, { timeout: 30_000 }).toBe('allow');
     await expect.poll(async () => (await viewOfC())?.permissionAsk ?? null, { timeout: 30_000 }).toBeNull();
     await atRest(runnerC.id);

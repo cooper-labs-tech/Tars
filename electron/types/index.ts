@@ -104,15 +104,23 @@ export interface AgentStatus {
     askedAt: string;
     /** When Tars refuses the question, with a reason the agent reads, if nobody answers (permissionAskMinutes). */
     until: string;
-    /** What is asked, whole: the command, the path or the address (the fields' first), the tool when none. */
+    /** What is asked: the command, the path or the address (the fields' first), the tool when none, made of `fields`. */
     subject: string;
-    /** The fields the person decides on, whole (each at most 2,000 characters). */
+    /** The fields the person decides on, as Tars publishes them (services/permission-asks.ts viewOf): each at most
+     *  2,000 characters, 32 fields at most. Whole unless `cut` names them; agent:permissionQuestion gives them whole. */
     fields: Record<string, string>;
+    /** The fields sent as their JSON (a number, a boolean, null, an array, an object), among `fields`. */
+    jsonFields?: string[];
+    /** The fields this view does not hold whole, each with its whole length: the window shows the question whole
+     *  (agent:permissionQuestion) before an allow, which must then name its fingerprint. */
+    cut?: Array<{ field: string; length: number }>;
+    /** The question's fingerprint, when this view holds it whole: what agent:answerPermission's allow names. */
+    fingerprint?: string;
     /** Why Claude Code asks, and the settings rule that asked, when it gave them. */
     reason?: string;
     rule?: string;
-    /** A question Tars cannot show whole, a file tool's or one with a field withheld: the window may refuse it or hand
-     *  it back, never allow it. */
+    /** A question Tars cannot show whole, a file tool's without its content or one with a field the mod could not
+     *  send: the window may refuse it or hand it back, never allow it. */
     withheld?: true;
     /** What was withheld and why, `<field>: <why>` joined by `; ` (the state mod's words). */
     withheldWhy?: string;
@@ -219,6 +227,8 @@ export interface AgentStatus {
     /** Set while the link is kept for work the agent left running in the
      *  background: its requester is owed one more note (agent-watch). */
     backgroundLeft?: string[];
+    /** The work was handed as a release gate by its project's orchestrator: its heavy runs may take `gate` (2.0.7). */
+    gate?: true;
   };
   /**
    * Who asked this agent for each piece of work still out, in order
@@ -351,6 +361,11 @@ export interface AgentStatus {
   model?: string;              // Model name (e.g. 'sonnet', 'opus', 'haiku'), persisted across restarts
   localModel?: string;        // Tasmania model name when provider is 'local'
   savedPrompt?: string;       // Saved task/prompt for re-launching the agent
+  /**
+   * A task kept for the agent's next fresh start (2.0.7, core/first-task.ts): the window's agent.setFirstTask, or a
+   * team's brief for an orchestrator not started on deploy. Typed once, as that start's prompt, never as its role.
+   */
+  firstTask?: { text: string; setAt: string };
   obsidianVaultPaths?: string[]; // Obsidian vault paths to mount via --add-dir (read-only)
   createdAt?: string;         // ISO timestamp when the agent was created
   cliPath?: string;              // Custom CLI binary path override
@@ -940,6 +955,8 @@ export interface ClaudeAccountState extends ClaudeAccount {
   agentIds: string[];
   /** A sentence for the page: why the last sign-in or status check did not work. */
   error: string | null;
+  /** `cli-missing`: there is no claude to ask (not installed, or not where Settings says), so install Claude Code first. */
+  code: 'cli-missing' | null;
 }
 
 export interface ClaudeAccountsView {

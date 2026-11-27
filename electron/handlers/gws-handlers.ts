@@ -8,8 +8,9 @@ import { buildFullPath } from '../utils/path-builder';
 import type { AppSettings } from '../types';
 import { joinPathEntries, withPath } from '../platform';
 import {
-  CliNotRunnableError, execCli, findWindowsCli, stdioServerCommand, windowsCliDirs, windowsGcloudDirs, type CliLookup,
+  CliNotRunnableError, findWindowsCli, stdioServerCommand, windowsCliDirs, windowsGcloudDirs, type CliLookup,
 } from '../providers/cli-exec';
+import { probeCli } from '../core/cli-probe';
 
 const execAsync = promisify(exec);
 
@@ -202,12 +203,12 @@ export function registerGwsHandlers(deps: GwsHandlerDependencies): void {
 
       const env = withPath(process.env, fullPath, process.platform) as NodeJS.ProcessEnv;
 
-      // win32: an argv, never a line for cmd.exe, which would read a `"`, `&`
-      // or %VAR% in the path; execCli resolves an npm gws.cmd to node and its
-      // script. darwin/linux: the line /bin/sh has always run.
-      const { stdout } = process.platform === 'win32'
-        ? await execCli(gwsPath, ['auth', 'status', '--json'], { env, timeout: 10000, encoding: 'utf-8' })
-        : await execAsync(`"${gwsPath}" auth status --json`, { env, timeout: 10000 });
+      // An argv on every system, never a line for a shell, which would read a
+      // `"`, `&`, `$(...)` or %VAR% in the path: probeCli resolves an npm
+      // gws.cmd to node and its script on Windows. A CLI probe
+      // (core/cli-probe.ts): ended with what it started at its time and at
+      // the quit (the Audit's P3 on probe orphans).
+      const { stdout } = await probeCli(gwsPath, ['auth', 'status', '--json'], { env, timeoutMs: 10000 });
 
       const data = JSON.parse(stdout.trim());
       // Real gws auth status output:

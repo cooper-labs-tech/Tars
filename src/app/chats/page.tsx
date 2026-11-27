@@ -5,6 +5,8 @@ import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
 import { MessageSquare } from 'lucide-react';
 import { BrandMark } from '@/components/Brand';
+import FirstRun from '@/components/FirstRun';
+import { useElectronAgents } from '@/hooks/useElectron';
 import { LoadingPanel, PageHeader } from '@/components/ui';
 import { ChatPage } from '@/components/NewShell/ChatPage';
 import { NewChatRecord } from '@/components/NewShell/NewChatRecord';
@@ -29,6 +31,7 @@ export default function ChatsPage() {
 function ChatsPageInner() {
   const params = useSearchParams();
   const { chats, at } = useChats();
+  const { agents, isLoading: agentsLoading } = useElectronAgents();
 
   if (params.get('new') === '1') return <NewChatRecord initialProject={params.get('project')} />;
   if (chats === null) return <LoadingPanel what="Reading the chats" />;
@@ -37,6 +40,15 @@ function ChatsPageInner() {
   const open = (asked && chats.find(chat => chat.id === asked))
     || chatSections(chats, { now: at }).flatMap(section => section.chats)[0];
   if (open) return <ChatPage key={open.id} chat={open} />;
+  // No agent in any project: a new user's first run (frame `First run (2.0.7)`).
+  if (!agentsLoading && agents.length === 0) {
+    return (
+      <div className="h-[calc(100vh-44px)] flex flex-col">
+        <PageHeader title="Chats" subtitle="A conversation with the orchestrator of a project, on one topic." />
+        <div className="flex-1 min-h-0 border border-border bg-card"><FirstRun /></div>
+      </div>
+    );
+  }
 
   return (
     <div className="h-[calc(100vh-44px)] flex flex-col">

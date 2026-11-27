@@ -5,6 +5,7 @@ import {
   canSubmitTeam,
   deployButtonLabel,
   ownWorktreeOf,
+  teamDeployFooter,
   teamSelectionSummary,
   worktreeCount,
   worktreeToSave,
@@ -138,5 +139,32 @@ describe('worktreeToSave', () => {
     expect(worktreeToSave({ useWorktree: false, branchName: 'feat/notes' }, {})).toBeUndefined();
     expect(worktreeToSave({ useWorktree: true, branchName: '   ' }, {})).toBeUndefined();
     expect(worktreeToSave({ useWorktree: true, branchName: 'feat/y' }, { worktreePath: '/p/.worktrees/feat-x', branchName: 'feat/x' })).toBeUndefined();
+  });
+});
+
+/**
+ * New team's footer: what the deploy will make (2.0.7; frames `Overlay · New team (one screen)` and `First run (2.0.7)
+ * · states`, its row `new team from the first run`).
+ *
+ * How it can fail, written before the code:
+ * 1. it names a fixed number of worktrees ("Five"), whatever members are chosen;
+ * 2. it counts a member with no branch (the orchestrator on main, or every member after deploy without worktrees);
+ * 3. a team none of whose members asks for a worktree (since PR 585, the built-in team) is told worktrees are made,
+ *    instead of that the agents make one for each piece of work;
+ * 4. it stops saying that nothing is pushed.
+ */
+describe('teamDeployFooter', () => {
+  it('counts the worktrees of the members chosen, not a fixed five (1, 2, 4)', () => {
+    expect(teamDeployFooter(4)).toBe('4 worktrees are created under the project, one for each member with a branch. Nothing is pushed.');
+    expect(teamDeployFooter(1)).toBe('1 worktree is created under the project, for the member with a branch. Nothing is pushed.');
+  });
+
+  it('a team with no branch says no worktree is made now, and who makes them (3, 4)', () => {
+    expect(teamDeployFooter(0)).toBe('No worktree is made now: your agents make one for each piece of work. Nothing is pushed.');
+  });
+
+  it('reads the count from the members, a member with no branch not counted (2)', () => {
+    const members = [{ worktreeBranch: undefined }, { worktreeBranch: 'feat/a' }, { worktreeBranch: '' }, { worktreeBranch: 'feat/b' }];
+    expect(teamDeployFooter(worktreeCount(members))).toMatch(/^2 worktrees are created/);
   });
 });

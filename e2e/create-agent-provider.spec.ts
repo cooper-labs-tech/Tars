@@ -35,8 +35,13 @@ test('an agent makes and starts an agent on any provider and any CLI through its
   const launchesFile = path.join(home, 'launches.jsonl');
   const standIn = (name: string) => {
     const file = path.join(bin, name);
+    // The --help Tars reads before a codex launch (#608) and its sign-in check (login status) are answered, and the
+    // stand-in leaves, unrecorded: hanging on them, it left orphans of PID 1 after the app quit (the Audit's P4, 20/11).
     fs.writeFileSync(file, `#!${process.execPath}
-require('fs').appendFileSync(${JSON.stringify(launchesFile)}, JSON.stringify({ bin: ${JSON.stringify(name)}, argv: process.argv.slice(2), cwd: process.cwd(), agent: process.env.CLAUDE_AGENT_ID || null }) + '\\n');
+const argv = process.argv.slice(2);
+if (argv[0] === '--help') { process.stdout.write('Usage: ${name} [OPTIONS]\\n'); process.exit(0); }
+if (argv[0] === 'login' && argv[1] === 'status') { process.stdout.write('Logged in using ChatGPT\\n'); process.exit(0); }
+require('fs').appendFileSync(${JSON.stringify(launchesFile)}, JSON.stringify({ bin: ${JSON.stringify(name)}, argv, cwd: process.cwd(), agent: process.env.CLAUDE_AGENT_ID || null }) + '\\n');
 process.stdout.write('${name} ready\\r\\n');
 setInterval(() => {}, 1 << 30);
 `, { mode: 0o755 });

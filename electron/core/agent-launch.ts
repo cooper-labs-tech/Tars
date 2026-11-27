@@ -32,14 +32,15 @@ export interface AgentLaunchOptions {
    */
   resumeSessionId?: string | null;
   /**
-   * The prompt is a message of a chat (services/chat-runners.ts): the CLI's
-   * first turn, never kept as the agent's saved prompt, which is its brief
-   * (the agent's form, a template, a team's brief) and its role in its
-   * bootstrap.
+   * The prompt is a message of a chat (services/chat-runners.ts): a turn that
+   * does not take the agent's first task (core/first-task.ts withFirstTask).
+   * Never a reason to keep the prompt as the agent's role: no launch does.
    */
   message?: boolean;
   /** Who sent that message: a retype of the launch's task types it under them, never as Tars (the Audit's L2 on #569). */
   sender?: MessageSender;
+  /** The prompt holds the agent's first task (core/first-task.ts): typed, never kept as its saved prompt, which is its role. */
+  firstTask?: boolean;
 }
 
 export type AgentLaunchResult =

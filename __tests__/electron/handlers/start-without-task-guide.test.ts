@@ -79,6 +79,13 @@ vi.mock('os', async (importOriginal) => {
   const actual = await importOriginal<typeof import('os')>();
   return { ...actual, homedir: () => tmpHome, default: { ...actual, homedir: () => tmpHome } };
 });
+// A codex launch reads codex's --help first (CodexProvider.prepareLaunch, #608), a CLI probe (core/cli-probe.ts):
+// answered here as on a machine with no codex, CI's, so the owner's real codex never runs
+// (__tests__/setup/no-real-cli.ts refuses it; the Audit's I-4 on #616).
+vi.mock('../../../electron/core/cli-probe', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('../../../electron/core/cli-probe')>()),
+  probeCli: async () => { throw Object.assign(new Error('not installed'), { code: 'ENOENT' }); },
+}));
 vi.mock('node-pty', () => ({
   spawn: vi.fn((file: string): FakePty => {
     const terminal: FakePty = {
@@ -127,6 +134,7 @@ import { resetLaunches } from '../../../electron/core/agent-launch';
 import { resetAgentWatch } from '../../../electron/services/agent-watch';
 import { registerAgentRoutes } from '../../../electron/services/api-routes/agent-routes';
 import { agentGuideSection } from '../../../electron/services/agent-guide';
+import { readCodexFlags } from '../../../electron/providers/codex-cli';
 import { projectFilesDir } from '../../../electron/utils/project-files';
 import type { RouteApp, RouteContext, RouteRequest } from '../../../electron/services/api-routes/types';
 import type { AgentStatus, AppSettings } from '../../../electron/types';
@@ -139,6 +147,12 @@ beforeAll(() => {
   if (process.platform === 'win32') Object.defineProperty(process, 'platform', { ...hostPlatform, value: 'linux' });
 });
 afterAll(() => { Object.defineProperty(process, 'platform', hostPlatform); });
+
+// A codex launch first reads the installed codex's flags, a real process (CodexProvider.prepareLaunch, in every mode
+// since --no-daemon): read here once, before beforeEach fakes the clock, as a Tars run has by its second codex launch.
+// Under the fake clock that read ends after `settled` has run the clock past the terminal's half second, and the launch
+// then waits for good. Where no codex is installed nothing is kept, and the launch's own read fails before any spawn.
+beforeAll(async () => { await readCodexFlags('codex'); });
 
 const project = path.join(tmpHome, 'project');
 const SECTION = '## How Tars works';
@@ -311,7 +325,8 @@ describe('a CLI without Claude\'s hook started from the window with no task', ()
     const first = typedInto(terminal);
     expect(count(first), first).toBe(1);
     expect(first).toContain(MEMORY);
-    expect(first).toContain('assign_task');
+    // A worker's section (2.0.7: its kanban line follows Hermes, absent here, so a line every worker gets).
+    expect(first).toContain('send_message to "orchestrator"');
     // One message, one Enter: the section goes in with the task, not as a turn of its own.
     expect(count(first, '\r')).toBe(1);
     // The task under its sender's line, which opens the prompt (11), then Tars's words under Tars's line.

@@ -1,7 +1,6 @@
 import { app, ipcMain } from 'electron';
-import { execFile } from 'child_process';
-import { promisify } from 'util';
 import * as fs from 'fs';
+import { probeCli } from '../core/cli-probe';
 import * as path from 'path';
 import { hermesDesktopConfigPath, tailscaleCandidates } from '../platform';
 import * as os from 'os';
@@ -65,8 +64,6 @@ import {
   resolveHermesBaseUrl,
   HERMES_DEFAULT_PORT,
 } from '../types/hermes';
-
-const execFileAsync = promisify(execFile);
 
 /** Where Hermes Desktop keeps its own connection config (per platform: see electron/platform). */
 const HERMES_DESKTOP_CONFIG = hermesDesktopConfigPath(
@@ -280,7 +277,8 @@ async function detectTailscale(): Promise<TailscaleInfo> {
   const candidates = tailscalePlaces();
   for (const bin of candidates) {
     try {
-      const { stdout } = await execFileAsync(bin, ['status', '--json'], { timeout: 4000 });
+      // CLI probes (core/cli-probe.ts): ended with what they started at their time and at the quit (the Audit's P3).
+      const { stdout } = await probeCli(bin, ['status', '--json'], { timeoutMs: 4000 });
       const status = JSON.parse(stdout);
       const dnsName = typeof status?.Self?.DNSName === 'string'
         ? status.Self.DNSName.replace(/\.$/, '')
@@ -289,7 +287,7 @@ async function detectTailscale(): Promise<TailscaleInfo> {
 
       let serveConfigured = false;
       try {
-        const { stdout: serveOut } = await execFileAsync(bin, ['serve', 'status'], { timeout: 4000 });
+        const { stdout: serveOut } = await probeCli(bin, ['serve', 'status'], { timeoutMs: 4000 });
         serveConfigured = !/no serve config/i.test(serveOut) && serveOut.trim().length > 0;
       } catch { /* serve status exits non-zero when unconfigured on some versions */ }
 

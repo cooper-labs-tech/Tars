@@ -7,6 +7,7 @@ import { ipcReason } from '@/lib/ipc-error';
 import { isElectron } from '@/hooks/useElectron';
 import { DndContext } from '@dnd-kit/core';
 import { useElectronAgents, useElectronFS, useElectronSkills } from '@/hooks/useElectron';
+import FirstRun from '@/components/FirstRun';
 import { panelAgentsKey } from './utils/panelAgentsKey';
 import { useMultiTerminal } from './hooks/useMultiTerminal';
 import { useTerminalGrid } from './hooks/useTerminalGrid';
@@ -733,7 +734,8 @@ export default function TerminalsView() {
 
         {/* Terminal grid - takes full space, relative for sidebar panel */}
         <div className="flex-1 min-h-0 relative mt-2">
-          <TerminalGrid
+          {/* No agent in any project: a new user's first run in place of the empty grid (frame `First run (2.0.7) · states`). */}
+          {!isLoading && agents.length === 0 ? <FirstRun /> : <TerminalGrid
             agents={filteredAgents}
             visiblePanels={grid.visiblePanels}
             rglLayout={grid.rglLayout}
@@ -760,7 +762,7 @@ export default function TerminalsView() {
             onFocusPanel={handleFocusPanel}
             onContextMenu={contextMenu.openMenu}
             onFitAll={multiTerminal.fitAll}
-          />
+          />}
 
           {/* Sidebar panel - overlays grid from the right */}
           <Sidebar

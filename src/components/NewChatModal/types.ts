@@ -96,6 +96,8 @@ export interface NewChatModalProps {
   initialOrchestrator?: boolean;
   /** Opens on the team half of the switch instead of the agent half. Ignored in edit mode - editing an existing single agent has no team equivalent. */
   initialMode?: CreationMode;
+  /** The team alone, no switch to One agent (the first run, which deploys a team: frame `First run (2.0.7) · states`, its row `new team from the first run`). */
+  teamOnly?: boolean;
   /**
    * @deprecated The template-chip row this opened from the create screen is
    * gone in the one-screen redesign (the frame has no room for it, and no

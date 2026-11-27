@@ -7,6 +7,7 @@ import { useElectronAgents, useElectronFS } from '@/hooks/useElectron';
 import { Button, DialogShell, Dropdown, Input, Label } from '@/components/ui';
 import type { DropdownOption } from '@/components/ui';
 import { Toggle } from '@/components/Settings/Toggle';
+import { createAgentWithRole } from '@/lib/agent-role';
 import { revealLine, startsWithPromptByDefault, templateFacts } from '@/lib/template-review';
 import { PromptBlock, TemplateFactRows } from './TemplateReview';
 
@@ -24,7 +25,7 @@ interface InstantiateDialogProps {
  * just like one you made; off, the agent is created and not started.
  */
 export function InstantiateDialog({ template, onClose, onCreated }: InstantiateDialogProps) {
-  const { createAgent, startAgent } = useElectronAgents();
+  const { createAgent, updateAgent, startAgent } = useElectronAgents();
   const { projects, openFolderDialog } = useElectronFS();
 
   const [projectPath, setProjectPath] = useState<string | null>(null);
@@ -34,6 +35,8 @@ export function InstantiateDialog({ template, onClose, onCreated }: InstantiateD
   const [sendPrompt, setSendPrompt] = useState(() => startsWithPromptByDefault(template));
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // The agent is made: a second Create would make another one.
+  const [made, setMade] = useState(false);
 
   const facts = useMemo(() => templateFacts(template), [template]);
   const starts = sendPrompt && facts.prompt !== null;
@@ -59,6 +62,7 @@ export function InstantiateDialog({ template, onClose, onCreated }: InstantiateD
   }
 
   async function handleCreate() {
+    if (made) return;
     if (!projectPath) {
       setError('Please pick a project first.');
       return;
@@ -69,7 +73,10 @@ export function InstantiateDialog({ template, onClose, onCreated }: InstantiateD
       const resolvedModel = template.provider !== 'local' && template.model && template.model !== 'default'
         ? template.model
         : undefined;
-      const agent = await createAgent({
+      // The template's prompt is the agent's role, which main puts in every session's bootstrap ("## Your role"). Saved
+      // on it as it is made, under the same switch as the start: an imported or edited template's prompt may carry
+      // what the user did not write, and saved as the role it would run at every start, unread (the Audit's gate of #204).
+      const { agent, roleNotSaved } = await createAgentWithRole({ createAgent, updateAgent }, {
         projectPath,
         skills: template.skills,
         character: template.character,
@@ -80,7 +87,7 @@ export function InstantiateDialog({ template, onClose, onCreated }: InstantiateD
         model: resolvedModel,
         localModel: template.localModel,
         obsidianVaultPaths: template.obsidianVaultPaths,
-      });
+      }, sendPrompt ? template.savedPrompt : undefined);
       const prompt = template.savedPrompt?.trim() ?? '';
       if (prompt && sendPrompt) {
         await startAgent(agent.id, prompt, {
@@ -90,6 +97,13 @@ export function InstantiateDialog({ template, onClose, onCreated }: InstantiateD
         });
       }
       onCreated?.(agent.id);
+      if (roleNotSaved) {
+        // Made, and started as asked, but without its role: said here, and Create stays off so no second agent is made.
+        setMade(true);
+        setError(`Created, but its role was not saved: ${roleNotSaved}`);
+        setSubmitting(false);
+        return;
+      }
       onClose();
     } catch (err) {
       console.error('Failed to create agent from template:', err);
@@ -108,7 +122,7 @@ export function InstantiateDialog({ template, onClose, onCreated }: InstantiateD
           <Button variant="ghost" onClick={onClose} disabled={submitting}>
             Cancel
           </Button>
-          <Button variant="primary" onClick={handleCreate} disabled={!projectPath || submitting}>
+          <Button variant="primary" onClick={handleCreate} disabled={!projectPath || submitting || made}>
             {submitting ? 'Creating…' : starts ? 'Create and start' : 'Create agent'}
           </Button>
         </>
@@ -167,6 +181,10 @@ export function InstantiateDialog({ template, onClose, onCreated }: InstantiateD
                   This starts off unless the template is built in and unedited: an imported or edited one may carry a prompt you did not write.
                 </p>
               )}
+              {/* The switch decides the role too (the Audit's L1 on PR 581; frame `Overlay · Instantiate template · prompt`). */}
+              <p className="text-[11px] leading-4 text-muted-foreground">
+                On, it starts with this prompt and keeps it as its role, which it reads at every start. Off, it is created idle, with no role.
+              </p>
             </div>
           </div>
         )}

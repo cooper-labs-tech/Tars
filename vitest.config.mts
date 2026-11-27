@@ -20,7 +20,7 @@ export default defineConfig({
     // home-isolation.ts makes is inside the file's own temporary folder too.
     // repo-config-guard.ts last: it fails a file that changed the git
     // configuration of the repository the suite runs in.
-    setupFiles: ['./__tests__/setup/worktree-name.ts', './__tests__/setup/tmpdir-isolation.ts', './__tests__/setup/env-isolation.ts', './__tests__/setup/home-isolation.ts', './__tests__/setup/repo-config-guard.ts'],
+    setupFiles: ['./__tests__/setup/worktree-name.ts', './__tests__/setup/tmpdir-isolation.ts', './__tests__/setup/env-isolation.ts', './__tests__/setup/home-isolation.ts', './__tests__/setup/repo-config-guard.ts', './__tests__/setup/no-real-cli.ts'],
     // The run's own temporary folder, which must be empty at the end of the
     // run: see __tests__/setup/tmpdir-run.ts.
     globalSetup: ['./__tests__/setup/tmpdir-run.ts'],

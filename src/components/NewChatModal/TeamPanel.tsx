@@ -109,15 +109,16 @@ export function TeamPanel(props: {
       </div>
 
       <div>
-        <PanelCaption className="mb-1.5">The brief they all get</PanelCaption>
+        <PanelCaption className="mb-1.5">The orchestrator&apos;s first task</PanelCaption>
         <Textarea
           value={props.brief}
           onChange={(e) => props.onBriefChange(e.target.value)}
-          placeholder="What is this team shipping? Shared context every member starts with."
+          placeholder="What should this team ship? The orchestrator starts on it and splits the work."
           className="h-[72px]"
         />
         <p className="mt-1.5 text-[11px] text-muted-foreground">
-          Each member also gets the brief its role carries. This is added on top of it, not instead of it.
+          Typed once when the orchestrator first starts, now or later, and never kept as its role. It splits the work among
+          its team; each member keeps its own role. A team with no orchestrator: every member gets it.
         </p>
       </div>
 

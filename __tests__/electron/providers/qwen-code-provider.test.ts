@@ -135,9 +135,15 @@ describe('the qwen-code provider', () => {
     expect(provider().buildInteractiveCommand({ ...base, forkSession: true })).not.toContain('--fork-session');
   });
 
-  it('Q4. an orchestrator has no edit, write or sub-agent tool', () => {
+  it('Q4. an orchestrator has no edit, write, sub-agent, code search or web tool, and keeps reading and its shell', () => {
     const cmd = provider().buildInteractiveCommand({ ...base, orchestratorMode: true });
-    for (const tool of ['edit', 'write_file', 'agent']) expect(QWEN_ORCHESTRATOR_EXCLUDED).toContain(tool);
+    // Qwen Code 0.25.2's ToolNames: the work is its agents' (2.0.7), as for claude (orchestrator-tools.test.ts).
+    for (const tool of ['edit', 'notebook_edit', 'write_file', 'agent', 'create_sub_session', 'team_create', 'workflow', 'grep_search', 'glob', 'lsp', 'web_fetch', 'web_search']) expect(QWEN_ORCHESTRATOR_EXCLUDED).toContain(tool);
+    // A name Qwen Code does not know is dropped without a word, its tool left open (the Audit's L2 on #579): each is
+    // one of 0.25.2's ToolNames, read from its bundle (reports/orchestrator-role-runs/qwen-names.py, qwen-names.txt).
+    const QWEN_0_25_2 = ['advisor', 'agent', 'artifact', 'ask_user_question', 'create_sub_session', 'cron_create', 'cron_delete', 'cron_list', 'display_image', 'edit', 'enter_plan_mode', 'enter_worktree', 'exec', 'exit_plan_mode', 'exit_worktree', 'get_goal', 'glob', 'grep_search', 'image_gen', 'list_agents', 'loop_wakeup', 'list_directory', 'lsp', 'manage_memory', 'save_memory', 'monitor', 'notebook_edit', 'propose_goal', 'read_file', 'read_mcp_resource', 'record_artifact', 'record_source', 'report_findings', 'request_shutdown', 'search_memory', 'send_message', 'run_shell_command', 'skill', 'structured_output', 'task_create', 'task_list', 'task_stop', 'task_update', 'team_create', 'team_delete', 'team_plan_approval', 'todo_write', 'tool_call', 'tool_search', 'update_goal', 'web_fetch', 'web_search', 'workflow', 'write_file', 'zoom_image'];
+    for (const tool of QWEN_ORCHESTRATOR_EXCLUDED) expect(QWEN_0_25_2, `${tool} is no tool of Qwen Code 0.25.2`).toContain(tool);
+    for (const tool of ['read_file', 'run_shell_command', 'list_directory']) expect(QWEN_ORCHESTRATOR_EXCLUDED).not.toContain(tool);
     expect(cmd).toContain(`--exclude-tools ${QWEN_ORCHESTRATOR_EXCLUDED.join(' ')}`);
     expect(provider().buildInteractiveCommand(base)).not.toContain('--exclude-tools');
   });

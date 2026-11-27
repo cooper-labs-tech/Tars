@@ -18,6 +18,7 @@ import { registerHeavySlotRoutes } from './heavy-slot-routes';
 import { registerMcpRoutes } from './mcp-routes';
 import { registerJanitorRoutes } from './janitor-routes';
 import { registerOwnerWordsRoutes } from './owner-words-routes';
+import { registerWorktreeRoutes } from './worktree-routes';
 
 export function registerAllRoutes(app: RouteApp, ctx: RouteContext): void {
   registerBusRoutes(app);
@@ -42,6 +43,8 @@ export function registerAllRoutes(app: RouteApp, ctx: RouteContext): void {
   registerJanitorRoutes(app);
   // The owner's words, relayed under Tars's mark (services/owner-words.ts, SECURITY.md §8).
   registerOwnerWordsRoutes(app, ctx);
+  // A worktree per task, for any project (services/project-worktrees.ts).
+  registerWorktreeRoutes(app);
 }
 
 export type { RouteApp, RouteContext, RouteRequest, SendJson, RouteHandler, RouteDefinition } from './types';
