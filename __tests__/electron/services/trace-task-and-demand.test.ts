@@ -83,6 +83,11 @@ import { assertThrowaway } from '../../setup/throwaway-dirs';
  * 17. (L2) A request given up while held counts as one that reached the endpoint: it adds to its turn's and its
  *     session's request count and to its turn's model time, or it is the session's or a task's first request.
  * 18. (Info) A start that opened no terminal leaves its note for the agent's next spawn to read.
+ * 19. (#675 merged into #680, written before its fix.) 17's rule taken for every cancel: a request cut after it
+ *     reached the endpoint (an Esc or a Ctrl-C mid-answer with its tokens, the CLI's own interrupt, a hang-up before
+ *     the first byte that was not held, a Tars stop, the proxy's hold ceiling, the endpoint's cut stream) leaves the
+ *     request counts, the model time, the export's counts or the first request, while its tokens stay. Only a request
+ *     given up while held (`abandoned_while_held`) is none of these.
  *
  * The negative witness is feat/traces-window at 69c8f3f08, which records none of it; for 13 and 14, #675 at
  * 0346e9a65, which lists every task and puts none on a turn; for 15 to 18, #675 at 77463aad7.
@@ -692,6 +697,44 @@ describe('17. a request given up while held never reached the endpoint', () => {
     expect(ref).toBeTruthy();
     await close(token, traceId);
     expect(traceStore().session(traceId)!.outcome!.task!.firstRequestAt).toBe(t0 + 3000);
+  });
+});
+
+describe('19. a request cut after it reached the endpoint counts; only one given up while held does not', () => {
+  it('an Esc mid-answer counts in the request counts, the model time and the export, and is the first request; the held one before it is none', () => {
+    agent('esc');
+    const { traceId } = open('esc');
+    const t0 = Date.now() + 100;
+    request(traceId, 'esc', t0, { status: 499, responseBody: Buffer.alloc(0), contentType: undefined, attempts: 3, heldMs: 2000, cancel: { by: 'harness', cause: 'abandoned_while_held', at: t0 + 2000, deliveredBytes: 0 } });
+    // The next one reached the endpoint, which answered part of it (its tokens kept), and was cut by an Esc.
+    const body = Buffer.from(JSON.stringify({ model: 'open-model-1', stream: false, tools: [{ type: 'function', function: { name: 'sh', parameters: {} } }], messages: [{ role: 'user', content: `go ${t0}` }, { role: 'assistant', content: 'x' }, { role: 'tool', content: 'out', tool_call_id: 'c' }] }));
+    request(traceId, 'esc', t0 + 3000, { requestBody: body, cancel: { by: 'harness', cause: 'esc', at: t0 + 3008, deliveredBytes: 120 } });
+    const s = traceStore().session(traceId)!;
+    expect(s.session.requestCount).toBe(1);
+    expect(s.turns[0].modelMs).toBe(10);
+    expect(s.start!.firstRequestAt).toBe(t0 + 3000);
+    const doc = sessionDocument(traceStore(), traceId)!;
+    expect(doc.turns[0].request_count).toBe(1);
+    expect(doc.trace.request_count).toBe(1);
+    expect(doc.turns[0].tokens_out).toBe(1);
+  });
+
+  it('so does every other cut that reached it: Ctrl-C, the CLI\'s interrupt, an unknown hang-up, a Tars stop, the hold ceiling, a cut stream', () => {
+    const cuts = [
+      { by: 'harness', cause: 'ctrl_c' }, { by: 'harness', cause: 'cli_interrupt' }, { by: 'harness', cause: 'unknown' },
+      { by: 'tars', cause: 'stop' }, { by: 'proxy', cause: 'hold_ceiling' }, { by: 'endpoint', cause: 'stream_cut' },
+    ];
+    for (const [i, cut] of cuts.entries()) {
+      const id = `cut${i}`;
+      agent(id);
+      const { traceId } = open(id);
+      const t0 = Date.now() + 100;
+      request(traceId, id, t0, { cancel: { ...cut, at: t0 + 8, deliveredBytes: 40 } });
+      const s = traceStore().session(traceId)!;
+      const doc = sessionDocument(traceStore(), traceId)!;
+      expect({ session: s.session.requestCount, turn: doc.turns[0].request_count, modelMs: s.turns[0].modelMs, first: s.start!.firstRequestAt }, cut.cause)
+        .toEqual({ session: 1, turn: 1, modelMs: 10, first: t0 });
+    }
   });
 });
 
