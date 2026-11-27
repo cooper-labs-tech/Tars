@@ -91,6 +91,11 @@ import { assertThrowaway } from '../../setup/throwaway-dirs';
  *     the first byte that was not held, a Tars stop, the proxy's hold ceiling, the endpoint's cut stream) leaves the
  *     request counts, the model time, the export's counts or the first request, while its tokens stay. Only a request
  *     given up while held is none of these.
+ * 21. (The Audit's M1 on #680 at 9c3784838, written before its fix.) A request cut while held by a known cause (an
+ *     Esc or a Ctrl-C from the window, Tars stopping, sleeping, restarting, removing or replacing the agent, the quit:
+ *     status 499, attempts over 1 or time held) counts as reached: in the request counts, the model time, the export
+ *     and the first request, while `abandonedWhileHeld` counts it too. Given up while held is one rule everywhere:
+ *     cause `abandoned_while_held`, or cut by the harness or Tars with status 499 after a hold.
  *
  * The negative witness is feat/traces-window at 69c8f3f08, which records none of it; for 13 and 14, #675 at
  * 0346e9a65, which lists every task and puts none on a turn; for 15 to 18, #675 at 77463aad7; for 19, 21e3831c5; for
@@ -738,6 +743,24 @@ describe('20. a request cut after it reached the endpoint counts; only one given
       const doc = sessionDocument(traceStore(), traceId)!;
       expect({ session: s.session.requestCount, turn: doc.turns[0].request_count, modelMs: s.turns[0].modelMs, first: s.start!.firstRequestAt }, cut.cause)
         .toEqual({ session: 1, turn: 1, modelMs: 10, first: t0 });
+    }
+  });
+
+  it('21. an Esc or a Tars stop during a hold is given up while held: in none of the four, and counted as abandoned', () => {
+    for (const [i, cut] of [{ by: 'harness', cause: 'esc' }, { by: 'tars', cause: 'stop' }].entries()) {
+      const id = `heldcut${i}`;
+      agent(id);
+      const { traceId } = open(id);
+      const t0 = Date.now() + 100;
+      request(traceId, id, t0, { status: 499, responseBody: Buffer.alloc(0), contentType: undefined, attempts: 3, heldMs: 2000, cancel: { ...cut, at: t0 + 2000, deliveredBytes: 0 } });
+      const body = Buffer.from(JSON.stringify({ model: 'open-model-1', stream: false, tools: [{ type: 'function', function: { name: 'sh', parameters: {} } }], messages: [{ role: 'user', content: `go ${t0}` }, { role: 'assistant', content: 'x' }, { role: 'tool', content: 'out', tool_call_id: 'c' }] }));
+      request(traceId, id, t0 + 3000, { requestBody: body });
+      const s = traceStore().session(traceId)!;
+      const doc = sessionDocument(traceStore(), traceId)!;
+      expect({
+        session: s.session.requestCount, turn: doc.turns[0].request_count, trace: doc.trace.request_count, modelMs: s.turns[0].modelMs,
+        first: s.start!.firstRequestAt, abandoned: traceStore().requestCounts(traceId).abandoned,
+      }, cut.cause).toEqual({ session: 1, turn: 1, trace: 1, modelMs: 10, first: t0 + 3000, abandoned: 1 });
     }
   });
 });
