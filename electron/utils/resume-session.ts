@@ -68,6 +68,45 @@ export function transcriptRoots(...paths: Array<string | undefined>): string[] {
 }
 
 /**
+ * Whether gemini has this session on disk, for any spelling of the agent's folders (gemini 0.70.0, measured 23/11):
+ * gemini names each folder it runs in in ~/.gemini/projects.json and keeps a session in
+ * ~/.gemini/tmp/<that name>/chats/session-<time>-<the uuid's first 8>.jsonl, the whole uuid on its first line, which is
+ * what is compared. A name that is not a plain folder name is never followed.
+ */
+function geminiSessionOf(sessionId: string, roots: string[], homeDir: string): boolean {
+  let names: Record<string, unknown>;
+  try {
+    names = JSON.parse(fs.readFileSync(path.join(homeDir, '.gemini', 'projects.json'), 'utf8'))?.projects ?? {};
+  } catch {
+    return false;
+  }
+  const firstLine = (file: string): string => {
+    const fd = fs.openSync(file, 'r');
+    try {
+      const buf = Buffer.alloc(4096);
+      return buf.subarray(0, fs.readSync(fd, buf, 0, buf.length, 0)).toString('utf8').split('\n', 1)[0];
+    } finally {
+      fs.closeSync(fd);
+    }
+  };
+  for (const spelling of transcriptRoots(...roots)) {
+    const name = names[spelling];
+    if (typeof name !== 'string' || !name || name !== path.basename(name) || name === '.' || name === '..') continue;
+    const chats = path.join(homeDir, '.gemini', 'tmp', name, 'chats');
+    let files: string[];
+    try { files = fs.readdirSync(chats); } catch { continue; }
+    for (const file of files.filter((f) => f.startsWith('session-') && f.endsWith(`-${sessionId.slice(0, 8)}.jsonl`))) {
+      try {
+        if (JSON.parse(firstLine(path.join(chats, file)))?.sessionId === sessionId) return true;
+      } catch {
+        // A file being written, or not a session: not this one.
+      }
+    }
+  }
+  return false;
+}
+
+/**
  * The session id to resume, or null.
  *
  * Null covers every reason not to resume: no id recorded, an id that is not a
@@ -92,6 +131,10 @@ export function resolveResumeSessionId(
 
     if (agent.provider === 'codex') {
       if (codexRolloutOf(sessionId, codexHome(process.env, homeDir))) return sessionId;
+      continue;
+    }
+    if (agent.provider === 'gemini') {
+      if (geminiSessionOf(sessionId, [agent.worktreePath, agent.projectPath].filter((p): p is string => !!p), homeDir)) return sessionId;
       continue;
     }
 

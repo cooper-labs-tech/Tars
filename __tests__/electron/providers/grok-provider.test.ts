@@ -62,7 +62,7 @@ describe('GrokProvider', () => {
       expect(provider.getHookConfig().settingsFile).toContain('config.toml');
     });
 
-    it('reports no --add-dir flag (Grok has no multi-root flag)', async () => {
+    it('reports no --add-dir flag: grok 1.0.92 has one, which Tars does not hand it yet', async () => {
       const provider = await getProvider();
       expect(provider.getAddDirFlag()).toBe('');
     });

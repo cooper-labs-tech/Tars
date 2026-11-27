@@ -23,6 +23,7 @@ import type { AgentWakeVia } from '../../types';
 import { sessionStarted, SENDER_WAIT_MS, launchBegins, launchAbandoned, dialogShown, takeSlot } from '../../core/agent-launch';
 import { getAllProviders, getProvider, isValidProvider } from '../../providers';
 import { planModeRefusal } from '../../providers/plan-mode';
+import { addedFolderRefusal } from '../../providers/added-folders';
 // An agent may name any CLI, since an agent in bypass can run any binary itself (SECURITY.md): what is
 // refused is only what could not start, on the platform Tars runs on (2.0.2).
 import { cliPathProblem } from '../../platform/cli-path';
@@ -2437,6 +2438,12 @@ export function registerAgentRoutes(app_: RouteApp, ctx: RouteContext): void {
     const noPlan = planModeRefusal(provider, permissionMode);
     if (noPlan) {
       sendJson({ error: noPlan }, 400);
+      return;
+    }
+    // A secondary folder its CLI would never see (providers/added-folders.ts).
+    const noFolder = addedFolderRefusal(provider, { secondary: secondaryProjectPath });
+    if (noFolder) {
+      sendJson({ error: noFolder }, 400);
       return;
     }
     if (cliPath !== undefined) {

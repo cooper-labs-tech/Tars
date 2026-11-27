@@ -8,6 +8,7 @@ import { orchestratorMoved } from './chat-identity';
 import { launchSettings, changedLaunchSettings, restartForSettings, type RestartOutcome } from './agent-restart';
 import { assignRole, requestedRole } from './agent-role';
 import { planModeRefusal } from '../providers/plan-mode';
+import { addedFolderRefusal } from '../providers/added-folders';
 import { skillsProblem } from '../utils/skill-name';
 import { handedFolderProblem } from '../utils/handed-folder';
 import type { AgentStatus, WorktreeConfig, AgentCharacter, AgentProvider, AgentPermissionMode, AgentEffort, AgentRole } from '../types';
@@ -106,6 +107,18 @@ export async function updateAgent(params: AgentUpdate, opts: AgentUpdateOptions 
   if (params.provider !== undefined || params.permissionMode !== undefined) {
     const noPlan = planModeRefusal(params.provider ?? agent.provider, params.permissionMode ?? agent.permissionMode);
     if (noPlan) return { success: false, error: noPlan };
+  }
+  // A folder the agent's CLI would never see (providers/added-folders.ts), judged on the move, not on what is sent (the
+  // Audit's M1 on #636): a change of CLI judges every folder the agent would hold, kept ones included; otherwise only
+  // the folders sent. The window's edit sends the provider the agent already has, with its name, model and skills,
+  // and must save for an agent already holding one, which is said at its launch.
+  const cliChanges = params.provider !== undefined && params.provider !== agent.provider;
+  if (cliChanges || params.secondaryProjectPath !== undefined || params.obsidianVaultPaths !== undefined) {
+    const noFolder = addedFolderRefusal(params.provider ?? agent.provider, cliChanges ? {
+      secondary: params.secondaryProjectPath !== undefined ? params.secondaryProjectPath : agent.secondaryProjectPath,
+      vaults: params.obsidianVaultPaths !== undefined ? params.obsidianVaultPaths : agent.obsidianVaultPaths,
+    } : { secondary: params.secondaryProjectPath, vaults: params.obsidianVaultPaths });
+    if (noFolder) return { success: false, error: noFolder };
   }
   let role: AgentRole | undefined;
   try {

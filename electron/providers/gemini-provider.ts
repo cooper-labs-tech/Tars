@@ -2,10 +2,13 @@ import * as os from 'os';
 import * as path from 'path';
 import * as fs from 'fs';
 import { execCliSync, cliFailureText, CliNotRunnableError } from './cli-exec';
-import type { AppSettings } from '../types';
+import type { AgentPermissionMode, AppSettings } from '../types';
 import { keyEnvFor } from '../services/cli-keys';
 import { DATA_DIR } from '../constants';
 import { handedSecondaryFolder } from '../utils/handed-folder';
+import { trustGeminiFolders } from '../utils/gemini-trust';
+import { splitFolderSentence, splitOnItsLine } from './added-folders';
+import { agentNotice } from '../core/agent-notices';
 import { legacyShCommand, usesNodeHooks } from '../utils/hook-command';
 import { allowAgentToken, configureGeminiNodeHooks } from '../utils/gemini-node-hooks';
 import type {
@@ -18,6 +21,24 @@ import type {
 import { servedPathMatches, shellQuote } from './cli-provider';
 import { geminiRoleArgs } from '../services/mcp-roles';
 import { writeSharedJsonSync } from '../utils/shared-file';
+
+/** A session of gemini's own, as its hooks report it: a uuid. */
+const GEMINI_SESSION_ID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+/** The folders already said, with no agent to tell, to be left out of a gemini line: each said once per run of Tars. */
+const unpassableSaid = new Set<string>();
+
+/**
+ * A permission mode onto gemini's --approval-mode (0.70.0 --help: default, auto_edit, yolo, plan); normal: none.
+ * No plan (measured on 0.70.0, 24/11): gemini's plan mode hides every MCP tool that declares no readOnlyHint, which is
+ * every one of Tars's, and asks before one that does, so a gemini agent in plan could never report to Tars. Tars gives
+ * gemini no plan mode (plan-mode.ts): a stored plan is refused at creation and update, and a session asked in plan
+ * (/start, /dispatch, a Hermes gateway) runs as normal, as on every CLI with no plan mode, until #640 refuses it.
+ */
+export function geminiApprovalMode(mode: AgentPermissionMode | undefined): 'auto_edit' | 'yolo' | null {
+  if (mode === 'auto') return 'auto_edit';
+  if (mode === 'bypass') return 'yolo';
+  return null;
+}
 
 export class GeminiProvider implements CLIProvider {
   readonly id = 'gemini' as const;
@@ -59,27 +80,52 @@ export class GeminiProvider implements CLIProvider {
     const [allowFlag, ...allowed] = geminiRoleArgs(params.orchestratorMode === true, path.join(this.configDir, 'settings.json'));
     if (allowFlag) command += ` ${allowFlag} ${allowed.map(shellQuote).join(' ')}`;
 
-    // Gemini has no documented skip-permissions flag
+    // The agent's folder trusted for the session, written nowhere (gemini 0.70.0, measured 23/11): its folder trust is
+    // on by default, and in a folder never trusted it opened on its trust question, which took the first task typed.
+    command += ' --skip-trust';
 
-    // Secondary project (Gemini uses --include-directories), never ~/.tars-private (utils/handed-folder.ts)
+    // Its permission mode as gemini's approval mode (0.70.0, measured): in its default mode every tool call waited on
+    // a question, Tars's own MCP tools included, which nobody answers in an agent's terminal. Normal keeps gemini's
+    // default: it asks, as the user chose.
+    const approval = geminiApprovalMode(params.permissionMode);
+    if (approval) command += ` --approval-mode ${approval}`;
+
+    // Its own session continued (0.70.0, measured): the uuid its hooks report, and only a uuid, since gemini also
+    // takes `latest` or an index there, another session. Gemini has no fork: a launch asked to fork starts a new one.
+    if (params.resumeSessionId && !params.forkSession && GEMINI_SESSION_ID.test(params.resumeSessionId)) {
+      command += ` --resume ${shellQuote(params.resumeSessionId)}`;
+    }
+
+    // The folders the line adds (--include-directories): the secondary project, never ~/.tars-private
+    // (utils/handed-folder.ts); the template's folders, with whatever the agent's permission mode allows there,
+    // reading and writing alike; and Tars's own directory.
+    const added: string[] = [];
     const secondary = handedSecondaryFolder(params.secondaryProjectPath);
-    if (secondary) {
-      command += ` --include-directories ${shellQuote(secondary)}`;
+    if (secondary) added.push(secondary);
+    for (const vp of params.obsidianVaultPaths ?? []) {
+      // Read back from agents.json or templates.json, which any agent can write: never ~/.tars-private.
+      if (handedSecondaryFolder(vp) && fs.existsSync(vp)) added.push(vp);
     }
-
-    // The template's folders: added to what the CLI may reach, with whatever
-    // the agent's permission mode allows there, reading and writing alike.
-    if (params.obsidianVaultPaths) {
-      for (const vp of params.obsidianVaultPaths) {
-        // Read back from agents.json or templates.json, which any agent can write: never ~/.tars-private.
-        if (handedSecondaryFolder(vp) && fs.existsSync(vp)) {
-          command += ` --include-directories ${shellQuote(vp)}`;
-        }
+    added.push(DATA_DIR);
+    // gemini splits every --include-directories value at commas and trims each piece (`coerceCommaSeparated`, 0.70.0),
+    // with no way to escape one: a folder whose path holds a comma, or ends in a space, would reach it as other
+    // folders, untrusted, and gemini would ask. Such a folder is left out of the line, and of gemini's store (the
+    // Audit's I-3 on #636). It is refused where it is set (providers/added-folders.ts); one set before that is said in
+    // the agent's own output at each launch, where its user reads it (the Audit's L1 at aef730f1c).
+    const passed = added.filter((folder) => {
+      if (!splitOnItsLine(folder)) return true;
+      if (params.agentId) agentNotice(params.agentId, splitFolderSentence('gemini', folder));
+      else if (!unpassableSaid.has(folder)) {
+        unpassableSaid.add(folder);
+        console.warn(`[gemini] ${splitFolderSentence('gemini', folder)}`);
       }
-    }
-
-    // Include Tars directory
-    command += ` --include-directories ${shellQuote(DATA_DIR)}`;
+      return false;
+    });
+    for (const folder of passed) command += ` --include-directories ${shellQuote(folder)}`;
+    // Each trusted in gemini's own store as the line is built (0.70.0, measured 24/11): an added folder it does not
+    // trust opens "Do you trust the following folders being added to this workspace?", which --skip-trust does not
+    // cover, and the first task typed into the terminal answered it and was lost.
+    trustGeminiFolders(passed, this.configDir);
 
     // Prompt with skills directive
     // No task, no prompt: the skills line alone was a turn nobody asked for.

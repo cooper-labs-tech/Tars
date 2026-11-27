@@ -45,6 +45,9 @@ import { landsUnderSafeRoot } from '../utils/real-target';
 import { writeAtomicSync } from '../utils/secret-file';
 import { getProvider, getAllProviders } from '../providers';
 import { planModeRefusal } from '../providers/plan-mode';
+import { addedFolderRefusal } from '../providers/added-folders';
+import { handedFolderProblem } from '../utils/handed-folder';
+import { folderAppliesAt } from '../core/secondary-folder';
 import { withoutRetiredSettings } from '../services/telegram-retired';
 import { messagesWaiting, oweToFirstMessage, writeHumanInput } from '../core/pty-manager';
 import { killPty } from '../core/pty-kill';
@@ -357,6 +360,12 @@ function registerAgentHandlers(deps: IpcHandlerDependencies): void {
     // Plan on a provider that has none would run as normal (the Audit's Low 2 on #407).
     const noPlan = planModeRefusal(config.provider, config.permissionMode);
     if (noPlan) throw new Error(noPlan);
+    // A folder its CLI would never see (providers/added-folders.ts).
+    const noFolder = addedFolderRefusal(config.provider, { secondary: config.secondaryProjectPath, vaults: config.obsidianVaultPaths });
+    if (noFolder) throw new Error(noFolder);
+    // Never ~/.tars-private, as on every other path that sets a secondary folder (utils/handed-folder.ts).
+    const handed = config.secondaryProjectPath ? handedFolderProblem(config.secondaryProjectPath) : null;
+    if (handed) throw new Error(`Not created: ${handed}.`);
     // Before anything is created: a refused role leaves no worktree or terminal behind.
     const role = requestedRole(config) ?? 'worker';
     // Every task the agent is given opens with its skills (gate of #204).
@@ -1169,9 +1178,15 @@ function registerAgentHandlers(deps: IpcHandlerDependencies): void {
 
     // Validate the path if provided
     if (secondaryProjectPath) {
+      // Never ~/.tars-private, from here as from agent:update: typed into the CLI below, it would be handed at once.
+      const handed = handedFolderProblem(secondaryProjectPath);
+      if (handed) return { success: false, error: `Not saved: ${handed}.` };
       if (!fs.existsSync(secondaryProjectPath)) {
         return { success: false, error: 'Path does not exist' };
       }
+      // A folder the agent's CLI would never see, refused with the reason the window shows (providers/added-folders.ts).
+      const noFolder = addedFolderRefusal(agent.provider, { secondary: secondaryProjectPath });
+      if (noFolder) return { success: false, error: noFolder };
       agent.secondaryProjectPath = secondaryProjectPath;
       console.log(`Set secondary project path for agent ${id}: ${secondaryProjectPath}`);
     } else {
@@ -1183,7 +1198,9 @@ function registerAgentHandlers(deps: IpcHandlerDependencies): void {
     // Save updated agents to disk
     saveAgents();
 
-    return { success: true, agent };
+    // Typed into no CLI: the folder reaches it at its next start, or never for a CLI whose line hands none
+    // (core/secondary-folder.ts). The window says which.
+    return { success: true, agent, appliesAt: folderAppliesAt(agent.provider, secondaryProjectPath) };
   });
 
   // Send input to an agent

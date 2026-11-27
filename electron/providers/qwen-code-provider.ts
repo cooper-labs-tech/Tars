@@ -4,6 +4,8 @@ import * as fs from 'fs';
 import type { AppSettings } from '../types';
 import { DATA_DIR } from '../constants';
 import { handedSecondaryFolder } from '../utils/handed-folder';
+import { splitFolderSentence, splitOnItsLine } from './added-folders';
+import { agentNotice } from '../core/agent-notices';
 import { keyEnvFor } from '../services/cli-keys';
 import {
   QWEN_MODEL_ID, QWEN_ORCHESTRATOR_EXCLUDED, qwenApprovalMode, qwenMcpServers, qwenModels, saveQwenHooks,
@@ -19,6 +21,9 @@ import type {
 } from './cli-provider';
 import { servedPathMatches, shellQuote } from './cli-provider';
 import { qwenRoleArgs } from '../services/mcp-roles';
+
+/** The folders left off a line built with no agent to tell, said once per run in Tars's log, as gemini's are. */
+const unpassableSaid = new Set<string>();
 
 /**
  * Qwen Code (2.0.4): the CLI `qwen`, a Gemini CLI fork, as a CLI of Tars's
@@ -65,13 +70,24 @@ export class QwenCodeProvider implements CLIProvider {
       command += ` --resume ${shellQuote(params.resumeSessionId)}`;
       if (params.forkSession) command += ' --fork-session';
     }
-    // Never ~/.tars-private (utils/handed-folder.ts).
+    // Never ~/.tars-private (utils/handed-folder.ts). Qwen Code 0.28.4 splits every --include-directories value at
+    // commas and trims each piece, as gemini-cli does (read in its bundle): a folder no spelling passes whole is left
+    // off the line, refused where it is set (providers/added-folders.ts), and said in the agent's output at each launch.
+    const added: string[] = [];
     const secondary = handedSecondaryFolder(params.secondaryProjectPath);
-    if (secondary) command += ` --include-directories ${shellQuote(secondary)}`;
+    if (secondary) added.push(secondary);
     for (const vp of params.obsidianVaultPaths ?? []) {
-      if (handedSecondaryFolder(vp) && fs.existsSync(vp)) command += ` --include-directories ${shellQuote(vp)}`;
+      if (handedSecondaryFolder(vp) && fs.existsSync(vp)) added.push(vp);
     }
-    command += ` --include-directories ${shellQuote(DATA_DIR)}`;
+    added.push(DATA_DIR);
+    for (const folder of added) {
+      if (!splitOnItsLine(folder)) command += ` --include-directories ${shellQuote(folder)}`;
+      else if (params.agentId) agentNotice(params.agentId, splitFolderSentence('Qwen Code', folder));
+      else if (!unpassableSaid.has(folder)) {
+        unpassableSaid.add(folder);
+        console.warn(`[qwen-code] ${splitFolderSentence('Qwen Code', folder)}`);
+      }
+    }
 
     // No task, no prompt: a launch without one opens at its prompt.
     let finalPrompt = params.prompt?.trim() ? params.prompt : '';

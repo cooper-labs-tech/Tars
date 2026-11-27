@@ -1622,7 +1622,12 @@ export interface ElectronAPI {
     /** An asleep agent's CLI started on its own conversation, nothing typed; refused for one that is not asleep. */
     wake: (id: string) => Promise<{ success: boolean; error?: string }>;
     resize: (params: { id: string; cols: number; rows: number }) => Promise<{ success: boolean }>;
-    setSecondaryProject: (params: { id: string; secondaryProjectPath: string | null }) => Promise<{ success: boolean; error?: string; agent?: AgentStatus }>;
+    /**
+     * `appliesAt` on success. Nothing is typed into the agent's CLI for the folder: 'next-start' when the CLI's launch
+     * line hands it, at its next start (claude, codex, gemini, Qwen Code, and a cleared folder on any CLI);
+     * 'not-handed' when the CLI's line never hands one (grok, OpenCode, Pi, Amp, the API-key providers).
+     */
+    setSecondaryProject: (params: { id: string; secondaryProjectPath: string | null }) => Promise<{ success: boolean; error?: string; agent?: AgentStatus; appliesAt?: 'next-start' | 'not-handed' }>;
     onOutput: (callback: (event: AgentEvent) => void) => () => void;
     onError: (callback: (event: AgentEvent) => void) => () => void;
     onComplete: (callback: (event: AgentEvent) => void) => () => void;

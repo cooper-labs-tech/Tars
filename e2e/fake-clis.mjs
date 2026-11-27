@@ -20,6 +20,10 @@
 // claude reports 2.1.288, under the 2.1.289 that the state mod needs: its turns show through the shell hooks here,
 // the state mod having specs of its own (state-mod.live.spec.ts).
 // codex is e2e/fake-codex.mjs (fix/codex-works, measured on 0.163), not this file.
+// gemini's questions, measured on 2026-11-23, gemini 0.70.0 (its TUI in a PTY, isolated, on a stand-in of Gemini's
+// API): its folder trust is on by default, so in a folder never trusted it opens on "Do you trust the files in this
+// folder?" unless --skip-trust is on its line, and a task typed then is taken by the question; in its default approval
+// mode every tool call, Tars's MCP tools included, waits on a question unless --approval-mode yolo (or --yolo).
 //
 // A turn does what the text it was given asks, as a model would (the first of these in the text):
 //   DELEGATE <agent id> <prompt>   calls Tars's delegate_task, through Tars's MCP server as this CLI starts it;
@@ -223,6 +227,7 @@ export async function run() {
       else if (a === '-p' || a === '--prompt') { opts.prompt = argv[++i]; opts.oneShot = true; }
       else if (a === '-y' || a === '--yolo') opts.bypass = true;
       else if (a === '--approval-mode') opts.bypass = argv[++i] === 'yolo';
+      else if (a === '--skip-trust') opts.skipTrust = true;
       else if (a === '-m' || a === '--model') opts.model = argv[++i];
       else if (a === '--resume' || a === '-r') opts.resume = argv[++i];
       else if (a.startsWith('-')) { if (argv[i + 1] && !argv[i + 1].startsWith('-')) i++; }
@@ -445,6 +450,13 @@ export async function run() {
     out(`\nDo you want to run echo ${tag}?\n> 1. Yes\n  2. No\n`);
     return new Promise((resolve) => { dialog = resolve; });
   }
+  /** gemini 0.70.0 (measured): in its default approval mode every tool call asks first, Tars's MCP tools included. */
+  function approved(tool) {
+    if (kind !== 'gemini' || opts.bypass) return Promise.resolve(true);
+    log({ asks: 'tool approval', tool });
+    out(`\nAllow execution of MCP tool "${tool}" from server "claude-mgr-orchestrator"?\n> 1. Allow once\n  2. Allow tool for this session\n  4. No, suggest changes (esc)\n`);
+    return new Promise((resolve) => { dialog = resolve; });
+  }
 
   async function turn(text) {
     log({ turn: true, text: text.slice(-600) });
@@ -464,6 +476,7 @@ export async function run() {
     if (!directive) answer = 'ok';
     else if (directive[1] === 'ECHO') answer = `echo ${directive[2]}`;
     else if (directive[1] === 'APPROVE') answer = (opts.bypass || await ask(directive[2])) ? `ran echo ${directive[2]}` : `did not run echo ${directive[2]}`;
+    else if (!(await approved(directive[1] === 'SEND' ? 'send_message' : 'delegate_task'))) answer = `${directive[1] === 'SEND' ? 'send_message' : 'delegate_task'} not run: not approved`;
     else if (directive[1] === 'SEND') {
       const r = await callTars('send_message', { id: directive[2], message: (directive[3] ?? '').trim() });
       answer = `send_message ${r.isError ? 'refused' : 'sent'}: ${r.text.split('\n')[0]}`;
@@ -477,6 +490,14 @@ export async function run() {
     if (kind === 'gemini') hook('AfterAgent', { prompt: text, prompt_response: answer, stop_hook_active: false });
     else hook('Stop', { stop_hook_active: false, last_assistant_message: answer, permission_mode: permissionMode });
     if (kind !== 'claude') hook('Notification', { notification_type: 'idle_prompt', message: 'waiting for your input' });
+  }
+
+  // ---- gemini's folder trust (0.70.0, measured): on by default, asked in a folder it was never told to trust, unless
+  // --skip-trust is on its line; a task typed then answers the question and is lost.
+  if (kind === 'gemini' && !opts.oneShot) {
+    const trusted = readJson(path.join(HOME, '.gemini', 'trustedFolders.json')) ?? {};
+    const off = settings.security?.folderTrust?.enabled === false;
+    if (!off && !opts.skipTrust && !trusted[cwd] && !trusted[fs.realpathSync(cwd)]) question = 'trust';
   }
 
   hook('SessionStart', { source: opts.resume ? 'resume' : 'startup', model: opts.model, permission_mode: permissionMode });
