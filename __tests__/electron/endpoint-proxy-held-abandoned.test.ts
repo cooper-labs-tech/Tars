@@ -115,8 +115,12 @@ describe('a request the harness gives up while the proxy holds it', () => {
     await startProxy();
     await callAndGiveUp(() => expect.poll(() => reached, { timeout: 3000 }).toBe(true));
     await new Promise(r => setTimeout(r, 200));
-    expect(records.filter(r => r.cancel)).toEqual([]);
+    // Recorded since trace feature B3, as a hang-up of unknown cause (endpoint-proxy-cancel.test.ts, 3), never as
+    // given up while held.
+    expect(records.filter(r => r.cancel?.cause === 'abandoned_while_held')).toEqual([]);
+    expect(records.map(r => r.cancel?.cause)).toEqual(['unknown']);
 
+    records = [];
     session = { ...TRACED, traced: false };
     up.handler = (_q, res) => busy(res);
     await callAndGiveUp(() => expect.poll(() => holds.length, { timeout: 3000 }).toBeGreaterThan(0));

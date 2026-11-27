@@ -439,6 +439,8 @@ export async function run() {
   log({ launch: true, argv, cwd, token: !!process.env.CLAUDE_MGR_API_TOKEN, instance: !!process.env.TARS_INSTANCE_ID, sid, prompt: opts.prompt, oneShot: opts.oneShot, question, loggedIn, servers: Object.keys(mcpServers()) });
 
   let dialog = null;
+  /** The model call in flight (an AbortController), which a lone Esc on the input cuts. */
+  let modelCall = null;
   function ask(tag) {
     hook('PermissionRequest', { tool_name: 'Bash', tool_input: { command: `echo ${tag}` } });
     hook('Notification', { notification_type: 'permission_prompt', message: `${kind} needs your permission to use Bash` });
@@ -503,10 +505,20 @@ export async function run() {
     const giveUp = /\bGIVE UP AFTER (\d+)\b/.exec(text);
     for (let step = 0; step < 4; step++) {
       const sentAt = Date.now();
+      // A lone Esc typed while the model answers cuts the call, as Qwen Code's own Esc does (trace feature B3).
+      const call = new AbortController();
+      modelCall = call;
+      const interrupted = (firstChunkAt) => {
+        modelCall = null;
+        log({ model: true, interrupted: true, sentAt, firstChunkAt, at: Date.now() });
+        return 'interrupted';
+      };
       let res;
       try {
-        res = await fetch(`${base}/chat/completions`, { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${key}` }, body: JSON.stringify({ model: process.env.OPENAI_MODEL, messages, tools, stream: true, stream_options: { include_usage: true } }), ...(giveUp ? { signal: AbortSignal.timeout(Number(giveUp[1])) } : {}) });
+        res = await fetch(`${base}/chat/completions`, { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${key}` }, body: JSON.stringify({ model: process.env.OPENAI_MODEL, messages, tools, stream: true, stream_options: { include_usage: true } }), signal: giveUp ? AbortSignal.any([call.signal, AbortSignal.timeout(Number(giveUp[1]))]) : call.signal });
       } catch (err) {
+        if (call.signal.aborted) return interrupted(undefined);
+        modelCall = null;
         if (!giveUp) throw err;
         log({ model: true, gaveUp: true, sentAt, gaveUpAt: Date.now(), keyHead: key.slice(0, 4), keyLength: key.length });
         return `gave up after ${giveUp[1]} ms`;
@@ -514,12 +526,18 @@ export async function run() {
       let firstChunkAt;
       let raw = '';
       const reader = res.body.getReader();
-      for (;;) {
-        const { value, done } = await reader.read();
-        if (done) break;
-        if (firstChunkAt === undefined) firstChunkAt = Date.now();
-        raw += Buffer.from(value).toString('utf8');
+      try {
+        for (;;) {
+          const { value, done } = await reader.read();
+          if (done) break;
+          if (firstChunkAt === undefined) firstChunkAt = Date.now();
+          raw += Buffer.from(value).toString('utf8');
+        }
+      } catch (err) {
+        if (call.signal.aborted) return interrupted(firstChunkAt);
+        throw err;
       }
+      modelCall = null;
       log({ model: true, status: res.status, sentAt, firstChunkAt, endAt: Date.now(), keyHead: key.slice(0, 4), keyLength: key.length, model_: process.env.OPENAI_MODEL });
       if (!res.ok) return `the endpoint answered ${res.status}`;
       let content = '';
@@ -600,6 +618,11 @@ export async function run() {
     if (dialog) {
       if (/[1y\r]/.test(data)) { const d = dialog; dialog = null; d(true); }
       else if (/[2n\x1b]/.test(data)) { const d = dialog; dialog = null; d(false); }
+      return;
+    }
+    // A lone Esc while the model answers: the call is cut (modelTurn).
+    if (data === '\x1b') {
+      if (modelCall) { log({ key: 'esc', at: Date.now() }); modelCall.abort(); }
       return;
     }
     while (data.length) {
