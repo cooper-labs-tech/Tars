@@ -121,9 +121,9 @@ const CORRECTORS = new Set(['user', 'orchestrator']);
  * folder, and `firstRequestAt` is the session's first request at the endpoint.
  */
 export interface TraceStart {
-  /** owner | task | channel | restart | start | wake | redelegation | unknown */
+  /** owner | task | channel | restart | start | wake | redelegation | unknown (core/session-start.ts SessionTrigger). */
   trigger: string;
-  /** How, by its kind: window, key, api, slack, discord, hermes, chat, tars. Never a name. */
+  /** How, by its kind, never a name: one of core/session-start.ts StartVia. */
   via?: string;
   taskRef?: string;
   taskId?: string;
@@ -178,6 +178,8 @@ export interface TypedInput {
   text: string;
   /** The words come from a closed model (a Claude agent, say): the session becomes `mixed`. */
   closed: boolean;
+  /** The ref of the task these words hand over (core/task-requests.ts): the turn they open served it. */
+  taskRef?: string;
 }
 
 export interface TraceFilter {
@@ -205,7 +207,10 @@ export interface TraceTotals { count: number; bytes: number; tokensIn: number; t
  */
 export interface TraceOutcome {
   task?: TraceTask;
+  /** The last OUTCOME_TASKS_MAX tasks, fewer when more would pass OUTCOME_BYTES_MAX (boundOutcomeTasks). */
   tasks?: TraceTask[];
+  /** How many of the session's tasks `tasks` leaves out, the oldest: their turns still carry their ref. */
+  tasksOmitted?: number;
   branch?: string;
   head?: string;
   tests?: { command?: string; passed?: number; failed?: number; at?: number };
@@ -215,6 +220,37 @@ export interface TraceOutcome {
   /** Requests the harness gave up while the proxy held them (each a row with its `cancel`). */
   abandonedWhileHeld?: number;
   pr?: { number: number; state: 'merged' | 'closed'; at: number };
+}
+
+/** The most tasks an outcome lists: the last ones, the rest counted in `tasksOmitted` (the back office's need, #675). */
+export const OUTCOME_TASKS_MAX = 50;
+/**
+ * What an outcome may weigh as JSON: the back office refuses one over 16 KiB, and its whole batch with it. 512 bytes
+ * under, for what the scrub may write in a string. Fifty tasks with every field filled and links to other sessions
+ * weigh more (about 21 KB), so the list may hold fewer than fifty.
+ */
+export const OUTCOME_BYTES_MAX = 16 * 1024 - 512;
+
+/**
+ * The outcome with its task list bounded: the last OUTCOME_TASKS_MAX tasks, then the oldest of those out until the
+ * outcome weighs OUTCOME_BYTES_MAX at most, each left out counted in `tasksOmitted` (with what an earlier bound
+ * counted). The session's own `task` stays whatever the list keeps. No list and no count when there is nothing to say.
+ */
+export function boundOutcomeTasks(outcome: TraceOutcome): TraceOutcome {
+  const all = outcome.tasks ?? [];
+  const before = outcome.tasksOmitted ?? 0;
+  const shaped = (kept: TraceTask[]): TraceOutcome => {
+    const omitted = before + all.length - kept.length;
+    const out: TraceOutcome = { ...outcome };
+    delete out.tasks;
+    delete out.tasksOmitted;
+    if (kept.length) out.tasks = kept;
+    if (omitted) out.tasksOmitted = omitted;
+    return out;
+  };
+  let kept = all.slice(-OUTCOME_TASKS_MAX);
+  while (kept.length && Buffer.byteLength(JSON.stringify(shaped(kept))) > OUTCOME_BYTES_MAX) kept = kept.slice(1);
+  return shaped(kept);
 }
 
 export interface TraceSessionSummary {
@@ -236,6 +272,8 @@ export interface TraceTurnView {
   turnId: string; index: number; startedAt: number; endedAt?: number; gapBeforeMs?: number;
   author: string; authorDetail?: string; finalStatus?: string; toolCalls: number; toolErrors: number;
   modelMs: number; toolMs: number; requests: TraceRequestView[];
+  /** The ref of the task the turn served, when the words that opened it handed one over, or the session started on one. */
+  taskRef?: string;
   /** Its interventions (trace feature B3), absent when none. */
   interventions?: TurnInterventions;
 }
@@ -298,7 +336,7 @@ CREATE INDEX IF NOT EXISTS typed_inputs_agent ON typed_inputs(agent_id, at);
  * a session's start and the demand it never received (trace feature A3), and a request's cancel.
  */
 const ADDED_COLUMNS: ReadonlyArray<readonly [table: string, column: string, type?: string]> = [
-  ['traces', 'start_json'], ['traces', 'demand_json'], ['requests', 'cancel_json'],
+  ['traces', 'start_json'], ['traces', 'demand_json'], ['requests', 'cancel_json'], ['typed_inputs', 'task_ref'], ['turns', 'task_ref'],
   // Trace feature B3: a session's interventions, and when the words that opened a turn were typed.
   ['traces', 'interventions_json'], ['turns', 'instructed_at', 'INTEGER'],
 ];
@@ -619,8 +657,8 @@ export class TraceStore {
   noteTypedInput(t: TypedInput): void {
     const text = norm(t.text);
     if (!text) return;
-    this.db.prepare('INSERT INTO typed_inputs (agent_id, at, author, author_detail, text_norm, closed) VALUES (?, ?, ?, ?, ?, ?)')
-      .run(t.agentId, t.at, t.author, t.authorDetail ?? null, text, t.closed ? 1 : 0);
+    this.db.prepare('INSERT INTO typed_inputs (agent_id, at, author, author_detail, text_norm, closed, task_ref) VALUES (?, ?, ?, ?, ?, ?, ?)')
+      .run(t.agentId, t.at, t.author, t.authorDetail ?? null, text, t.closed ? 1 : 0, t.taskRef ?? null);
     this.db.prepare('DELETE FROM typed_inputs WHERE at < ?').run(t.at - 7 * 86_400_000);
   }
 
@@ -640,16 +678,16 @@ export class TraceStore {
     return JSON.parse(decompress(row.codec, row.data).toString('utf8'));
   }
 
-  private authorFor(agentId: string, instruction: string, at: number): { author: string; detail?: string; closed: boolean; id?: number; typedAt?: number } {
+  private authorFor(agentId: string, instruction: string, at: number): { author: string; detail?: string; closed: boolean; id?: number; taskRef?: string; typedAt?: number } {
     const said = norm(instruction);
     if (!said) return { author: 'unknown', closed: false };
-    const rows = this.db.prepare(`SELECT id, at, author, author_detail, text_norm, closed FROM typed_inputs
+    const rows = this.db.prepare(`SELECT id, at, author, author_detail, text_norm, closed, task_ref FROM typed_inputs
       WHERE agent_id = ? AND used_by IS NULL AND at <= ? AND at >= ? ORDER BY at DESC`).all(agentId, at + 1000, at - TYPED_INPUT_WINDOW_MS) as Row[];
     for (const r of rows) {
       const typed = String(r.text_norm);
       const head = typed.slice(0, 200);
       if (said.includes(head) || typed.includes(said)) {
-        return { author: String(r.author), detail: optStr(r.author_detail), closed: r.closed === 1, id: num(r.id), typedAt: num(r.at) };
+        return { author: String(r.author), detail: optStr(r.author_detail), closed: r.closed === 1, id: num(r.id), taskRef: optStr(r.task_ref), typedAt: num(r.at) };
       }
     }
     return { author: 'unknown', closed: false };
@@ -686,9 +724,12 @@ export class TraceStore {
     if (opens) {
       const who = req ? this.authorFor(rec.agentId, instructionText(rec.surface, req.input), rec.startedAt) : { author: 'unknown', closed: false } as ReturnType<TraceStore['authorFor']>;
       turnId = id('turn_');
-      this.db.prepare(`INSERT INTO turns (turn_id, trace_id, turn_index, started_at, gap_before_ms, author, author_detail)
-        VALUES (?, ?, ?, ?, ?, ?, ?)`).run(turnId, rec.traceId, lastTurn ? num(lastTurn.turn_index) + 1 : 0, rec.startedAt,
-        lastEnd !== undefined ? Math.max(0, rec.startedAt - lastEnd) : null, who.author, who.detail ?? null);
+      // The task the turn serves: the one its words handed over, or, for a session's first turn, the one it started on
+      // (its prompt goes in with the CLI's launch, typed by nobody).
+      const startRef = !lastTurn && trace.start_json ? optStr((JSON.parse(String(trace.start_json)) as TraceStart).taskRef) : undefined;
+      this.db.prepare(`INSERT INTO turns (turn_id, trace_id, turn_index, started_at, gap_before_ms, author, author_detail, task_ref)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?)`).run(turnId, rec.traceId, lastTurn ? num(lastTurn.turn_index) + 1 : 0, rec.startedAt,
+        lastEnd !== undefined ? Math.max(0, rec.startedAt - lastEnd) : null, who.author, who.detail ?? null, who.taskRef ?? startRef ?? null);
       if (who.id !== undefined) this.db.prepare('UPDATE typed_inputs SET used_by = ? WHERE id = ?').run(turnId, who.id);
       // When its words were typed: a correction's delay runs from the turn before's end to them (trace feature B3).
       if (who.typedAt !== undefined) this.db.prepare('UPDATE turns SET instructed_at = ? WHERE turn_id = ?').run(who.typedAt, turnId);
@@ -839,6 +880,7 @@ export class TraceStore {
         gapBeforeMs: optNum(t.gap_before_ms), author: String(t.author), authorDetail: optStr(t.author_detail), finalStatus: optStr(t.final_status),
         toolCalls: num(t.tool_call_count), toolErrors: num(t.tool_error_count), modelMs: num(t.model_ms), toolMs: num(t.tool_ms),
         requests: requests.filter(r => r.turn_id === t.turn_id).map(view),
+        ...(optStr(t.task_ref) ? { taskRef: String(t.task_ref) } : {}),
         ...(interventions[i] ? { interventions: interventions[i] } : {}),
       })),
     };

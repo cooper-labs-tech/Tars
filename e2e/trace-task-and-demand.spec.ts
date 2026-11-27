@@ -29,7 +29,7 @@ import { DEV_URL, apiPort } from './ports.mjs';
  *    sequence moved; gh is asked nothing but `pr list --state closed`. macOS and Linux: the stand-in gh is a script
  *    with a shebang, which execFile cannot run on Windows.
  * 6. What leaves: the upload's preview carries every new field and neither task's words; the notice has a line for
- *    each.
+ *    each. The first turn carries the first task's ref (added on #675 for the back office's per-task split).
  * The artefact: values.json, the session as exported, the preview, the stand-in endpoint's and gh's logs, the app's log.
  */
 
@@ -40,6 +40,7 @@ const REPO_URL = 'https://github.com/e2e-owner/e2e-probe.git';
 const NEW_NOTICE_LINES = [
   'what started each session: you, a task, a channel, a restart, a wake from sleep or a task handed on again, by its kind and never by who',
   'the tasks each session ran: their ids, where they came from (you, an agent, a channel, Tars), the task they were part of, the agent that asked, and how they ended',
+  'the task each turn served, by its reference',
   'when each task reached Tars, was handed to the agent, and sent its first request to the model',
   'the commit and branch each session started from',
   'whether the pull request of a session\'s branch was merged or closed, and when',
@@ -188,7 +189,7 @@ process.exit(1);
       seqAfterPr = await evaluate<number>(seqOf, { id: traceId });
     }
 
-    const session = await evaluate<Row & { start?: Row; outcome?: Row; lostDemand?: Row[]; turns: Array<{ requests: Row[] }> }>(sessionOf, { id: traceId });
+    const session = await evaluate<Row & { start?: Row; outcome?: Row; lostDemand?: Row[]; turns: Array<{ requests: Row[]; taskRef?: string }> }>(sessionOf, { id: traceId });
     const requests = session.turns.flatMap(t => t.requests);
     const start = session.start ?? {};
     const outcome = session.outcome ?? {};
@@ -215,6 +216,9 @@ process.exit(1);
 
     // 3. The demand it never served.
     expect.soft(session.lostDemand, 'the task taken back').toEqual([expect.objectContaining({ kind: 'queue_drop', ref: ref2, reason: 'cancelled' })]);
+
+    // The session started on the first task: its first turn carries that task's ref, which survives the outcome's cap.
+    expect.soft(session.turns[0]?.taskRef, 'the first turn\'s task').toBe(ref1);
 
     // 4. The outcome: the ledger's task, and the request given up counted apart.
     expect.soft(task, 'the outcome\'s task').toMatchObject({ id: start.taskId, ref: ref1, source: 'agent', requesterAgentId: LEAD });

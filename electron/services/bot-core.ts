@@ -23,7 +23,7 @@ import { killStalePty, armTaskStartWatch, launchIntoTerminal, cliStartRefusal } 
 import { toLaunch, projectName, type Launch } from '../platform';
 import { consumeResumeSessionId } from '../utils/resume-session';
 import { noteWaker } from '../core/agent-asleep';
-import { noteSessionStart } from '../core/session-start';
+import { VIA_OF_CHANNEL, noteSessionStart } from '../core/session-start';
 import { noteLaunch, launchSettings } from '../core/agent-restart';
 import { sessionStarted, launchUnlessRunning, launchAbandoned, dialogShown, takeSlot } from '../core/agent-launch';
 import { handOffFrom, noteHandOff } from './task-ledger';
@@ -344,7 +344,7 @@ export async function startWithTask(
     const workingDir = workingDirOf(agent);
     launch = await claimLaunch(agent);
     // Why a terminal opens here, for its traced session (core/session-start.ts).
-    noteSessionStart(agent.id, { trigger: 'channel', via: from.toLowerCase() });
+    noteSessionStart(agent.id, { trigger: 'channel', via: VIA_OF_CHANNEL[from] });
     const ptyProcess = await terminalOf(fleet, agent);
     if (!ptyProcess) {
       if (launch) launchAbandoned(agent.id, launch);
@@ -459,7 +459,7 @@ export async function forwardToOrchestrator(
   try {
     launch = await claimLaunch(orchestrator);
     // The owner's own words (the relay passes them as the user's), else the channel's message.
-    noteSessionStart(orchestrator.id, { trigger: opts.sender?.kind === 'user' ? 'owner' : 'channel', via: from.toLowerCase() });
+    noteSessionStart(orchestrator.id, { trigger: opts.sender?.kind === 'user' ? 'owner' : 'channel', via: VIA_OF_CHANNEL[from] });
     const ptyProcess = await terminalOf(fleet, orchestrator);
     if (!ptyProcess) {
       if (launch) launchAbandoned(orchestrator.id, launch);

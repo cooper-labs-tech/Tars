@@ -11,7 +11,7 @@ import { updateSharedJsonSync } from '../utils/shared-file';
 import { startEndpointProxy, stopEndpointProxy, type HoldEvent, type ProxySession } from './endpoint-proxy';
 import { endpointLaunchFor, piModelsWithEndpoint, type EndpointLaunch } from './endpoint-harness';
 import { ENDPOINT_HARNESSES, endpointTarget, ensureDropFolder, transportOf } from './inference-endpoints';
-import { CORRECTION_WINDOW_MS, TraceStore, type InterventionEvent, type RequestCancel, type TraceStart, type TraceTask } from './trace-store';
+import { CORRECTION_WINDOW_MS, TraceStore, boundOutcomeTasks, type InterventionEvent, type RequestCancel, type TraceStart, type TraceTask } from './trace-store';
 import { InterruptKeys, interruptKeyOf, type InterruptKey } from '../core/interrupt-keys';
 import { takeSessionStart } from '../core/session-start';
 import type { OneTaskQueue, QueueEvent } from '../core/one-task';
@@ -667,10 +667,10 @@ export function closeEndpointSession(token: string | undefined): void {
       const tasks = tasksOf(live, endedAt);
       const ownId = [...live.named].find(([, n]) => n.ref === live.startRef)?.[0];
       const task = tasks.find(t => t.id === ownId) ?? tasks[0];
-      traceStore().endTrace(live.traceId, endedAt, {
+      traceStore().endTrace(live.traceId, endedAt, boundOutcomeTasks({
         ...git, heldRequests: counts.held, requestErrors: counts.errors, abandonedWhileHeld: counts.abandoned,
         ...(task ? { task } : {}), ...(tasks.length ? { tasks } : {}),
-      });
+      }));
       changed();
     } catch (err) {
       console.error(`[traces] session not ended: ${(err as Error).message}`);
@@ -767,7 +767,9 @@ function linkTask(traceId: string, taskId: string, alsoIn: string): void {
   const outcome = traceStore().session(traceId)?.outcome;
   if (!outcome?.tasks) return;
   const link = (t: TraceTask): TraceTask => (t.id === taskId ? { ...t, alsoIn: [...new Set([...(t.alsoIn ?? []), alsoIn])] } : t);
-  traceStore().mergeOutcome(traceId, { tasks: outcome.tasks.map(link), ...(outcome.task ? { task: link(outcome.task) } : {}) });
+  // Bounded again: a link adds weight to an outcome already at its cap.
+  const bounded = boundOutcomeTasks({ ...outcome, tasks: outcome.tasks.map(link), ...(outcome.task ? { task: link(outcome.task) } : {}) });
+  traceStore().mergeOutcome(traceId, { ...bounded, tasks: bounded.tasks ?? [] });
 }
 
 /**
@@ -829,7 +831,7 @@ type Sender =
   | { kind: 'owner-relay'; by: { id: string; name?: string } };
 
 /** What Tars typed into a traced agent's terminal, and from whom: the turn it opens is attributed to them. */
-export function noteTypedForTraces(origin: { agentId: string; from?: string; sender?: Sender } | undefined, text: string): void {
+export function noteTypedForTraces(origin: { agentId: string; from?: string; sender?: Sender; taskRef?: string } | undefined, text: string): void {
   if (!origin || !deps || !liveTraceOf(origin.agentId)) return;
   const s = origin.sender;
   let author = 'user';
@@ -856,7 +858,8 @@ export function noteTypedForTraces(origin: { agentId: string; from?: string; sen
     detail = origin.from;
   }
   try {
-    traceStore().noteTypedInput({ agentId: origin.agentId, at: Date.now(), author, authorDetail: detail, text, closed });
+    // With the ref of the task these words hand over, if they do: the turn they open carries it (#675).
+    traceStore().noteTypedInput({ agentId: origin.agentId, at: Date.now(), author, authorDetail: detail, text, closed, ...(origin.taskRef ? { taskRef: origin.taskRef } : {}) });
   } catch (err) {
     console.error(`[traces] typed input not noted: ${(err as Error).message}`);
   }

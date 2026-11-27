@@ -52,7 +52,7 @@ export function sessionDocument(store: TraceStore, traceId: string, seen: Set<st
       tool_error_count: t.toolErrors, model_ms: t.modelMs, tool_ms: t.toolMs,
       tokens_in: t.requests.reduce((a, r) => a + (r.tokensIn ?? 0), 0), tokens_cached: t.requests.reduce((a, r) => a + (r.tokensCached ?? 0), 0),
       tokens_out: t.requests.reduce((a, r) => a + (r.tokensOut ?? 0), 0), final_status: t.finalStatus ?? null,
-      author: t.author, author_detail: t.authorDetail ?? null,
+      author: t.author, author_detail: t.authorDetail ?? null, task_ref: t.taskRef ?? null,
       // What a person, an orchestrator or Tars did to the turn (trace feature B3).
       interventions: t.interventions ?? null,
     });

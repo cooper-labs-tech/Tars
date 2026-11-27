@@ -281,7 +281,10 @@ from the window, or from an agent's drop file (`~/.tars/endpoint-keys/<name>.key
   session's first request at the endpoint, and the commit and branch the agent's folder was on;
 - the outcome holds the branch, the head, held requests and errors, the requests given up while held, and the tasks
   of the task ledger the session ran, its own first: each with its id, source, parent, asker, status, queue times,
-  first request and end, and `alsoIn` when the same task ran in another session. Once the session has ended, the
+  first request and end, and `alsoIn` when the same task ran in another session. The list keeps the last 50, fewer
+  when they would make the outcome weigh more than 16 KiB less 512 bytes (the back office refuses an outcome over
+  16 KiB), and `tasksOmitted` counts the rest. A turn carries the ref of the task it served (the one the words that
+  opened it handed over, or for a session's first turn the one it started on), so no task loses its turns. Once the session has ended, the
   end of its branch's pull request (merged or closed, and when), read with `gh pr list --state closed` every 5 minutes
   while an ended session waits for one, moves its change sequence, so the reader and the upload take it again;
 - a task taken out of the agent's queue before it started is kept with the session by its kind (`cancelled`,

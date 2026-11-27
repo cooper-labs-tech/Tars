@@ -64,7 +64,17 @@ import { assertThrowaway } from '../../setup/throwaway-dirs';
  *     times, commit and branch), the tasks, the pull request's end, the lost demand, a request's cancel; or a name
  *     leaves with them (who woke or started the session, a task's text).
  *
- * The negative witness is feat/traces-window at 69c8f3f08, which records none of it.
+ * The outcome's size, and the task on each turn (27/11, the back office's needs on #675):
+ * 13. `outcome.tasks` grows without bound: a permanent agent's long session serves many tasks, and the back office
+ *     refuses an outcome over 16 KiB, its whole batch with it. The last 50 are kept and `tasksOmitted` counts the
+ *     rest; fewer when 50 would still pass the cap (every field filled, links to other sessions), the oldest first.
+ *     At 0 tasks: neither key. At 50: all, no count. At 51: the last 50, one omitted. The session's own task stays.
+ * 14. A task dropped from that list loses its link to the turns that served it: a turn opened by a message that
+ *     handed a task over (its ref, core/task-requests.ts) does not carry that ref; the first turn of a session started
+ *     on a task does not carry the start's ref; a turn with neither carries one anyway.
+ *
+ * The negative witness is feat/traces-window at 69c8f3f08, which records none of it; for 13 and 14, #675 at
+ * 0346e9a65, which lists every task and puts none on a turn.
  */
 
 assertThrowaway({ DATA_DIR, PRIVATE_DIR });
@@ -77,9 +87,10 @@ vi.mock('../../../electron/services/endpoint-proxy', async (importOriginal) => (
 }));
 
 import {
-  TRACES_DB_FILE, TRACES_INSTALL_FILE, applyPrStates, closeEndpointSession, configureTraces, liveTraceOf, openEndpointSession,
+  TRACES_DB_FILE, TRACES_INSTALL_FILE, applyPrStates, closeEndpointSession, configureTraces, liveTraceOf, noteTypedForTraces, openEndpointSession,
   recordConsent, stopTracesRuntime, traceStore, traceUploader,
 } from '../../../electron/services/traces-runtime';
+import { OUTCOME_BYTES_MAX, boundOutcomeTasks, type TraceTask } from '../../../electron/services/trace-store';
 import { noteSessionStart, START_NOTE_MS } from '../../../electron/core/session-start';
 import { oneTaskQueue } from '../../../electron/core/one-task';
 import { createTaskLedger, setLiveTaskLedger, type TaskAgentView, type TaskLedger } from '../../../electron/services/task-ledger';
@@ -441,6 +452,94 @@ describe('the demand that never arrived', () => {
     await close(token, traceId);
     expect(outcomeOf(traceId)).toMatchObject({ requestErrors: 0, abandonedWhileHeld: 1 });
     expect(traceStore().session(traceId)!.session.finalStatus).toBe('abandoned');
+  });
+});
+
+describe('13. the outcome\'s tasks, bounded', () => {
+  const uuid = (i: number) => `${String(i).padStart(8, '0')}-0000-4000-8000-000000000000`;
+  /** A task as a delegation leaves it in the outcome: id, ref, source, asker, status and its six times. */
+  const typical = (i: number): TraceTask => ({
+    id: uuid(i), ref: `t-${String(i).padStart(8, '0')}`, source: 'agent', requesterAgentId: uuid(900), status: 'completed',
+    queuedAt: 1795786698798 + i, handedAt: 1795786698799 + i, startedAt: 1795786700506 + i, firstRequestAt: 1795786701466 + i, endedAt: 1795786704114 + i,
+  });
+  const rest = { branch: 'feat/a-long-branch-name', head: 'e5cbe3cd'.repeat(5), heldRequests: 3, requestErrors: 0, abandonedWhileHeld: 1 };
+
+  it('at 0: neither the list nor a count', () => {
+    const bounded = boundOutcomeTasks({ ...rest });
+    expect(bounded).not.toHaveProperty('tasks');
+    expect(bounded).not.toHaveProperty('tasksOmitted');
+  });
+
+  it('at 50: all of them, no count; at 51: the last 50, one omitted', () => {
+    const fifty = Array.from({ length: 50 }, (_, i) => typical(i));
+    const kept = boundOutcomeTasks({ ...rest, task: fifty[0], tasks: fifty });
+    expect(kept.tasks).toEqual(fifty);
+    expect(kept).not.toHaveProperty('tasksOmitted');
+    const fiftyOne = Array.from({ length: 51 }, (_, i) => typical(i));
+    const cut = boundOutcomeTasks({ ...rest, task: fiftyOne[0], tasks: fiftyOne });
+    expect(cut.tasks).toEqual(fiftyOne.slice(1));
+    expect(cut.tasksOmitted).toBe(1);
+    // The session's own task stays, listed or not.
+    expect(cut.task).toEqual(fiftyOne[0]);
+    for (const o of [kept, cut]) expect(Buffer.byteLength(JSON.stringify(o))).toBeLessThanOrEqual(OUTCOME_BYTES_MAX);
+  });
+
+  it('every field filled: fewer than 50, the oldest out first, under the cap, counted', () => {
+    const full = Array.from({ length: 50 }, (_, i) => ({ ...typical(i), parentTaskId: uuid(500 + i), alsoIn: [`tr_${'x'.repeat(24)}`, `tr_${'y'.repeat(24)}`] }));
+    const bounded = boundOutcomeTasks({ ...rest, task: full[49], tasks: full, tasksOmitted: 2 });
+    const kept = bounded.tasks!;
+    expect(Buffer.byteLength(JSON.stringify(bounded))).toBeLessThanOrEqual(OUTCOME_BYTES_MAX);
+    expect(kept.length).toBeLessThan(50);
+    expect(kept).toEqual(full.slice(50 - kept.length));
+    // What an earlier bound omitted is counted on.
+    expect(bounded.tasksOmitted).toBe(2 + 50 - kept.length);
+  });
+
+  it('at a session\'s end: 51 tasks of the ledger, the last 50 kept, one omitted', async () => {
+    const q = agent('many');
+    noteSessionStart('many', { trigger: 'owner', via: 'window' });
+    const { traceId, token } = open('many');
+    const ids: string[] = [];
+    for (let i = 0; i < 51; i++) {
+      ids.push(ledger.turnStarted(view(q), { sessionId: 'many-1' })!);
+      ledger.stateChanged(view(q, { status: 'idle' }));
+    }
+    await close(token, traceId);
+    const outcome = outcomeOf(traceId)!;
+    expect(outcome.tasks!.map(t => t.id)).toEqual(ids.slice(1));
+    expect(outcome.tasksOmitted).toBe(1);
+    expect(outcome.task!.id).toBe(ids[0]);
+  });
+});
+
+describe('14. the task each turn served', () => {
+  it('a turn opened by a message that handed a task over carries its ref; one with none carries none', () => {
+    agent('t');
+    noteSessionStart('t', { trigger: 'owner', via: 'window' });
+    const { traceId } = open('t');
+    const t0 = Date.now();
+    noteTypedForTraces({ agentId: 't', from: 'Lead', sender: { kind: 'agent', id: LEAD }, taskRef: 't-0000aaaa' } as never, `go ${t0 + 10}`);
+    request(traceId, 't', t0 + 10);
+    noteTypedForTraces({ agentId: 't', from: 'you' } as never, `go ${t0 + 20}`);
+    request(traceId, 't', t0 + 20);
+    const turns = traceStore().session(traceId)!.turns;
+    expect(turns.map(x => x.taskRef ?? null)).toEqual(['t-0000aaaa', null]);
+  });
+
+  it('the first turn of a session started on a task carries the start\'s ref, the export and the upload with it', () => {
+    agent('s1');
+    const now = Date.now();
+    const ref = delegate('s1', { queued: now - 100, handed: now - 50 });
+    const { traceId } = open('s1');
+    request(traceId, 's1', now + 10);
+    request(traceId, 's1', now + 20);
+    const turns = traceStore().session(traceId)!.turns;
+    expect(turns.map(x => x.taskRef ?? null)).toEqual([ref, null]);
+    const doc = sessionDocument(traceStore(), traceId)!;
+    expect(doc.turns.map(x => x.task_ref)).toEqual([ref, null]);
+    recordConsent(new Date().toISOString());
+    const body = traceUploader().preview(traceId)!.document.batches[0].body as { turns: Array<Record<string, unknown>> };
+    expect(body.turns.map(x => x.taskRef ?? null)).toEqual([ref, null]);
   });
 });
 
