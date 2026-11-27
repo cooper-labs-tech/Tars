@@ -38,16 +38,33 @@ function norm(v: Version): Norm {
 }
 const linesOfNorm = (n: Norm): string[] | undefined => (n.id === null ? [] : n.text !== undefined ? linesOf(n.text) : undefined);
 
+/** A file renamed whole at boundary `index`: `from` absent there, `to` new there, with the same blob. */
+export interface Rename { index: number; from: string; to: string }
+
+/**
+ * What changed between boundary k and k + 1, file by file: a renamed file is one change, from its old path's version
+ * to its new path's (the Audit's L1 at 08e5b439d: a rename read as a revert and a new author).
+ */
+function changesAt(histories: PathHistory[], k: number, renames: Rename[]): Array<{ before: Version; after: Version; path: string; renamed: boolean }> {
+  const byPath = new Map(histories.map(h => [h.path, h]));
+  const pairs = renames.filter(r => r.index === k + 1 && byPath.has(r.from) && byPath.has(r.to));
+  const paired = new Set(pairs.flatMap(r => [r.from, r.to]));
+  return [
+    ...pairs.map(r => ({ before: byPath.get(r.from)!.versions[k], after: byPath.get(r.to)!.versions[k + 1], path: r.to, renamed: true })),
+    ...histories.filter(h => !paired.has(h.path)).map(h => ({ before: h.versions[k], after: h.versions[k + 1], path: h.path, renamed: false })),
+  ];
+}
+
 /** Turn `k`'s files and lines: the change from boundary k to k + 1. */
-export function turnStats(histories: PathHistory[], k: number): { files: number; added: number | null; removed: number | null } {
+export function turnStats(histories: PathHistory[], k: number, renames: Rename[] = []): { files: number; added: number | null; removed: number | null } {
   let files = 0;
   let added = 0;
   let removed = 0;
   let unknown = false;
-  for (const h of histories) {
-    const a = norm(h.versions[k]);
-    const b = norm(h.versions[k + 1]);
-    if (a.id === b.id) continue;
+  for (const c of changesAt(histories, k, renames)) {
+    const a = norm(c.before);
+    const b = norm(c.after);
+    if (a.id === b.id && !c.renamed) continue;
     files++;
     if (a.binary || b.binary) continue;
     const la = linesOfNorm(a);
@@ -64,17 +81,18 @@ export interface Survival { changed: number | null; survived: number | null; rev
 
 /**
  * Each turn's added lines followed to the final version: the last boundary's, or `final`'s when given (the default
- * branch's version of each file, null for one absent there).
+ * branch's version of each file, null for one absent there), through the renames at the boundaries after the turn.
  */
-export function survival(histories: PathHistory[], turns: number, final?: Map<string, Version>): Survival[] {
+export function survival(histories: PathHistory[], turns: number, final?: Map<string, Version>, renames: Rename[] = []): Survival[] {
+  const byPath = new Map(histories.map(h => [h.path, h]));
   const out: Survival[] = [];
   for (let k = 0; k < turns; k++) {
     let changed = 0;
     let survived = 0;
     let unknown = false;
-    for (const h of histories) {
-      const a = norm(h.versions[k]);
-      const b = norm(h.versions[k + 1]);
+    for (const c of changesAt(histories, k, renames)) {
+      const a = norm(c.before);
+      const b = norm(c.after);
       if (a.id === b.id || a.binary || b.binary) continue;
       const la = linesOfNorm(a);
       const lb = linesOfNorm(b);
@@ -85,7 +103,15 @@ export function survival(histories: PathHistory[], turns: number, final?: Map<st
       let alive: number[] = [];
       for (let j = 0; j < lb.length; j++) if (!keptNew.has(j)) alive.push(j);
       changed += alive.length;
-      const chain: Version[] = [...h.versions.slice(k + 1, turns + 1), ...(final ? [final.has(h.path) ? final.get(h.path) : undefined] : [])];
+      // The file's versions after the turn, from the path it moves to when a later boundary renames it.
+      const chain: Version[] = [c.after];
+      let p = c.path;
+      for (let i = k + 2; i <= turns; i++) {
+        const moved = renames.find(r => r.index === i && r.from === p && byPath.has(r.to));
+        if (moved) p = moved.to;
+        chain.push(byPath.get(p)?.versions[i]);
+      }
+      if (final) chain.push(final.has(p) ? final.get(p) : undefined);
       let cur = norm(chain[0]);
       for (let i = 1; i < chain.length && alive.length; i++) {
         const next = norm(chain[i]);
@@ -114,7 +140,29 @@ export interface RecorderDeps {
   /** Tests: held before a boundary's counts, to show a slow one keeps its place. */
   delay?: (boundary: number) => Promise<void>;
   now?: () => number;
+  /** finalize's git calls (safeGit), a seam for the tests: a runner that refuses what Windows would. */
+  git?: (dir: string, args: string[], opts: { timeout: number }) => Promise<{ stdout: string }>;
 }
+
+/** Windows takes a command line of 32,767 characters at most: the path lists given to git stay well under it. */
+const ARGV_BUDGET = 30_000;
+
+/** The paths in groups whose command line, with `base` before them, stays under ARGV_BUDGET (the Audit's L3). */
+function chunked(base: string[], paths: string[]): string[][] {
+  const groups: string[][] = [];
+  const fixed = base.join(' ').length;
+  let cur: string[] = [];
+  let length = fixed;
+  for (const p of paths) {
+    if (cur.length && length + p.length + 1 > ARGV_BUDGET) { groups.push(cur); cur = []; length = fixed; }
+    cur.push(p);
+    length += p.length + 1;
+  }
+  if (cur.length) groups.push(cur);
+  return groups;
+}
+
+export type FinalizeResult = 'open' | 'merged' | 'deleted' | 'done' | 'default-branch' | 'no-branch' | 'unknown';
 
 interface Live {
   /** The next boundary's index. */
@@ -139,11 +187,13 @@ export class WorkspaceRecorder {
   private readonly snap: (dir: string) => Promise<WorkspaceSnapshot>;
   private readonly blob: (dir: string, id: string) => Promise<Buffer | null>;
   private readonly now: () => number;
+  private readonly git: NonNullable<RecorderDeps['git']>;
 
   constructor(private readonly deps: RecorderDeps) {
     this.snap = deps.snapshot ?? ((dir) => snapshotWorkspace(dir));
     this.blob = deps.readBlob ?? ((dir, id) => readBlob(dir, id));
     this.now = deps.now ?? Date.now;
+    this.git = deps.git ?? ((dir, args, opts) => safeGit(dir, args, opts));
   }
 
   private session(traceId: string): Live {
@@ -217,7 +267,19 @@ export class WorkspaceRecorder {
           l.touched.add(p);
           histories.push({ path: p, versions: [versionOf(before), versionOf(after)] });
         }
-        stats = turnStats(histories, 0);
+        // An exact rename: a path gone and a path new with the same blob (the snapshots' ids say it).
+        const gone = changed.filter(p => prev.snap.files!.has(p) && !snap.files!.has(p));
+        const fresh = changed.filter(p => !prev.snap.files!.has(p) && snap.files!.has(p));
+        const renames: Rename[] = [];
+        for (const from of gone) {
+          const id = prev.snap.files!.get(from)!;
+          if (id.startsWith('large:') || id.startsWith('unreadable:')) continue;
+          const to = fresh.find(p => snap.files!.get(p) === id && !renames.some(r => r.to === p));
+          if (!to) continue;
+          renames.push({ index: 1, from, to });
+          store.addWorkspaceRename(traceId, index, from, to);
+        }
+        stats = turnStats(histories, 0, renames);
       }
       store.setTurnWorkspace(traceId, prev.at, {
         startHead: prev.snap.head, startTree: prev.snap.tree, endHead: snap.head, endTree: snap.tree,
@@ -242,7 +304,7 @@ export class WorkspaceRecorder {
     const turns = turnStarts.length;
     if (!turns) return false;
     const histories = store.workspaceHistories(traceId).map(h => ({ path: h.path, versions: h.versions.map(versionOf) }));
-    const results = survival(histories, turns, final);
+    const results = survival(histories, turns, final, store.workspaceRenames(traceId));
     const lastFailed = points.map(p => p.failed);
     const rows = turnStarts.map((t, k) => {
       // A failed boundary at or after this turn's end: its lines cannot be followed.
@@ -258,7 +320,7 @@ export class WorkspaceRecorder {
    * measured on the default branch's files. 'open' while the branch lives unmerged; 'done' when measured before;
    * 'default-branch' for a session on the default branch; 'unknown' when git could not tell.
    */
-  async finalize(traceId: string, dir: string): Promise<'open' | 'merged' | 'deleted' | 'done' | 'default-branch' | 'no-branch' | 'unknown'> {
+  async finalize(traceId: string, dir: string): Promise<FinalizeResult> {
     const store = this.deps.store;
     const s = store.session(traceId);
     if (!s) return 'unknown';
@@ -266,8 +328,11 @@ export class WorkspaceRecorder {
     const head = s.outcome?.head;
     if (!branch || !head || branch === 'HEAD') return 'no-branch';
     if (store.workspaceTurns(traceId).some(t => t.survivalBasis === 'merged' || t.survivalBasis === 'deleted')) return 'done';
-    const git = (args: string[]) => safeGit(dir, args, { timeout: 10_000 });
+    const git = (args: string[]) => this.git(dir, args, { timeout: 10_000 });
     const ok = (args: string[]) => git(args).then(() => true, (e: { code?: unknown; killed?: boolean }) => (e.code === 1 && !e.killed ? false : Promise.reject(e)));
+    // The pull request's own end, when the PR watch wrote it into the outcome (`outcome.pr`): a squash or a rebase
+    // merge leaves no ancestry for merge-base to find (the Audit's L2 at 08e5b439d).
+    const pr = (s.outcome as { pr?: { state?: unknown } } | undefined)?.pr;
     try {
       let ref = await git(['symbolic-ref', '-q', '--short', 'refs/remotes/origin/HEAD']).then(r => r.stdout.trim(), () => '');
       if (!ref) {
@@ -276,20 +341,33 @@ export class WorkspaceRecorder {
       if (!ref) return 'unknown';
       if (branch === ref || `origin/${branch}` === ref) return 'default-branch';
       const exists = await ok(['show-ref', '--verify', '--quiet', `refs/heads/${branch}`]);
-      const merged = await ok(['merge-base', '--is-ancestor', head, ref]);
+      const merged = pr?.state === 'merged' || await ok(['merge-base', '--is-ancestor', head, ref]);
       if (exists && !merged) return 'open';
-      const paths = store.workspaceHistories(traceId).map(h => h.path);
+      const histories = store.workspaceHistories(traceId);
+      const paths = histories.map(h => h.path);
       const final = new Map<string, Version>(paths.map(p => [p, null]));
-      if (paths.length) {
-        const listed = await git(['ls-tree', '-z', ref, '--', ...paths]);
+      const found = new Set<string>();
+      // The paths in command lines Windows takes (the Audit's L3).
+      for (const group of chunked(['ls-tree', '-z', ref, '--'], paths)) {
+        const listed = await git(['ls-tree', '-z', ref, '--', ...group]);
         for (const rec of listed.stdout.split('\0').filter(Boolean)) {
           const tab = rec.indexOf('\t');
           const [, type, id] = rec.slice(0, tab).split(' ');
           const p = rec.slice(tab + 1);
           if (type !== 'blob') continue;
+          found.add(p);
           const bytes = await this.blob(dir, id);
           final.set(p, bytes === null ? undefined : isBinary(bytes) ? { binary: id } : bytes.toString('utf8'));
         }
+      }
+      // A file the session left that the default branch holds under another path, unchanged: renamed there, its
+      // lines still there (the Audit's L1). Found by its blob id over the whole tree, read only when a path is missing.
+      const missing = histories.filter(h => !found.has(h.path)).map(h => ({ path: h.path, last: h.versions[h.versions.length - 1] }))
+        .filter((m): m is { path: string; last: StoredVersion } => !!m.last && /^[0-9a-f]{40,64}$/.test(m.last.id));
+      if (missing.length) {
+        const tree = await git(['ls-tree', '-r', '-z', ref]);
+        const ids = new Set(tree.stdout.split('\0').filter(Boolean).map(rec => rec.slice(0, rec.indexOf('\t')).split(' ')[2]));
+        for (const m of missing) if (ids.has(m.last.id)) final.set(m.path, versionOf(m.last));
       }
       const basis = merged ? 'merged' : 'deleted';
       this.writeSurvival(traceId, final, basis);
@@ -297,5 +375,20 @@ export class WorkspaceRecorder {
     } catch {
       return 'unknown';
     }
+  }
+
+  /**
+   * The sessions due a check of their branch (the store's line: least recently checked first, none checked for good,
+   * none past its age), each checked and its result noted, so one that can never be measured leaves the line and one
+   * still open waits its turn again (the Audit's M1 at 08e5b439d).
+   */
+  async finalizeDue(dirOf: (s: { traceId: string; agentId: string; projectPath: string }) => string | undefined, limit = 10, now = this.now()): Promise<Array<{ traceId: string; result: FinalizeResult }>> {
+    const out: Array<{ traceId: string; result: FinalizeResult }> = [];
+    for (const s of this.deps.store.workspaceToFinalize(limit, now)) {
+      const result = await this.finalize(s.traceId, dirOf(s) ?? s.projectPath);
+      this.deps.store.noteFinalCheck(s.traceId, result, now);
+      out.push({ traceId: s.traceId, result });
+    }
+    return out;
   }
 }

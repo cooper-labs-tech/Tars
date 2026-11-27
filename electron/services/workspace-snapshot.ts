@@ -100,13 +100,20 @@ export async function snapshotWorkspace(dir: string, opts: SnapshotOptions = {})
   for (const [file, e] of index.entries) { files.set(file, e.id); modes.set(file, e.mode); }
   const contents = new Map<string, Buffer>();
   let kept = 0;
+  // A file there that cannot be read (another process holds it, as Windows lets one do): kept, its content unknown,
+  // and the tree hash unknown with it. Only a file really gone (ENOENT) counts as deleted (the Audit's L3).
+  let unreadable = false;
+  const cannotRead = (file: string, err: unknown, st?: fs.Stats): void => {
+    if ((err as NodeJS.ErrnoException).code === 'ENOENT') { files.delete(file); modes.delete(file); return; }
+    files.set(file, `unreadable:${st?.size ?? 0}:${Math.floor(st?.mtimeMs ?? 0)}`);
+    unreadable = true;
+  };
   const readOne = (file: string, indexId?: string) => {
     let st: fs.Stats;
     try {
       st = fs.lstatSync(path.join(dir, file));
-    } catch {
-      files.delete(file);
-      modes.delete(file);
+    } catch (err) {
+      cannotRead(file, err);
       return;
     }
     if (st.isDirectory()) return; // a submodule's folder: its index entry stands
@@ -118,7 +125,7 @@ export async function snapshotWorkspace(dir: string, opts: SnapshotOptions = {})
     if (!modes.has(file) || modes.get(file) === '120000') modes.set(file, st.mode & 0o111 ? '100755' : '100644');
     if (st.size > maxFile) { files.set(file, `large:${st.size}:${Math.floor(st.mtimeMs)}`); return; }
     let bytes: Buffer;
-    try { bytes = fs.readFileSync(path.join(dir, file)); } catch { files.delete(file); modes.delete(file); return; }
+    try { bytes = fs.readFileSync(path.join(dir, file)); } catch (err) { cannotRead(file, err, st); return; }
     let id = blobId(bytes, algo);
     if (indexId && id !== indexId && bytes.includes(13)) {
       const lf = Buffer.from(bytes.toString('latin1').replace(/\r\n/g, '\n'), 'latin1');
@@ -134,7 +141,7 @@ export async function snapshotWorkspace(dir: string, opts: SnapshotOptions = {})
   for (const file of untracked) readOne(file);
 
   const lines = [...files.keys()].sort((a, b) => (a < b ? -1 : a > b ? 1 : 0)).map(f => `${modes.get(f) ?? '100644'} ${files.get(f)} ${f}\n`);
-  const tree = createHash('sha256').update(lines.join('')).digest('hex');
+  const tree = unreadable ? null : createHash('sha256').update(lines.join('')).digest('hex');
   return { head, tree, files, contents, ms: Date.now() - started };
 }
 

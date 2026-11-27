@@ -280,7 +280,11 @@ from the window, or from an agent's drop file (`~/.tars/endpoint-keys/<name>.key
   HEAD and a hash of its working tree, dirty and untracked files included (`workspace-snapshot.ts`); the files the
   turn changed and the lines it added and removed (`line-diff.ts`, binary files counted in no line); and the share of
   its added lines still there at the session's end, then again on the default branch once its branch is merged or
-  deleted (the hourly sweep looks), the session's change sequence moved each time. Only reads touch the checkout
+  deleted (the hourly sweep looks), the session's change sequence moved each time. A session on the default branch,
+  or with no branch, is not looked at again; one still open, or that git could not tell, is looked at again an hour
+  on, doubling to a day, for 14 days after its end; a squash or rebase merge counts once the pull request's own end
+  in the outcome (`outcome.pr`) says merged. A file renamed whole (the same blob under another path), by a turn or on
+  the default branch, keeps its lines. A file the snapshot cannot read is there and unknown, never deleted. Only reads touch the checkout
   (safeGit, `--no-optional-locks`: no index refresh, no lock, no object written), each bounded; what failed or timed
   out is null, never 0. The file versions kept to count survival stay in the store, local, counted against the cap
   and deleted with the session.

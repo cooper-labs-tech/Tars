@@ -214,7 +214,16 @@ CREATE TABLE IF NOT EXISTS workspace_versions (
   trace_id TEXT NOT NULL, idx INTEGER NOT NULL, path TEXT NOT NULL, id TEXT, binary INTEGER NOT NULL DEFAULT 0,
   codec TEXT, data BLOB, PRIMARY KEY (trace_id, idx, path)
 );
+CREATE TABLE IF NOT EXISTS workspace_renames (
+  trace_id TEXT NOT NULL, idx INTEGER NOT NULL, from_path TEXT NOT NULL, to_path TEXT NOT NULL, PRIMARY KEY (trace_id, idx, from_path)
+);
+CREATE TABLE IF NOT EXISTS workspace_final (
+  trace_id TEXT PRIMARY KEY, state TEXT NOT NULL, checked_at INTEGER NOT NULL, next_at INTEGER NOT NULL, tries INTEGER NOT NULL DEFAULT 0
+);
 `;
+
+/** How long after its end a session's branch is still watched for a merge or a deletion (as the PR watch, 14 days). */
+const WORKSPACE_FINAL_DAYS = 14;
 
 /** The file versions one session keeps to measure survival, at most: past it a version keeps its id, not its text. */
 const WORKSPACE_KEPT_BYTES = 64 * 1024 * 1024;
@@ -569,14 +578,44 @@ export class TraceStore {
 
   /**
    * Ended sessions whose survival was measured at their end only, with a branch in their outcome: those a merge or a
-   * deletion of that branch may still measure again (turn-workspace.ts finalize), oldest first.
+   * deletion of that branch may still measure again (turn-workspace.ts finalize). Never one checked for good (on the
+   * default branch, no branch, measured), never one waiting for its next check, never one ended more than
+   * WORKSPACE_FINAL_DAYS ago; the least recently checked first, then the oldest (the Audit's M1 at 08e5b439d: ten that
+   * could never be measured used to hold the line for good).
    */
-  workspaceToFinalize(limit: number): Array<{ traceId: string; agentId: string; projectPath: string }> {
+  workspaceToFinalize(limit: number, now = Date.now()): Array<{ traceId: string; agentId: string; projectPath: string }> {
     return (this.db.prepare(`SELECT t.trace_id, t.agent_id, t.project_path FROM traces t
-      WHERE t.ended_at IS NOT NULL AND t.outcome_json LIKE '%"branch"%'
+      LEFT JOIN workspace_final f ON f.trace_id = t.trace_id
+      WHERE t.ended_at IS NOT NULL AND t.ended_at >= ? AND t.outcome_json LIKE '%"branch"%'
         AND EXISTS (SELECT 1 FROM workspace_turns w WHERE w.trace_id = t.trace_id AND w.survival_basis = 'session_end')
         AND NOT EXISTS (SELECT 1 FROM workspace_turns w WHERE w.trace_id = t.trace_id AND w.survival_basis IN ('merged', 'deleted'))
-      ORDER BY t.ended_at ASC LIMIT ?`).all(limit) as Row[]).map(r => ({ traceId: String(r.trace_id), agentId: String(r.agent_id), projectPath: String(r.project_path) }));
+        AND (f.trace_id IS NULL OR (f.state = 'waiting' AND f.next_at <= ?))
+      ORDER BY COALESCE(f.checked_at, 0) ASC, t.ended_at ASC LIMIT ?`).all(now - WORKSPACE_FINAL_DAYS * 86_400_000, now, limit) as Row[])
+      .map(r => ({ traceId: String(r.trace_id), agentId: String(r.agent_id), projectPath: String(r.project_path) }));
+  }
+
+  /**
+   * What a check of a session's branch found: measured ('done'), never measurable ('never': on the default branch, no
+   * branch), or to ask again ('waiting': still open, or git could not tell), an hour on, doubling to a day.
+   */
+  noteFinalCheck(traceId: string, result: string, now: number): void {
+    const state = result === 'merged' || result === 'deleted' || result === 'done' ? 'done'
+      : result === 'default-branch' || result === 'no-branch' ? 'never' : 'waiting';
+    const tries = ((this.db.prepare('SELECT tries FROM workspace_final WHERE trace_id = ?').get(traceId) as { tries?: number } | undefined)?.tries ?? 0) + 1;
+    const next = now + Math.min(86_400_000, 3_600_000 * 2 ** (tries - 1));
+    this.db.prepare(`INSERT INTO workspace_final (trace_id, state, checked_at, next_at, tries) VALUES (?, ?, ?, ?, ?)
+      ON CONFLICT(trace_id) DO UPDATE SET state = excluded.state, checked_at = excluded.checked_at, next_at = excluded.next_at, tries = excluded.tries`)
+      .run(traceId, state, now, next, tries);
+  }
+
+  /** A file renamed whole at a boundary (the same blob under another path): its lines are followed through it. */
+  addWorkspaceRename(traceId: string, index: number, from: string, to: string): void {
+    this.db.prepare('INSERT OR REPLACE INTO workspace_renames (trace_id, idx, from_path, to_path) VALUES (?, ?, ?, ?)').run(traceId, index, from, to);
+  }
+
+  workspaceRenames(traceId: string): Array<{ index: number; from: string; to: string }> {
+    return (this.db.prepare('SELECT idx, from_path, to_path FROM workspace_renames WHERE trace_id = ? ORDER BY idx').all(traceId) as Row[])
+      .map(r => ({ index: num(r.idx), from: String(r.from_path), to: String(r.to_path) }));
   }
 
   /** What Tars typed into an agent's terminal, and from whom: the authorship a turn is matched to. */
@@ -842,7 +881,7 @@ export class TraceStore {
       this.db.prepare('DELETE FROM typed_inputs WHERE used_by IN (SELECT turn_id FROM turns WHERE trace_id = ?)').run(traceId);
       this.db.prepare('DELETE FROM turns WHERE trace_id = ?').run(traceId);
       this.db.prepare('DELETE FROM uploads WHERE trace_id = ?').run(traceId);
-      for (const table of ['workspace_points', 'workspace_turns', 'workspace_versions']) this.db.prepare(`DELETE FROM ${table} WHERE trace_id = ?`).run(traceId);
+      for (const table of ['workspace_points', 'workspace_turns', 'workspace_versions', 'workspace_renames', 'workspace_final']) this.db.prepare(`DELETE FROM ${table} WHERE trace_id = ?`).run(traceId);
       deleted += this.db.prepare('DELETE FROM traces WHERE trace_id = ?').run(traceId).changes;
     }
     return deleted;

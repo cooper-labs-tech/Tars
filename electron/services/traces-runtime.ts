@@ -379,10 +379,8 @@ function folderOf(agentId: string): string | undefined {
  * measured again on the default branch (a few per sweep, each git call bounded).
  */
 export async function finalizeWorkspaces(limit = 10): Promise<void> {
-  for (const s of traceStore().workspaceToFinalize(limit)) {
-    const r = await turnWorkspace().finalize(s.traceId, folderOf(s.agentId) ?? s.projectPath);
-    if (r === 'merged' || r === 'deleted') changed();
-  }
+  const checked = await turnWorkspace().finalizeDue((s) => folderOf(s.agentId), limit);
+  if (checked.some(c => c.result === 'merged' || c.result === 'deleted')) changed();
 }
 
 /** The uploader to the user's back-office (trace-upload.ts): idle while no address or no consent. */
