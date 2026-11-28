@@ -82,7 +82,8 @@ export class HarnessToolLogs {
 
   private readQwen(s: FollowedSession): void {
     const sessionId = this.deps.sessionIdOf(s.agentId);
-    if (!sessionId) return;
+    // Posted by the agent's own hooks, then joined into a path: no separator, no dot-dot (the Audit of #692).
+    if (!sessionId || !SESSION_ID.test(sessionId)) return;
     // Qwen Code names its chat folder after its real working folder (macOS's /tmp is /private/tmp): every spelling of
     // the folder is tried, as every reader of a transcript does (transcriptRoots).
     const homeDir = (this.deps.homeDir ?? os.homedir)();
@@ -109,6 +110,10 @@ export class HarnessToolLogs {
   private readOpencode(s: FollowedSession): void {
     const file = path.join((this.deps.dataHome ?? defaultDataHome)(), 'opencode', 'opencode.db');
     if (!fs.existsSync(file)) return;
+    // Closed cleanly, a WAL store has no -wal: opening it, even read-only, makes the -wal and the -shm and leaves them
+    // behind (better-sqlite3 opens no `immutable` URI; measured on 28/11). Nothing new comes from an opencode that is
+    // not running: its calls were read while it ran.
+    if (walClosed(file)) return;
     // A moment at most on a lock (a store not in WAL mode, mid-write): never the driver's 5 s on Tars's main thread.
     const db = new Database(file, { readonly: true, fileMustExist: true, timeout: OPENCODE_LOCK_WAIT_MS });
     try {
@@ -133,6 +138,17 @@ export class HarnessToolLogs {
       db.close();
     }
   }
+}
+
+/** A session id that may go into a file's name: what Tars's own session ids are (chats.ts). */
+const SESSION_ID = /^[A-Za-z0-9_-]{1,100}$/;
+
+/** Whether a SQLite store is in WAL mode (its header's byte 18 is 2) with no -wal beside it: no writer has it open. */
+function walClosed(file: string): boolean {
+  const header = Buffer.alloc(20);
+  const fd = fs.openSync(file, 'r');
+  try { fs.readSync(fd, header, 0, 20, 0); } finally { fs.closeSync(fd); }
+  return header[18] === 2 && !fs.existsSync(`${file}-wal`);
 }
 
 function defaultDataHome(): string {
