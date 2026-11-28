@@ -1208,6 +1208,40 @@ would be sent.
   the deletion is still never sent.
 - A pass under way is stopped and waited for before the deletion, and every pass reads the consent again before
   each session and before any registration, so nothing it sends lands after a deletion or a withdrawn consent.
+
+**Training consent** (trace feature A5). Uploading is consent to storage, not to training. A second switch, "May be
+used to train models", stands beside sharing. What leaves, and who decides:
+- Each session carries `consent: { training }`, as the switch stood while it ran: off at any moment, false for good.
+  Turned off while a session runs, the session goes again with false. A session recorded before the switch existed
+  reads false.
+- Trainable is a positive, private fact. `~/.tars-private/traces-training-allowed.json` (0600) lists the sessions
+  Tars opened while training was on; a session leaves it when the switch goes off while it runs. A session is
+  trainable only when that list names it and its stamp in the trace store says yes. The store is under `~/.tars`,
+  which every agent is handed: an agent that sets a stamp back to yes, or copies a session under a new id, makes
+  nothing trainable. One rule decides it wherever the field leaves (`trace-store.ts` summaryOf): the external
+  reader's session document and change list, the export, the upload and the preview.
+- The list is read once per run and held in memory. A change is written at once, and again every minute until a write
+  holds, and the window is told while it does not. A list that cannot be read is set aside (`.unreadable-<time>`) and
+  a new one started: none of the sessions recorded before counts as trainable, and the window is told. The sweep
+  prunes it with the sessions it names.
+- The restart case, as for the switch: a write of the list refused, then Tars stopped before a retry holds. A session
+  added then is on no list after the restart, so it is not trainable (it fails closed). A session taken off then is
+  still listed after the restart; it stays not trainable through its stamp alone, which the off set to no in the store
+  at the same moment (unless that write failed too), and since the store is under `~/.tars` an agent could write that
+  stamp back to yes: this is the one case the list does not cover.
+- The install's current value goes to the back-office on every change (`PUT /v1/installs/me/consent` with
+  `{ training }` alone and the install token), and with the registration. It covers the sessions already sent. A change
+  the back-office has not taken stays owed across a restart, is sent again until a 2xx, and goes with sharing off
+  too, since it carries no session.
+- On by default (`TRAINING_DEFAULT` in `services/traces-runtime.ts`, the owner's ruling of 11/11).
+- Only the window's `traces:setTraining` sets it. It lives in `~/.tars-private/traces-training.json` (0600), which
+  no agent is handed, and which neither the settings' save nor an agent writing `app-settings.json` reaches. No API
+  route reads or writes it. A file that cannot be read as one counts as off.
+- Off is a revoke and applies at once. On a disk that refuses the write, it holds for the run and is written again
+  every minute, and the window is told. A restart before that write holds reads the switch as it was: this one case
+  does not fail closed. On is a grant: written first, and refused when it cannot be.
+- What it does not do: what a reader of the back-office does with the value is the reader's. Tars records it and
+  sends it; it cannot make anyone honour it.
 - When the back-office no longer knows the install (a 401: the user's deletion, or its operator's), Tars never
   registers again on its own. Uploads stop, the local traces stay, the consent is withdrawn, and the window says so.
   Registering again is the user's own act.

@@ -1105,6 +1105,9 @@ contextBridge.exposeInMainWorld('electronAPI', {
     uploadNotice: () => ipcRenderer.invoke('traces:uploadNotice'),
     preview: (traceId: string) => ipcRenderer.invoke('traces:preview', traceId),
     giveUploadConsent: () => ipcRenderer.invoke('traces:giveUploadConsent'),
+    // The owner's training switch (trace feature A5): only this channel sets it.
+    training: () => ipcRenderer.invoke('traces:training'),
+    setTraining: (training: boolean) => ipcRenderer.invoke('traces:setTraining', training),
     uploadState: () => ipcRenderer.invoke('traces:uploadState'),
     deleteEverywhere: () => ipcRenderer.invoke('traces:deleteEverywhere'),
     abandonDeletion: () => ipcRenderer.invoke('traces:abandonDeletion'),

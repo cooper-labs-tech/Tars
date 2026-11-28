@@ -289,7 +289,20 @@ consent, opted-in sessions are uploaded:
   request is never counted as a step of its turn. A back-office refuses fields it does not know (422
   `invalid_batch`), so it takes `side` before Tars sends it: the back-office is updated first. A batch it refuses
   stays unsent and is tried again on the backoff, never sent without the mark;
+- each session with `consent: { training }` (trace feature A5): the owner's switch "May be used to train models" as
+  it stood while the session ran, false once it was off at any moment, false for a session recorded before it existed.
+  True only for a session on the private list of those Tars opened while training was on
+  (`~/.tars-private/traces-training-allowed.json`), whatever the store's stamp says: one rule (`trace-store.ts`
+  summaryOf) for the export's `traces` row, the read API's session document and change list, the upload and the
+  preview. The back-office is #678's, which takes the field first;
 - resumed after a restart, with backoff.
+
+**Training consent** (trace feature A5). The switch is on by default (`TRAINING_DEFAULT`), set by the window's
+`traces:setTraining` alone, and kept in `~/.tars-private/traces-training.json`. The install's value goes to the
+back-office with the registration (`consent: { training }`) and on every change (`PUT /v1/installs/me/consent`,
+`{ training }`, the install token), first in a pass, with sharing off too. A change not taken stays owed across a
+restart. Off applies at once to every session running and is written after; on is written first. The upload notice
+says where it stands, in a line of its own, and the preview shows the consent a session would carry.
 
 `deleteEverywhere` asks the back-office to delete all of it.
 

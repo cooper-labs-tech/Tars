@@ -8,7 +8,7 @@ import {
 } from '../services/inference-endpoints';
 import {
   endpointWaits, readerTokenStatus, revokeReaderToken, rotateReaderToken, sweepTraces, traceSettingsOf, traceStore,
-  withdrawUploadConsent, holdRevoke,
+  withdrawUploadConsent, holdRevoke, readTraining, setTraining, trainingView,
 } from '../services/traces-runtime';
 import type { TraceFilter } from '../services/trace-store';
 import { traceExportLines } from '../services/trace-export';
@@ -298,7 +298,18 @@ export function registerTracesHandlers(deps: TracesHandlerDeps): void {
 
   // The upload to a back-office (its address a setting, empty until the user sets one): what leaves the machine,
   // shown before the first upload, and a session as it would be sent.
+  // The owner's training switch, "May be used to train models" (trace feature A5): read here, set here, and nowhere
+  // else. No agent, token or API route reaches it (traces-runtime.ts TRACES_TRAINING_FILE).
+  ipcMain.handle('traces:training', () => trainingView());
+  ipcMain.handle('traces:setTraining', (_e, value: unknown) => {
+    if (typeof value !== 'boolean') return { ok: false, error: 'Training is on or off.' };
+    const r = setTraining(value);
+    return r.ok ? { ...r, state: trainingView() } : r;
+  });
+
   ipcMain.handle('traces:uploadNotice', () => ({
+    // Where the training switch stands, which every session sent carries as it stood while it ran.
+    training: readTraining().value,
     // After a deletion, only what was recorded after it goes: the deleted sessions are never sent again.
     ...(traceSettingsOf(deps.getAppSettings()).uploadDeletedAt !== undefined
       ? { onlyAfter: new Date(traceSettingsOf(deps.getAppSettings()).uploadDeletedAt!).toISOString() } : {}),
@@ -307,6 +318,7 @@ export function registerTracesHandlers(deps: TracesHandlerDeps): void {
       'their timing, token counts, the harness and its version, the model and the endpoint\'s name',
       'who wrote each turn (you, an orchestrator, an agent, a channel) and how the session ended (branch, commit)',
       'an install id, to delete everything this install sent',
+      `Whether each session may be used to train models, as your switch stood while it ran (off at any moment: no), and this install's current choice, which also covers the sessions already sent when you turn it off. Now: ${readTraining().value ? 'yes' : 'no'}`,
     ],
     stays: ['your keys and Tars\'s tokens (masked before upload)', 'sessions of projects and agents not opted in', 'the endpoints\' keys and addresses', 'anything outside traced sessions'],
     scrubbing: {
