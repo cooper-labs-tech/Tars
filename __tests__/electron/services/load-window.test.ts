@@ -5,7 +5,7 @@ import * as path from 'node:path';
 import { createHash } from 'node:crypto';
 import { checkGrant, readGrants, writeGrant, type LoadGrant } from '../../../electron/services/load-grants';
 import { createLoadWindow, type LoadWindowDeps } from '../../../electron/services/load-window';
-import { readRun, updateRun } from '../../../electron/services/load-run-record';
+import { readRun, updateRun, type LoadArrival } from '../../../electron/services/load-run-record';
 import { planArrivals } from '../../../electron/services/load-pool';
 import { hasPosixModes } from '../../setup/platform-limits';
 
@@ -295,7 +295,9 @@ describe('the Projects view', () => {
       { ...g(projects.off, ['codex']), enabled: false }, g(projects.ghfail, ['codex']), g(projects.bare, []),
     ];
     loadAgents = [{ id: 'a-1', name: 'Load 1', projectPath: projects.pub, provider: 'codex', endpointId: 'ep-1', model: 'open-coder-1' }];
-    const w = createLoadWindow(deps());
+    // What the engine holds of a run: its arrivals (never the run's log, the Audit's Infos on #685).
+    let engineHolds: { arrivals: LoadArrival[]; agents: [] } | undefined;
+    const w = createLoadWindow(deps({ progress: () => engineHolds }));
     const v = await w.projects();
     expect(v.projects.map(x => x.path).sort()).toEqual(Object.values(projects).sort());
     expect(v.endpoints).toEqual([{ id: 'ep-1', name: 'Shared host', models: ['open-coder-1'] }]);
@@ -318,7 +320,11 @@ describe('the Projects view', () => {
     writePool('p', [line({ task_id: 'pub-1' })]);
     const shown = (await w.refresh()).proposal!;
     const r = await w.approve({ pool: 'p', sha256: shown.sha256, proposalId: shown.id, window: {} }) as { runId: string };
+    // Written into the run's log, it puts no agent in a window; held by the engine, it does.
     updateRun(path.join(dir, 'runs'), r.runId, x => ({ ...x, arrivals: [{ n: 1, taskId: 'pub-1', plannedAt: now, actualAt: now, agentId: 'a-1', harness: 'codex' }] }));
+    expect((await w.projects()).projects.find(x => x.path === projects.pub)!.agents[0].inWindow).toBe(false);
+    expect(r.runId).toBeTruthy();
+    engineHolds = { arrivals: [{ n: 1, taskId: 'pub-1', plannedAt: now, actualAt: now, agentId: 'a-1', harness: 'codex' }], agents: [] };
     expect((await w.projects()).projects.find(x => x.path === projects.pub)!.agents[0].inWindow).toBe(true);
   });
 
