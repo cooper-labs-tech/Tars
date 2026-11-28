@@ -111,6 +111,10 @@ import { hasPosixModes } from '../setup/platform-limits';
  *     its dashes, or in braces), or an empty one, is given, so the endpoint ignores it and an install-wide deletion
  *     silently stops reaching its copy; or it is held back without a word in the log, so a new id format goes unseen;
  *     or that line names the id, or is written at every request.
+ * 51. (The Audit's Info on #686, 28/11.) The upload state the window reads does not say whether the install id goes
+ *     now (`installIdSent`), so the window restates main's rule and says "sent now" while nothing goes: after a
+ *     deletion whose install file could be neither removed nor emptied, or for an id that is no canonical uuid; or it
+ *     says false while the header really goes.
  */
 
 type Seen = { method: string; url: string; headers: http.IncomingHttpHeaders; body: Buffer };
@@ -988,6 +992,39 @@ describe('the install id an endpoint may be told (trace feature A4)', () => {
       expect(uploader().currentInstallId(), 'an empty id').toBeNull();
     } finally {
       warn.mockRestore();
+    }
+  });
+
+  it('51: the upload state says whether the install id goes now, as main decides it', async () => {
+    seed('t1', 'first');
+    const u = uploader();
+    expect(u.state().installIdSent, 'never registered').toBe(false);
+    await u.runOnce();
+    expect(u.state().installIdSent, 'registered, a canonical uuid').toBe(true);
+    const install = JSON.parse(fs.readFileSync(installFile(), 'utf8'));
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    try {
+      fs.writeFileSync(installFile(), JSON.stringify({ ...install, installId: 'install.7' }));
+      expect(uploader().state().installIdSent, 'no canonical uuid').toBe(false);
+    } finally {
+      warn.mockRestore();
+    }
+    fs.writeFileSync(installFile(), JSON.stringify(install));
+    if (!hasPosixModes()) return;
+    const stuck = uploader();
+    expect(stuck.state().installIdSent).toBe(true);
+    fs.chmodSync(installFile(), 0o400);
+    fs.chmodSync(path.dirname(installFile()), 0o500);
+    const log = vi.spyOn(console, 'error').mockImplementation(() => {});
+    try {
+      expect(await stuck.deleteEverywhere()).toMatchObject({ ok: true });
+      expect(fs.existsSync(installFile()) && fs.readFileSync(installFile(), 'utf8').length > 0, 'the install file stayed').toBe(true);
+      expect(stuck.state().installIdSent, 'after a deletion, its file stuck').toBe(false);
+      expect(uploader().state().installIdSent, 'and in the next run').toBe(false);
+    } finally {
+      fs.chmodSync(path.dirname(installFile()), 0o700);
+      fs.chmodSync(installFile(), 0o600);
+      log.mockRestore();
     }
   });
 
