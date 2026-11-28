@@ -368,7 +368,7 @@ export function registerTracesHandlers(deps: TracesHandlerDeps): void {
       'what was done to each turn: an Esc or a Ctrl-C typed into it, a stop or a restart, who sent the next instruction (by kind) and how long after, whether it corrected a finished turn, and a later session that took its task',
       'how the wait before each request divides: its tools\' run, the wait for typed words and whose they were (by kind), the endpoint\'s pause, and the harness\'s own time',
       'each tool call, by its id: its exit code, how long it ran, whether it was denied, timed out or failed, and whether the harness cut its output (with how many bytes, when it counts them), never its command or its output',
-      'This install\'s id, with every request to an inference endpoint whose install header you turned on, only while you share and this install is registered, and never after a deletion: so that endpoint can tie its own copy of those requests to this install, and delete it with the rest',
+      'the install\'s id, with every request to an inference endpoint whose install header you turned on, only while you share and this install is registered, and never after a deletion: so that endpoint can tie its own copy of those requests to this install, and delete it with the rest',
       'for each turn, the commit the repository was on at its start and at its end, as git names them (startHead, endHead)',
       'for each turn, a hash of the working tree at its start and at its end, which names no file (startTree, endTree)',
       'for each turn, how many files it changed and how many lines it added and removed (filesChanged, linesAdded, linesRemoved)',
