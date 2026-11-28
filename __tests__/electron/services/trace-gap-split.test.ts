@@ -74,6 +74,9 @@ import { assertThrowaway } from '../../setup/throwaway-dirs';
  *     or an exit that is not a whole number leaves, from a log that writes times with fractions, and the back office
  *     refuses the whole batch: a call's `ms` and `truncatedBytes`, and every part of a gap, are whole numbers; an exit
  *     that is not a whole number is no exit.
+ * 17. (Part 2, the Audit of #692, 28/11.) An opencode session's last call, the last request that carries its answer,
+ *     and opencode's clean exit, all within one pass of the follower (harness-tool-logs.ts): the exit moves the rows
+ *     into a store the follower leaves unopened, and the last request's toolMs is null.
  */
 
 assertThrowaway({ DATA_DIR, PRIVATE_DIR });
@@ -92,6 +95,8 @@ import { oneTaskQueue } from '../../../electron/core/one-task';
 import { sessionDocument } from '../../../electron/services/trace-export';
 import { GAP_TOLERANCE_MS } from '../../../electron/services/trace-store';
 import { codexToolPartOf, piToolLineOf, toolCallRecordOf, TOOL_CALLS_PER_REQUEST_MAX } from '../../../electron/services/tool-calls';
+import { HarnessToolLogs, type FollowedSession } from '../../../electron/services/harness-tool-logs';
+import Database from 'better-sqlite3';
 
 const EP = 'ep-c1test';
 let home: string;
@@ -508,5 +513,39 @@ describe('whole numbers', () => {
     expect(gap.toolMs).toBe(491);
     for (const [k, v] of Object.entries(gap)) if (typeof v === 'number') expect(Number.isInteger(v), `${k}: ${v}`).toBe(true);
     for (const c of lastRequest(traceId).toolCalls!) expect(Number.isInteger(c.ms), `ms: ${c.ms}`).toBe(true);
+  });
+});
+
+describe('the last request of an opencode session (part 2)', () => {
+  it('17: its call, its answer and opencode\'s clean exit within one pass of the follower, it still gets its tool time', () => {
+    agent('q');
+    const { traceId } = open('q');
+    const t0 = Date.now() + 1000;
+    const said = { role: 'user', content: 'go' };
+    const data = path.join(home, 'data');
+    const tmp = path.join(home, 'tmp');
+    const file = path.join(data, 'opencode', 'opencode.db');
+    for (const d of [path.dirname(file), tmp]) fs.mkdirSync(d, { recursive: true });
+    // opencode 1.19.6's store, in WAL mode, while it runs.
+    const writer = new Database(file);
+    writer.pragma('journal_mode = WAL');
+    writer.exec(`CREATE TABLE session (id TEXT PRIMARY KEY, project_id TEXT, directory TEXT, title TEXT, time_created INTEGER, time_updated INTEGER);
+      CREATE TABLE part (id TEXT PRIMARY KEY, message_id TEXT, session_id TEXT, time_created INTEGER, time_updated INTEGER, data TEXT);`);
+    writer.prepare('INSERT INTO session VALUES (?, ?, ?, ?, ?, ?)').run('ses_o', 'p', project, 't', t0, t0);
+    const s: FollowedSession = { traceId, agentId: 'q', harness: 'opencode', folder: project, startedAt: t0 - 1000 };
+    const logs = new HarnessToolLogs({ sessions: () => [s], sessionIdOf: () => undefined, note: noteToolCall, dataHome: () => data, tmpDir: () => tmp });
+    request(traceId, t0, [said], { calls: ['a'] });
+    logs.tick();
+    // Within one 2 s pass: the call, the last request that carries its answer, and opencode's clean exit.
+    const call = { type: 'tool', tool: 'bash', callID: 'a', state: { status: 'completed', time: { start: t0 + 20, end: t0 + 320 }, metadata: { exit: 0, truncated: false } } };
+    writer.prepare('INSERT INTO part VALUES (?, ?, ?, ?, ?, ?)').run('p1', 'm', 'ses_o', t0 + 20, t0 + 320, JSON.stringify(call));
+    request(traceId, t0 + 400, [said, asks(['a']), ...answers(['a'])]);
+    writer.close();
+    expect(fs.readdirSync(path.dirname(file)), 'opencode\'s clean exit').toEqual(['opencode.db']);
+    s.endedAt = Date.now();
+    logs.tick();
+    expect(lastRequest(traceId).gap?.toolMs).toBe(300);
+    expect(fs.readdirSync(path.dirname(file)), 'nothing beside opencode\'s store').toEqual(['opencode.db']);
+    expect(fs.readdirSync(tmp), 'the copy deleted').toEqual([]);
   });
 });

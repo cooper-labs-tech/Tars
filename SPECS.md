@@ -327,8 +327,18 @@ from the window, or from an agent's drop file (`~/.tars/endpoint-keys/<name>.key
   `CommandExecution` items and output lines (measured), pi 1.3.0's and 1.5.2's `toolResult` lines (read in their
   code). A line read late, after its request or the session's end, still lands on the session it happened in, and
   moves its change sequence; one outside every session of the agent is dropped. Each call's row weighs in the store's
-  size and its session's bytes, by its id and its facts, so the cap counts it. The other harnesses' logs are not
-  read yet: their requests' `toolMs` is null.
+  size and its session's bytes, by its id and its facts, so the cap counts it. Qwen Code's and opencode's (measured:
+  0.25.2, 1.19.6) are read by a follower of their own (`services/harness-tool-logs.ts`), every 2 s while a traced
+  session of theirs runs and 30 s after its end: Qwen Code's chat file of the agent's session (its `qwen-code.tool_call`
+  telemetry and `tool_result` lines; its session id, posted by the agent's hooks, a plain id before it joins the path),
+  each byte once, at most 1 MiB a pass; opencode's database, opened read-only, the `tool` parts of the sessions begun
+  in the agent's folder since the traced session started, at most 500 rows a pass, and never opened while opencode is
+  not running (its WAL store closed cleanly has no -wal, which a read-only open would make and leave). After the
+  session's end, the rows opencode's clean exit moved into the store (its last call, written after the last pass) are
+  read once from a copy in Tars's temporary folder, deleted at once, so the last request keeps its tool time. Node
+  copies byte by byte on Tars's main thread wherever it makes no clone (APFS included), so a store over 64 MB is not
+  copied and that last tool time stays unknown; a copy a crash left behind is removed at the next start, once a few
+  minutes old. A harness not read (none other runs on an endpoint yet) leaves its requests' `toolMs` null.
 
 Retention and a size cap come from Settings. The back-office reads it through `window.electronAPI.traces`. An external
 reader reads it through `GET /api/traces/*`, with its own token, as the reader's trace format tables.

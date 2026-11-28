@@ -24,6 +24,7 @@ import { defaultTracePairs, traceDecision } from './trace-gate';
 import { projectEnvValues, type ScrubContext } from './trace-scrub';
 import { TraceUploader } from './trace-upload';
 import type { ToolCallPart } from './tool-calls';
+import { ENDED_GRACE_MS, HarnessToolLogs, type FollowedSession } from './harness-tool-logs';
 import { SECRET_FIELDS, keysKeptAfter, withKeptKeys } from './settings-secrets';
 
 /**
@@ -471,6 +472,31 @@ export function configureTraces(d: TracesDeps): void {
 let queueEvents: (() => void) | null = null;
 let prTimer: NodeJS.Timeout | null = null;
 
+/** How often Qwen Code's and opencode's logs are read for the tool calls of their traced sessions. */
+const HARNESS_LOGS_EVERY_MS = 2000;
+let harnessLogsTimer: NodeJS.Timeout | null = null;
+/** The harnesses whose logs no watcher of their own follows: read here (codex's and pi's watchers already do). */
+const LOGGED_HERE = new Set(['qwen-code', 'opencode']);
+/** Their traced sessions that ended lately: still read for a while, for what the harness writes as it exits. */
+const endedFollowed: FollowedSession[] = [];
+
+function followedOf(live: LiveSession, endedAt?: number): FollowedSession | null {
+  const agent = agentOf(live.agentId);
+  const folder = agent?.worktreePath || agent?.projectPath;
+  if (!live.traced || !LOGGED_HERE.has(live.harness) || !folder) return null;
+  return { traceId: live.traceId, agentId: live.agentId, harness: live.harness, folder, startedAt: live.startedAt, ...(endedAt !== undefined ? { endedAt } : {}) };
+}
+
+const harnessLogs = new HarnessToolLogs({
+  sessions: () => {
+    const now = Date.now();
+    for (let i = endedFollowed.length - 1; i >= 0; i--) if (now - endedFollowed[i].endedAt! > ENDED_GRACE_MS) endedFollowed.splice(i, 1);
+    return [...[...sessions.values()].map(s => followedOf(s)).filter((s): s is FollowedSession => !!s), ...endedFollowed];
+  },
+  sessionIdOf: (agentId) => agentOf(agentId)?.currentSessionId ?? undefined,
+  note: (agentId, part) => noteToolCall(agentId, part),
+});
+
 /** How often the pull requests of ended sessions are read: every 5 minutes, or an E2E's own pace (200 ms at least). */
 function prEveryMs(): number {
   const asked = Number(process.env.DOROTHY_PR_EVERY_MS);
@@ -487,6 +513,9 @@ export function startTracesRuntime(d: TracesDeps): void {
   sweepTraces();
   uploadTimer = setInterval(uploadPass, 5 * 60_000);
   uploadTimer.unref?.();
+  // The tool calls of Qwen Code's and opencode's traced sessions, from their own logs (harness-tool-logs.ts).
+  harnessLogsTimer = setInterval(() => harnessLogs.tick(), HARNESS_LOGS_EVERY_MS);
+  harnessLogsTimer.unref?.();
   // A consent its file does not hold is none, before anything is sent (it fails closed).
   reconcileConsent();
   uploadPass();
@@ -528,6 +557,9 @@ export function stopTracesRuntime(): void {
   queueEvents = null;
   if (prTimer) clearInterval(prTimer);
   prTimer = null;
+  if (harnessLogsTimer) clearInterval(harnessLogsTimer);
+  harnessLogsTimer = null;
+  endedFollowed.length = 0;
   if (sweepTimer) clearInterval(sweepTimer);
   sweepTimer = null;
   if (uploadTimer) clearInterval(uploadTimer);
@@ -663,6 +695,9 @@ export function closeEndpointSession(token: string | undefined): void {
   windowKeys.forget(live.agentId);
   if (!live.traced) return;
   const endedAt = Date.now();
+  // Its harness's log, if read here, is still read a while for what it writes as it exits.
+  const followed = followedOf(live, endedAt);
+  if (followed) endedFollowed.push(followed);
   const agent = agentOf(live.agentId);
   const folder = agent?.worktreePath || agent?.projectPath;
   void gitOutcome(folder).then((git) => {
