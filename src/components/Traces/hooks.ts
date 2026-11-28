@@ -1,7 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useRef, useState } from 'react';
-import type { TraceFilter, TraceSessionSummary, TraceStats } from '@/types/electron';
+import type { TraceFilter, TraceSessionSummary, TraceStats, UploadState } from '@/types/electron';
 import { reasonOf } from '@/lib/traces-format';
 
 /** The traces channel, or nothing in a browser without the desktop app. */
@@ -32,6 +32,22 @@ export function useUnsavedNote<T = string>() {
   }, []);
   useTracesChanged(() => { void check(); });
   return [note, setNote] as const;
+}
+
+/**
+ * traces.uploadState, read again on every change: null until read, and kept as it was when a read fails (said in the
+ * console), so a line built on it never claims what it could not read.
+ */
+export function useUploadState() {
+  const [state, setState] = useState<UploadState | null>(null);
+  const read = useCallback(async () => {
+    const api = tracesApi();
+    if (!api) return;
+    try { setState(await api.uploadState()); } catch (e) { console.warn('[traces] reading the upload state failed:', e); }
+  }, []);
+  useEffect(() => { void read(); }, [read]);
+  useTracesChanged(read);
+  return state;
 }
 
 /** traces.stats: storage against the cap, retention, the oldest session, whether bodies are being dropped. */
