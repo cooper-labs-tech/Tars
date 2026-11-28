@@ -46,6 +46,10 @@ Every error is `{"error": "<code>", "message"?: "<text>", ...}` with these statu
 | 503 | `unavailable` | The server is shutting down (`Retry-After`) |
 | 507 | `disk_full` | The server is below its free-disk floor and takes no write, registrations included (`Retry-After`). Reads go on |
 
+An id in the path (a session's, a batch's, a session read's) is percent-decoded only once the request's token was
+checked: a request without a valid token gets `401` whatever its path holds, and with one, an id that is no valid
+percent-encoding (`%E0%A4%A`) gets `400 bad_id`, as an id outside its pattern does.
+
 Default limits, each set by the operator (`GET /v1/installs/me` returns the ones that apply):
 
 | Limit | Default |

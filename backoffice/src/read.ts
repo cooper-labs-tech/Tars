@@ -2,7 +2,7 @@
 import type { IncomingMessage, ServerResponse } from 'node:http';
 import { zstdDecompressSync } from 'node:zlib';
 import { type Ctx, json, authReader, ms } from './http.ts';
-import { HttpError } from './body.ts';
+import { HttpError, pathId } from './body.ts';
 import { encodeCursor, decodeCursor } from './cursor.ts';
 import { LIMITS } from './config.ts';
 import { inTx } from './db.ts';
@@ -118,8 +118,9 @@ export async function listConsentChanges(ctx: Ctx, req: IncomingMessage, res: Se
   });
 }
 
-export async function getSession(ctx: Ctx, req: IncomingMessage, res: ServerResponse, install: string, sessionId: string): Promise<void> {
+export async function getSession(ctx: Ctx, req: IncomingMessage, res: ServerResponse, install: string, rawSessionId: string): Promise<void> {
   await authReader(ctx, req);
+  const sessionId = pathId(rawSessionId);
   if (!UUID.test(install) || !ID.test(sessionId)) throw new HttpError(404, 'not_found');
   const s = (await ctx.db.query(`SELECT ${SESSION_SELECT} FROM sessions WHERE install_id = $1 AND session_id = $2`, [install, sessionId])).rows[0];
   if (!s) throw new HttpError(404, 'not_found');

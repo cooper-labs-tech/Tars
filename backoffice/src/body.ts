@@ -15,6 +15,18 @@ export class HttpError extends Error {
   }
 }
 
+/**
+ * An id taken from the path, decoded. Called by each route right after it checked its token, never before: a request
+ * without one is answered 401 whatever its path holds. A malformed escape (`%E0%A4%A`) is 400 `bad_id`, never a 500.
+ */
+export function pathId(raw: string): string {
+  try {
+    return decodeURIComponent(raw);
+  } catch {
+    throw new HttpError(400, 'bad_id');
+  }
+}
+
 export interface BodyLimits { wire: number; decoded: number }
 
 export function decodeBody(raw: Buffer, encoding: string | undefined, limits: BodyLimits): Buffer {

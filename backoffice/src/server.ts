@@ -24,12 +24,14 @@ async function route(ctx: Ctx, req: IncomingMessage, res: ServerResponse): Promi
   if (p === '/v1/installs/me' && m === 'GET') return me(ctx, req, res);
   if (p === '/v1/installs/me' && m === 'DELETE') return deleteMe(ctx, req, res);
   if (p === '/v1/installs/me/consent' && m === 'PUT') return putConsent(ctx, req, res);
-  if ((x = /^\/v1\/sessions\/([^/]+)$/.exec(p)) && m === 'DELETE') return deleteOneSession(ctx, req, res, decodeURIComponent(x[1]!));
+  // The ids below go raw: each route decodes its own (pathId) once it checked its token, so a request without one is
+  // 401 whatever its path holds, and a malformed escape is 400 bad_id, never a 500.
+  if ((x = /^\/v1\/sessions\/([^/]+)$/.exec(p)) && m === 'DELETE') return deleteOneSession(ctx, req, res, x[1]!);
   if (p === '/v1/blobs/missing' && m === 'POST') return missingBlobs(ctx, req, res);
   if ((x = /^\/v1\/blobs\/([^/]+)$/.exec(p)) && m === 'PUT') return putBlob(ctx, req, res, x[1]!);
-  if ((x = /^\/v1\/batches\/([^/]+)$/.exec(p)) && m === 'PUT') return putBatch(ctx, req, res, decodeURIComponent(x[1]!));
+  if ((x = /^\/v1\/batches\/([^/]+)$/.exec(p)) && m === 'PUT') return putBatch(ctx, req, res, x[1]!);
   if (p === '/v1/read/sessions' && m === 'GET') return listSessions(ctx, req, res, url);
-  if ((x = /^\/v1\/read\/sessions\/([^/]+)\/([^/]+)$/.exec(p)) && m === 'GET') return getSession(ctx, req, res, x[1]!, decodeURIComponent(x[2]!));
+  if ((x = /^\/v1\/read\/sessions\/([^/]+)\/([^/]+)$/.exec(p)) && m === 'GET') return getSession(ctx, req, res, x[1]!, x[2]!);
   if (p === '/v1/read/deletions' && m === 'GET') return listDeletions(ctx, req, res, url);
   if (p === '/v1/read/install-consent' && m === 'GET') return listConsentChanges(ctx, req, res, url);
   if (p === '/v1/read/requests' && m === 'GET') return findRequests(ctx, req, res, url);

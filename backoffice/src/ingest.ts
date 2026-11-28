@@ -3,7 +3,7 @@ import type { IncomingMessage, ServerResponse } from 'node:http';
 import { createHash, createHmac, randomBytes, randomUUID } from 'node:crypto';
 import { zstdCompressSync } from 'node:zlib';
 import { type Ctx, json, clientAddr, smallJson, readJson, authInstall, assertRoom, type Install } from './http.ts';
-import { HttpError, readRaw, decodeBody } from './body.ts';
+import { HttpError, readRaw, decodeBody, pathId } from './body.ts';
 import { validateBatch, type Batch } from './batch.ts';
 import { inTx, nextChange, type Tx } from './db.ts';
 import { mintToken } from './tokens.ts';
@@ -105,8 +105,9 @@ export async function deleteMe(ctx: Ctx, req: IncomingMessage, res: ServerRespon
 }
 
 /** One session the install sent, deleted on its word (API.md § 3): 200 whether it held it or not. */
-export async function deleteOneSession(ctx: Ctx, req: IncomingMessage, res: ServerResponse, sessionId: string): Promise<void> {
+export async function deleteOneSession(ctx: Ctx, req: IncomingMessage, res: ServerResponse, rawId: string): Promise<void> {
   const inst = await authInstall(ctx, req);
+  const sessionId = pathId(rawId);
   if (!ID.test(sessionId)) throw new HttpError(400, 'bad_id');
   json(res, 200, await deleteSession(ctx, inst.id, sessionId));
 }
@@ -243,9 +244,11 @@ function lastById<R extends Record<string, unknown>>(rows: R[], key: keyof R & s
   return [...m.values()];
 }
 
-export async function putBatch(ctx: Ctx, req: IncomingMessage, res: ServerResponse, batchId: string): Promise<void> {
-  if (!ID.test(batchId)) throw new HttpError(400, 'bad_id');
+export async function putBatch(ctx: Ctx, req: IncomingMessage, res: ServerResponse, rawId: string): Promise<void> {
+  // The token first: a request without one is 401 whatever its id (before, a bad id answered 400 to anyone).
   const inst = await authInstall(ctx, req);
+  const batchId = pathId(rawId);
+  if (!ID.test(batchId)) throw new HttpError(400, 'bad_id');
   await assertRoom(ctx);
   const { value, bytes } = await readJson(req, LIMITS.batchWire, LIMITS.batchDecoded);
   const v = validateBatch(value);
