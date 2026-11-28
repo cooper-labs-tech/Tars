@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
@@ -35,6 +35,9 @@ import type { LoadTask } from '../../../electron/services/load-pool';
  *      can write, decides something or is what the card shows: an edited log admits an arrival past max_concurrent,
  *      ends a session, or changes the progress. The engine holds the progress itself (its arrivals and the agents
  *      that run them), kept privately for after a restart, where the session a restart cut reads `stopped`.
+ *  E10. (The no-memory rule, written before its code.) The agent's preparation for the session (its worktree set, its
+ *      TMPDIR emptied: load-handlers.ts) fails, and the session starts anyway on what an earlier one left, or the
+ *      arrival stays open for ever, its place held and its worktree kept.
  */
 
 let dir: string;
@@ -264,6 +267,24 @@ describe('a session', () => {
     expect(f.log.find(x => x.n === 1)).toMatchObject({ end: 'error' });
     expect(calls.filter(a => a[0] === 'worktree')).toEqual([]);
     expect(f.launches).toEqual([]);
+  });
+
+  it('E10: a preparation that fails starts no session; the arrival ends in error, its worktree removed, its place freed', async () => {
+    const p = plan([task()], [{ n: 1, taskId: 'fix-retry', offsetMs: 0 }, { n: 2, taskId: 'fix-retry', offsetMs: 60_000 }]);
+    let fails = true;
+    const e = createLoadEngine(deps(p, { prepare: (agentId, worktreePath) => {
+      if (fails) throw new Error('the TMPDIR could not be emptied');
+      f.agents.find(a => a.id === agentId)!.worktreePath = worktreePath;
+    } }));
+    e.start(RUN);
+    await c.advance(T0);
+    expect(f.launches).toEqual([]);
+    await vi.waitFor(() => expect(f.log.find(x => x.n === 1)).toMatchObject({ end: 'error' }));
+    expect(fs.existsSync(path.join(project, '.worktrees', 'load', RUN, 'fix-retry-1'))).toBe(false);
+    // Its place is free: the next arrival starts.
+    fails = false;
+    await c.advance(T0 + 60_000);
+    await vi.waitFor(() => expect(f.launches).toHaveLength(1));
   });
 });
 

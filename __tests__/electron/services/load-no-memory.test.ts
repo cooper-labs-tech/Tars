@@ -169,7 +169,10 @@ describe('the starting context (N8)', () => {
     const second = startContextOf('codex', task, w);
     expect(first.sha256).toMatch(/^[0-9a-f]{64}$/);
     expect(second.sha256).toBe(first.sha256);
-    expect(first.files).toEqual([{ path: '~/.codex/AGENTS.override.md', sha256: null }, { path: '~/.codex/AGENTS.md', sha256: expect.stringMatching(/^[0-9a-f]{64}$/) }]);
+    expect(first.files).toEqual([
+      { path: path.join('~', '.codex', 'AGENTS.override.md'), sha256: null },
+      { path: path.join('~', '.codex', 'AGENTS.md'), sha256: expect.stringMatching(/^[0-9a-f]{64}$/) },
+    ]);
     // As a load prompt carried the project's memory before this PR.
     expect(startContextOf('codex', `<project-memory>\nThe user wants X.\n</project-memory>\n\n${task}`, w).sha256).not.toBe(first.sha256);
     // A line planted in the instructions codex loads at every start (an earlier session in bypass could write it).
