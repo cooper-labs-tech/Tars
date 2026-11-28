@@ -304,7 +304,8 @@ describe('trace back-office, end to end', () => {
     assert.match(s.html, /<option value="closed" selected>/);
     const noCsrf = await form('/admin/settings', { registration: 'open' });
     assert.equal(note('admin.postWithoutCsrf', noCsrf.status), 403);
-    const open = await form('/admin/settings', { csrf: csrfOf(s.html), registration: 'open' });
+    // The suite's own pace: dozens of calls from one install, more than the default burst; the rate step sets its own.
+    const open = await form('/admin/settings', { csrf: csrfOf(s.html), registration: 'open', ratePerMinute: '600', burst: '600' });
     assert.equal(open.status, 303);
   });
 
