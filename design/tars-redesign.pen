@@ -929430,6 +929430,2982 @@
           ]
         }
       ]
+    },
+    {
+      "type": "frame",
+      "id": "rxeHY",
+      "x": 0,
+      "y": 170000,
+      "name": "Settings · Inference endpoints · send install id",
+      "theme": {
+        "mode": "dark"
+      },
+      "width": 1440,
+      "fill": "$bg",
+      "layout": "vertical",
+      "gap": 16,
+      "padding": [
+        40,
+        50
+      ],
+      "children": [
+        {
+          "type": "text",
+          "id": "M1vyZ4",
+          "name": "t",
+          "fill": "$text-primary",
+          "textGrowth": "fixed-width",
+          "width": 1340,
+          "content": "Send install id: beside the session headers, in each state",
+          "lineHeight": 1.15,
+          "fontFamily": "$font-display",
+          "fontSize": 28,
+          "fontWeight": "normal"
+        },
+        {
+          "type": "frame",
+          "id": "lYxtV",
+          "name": "state off",
+          "width": "fill_container",
+          "fill": "$bg",
+          "stroke": "$border-strong",
+          "strokeWidth": 1,
+          "layout": "vertical",
+          "gap": 12,
+          "padding": [
+            14,
+            16
+          ],
+          "children": [
+            {
+              "type": "text",
+              "id": "EDfkS",
+              "name": "caption",
+              "fill": "$text-muted",
+              "content": "OFF",
+              "lineHeight": 1.4,
+              "fontFamily": "$font-mono",
+              "fontSize": 10,
+              "fontWeight": "normal"
+            },
+            {
+              "type": "frame",
+              "id": "Lmf6v",
+              "name": "headers",
+              "width": "fill_container",
+              "gap": 12,
+              "alignItems": "center",
+              "children": [
+                {
+                  "type": "frame",
+                  "id": "LvYuH",
+                  "name": "l",
+                  "width": 620,
+                  "layout": "vertical",
+                  "gap": 2,
+                  "children": [
+                    {
+                      "type": "text",
+                      "id": "lOBac",
+                      "name": "t",
+                      "fill": "$text-primary",
+                      "content": "Send session headers",
+                      "lineHeight": 1.4,
+                      "fontFamily": "$font-ui",
+                      "fontSize": 12.5,
+                      "fontWeight": "normal"
+                    },
+                    {
+                      "type": "text",
+                      "id": "OzB50",
+                      "name": "t",
+                      "fill": "$text-secondary",
+                      "textGrowth": "fixed-width",
+                      "width": 620,
+                      "content": "Adds X-Session-Id and X-Agent-Id to every request, for a server that groups requests into sessions. Off by default: nothing about your agents goes with a request unless you turn it on.",
+                      "lineHeight": 1.4,
+                      "fontFamily": "$font-ui",
+                      "fontSize": 11,
+                      "fontWeight": "normal"
+                    }
+                  ]
+                },
+                {
+                  "type": "frame",
+                  "id": "QH16S",
+                  "name": "sp",
+                  "width": "fill_container",
+                  "height": 1
+                },
+                {
+                  "type": "frame",
+                  "id": "sUrJI",
+                  "name": "Toggle on",
+                  "width": 30,
+                  "height": 16,
+                  "fill": "$accent",
+                  "stroke": "$accent",
+                  "strokeWidth": 1,
+                  "layout": "none",
+                  "children": [
+                    {
+                      "type": "rectangle",
+                      "id": "g8fUvL",
+                      "x": 16,
+                      "y": 1,
+                      "name": "knob",
+                      "fill": "$bg",
+                      "width": 12,
+                      "height": 12
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "type": "frame",
+              "id": "RReBi",
+              "name": "install id",
+              "width": "fill_container",
+              "gap": 12,
+              "alignItems": "center",
+              "children": [
+                {
+                  "type": "frame",
+                  "id": "ETUSl",
+                  "name": "l",
+                  "width": 620,
+                  "layout": "vertical",
+                  "gap": 2,
+                  "children": [
+                    {
+                      "type": "text",
+                      "id": "KReKk",
+                      "name": "t",
+                      "fill": "$text-primary",
+                      "content": "Send install id",
+                      "lineHeight": 1.4,
+                      "fontFamily": "$font-ui",
+                      "fontSize": 12.5,
+                      "fontWeight": "normal"
+                    },
+                    {
+                      "type": "text",
+                      "id": "sUuHU",
+                      "name": "t",
+                      "fill": "$text-secondary",
+                      "textGrowth": "fixed-width",
+                      "width": 620,
+                      "content": "Adds X-Install-Id, this install's back-office id, to every request while you share traces and Tars is registered with your back-office, so deleting everything there can reach this endpoint's own copy. Needs the session headers. Never sent after a deletion.",
+                      "lineHeight": 1.4,
+                      "fontFamily": "$font-ui",
+                      "fontSize": 11,
+                      "fontWeight": "normal"
+                    }
+                  ]
+                },
+                {
+                  "type": "frame",
+                  "id": "cHpoa",
+                  "name": "sp",
+                  "width": "fill_container",
+                  "height": 1
+                },
+                {
+                  "type": "frame",
+                  "id": "v08Pba",
+                  "name": "Toggle off",
+                  "width": 30,
+                  "height": 16,
+                  "fill": "$surface-raised",
+                  "stroke": "$border",
+                  "strokeWidth": 1,
+                  "layout": "none",
+                  "children": [
+                    {
+                      "type": "rectangle",
+                      "id": "DjtuF",
+                      "x": 2,
+                      "y": 1,
+                      "name": "knob",
+                      "fill": "$text-secondary",
+                      "width": 12,
+                      "height": 12
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "type": "frame",
+          "id": "NOJ1k",
+          "name": "state on, and sent",
+          "width": "fill_container",
+          "fill": "$bg",
+          "stroke": "$border-strong",
+          "strokeWidth": 1,
+          "layout": "vertical",
+          "gap": 12,
+          "padding": [
+            14,
+            16
+          ],
+          "children": [
+            {
+              "type": "text",
+              "id": "KwmiZ",
+              "name": "caption",
+              "fill": "$text-muted",
+              "content": "ON, AND SENT",
+              "lineHeight": 1.4,
+              "fontFamily": "$font-mono",
+              "fontSize": 10,
+              "fontWeight": "normal"
+            },
+            {
+              "type": "frame",
+              "id": "t3ol1n",
+              "name": "headers",
+              "width": "fill_container",
+              "gap": 12,
+              "alignItems": "center",
+              "children": [
+                {
+                  "type": "frame",
+                  "id": "KSqE9",
+                  "name": "l",
+                  "width": 620,
+                  "layout": "vertical",
+                  "gap": 2,
+                  "children": [
+                    {
+                      "type": "text",
+                      "id": "u7me2",
+                      "name": "t",
+                      "fill": "$text-primary",
+                      "content": "Send session headers",
+                      "lineHeight": 1.4,
+                      "fontFamily": "$font-ui",
+                      "fontSize": 12.5,
+                      "fontWeight": "normal"
+                    },
+                    {
+                      "type": "text",
+                      "id": "WNIHC",
+                      "name": "t",
+                      "fill": "$text-secondary",
+                      "textGrowth": "fixed-width",
+                      "width": 620,
+                      "content": "Adds X-Session-Id and X-Agent-Id to every request, for a server that groups requests into sessions. Off by default: nothing about your agents goes with a request unless you turn it on.",
+                      "lineHeight": 1.4,
+                      "fontFamily": "$font-ui",
+                      "fontSize": 11,
+                      "fontWeight": "normal"
+                    }
+                  ]
+                },
+                {
+                  "type": "frame",
+                  "id": "a4XOVt",
+                  "name": "sp",
+                  "width": "fill_container",
+                  "height": 1
+                },
+                {
+                  "type": "frame",
+                  "id": "U3CBM",
+                  "name": "Toggle on",
+                  "width": 30,
+                  "height": 16,
+                  "fill": "$accent",
+                  "stroke": "$accent",
+                  "strokeWidth": 1,
+                  "layout": "none",
+                  "children": [
+                    {
+                      "type": "rectangle",
+                      "id": "a0i28",
+                      "x": 16,
+                      "y": 1,
+                      "name": "knob",
+                      "fill": "$bg",
+                      "width": 12,
+                      "height": 12
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "type": "frame",
+              "id": "gF6RM",
+              "name": "install id",
+              "width": "fill_container",
+              "gap": 12,
+              "alignItems": "center",
+              "children": [
+                {
+                  "type": "frame",
+                  "id": "nsSIy",
+                  "name": "l",
+                  "width": 620,
+                  "layout": "vertical",
+                  "gap": 2,
+                  "children": [
+                    {
+                      "type": "text",
+                      "id": "EoQ12",
+                      "name": "t",
+                      "fill": "$text-primary",
+                      "content": "Send install id",
+                      "lineHeight": 1.4,
+                      "fontFamily": "$font-ui",
+                      "fontSize": 12.5,
+                      "fontWeight": "normal"
+                    },
+                    {
+                      "type": "text",
+                      "id": "W1xzuM",
+                      "name": "t",
+                      "fill": "$text-secondary",
+                      "textGrowth": "fixed-width",
+                      "width": 620,
+                      "content": "Adds X-Install-Id, this install's back-office id, to every request while you share traces and Tars is registered with your back-office, so deleting everything there can reach this endpoint's own copy. Needs the session headers. Never sent after a deletion.",
+                      "lineHeight": 1.4,
+                      "fontFamily": "$font-ui",
+                      "fontSize": 11,
+                      "fontWeight": "normal"
+                    },
+                    {
+                      "type": "frame",
+                      "id": "ziCty",
+                      "name": "state",
+                      "gap": 6,
+                      "padding": [
+                        4,
+                        0,
+                        0,
+                        0
+                      ],
+                      "alignItems": "center",
+                      "children": [
+                        {
+                          "type": "rectangle",
+                          "id": "nNNaH",
+                          "name": "square",
+                          "fill": "$status-running",
+                          "width": 6,
+                          "height": 6
+                        },
+                        {
+                          "type": "text",
+                          "id": "PWDmr",
+                          "name": "t",
+                          "fill": "$status-running",
+                          "content": "sent now: you share traces and Tars is registered with your back-office",
+                          "lineHeight": 1.4,
+                          "fontFamily": "$font-mono",
+                          "fontSize": 10.5,
+                          "fontWeight": "normal"
+                        }
+                      ]
+                    }
+                  ]
+                },
+                {
+                  "type": "frame",
+                  "id": "y4pFLX",
+                  "name": "sp",
+                  "width": "fill_container",
+                  "height": 1
+                },
+                {
+                  "type": "frame",
+                  "id": "qhfm8",
+                  "name": "Toggle on",
+                  "width": 30,
+                  "height": 16,
+                  "fill": "$accent",
+                  "stroke": "$accent",
+                  "strokeWidth": 1,
+                  "layout": "none",
+                  "children": [
+                    {
+                      "type": "rectangle",
+                      "id": "iYQtm",
+                      "x": 16,
+                      "y": 1,
+                      "name": "knob",
+                      "fill": "$bg",
+                      "width": 12,
+                      "height": 12
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "type": "frame",
+          "id": "J3Z6R",
+          "name": "state on, not saved yet: sent once saved",
+          "width": "fill_container",
+          "fill": "$bg",
+          "stroke": "$border-strong",
+          "strokeWidth": 1,
+          "layout": "vertical",
+          "gap": 12,
+          "padding": [
+            14,
+            16
+          ],
+          "children": [
+            {
+              "type": "text",
+              "id": "T8cLgv",
+              "name": "caption",
+              "fill": "$text-muted",
+              "content": "ON, NOT SAVED YET: SENT ONCE SAVED",
+              "lineHeight": 1.4,
+              "fontFamily": "$font-mono",
+              "fontSize": 10,
+              "fontWeight": "normal"
+            },
+            {
+              "type": "frame",
+              "id": "mn15s",
+              "name": "headers",
+              "width": "fill_container",
+              "gap": 12,
+              "alignItems": "center",
+              "children": [
+                {
+                  "type": "frame",
+                  "id": "UXe6y",
+                  "name": "l",
+                  "width": 620,
+                  "layout": "vertical",
+                  "gap": 2,
+                  "children": [
+                    {
+                      "type": "text",
+                      "id": "x5BzPQ",
+                      "name": "t",
+                      "fill": "$text-primary",
+                      "content": "Send session headers",
+                      "lineHeight": 1.4,
+                      "fontFamily": "$font-ui",
+                      "fontSize": 12.5,
+                      "fontWeight": "normal"
+                    },
+                    {
+                      "type": "text",
+                      "id": "uyx26",
+                      "name": "t",
+                      "fill": "$text-secondary",
+                      "textGrowth": "fixed-width",
+                      "width": 620,
+                      "content": "Adds X-Session-Id and X-Agent-Id to every request, for a server that groups requests into sessions. Off by default: nothing about your agents goes with a request unless you turn it on.",
+                      "lineHeight": 1.4,
+                      "fontFamily": "$font-ui",
+                      "fontSize": 11,
+                      "fontWeight": "normal"
+                    }
+                  ]
+                },
+                {
+                  "type": "frame",
+                  "id": "YHgpu",
+                  "name": "sp",
+                  "width": "fill_container",
+                  "height": 1
+                },
+                {
+                  "type": "frame",
+                  "id": "w1s60",
+                  "name": "Toggle on",
+                  "width": 30,
+                  "height": 16,
+                  "fill": "$accent",
+                  "stroke": "$accent",
+                  "strokeWidth": 1,
+                  "layout": "none",
+                  "children": [
+                    {
+                      "type": "rectangle",
+                      "id": "BoZNq",
+                      "x": 16,
+                      "y": 1,
+                      "name": "knob",
+                      "fill": "$bg",
+                      "width": 12,
+                      "height": 12
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "type": "frame",
+              "id": "Glb7N",
+              "name": "install id",
+              "width": "fill_container",
+              "gap": 12,
+              "alignItems": "center",
+              "children": [
+                {
+                  "type": "frame",
+                  "id": "aQcqR",
+                  "name": "l",
+                  "width": 620,
+                  "layout": "vertical",
+                  "gap": 2,
+                  "children": [
+                    {
+                      "type": "text",
+                      "id": "IyOHA",
+                      "name": "t",
+                      "fill": "$text-primary",
+                      "content": "Send install id",
+                      "lineHeight": 1.4,
+                      "fontFamily": "$font-ui",
+                      "fontSize": 12.5,
+                      "fontWeight": "normal"
+                    },
+                    {
+                      "type": "text",
+                      "id": "vtXbh",
+                      "name": "t",
+                      "fill": "$text-secondary",
+                      "textGrowth": "fixed-width",
+                      "width": 620,
+                      "content": "Adds X-Install-Id, this install's back-office id, to every request while you share traces and Tars is registered with your back-office, so deleting everything there can reach this endpoint's own copy. Needs the session headers. Never sent after a deletion.",
+                      "lineHeight": 1.4,
+                      "fontFamily": "$font-ui",
+                      "fontSize": 11,
+                      "fontWeight": "normal"
+                    },
+                    {
+                      "type": "frame",
+                      "id": "T1rgk",
+                      "name": "state",
+                      "gap": 6,
+                      "padding": [
+                        4,
+                        0,
+                        0,
+                        0
+                      ],
+                      "alignItems": "center",
+                      "children": [
+                        {
+                          "type": "rectangle",
+                          "id": "JevmL",
+                          "name": "square",
+                          "fill": "$status-waiting",
+                          "width": 6,
+                          "height": 6
+                        },
+                        {
+                          "type": "text",
+                          "id": "bVWAY",
+                          "name": "t",
+                          "fill": "$status-waiting",
+                          "content": "sent once saved: you share traces and Tars is registered with your back-office",
+                          "lineHeight": 1.4,
+                          "fontFamily": "$font-mono",
+                          "fontSize": 10.5,
+                          "fontWeight": "normal"
+                        }
+                      ]
+                    }
+                  ]
+                },
+                {
+                  "type": "frame",
+                  "id": "NMGhY",
+                  "name": "sp",
+                  "width": "fill_container",
+                  "height": 1
+                },
+                {
+                  "type": "frame",
+                  "id": "zmNwx",
+                  "name": "Toggle on",
+                  "width": 30,
+                  "height": 16,
+                  "fill": "$accent",
+                  "stroke": "$accent",
+                  "strokeWidth": 1,
+                  "layout": "none",
+                  "children": [
+                    {
+                      "type": "rectangle",
+                      "id": "mSaeN",
+                      "x": 16,
+                      "y": 1,
+                      "name": "knob",
+                      "fill": "$bg",
+                      "width": 12,
+                      "height": 12
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "type": "frame",
+          "id": "XwktW",
+          "name": "state disabled: the session headers are off",
+          "width": "fill_container",
+          "fill": "$bg",
+          "stroke": "$border-strong",
+          "strokeWidth": 1,
+          "layout": "vertical",
+          "gap": 12,
+          "padding": [
+            14,
+            16
+          ],
+          "children": [
+            {
+              "type": "text",
+              "id": "y5m7w",
+              "name": "caption",
+              "fill": "$text-muted",
+              "content": "DISABLED: THE SESSION HEADERS ARE OFF",
+              "lineHeight": 1.4,
+              "fontFamily": "$font-mono",
+              "fontSize": 10,
+              "fontWeight": "normal"
+            },
+            {
+              "type": "frame",
+              "id": "eFFbk",
+              "name": "headers",
+              "width": "fill_container",
+              "gap": 12,
+              "alignItems": "center",
+              "children": [
+                {
+                  "type": "frame",
+                  "id": "u0Sjf",
+                  "name": "l",
+                  "width": 620,
+                  "layout": "vertical",
+                  "gap": 2,
+                  "children": [
+                    {
+                      "type": "text",
+                      "id": "CXe08",
+                      "name": "t",
+                      "fill": "$text-primary",
+                      "content": "Send session headers",
+                      "lineHeight": 1.4,
+                      "fontFamily": "$font-ui",
+                      "fontSize": 12.5,
+                      "fontWeight": "normal"
+                    },
+                    {
+                      "type": "text",
+                      "id": "LkTKi",
+                      "name": "t",
+                      "fill": "$text-secondary",
+                      "textGrowth": "fixed-width",
+                      "width": 620,
+                      "content": "Adds X-Session-Id and X-Agent-Id to every request, for a server that groups requests into sessions. Off by default: nothing about your agents goes with a request unless you turn it on.",
+                      "lineHeight": 1.4,
+                      "fontFamily": "$font-ui",
+                      "fontSize": 11,
+                      "fontWeight": "normal"
+                    }
+                  ]
+                },
+                {
+                  "type": "frame",
+                  "id": "nEbQi",
+                  "name": "sp",
+                  "width": "fill_container",
+                  "height": 1
+                },
+                {
+                  "type": "frame",
+                  "id": "cq3Mp",
+                  "name": "Toggle off",
+                  "width": 30,
+                  "height": 16,
+                  "fill": "$surface-raised",
+                  "stroke": "$border",
+                  "strokeWidth": 1,
+                  "layout": "none",
+                  "children": [
+                    {
+                      "type": "rectangle",
+                      "id": "v9DpHR",
+                      "x": 2,
+                      "y": 1,
+                      "name": "knob",
+                      "fill": "$text-secondary",
+                      "width": 12,
+                      "height": 12
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "type": "frame",
+              "id": "C5n1Qw",
+              "name": "install id",
+              "width": "fill_container",
+              "gap": 12,
+              "alignItems": "center",
+              "children": [
+                {
+                  "type": "frame",
+                  "id": "hAjTj",
+                  "name": "l",
+                  "width": 620,
+                  "layout": "vertical",
+                  "gap": 2,
+                  "children": [
+                    {
+                      "type": "text",
+                      "id": "FKMKz",
+                      "name": "t",
+                      "fill": "$text-muted",
+                      "content": "Send install id",
+                      "lineHeight": 1.4,
+                      "fontFamily": "$font-ui",
+                      "fontSize": 12.5,
+                      "fontWeight": "normal"
+                    },
+                    {
+                      "type": "text",
+                      "id": "aUpth",
+                      "name": "t",
+                      "fill": "$text-muted",
+                      "textGrowth": "fixed-width",
+                      "width": 620,
+                      "content": "Adds X-Install-Id, this install's back-office id, to every request while you share traces and Tars is registered with your back-office, so deleting everything there can reach this endpoint's own copy. Needs the session headers. Never sent after a deletion.",
+                      "lineHeight": 1.4,
+                      "fontFamily": "$font-ui",
+                      "fontSize": 11,
+                      "fontWeight": "normal"
+                    },
+                    {
+                      "type": "frame",
+                      "id": "hacwK",
+                      "name": "state",
+                      "gap": 6,
+                      "padding": [
+                        4,
+                        0,
+                        0,
+                        0
+                      ],
+                      "alignItems": "center",
+                      "children": [
+                        {
+                          "type": "text",
+                          "id": "m1yEO",
+                          "name": "t",
+                          "fill": "$text-muted",
+                          "content": "turn on the session headers first: the install id goes only with them",
+                          "lineHeight": 1.4,
+                          "fontFamily": "$font-mono",
+                          "fontSize": 10.5,
+                          "fontWeight": "normal"
+                        }
+                      ]
+                    }
+                  ]
+                },
+                {
+                  "type": "frame",
+                  "id": "tv5LT",
+                  "name": "sp",
+                  "width": "fill_container",
+                  "height": 1
+                },
+                {
+                  "type": "frame",
+                  "id": "RnNvy",
+                  "name": "Toggle off",
+                  "opacity": 0.4,
+                  "width": 30,
+                  "height": 16,
+                  "fill": "$surface-raised",
+                  "stroke": "$border",
+                  "strokeWidth": 1,
+                  "layout": "none",
+                  "children": [
+                    {
+                      "type": "rectangle",
+                      "id": "FxkLe",
+                      "x": 2,
+                      "y": 1,
+                      "name": "knob",
+                      "fill": "$text-secondary",
+                      "width": 12,
+                      "height": 12
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "type": "frame",
+          "id": "hkHbY",
+          "name": "state on, not sent: sharing is off",
+          "width": "fill_container",
+          "fill": "$bg",
+          "stroke": "$border-strong",
+          "strokeWidth": 1,
+          "layout": "vertical",
+          "gap": 12,
+          "padding": [
+            14,
+            16
+          ],
+          "children": [
+            {
+              "type": "text",
+              "id": "F4kHR",
+              "name": "caption",
+              "fill": "$text-muted",
+              "content": "ON, NOT SENT: SHARING IS OFF",
+              "lineHeight": 1.4,
+              "fontFamily": "$font-mono",
+              "fontSize": 10,
+              "fontWeight": "normal"
+            },
+            {
+              "type": "frame",
+              "id": "oKUGe",
+              "name": "headers",
+              "width": "fill_container",
+              "gap": 12,
+              "alignItems": "center",
+              "children": [
+                {
+                  "type": "frame",
+                  "id": "UX7LS",
+                  "name": "l",
+                  "width": 620,
+                  "layout": "vertical",
+                  "gap": 2,
+                  "children": [
+                    {
+                      "type": "text",
+                      "id": "vfLl0",
+                      "name": "t",
+                      "fill": "$text-primary",
+                      "content": "Send session headers",
+                      "lineHeight": 1.4,
+                      "fontFamily": "$font-ui",
+                      "fontSize": 12.5,
+                      "fontWeight": "normal"
+                    },
+                    {
+                      "type": "text",
+                      "id": "wJDnR",
+                      "name": "t",
+                      "fill": "$text-secondary",
+                      "textGrowth": "fixed-width",
+                      "width": 620,
+                      "content": "Adds X-Session-Id and X-Agent-Id to every request, for a server that groups requests into sessions. Off by default: nothing about your agents goes with a request unless you turn it on.",
+                      "lineHeight": 1.4,
+                      "fontFamily": "$font-ui",
+                      "fontSize": 11,
+                      "fontWeight": "normal"
+                    }
+                  ]
+                },
+                {
+                  "type": "frame",
+                  "id": "s6nVnA",
+                  "name": "sp",
+                  "width": "fill_container",
+                  "height": 1
+                },
+                {
+                  "type": "frame",
+                  "id": "lj1yA",
+                  "name": "Toggle on",
+                  "width": 30,
+                  "height": 16,
+                  "fill": "$accent",
+                  "stroke": "$accent",
+                  "strokeWidth": 1,
+                  "layout": "none",
+                  "children": [
+                    {
+                      "type": "rectangle",
+                      "id": "UWZfj",
+                      "x": 16,
+                      "y": 1,
+                      "name": "knob",
+                      "fill": "$bg",
+                      "width": 12,
+                      "height": 12
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "type": "frame",
+              "id": "CPStP",
+              "name": "install id",
+              "width": "fill_container",
+              "gap": 12,
+              "alignItems": "center",
+              "children": [
+                {
+                  "type": "frame",
+                  "id": "W0XTku",
+                  "name": "l",
+                  "width": 620,
+                  "layout": "vertical",
+                  "gap": 2,
+                  "children": [
+                    {
+                      "type": "text",
+                      "id": "K0Usx",
+                      "name": "t",
+                      "fill": "$text-primary",
+                      "content": "Send install id",
+                      "lineHeight": 1.4,
+                      "fontFamily": "$font-ui",
+                      "fontSize": 12.5,
+                      "fontWeight": "normal"
+                    },
+                    {
+                      "type": "text",
+                      "id": "KQUsY",
+                      "name": "t",
+                      "fill": "$text-secondary",
+                      "textGrowth": "fixed-width",
+                      "width": 620,
+                      "content": "Adds X-Install-Id, this install's back-office id, to every request while you share traces and Tars is registered with your back-office, so deleting everything there can reach this endpoint's own copy. Needs the session headers. Never sent after a deletion.",
+                      "lineHeight": 1.4,
+                      "fontFamily": "$font-ui",
+                      "fontSize": 11,
+                      "fontWeight": "normal"
+                    },
+                    {
+                      "type": "frame",
+                      "id": "qwN0N",
+                      "name": "state",
+                      "gap": 6,
+                      "padding": [
+                        4,
+                        0,
+                        0,
+                        0
+                      ],
+                      "alignItems": "center",
+                      "children": [
+                        {
+                          "type": "rectangle",
+                          "id": "W9GUU",
+                          "name": "square",
+                          "fill": "$status-waiting",
+                          "width": 6,
+                          "height": 6
+                        },
+                        {
+                          "type": "text",
+                          "id": "joaqy",
+                          "name": "t",
+                          "fill": "$status-waiting",
+                          "content": "not sent now: sharing is off. It goes again once you share traces",
+                          "lineHeight": 1.4,
+                          "fontFamily": "$font-mono",
+                          "fontSize": 10.5,
+                          "fontWeight": "normal"
+                        }
+                      ]
+                    }
+                  ]
+                },
+                {
+                  "type": "frame",
+                  "id": "p3kTD",
+                  "name": "sp",
+                  "width": "fill_container",
+                  "height": 1
+                },
+                {
+                  "type": "frame",
+                  "id": "qrQG8",
+                  "name": "Toggle on",
+                  "width": 30,
+                  "height": 16,
+                  "fill": "$accent",
+                  "stroke": "$accent",
+                  "strokeWidth": 1,
+                  "layout": "none",
+                  "children": [
+                    {
+                      "type": "rectangle",
+                      "id": "FJUBU",
+                      "x": 16,
+                      "y": 1,
+                      "name": "knob",
+                      "fill": "$bg",
+                      "width": 12,
+                      "height": 12
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "type": "frame",
+          "id": "ziS5Y",
+          "name": "state on, not sent: not registered",
+          "width": "fill_container",
+          "fill": "$bg",
+          "stroke": "$border-strong",
+          "strokeWidth": 1,
+          "layout": "vertical",
+          "gap": 12,
+          "padding": [
+            14,
+            16
+          ],
+          "children": [
+            {
+              "type": "text",
+              "id": "F8TaTx",
+              "name": "caption",
+              "fill": "$text-muted",
+              "content": "ON, NOT SENT: NOT REGISTERED",
+              "lineHeight": 1.4,
+              "fontFamily": "$font-mono",
+              "fontSize": 10,
+              "fontWeight": "normal"
+            },
+            {
+              "type": "frame",
+              "id": "e9jtRS",
+              "name": "headers",
+              "width": "fill_container",
+              "gap": 12,
+              "alignItems": "center",
+              "children": [
+                {
+                  "type": "frame",
+                  "id": "e266FD",
+                  "name": "l",
+                  "width": 620,
+                  "layout": "vertical",
+                  "gap": 2,
+                  "children": [
+                    {
+                      "type": "text",
+                      "id": "PwYRX",
+                      "name": "t",
+                      "fill": "$text-primary",
+                      "content": "Send session headers",
+                      "lineHeight": 1.4,
+                      "fontFamily": "$font-ui",
+                      "fontSize": 12.5,
+                      "fontWeight": "normal"
+                    },
+                    {
+                      "type": "text",
+                      "id": "F5spA",
+                      "name": "t",
+                      "fill": "$text-secondary",
+                      "textGrowth": "fixed-width",
+                      "width": 620,
+                      "content": "Adds X-Session-Id and X-Agent-Id to every request, for a server that groups requests into sessions. Off by default: nothing about your agents goes with a request unless you turn it on.",
+                      "lineHeight": 1.4,
+                      "fontFamily": "$font-ui",
+                      "fontSize": 11,
+                      "fontWeight": "normal"
+                    }
+                  ]
+                },
+                {
+                  "type": "frame",
+                  "id": "H7oq7",
+                  "name": "sp",
+                  "width": "fill_container",
+                  "height": 1
+                },
+                {
+                  "type": "frame",
+                  "id": "zFrme",
+                  "name": "Toggle on",
+                  "width": 30,
+                  "height": 16,
+                  "fill": "$accent",
+                  "stroke": "$accent",
+                  "strokeWidth": 1,
+                  "layout": "none",
+                  "children": [
+                    {
+                      "type": "rectangle",
+                      "id": "H8yif",
+                      "x": 16,
+                      "y": 1,
+                      "name": "knob",
+                      "fill": "$bg",
+                      "width": 12,
+                      "height": 12
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "type": "frame",
+              "id": "rWJOR",
+              "name": "install id",
+              "width": "fill_container",
+              "gap": 12,
+              "alignItems": "center",
+              "children": [
+                {
+                  "type": "frame",
+                  "id": "spKew",
+                  "name": "l",
+                  "width": 620,
+                  "layout": "vertical",
+                  "gap": 2,
+                  "children": [
+                    {
+                      "type": "text",
+                      "id": "JNUO5",
+                      "name": "t",
+                      "fill": "$text-primary",
+                      "content": "Send install id",
+                      "lineHeight": 1.4,
+                      "fontFamily": "$font-ui",
+                      "fontSize": 12.5,
+                      "fontWeight": "normal"
+                    },
+                    {
+                      "type": "text",
+                      "id": "K4NBd",
+                      "name": "t",
+                      "fill": "$text-secondary",
+                      "textGrowth": "fixed-width",
+                      "width": 620,
+                      "content": "Adds X-Install-Id, this install's back-office id, to every request while you share traces and Tars is registered with your back-office, so deleting everything there can reach this endpoint's own copy. Needs the session headers. Never sent after a deletion.",
+                      "lineHeight": 1.4,
+                      "fontFamily": "$font-ui",
+                      "fontSize": 11,
+                      "fontWeight": "normal"
+                    },
+                    {
+                      "type": "frame",
+                      "id": "X6hbK",
+                      "name": "state",
+                      "gap": 6,
+                      "padding": [
+                        4,
+                        0,
+                        0,
+                        0
+                      ],
+                      "alignItems": "center",
+                      "children": [
+                        {
+                          "type": "rectangle",
+                          "id": "VRDSk",
+                          "name": "square",
+                          "fill": "$status-waiting",
+                          "width": 6,
+                          "height": 6
+                        },
+                        {
+                          "type": "text",
+                          "id": "amG39",
+                          "name": "t",
+                          "fill": "$status-waiting",
+                          "content": "not sent now: Tars is not registered with your back-office",
+                          "lineHeight": 1.4,
+                          "fontFamily": "$font-mono",
+                          "fontSize": 10.5,
+                          "fontWeight": "normal"
+                        }
+                      ]
+                    }
+                  ]
+                },
+                {
+                  "type": "frame",
+                  "id": "yfM5X",
+                  "name": "sp",
+                  "width": "fill_container",
+                  "height": 1
+                },
+                {
+                  "type": "frame",
+                  "id": "FDGrE",
+                  "name": "Toggle on",
+                  "width": 30,
+                  "height": 16,
+                  "fill": "$accent",
+                  "stroke": "$accent",
+                  "strokeWidth": 1,
+                  "layout": "none",
+                  "children": [
+                    {
+                      "type": "rectangle",
+                      "id": "nnhbv",
+                      "x": 16,
+                      "y": 1,
+                      "name": "knob",
+                      "fill": "$bg",
+                      "width": 12,
+                      "height": 12
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "type": "frame",
+          "id": "OzuEq",
+          "name": "state on, not sent: Tars is not sending it",
+          "width": "fill_container",
+          "fill": "$bg",
+          "stroke": "$border-strong",
+          "strokeWidth": 1,
+          "layout": "vertical",
+          "gap": 12,
+          "padding": [
+            14,
+            16
+          ],
+          "children": [
+            {
+              "type": "text",
+              "id": "n5qNNo",
+              "name": "caption",
+              "fill": "$text-muted",
+              "content": "ON, NOT SENT: TARS IS NOT SENDING IT",
+              "lineHeight": 1.4,
+              "fontFamily": "$font-mono",
+              "fontSize": 10,
+              "fontWeight": "normal"
+            },
+            {
+              "type": "frame",
+              "id": "Aj94h",
+              "name": "headers",
+              "width": "fill_container",
+              "gap": 12,
+              "alignItems": "center",
+              "children": [
+                {
+                  "type": "frame",
+                  "id": "SgG3Q",
+                  "name": "l",
+                  "width": 620,
+                  "layout": "vertical",
+                  "gap": 2,
+                  "children": [
+                    {
+                      "type": "text",
+                      "id": "WtfQj",
+                      "name": "t",
+                      "fill": "$text-primary",
+                      "content": "Send session headers",
+                      "lineHeight": 1.4,
+                      "fontFamily": "$font-ui",
+                      "fontSize": 12.5,
+                      "fontWeight": "normal"
+                    },
+                    {
+                      "type": "text",
+                      "id": "S8oQE",
+                      "name": "t",
+                      "fill": "$text-secondary",
+                      "textGrowth": "fixed-width",
+                      "width": 620,
+                      "content": "Adds X-Session-Id and X-Agent-Id to every request, for a server that groups requests into sessions. Off by default: nothing about your agents goes with a request unless you turn it on.",
+                      "lineHeight": 1.4,
+                      "fontFamily": "$font-ui",
+                      "fontSize": 11,
+                      "fontWeight": "normal"
+                    }
+                  ]
+                },
+                {
+                  "type": "frame",
+                  "id": "fseuU",
+                  "name": "sp",
+                  "width": "fill_container",
+                  "height": 1
+                },
+                {
+                  "type": "frame",
+                  "id": "T6Fc8m",
+                  "name": "Toggle on",
+                  "width": 30,
+                  "height": 16,
+                  "fill": "$accent",
+                  "stroke": "$accent",
+                  "strokeWidth": 1,
+                  "layout": "none",
+                  "children": [
+                    {
+                      "type": "rectangle",
+                      "id": "tlaw6",
+                      "x": 16,
+                      "y": 1,
+                      "name": "knob",
+                      "fill": "$bg",
+                      "width": 12,
+                      "height": 12
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "type": "frame",
+              "id": "VKY5D",
+              "name": "install id",
+              "width": "fill_container",
+              "gap": 12,
+              "alignItems": "center",
+              "children": [
+                {
+                  "type": "frame",
+                  "id": "rFnNj",
+                  "name": "l",
+                  "width": 620,
+                  "layout": "vertical",
+                  "gap": 2,
+                  "children": [
+                    {
+                      "type": "text",
+                      "id": "BnWNA",
+                      "name": "t",
+                      "fill": "$text-primary",
+                      "content": "Send install id",
+                      "lineHeight": 1.4,
+                      "fontFamily": "$font-ui",
+                      "fontSize": 12.5,
+                      "fontWeight": "normal"
+                    },
+                    {
+                      "type": "text",
+                      "id": "Q6tqVD",
+                      "name": "t",
+                      "fill": "$text-secondary",
+                      "textGrowth": "fixed-width",
+                      "width": 620,
+                      "content": "Adds X-Install-Id, this install's back-office id, to every request while you share traces and Tars is registered with your back-office, so deleting everything there can reach this endpoint's own copy. Needs the session headers. Never sent after a deletion.",
+                      "lineHeight": 1.4,
+                      "fontFamily": "$font-ui",
+                      "fontSize": 11,
+                      "fontWeight": "normal"
+                    },
+                    {
+                      "type": "frame",
+                      "id": "riOrv",
+                      "name": "state",
+                      "gap": 6,
+                      "padding": [
+                        4,
+                        0,
+                        0,
+                        0
+                      ],
+                      "alignItems": "center",
+                      "children": [
+                        {
+                          "type": "rectangle",
+                          "id": "jzQy4",
+                          "name": "square",
+                          "fill": "$status-waiting",
+                          "width": 6,
+                          "height": 6
+                        },
+                        {
+                          "type": "text",
+                          "id": "uTiTc",
+                          "name": "t",
+                          "fill": "$status-waiting",
+                          "content": "not sent now: Tars is not sending it, and its log says why",
+                          "lineHeight": 1.4,
+                          "fontFamily": "$font-mono",
+                          "fontSize": 10.5,
+                          "fontWeight": "normal"
+                        }
+                      ]
+                    }
+                  ]
+                },
+                {
+                  "type": "frame",
+                  "id": "y8sn0",
+                  "name": "sp",
+                  "width": "fill_container",
+                  "height": 1
+                },
+                {
+                  "type": "frame",
+                  "id": "B6bmV6",
+                  "name": "Toggle on",
+                  "width": 30,
+                  "height": 16,
+                  "fill": "$accent",
+                  "stroke": "$accent",
+                  "strokeWidth": 1,
+                  "layout": "none",
+                  "children": [
+                    {
+                      "type": "rectangle",
+                      "id": "UOIWJ",
+                      "x": 16,
+                      "y": 1,
+                      "name": "knob",
+                      "fill": "$bg",
+                      "width": 12,
+                      "height": 12
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "type": "text",
+          "id": "qUVpI",
+          "name": "t",
+          "fill": "$text-secondary",
+          "textGrowth": "fixed-width",
+          "width": 1340,
+          "content": "Beside the session headers, in the endpoint's form, the owner's only: no agent turns it on. Off by default. Turning the session headers off turns it off, and while they are off it cannot be turned on. Its line follows main's own answer (the upload state's installIdSent), which is the install's, not this endpoint's: while the switch differs from what is saved (turned on and not saved yet, or a new endpoint), nothing goes to this endpoint yet, and the line says \"sent once saved\". Saved, \"sent now\" only when main sends the id. When main does not, the line says the reason the window can tell: a deletion not confirmed yet, sharing off, or Tars not registered with the back-office; and when none of these is the reason (an id main will not send, or an install a deletion left behind), \"not sent now: Tars is not sending it, and its log says why\".",
+          "lineHeight": 1.4,
+          "fontFamily": "$font-ui",
+          "fontSize": 12,
+          "fontWeight": "normal"
+        },
+        {
+          "type": "text",
+          "id": "cYBjk",
+          "name": "t",
+          "fill": "$text-muted",
+          "textGrowth": "fixed-width",
+          "width": 1340,
+          "content": "Rules kept: controls 26 or 32 px; an active state is a box; tokens only.",
+          "lineHeight": 1.4,
+          "fontFamily": "$font-ui",
+          "fontSize": 11,
+          "fontWeight": "normal"
+        }
+      ]
+    },
+    {
+      "type": "frame",
+      "id": "o9aCui",
+      "x": 1540,
+      "y": 170000,
+      "name": "Settings · Inference endpoints · send install id · light",
+      "theme": {
+        "mode": "light"
+      },
+      "width": 1440,
+      "fill": "$bg",
+      "layout": "vertical",
+      "gap": 16,
+      "padding": [
+        40,
+        50
+      ],
+      "children": [
+        {
+          "type": "text",
+          "id": "GxUeD",
+          "name": "t",
+          "fill": "$text-primary",
+          "textGrowth": "fixed-width",
+          "width": 1340,
+          "content": "Send install id: beside the session headers, in each state",
+          "lineHeight": 1.15,
+          "fontFamily": "$font-display",
+          "fontSize": 28,
+          "fontWeight": "normal"
+        },
+        {
+          "type": "frame",
+          "id": "Jcjl7",
+          "name": "state off",
+          "width": "fill_container",
+          "fill": "$bg",
+          "stroke": "$border-strong",
+          "strokeWidth": 1,
+          "layout": "vertical",
+          "gap": 12,
+          "padding": [
+            14,
+            16
+          ],
+          "children": [
+            {
+              "type": "text",
+              "id": "hAw0Q",
+              "name": "caption",
+              "fill": "$text-muted",
+              "content": "OFF",
+              "lineHeight": 1.4,
+              "fontFamily": "$font-mono",
+              "fontSize": 10,
+              "fontWeight": "normal"
+            },
+            {
+              "type": "frame",
+              "id": "PBax8",
+              "name": "headers",
+              "width": "fill_container",
+              "gap": 12,
+              "alignItems": "center",
+              "children": [
+                {
+                  "type": "frame",
+                  "id": "t7xDd2",
+                  "name": "l",
+                  "width": 620,
+                  "layout": "vertical",
+                  "gap": 2,
+                  "children": [
+                    {
+                      "type": "text",
+                      "id": "y9FHFn",
+                      "name": "t",
+                      "fill": "$text-primary",
+                      "content": "Send session headers",
+                      "lineHeight": 1.4,
+                      "fontFamily": "$font-ui",
+                      "fontSize": 12.5,
+                      "fontWeight": "normal"
+                    },
+                    {
+                      "type": "text",
+                      "id": "eCOo1",
+                      "name": "t",
+                      "fill": "$text-secondary",
+                      "textGrowth": "fixed-width",
+                      "width": 620,
+                      "content": "Adds X-Session-Id and X-Agent-Id to every request, for a server that groups requests into sessions. Off by default: nothing about your agents goes with a request unless you turn it on.",
+                      "lineHeight": 1.4,
+                      "fontFamily": "$font-ui",
+                      "fontSize": 11,
+                      "fontWeight": "normal"
+                    }
+                  ]
+                },
+                {
+                  "type": "frame",
+                  "id": "eZIdn",
+                  "name": "sp",
+                  "width": "fill_container",
+                  "height": 1
+                },
+                {
+                  "type": "frame",
+                  "id": "fEC6B",
+                  "name": "Toggle on",
+                  "width": 30,
+                  "height": 16,
+                  "fill": "$accent",
+                  "stroke": "$accent",
+                  "strokeWidth": 1,
+                  "layout": "none",
+                  "children": [
+                    {
+                      "type": "rectangle",
+                      "id": "aHekb",
+                      "x": 16,
+                      "y": 1,
+                      "name": "knob",
+                      "fill": "$bg",
+                      "width": 12,
+                      "height": 12
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "type": "frame",
+              "id": "YRiPH",
+              "name": "install id",
+              "width": "fill_container",
+              "gap": 12,
+              "alignItems": "center",
+              "children": [
+                {
+                  "type": "frame",
+                  "id": "p5pGx",
+                  "name": "l",
+                  "width": 620,
+                  "layout": "vertical",
+                  "gap": 2,
+                  "children": [
+                    {
+                      "type": "text",
+                      "id": "f7zSpL",
+                      "name": "t",
+                      "fill": "$text-primary",
+                      "content": "Send install id",
+                      "lineHeight": 1.4,
+                      "fontFamily": "$font-ui",
+                      "fontSize": 12.5,
+                      "fontWeight": "normal"
+                    },
+                    {
+                      "type": "text",
+                      "id": "FHmaV",
+                      "name": "t",
+                      "fill": "$text-secondary",
+                      "textGrowth": "fixed-width",
+                      "width": 620,
+                      "content": "Adds X-Install-Id, this install's back-office id, to every request while you share traces and Tars is registered with your back-office, so deleting everything there can reach this endpoint's own copy. Needs the session headers. Never sent after a deletion.",
+                      "lineHeight": 1.4,
+                      "fontFamily": "$font-ui",
+                      "fontSize": 11,
+                      "fontWeight": "normal"
+                    }
+                  ]
+                },
+                {
+                  "type": "frame",
+                  "id": "T8LE9g",
+                  "name": "sp",
+                  "width": "fill_container",
+                  "height": 1
+                },
+                {
+                  "type": "frame",
+                  "id": "XCY4w",
+                  "name": "Toggle off",
+                  "width": 30,
+                  "height": 16,
+                  "fill": "$surface-raised",
+                  "stroke": "$border",
+                  "strokeWidth": 1,
+                  "layout": "none",
+                  "children": [
+                    {
+                      "type": "rectangle",
+                      "id": "tYShl",
+                      "x": 2,
+                      "y": 1,
+                      "name": "knob",
+                      "fill": "$text-secondary",
+                      "width": 12,
+                      "height": 12
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "type": "frame",
+          "id": "b6sZKB",
+          "name": "state on, and sent",
+          "width": "fill_container",
+          "fill": "$bg",
+          "stroke": "$border-strong",
+          "strokeWidth": 1,
+          "layout": "vertical",
+          "gap": 12,
+          "padding": [
+            14,
+            16
+          ],
+          "children": [
+            {
+              "type": "text",
+              "id": "ib1UP",
+              "name": "caption",
+              "fill": "$text-muted",
+              "content": "ON, AND SENT",
+              "lineHeight": 1.4,
+              "fontFamily": "$font-mono",
+              "fontSize": 10,
+              "fontWeight": "normal"
+            },
+            {
+              "type": "frame",
+              "id": "M11hAc",
+              "name": "headers",
+              "width": "fill_container",
+              "gap": 12,
+              "alignItems": "center",
+              "children": [
+                {
+                  "type": "frame",
+                  "id": "k5buW",
+                  "name": "l",
+                  "width": 620,
+                  "layout": "vertical",
+                  "gap": 2,
+                  "children": [
+                    {
+                      "type": "text",
+                      "id": "g312p",
+                      "name": "t",
+                      "fill": "$text-primary",
+                      "content": "Send session headers",
+                      "lineHeight": 1.4,
+                      "fontFamily": "$font-ui",
+                      "fontSize": 12.5,
+                      "fontWeight": "normal"
+                    },
+                    {
+                      "type": "text",
+                      "id": "vM93S",
+                      "name": "t",
+                      "fill": "$text-secondary",
+                      "textGrowth": "fixed-width",
+                      "width": 620,
+                      "content": "Adds X-Session-Id and X-Agent-Id to every request, for a server that groups requests into sessions. Off by default: nothing about your agents goes with a request unless you turn it on.",
+                      "lineHeight": 1.4,
+                      "fontFamily": "$font-ui",
+                      "fontSize": 11,
+                      "fontWeight": "normal"
+                    }
+                  ]
+                },
+                {
+                  "type": "frame",
+                  "id": "VNibQ",
+                  "name": "sp",
+                  "width": "fill_container",
+                  "height": 1
+                },
+                {
+                  "type": "frame",
+                  "id": "s26f3",
+                  "name": "Toggle on",
+                  "width": 30,
+                  "height": 16,
+                  "fill": "$accent",
+                  "stroke": "$accent",
+                  "strokeWidth": 1,
+                  "layout": "none",
+                  "children": [
+                    {
+                      "type": "rectangle",
+                      "id": "TofYq",
+                      "x": 16,
+                      "y": 1,
+                      "name": "knob",
+                      "fill": "$bg",
+                      "width": 12,
+                      "height": 12
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "type": "frame",
+              "id": "qbP2u",
+              "name": "install id",
+              "width": "fill_container",
+              "gap": 12,
+              "alignItems": "center",
+              "children": [
+                {
+                  "type": "frame",
+                  "id": "mA0qr",
+                  "name": "l",
+                  "width": 620,
+                  "layout": "vertical",
+                  "gap": 2,
+                  "children": [
+                    {
+                      "type": "text",
+                      "id": "J6Mzy0",
+                      "name": "t",
+                      "fill": "$text-primary",
+                      "content": "Send install id",
+                      "lineHeight": 1.4,
+                      "fontFamily": "$font-ui",
+                      "fontSize": 12.5,
+                      "fontWeight": "normal"
+                    },
+                    {
+                      "type": "text",
+                      "id": "Op3qM",
+                      "name": "t",
+                      "fill": "$text-secondary",
+                      "textGrowth": "fixed-width",
+                      "width": 620,
+                      "content": "Adds X-Install-Id, this install's back-office id, to every request while you share traces and Tars is registered with your back-office, so deleting everything there can reach this endpoint's own copy. Needs the session headers. Never sent after a deletion.",
+                      "lineHeight": 1.4,
+                      "fontFamily": "$font-ui",
+                      "fontSize": 11,
+                      "fontWeight": "normal"
+                    },
+                    {
+                      "type": "frame",
+                      "id": "fvAYu",
+                      "name": "state",
+                      "gap": 6,
+                      "padding": [
+                        4,
+                        0,
+                        0,
+                        0
+                      ],
+                      "alignItems": "center",
+                      "children": [
+                        {
+                          "type": "rectangle",
+                          "id": "n5COF",
+                          "name": "square",
+                          "fill": "$status-running",
+                          "width": 6,
+                          "height": 6
+                        },
+                        {
+                          "type": "text",
+                          "id": "KBGsq",
+                          "name": "t",
+                          "fill": "$status-running",
+                          "content": "sent now: you share traces and Tars is registered with your back-office",
+                          "lineHeight": 1.4,
+                          "fontFamily": "$font-mono",
+                          "fontSize": 10.5,
+                          "fontWeight": "normal"
+                        }
+                      ]
+                    }
+                  ]
+                },
+                {
+                  "type": "frame",
+                  "id": "bNJCZ",
+                  "name": "sp",
+                  "width": "fill_container",
+                  "height": 1
+                },
+                {
+                  "type": "frame",
+                  "id": "dO9E8",
+                  "name": "Toggle on",
+                  "width": 30,
+                  "height": 16,
+                  "fill": "$accent",
+                  "stroke": "$accent",
+                  "strokeWidth": 1,
+                  "layout": "none",
+                  "children": [
+                    {
+                      "type": "rectangle",
+                      "id": "L9qe6R",
+                      "x": 16,
+                      "y": 1,
+                      "name": "knob",
+                      "fill": "$bg",
+                      "width": 12,
+                      "height": 12
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "type": "frame",
+          "id": "Lb8KZ",
+          "name": "state on, not saved yet: sent once saved",
+          "width": "fill_container",
+          "fill": "$bg",
+          "stroke": "$border-strong",
+          "strokeWidth": 1,
+          "layout": "vertical",
+          "gap": 12,
+          "padding": [
+            14,
+            16
+          ],
+          "children": [
+            {
+              "type": "text",
+              "id": "hqJZu",
+              "name": "caption",
+              "fill": "$text-muted",
+              "content": "ON, NOT SAVED YET: SENT ONCE SAVED",
+              "lineHeight": 1.4,
+              "fontFamily": "$font-mono",
+              "fontSize": 10,
+              "fontWeight": "normal"
+            },
+            {
+              "type": "frame",
+              "id": "u1f3G",
+              "name": "headers",
+              "width": "fill_container",
+              "gap": 12,
+              "alignItems": "center",
+              "children": [
+                {
+                  "type": "frame",
+                  "id": "Q4T0S",
+                  "name": "l",
+                  "width": 620,
+                  "layout": "vertical",
+                  "gap": 2,
+                  "children": [
+                    {
+                      "type": "text",
+                      "id": "l1bYuH",
+                      "name": "t",
+                      "fill": "$text-primary",
+                      "content": "Send session headers",
+                      "lineHeight": 1.4,
+                      "fontFamily": "$font-ui",
+                      "fontSize": 12.5,
+                      "fontWeight": "normal"
+                    },
+                    {
+                      "type": "text",
+                      "id": "X9soW",
+                      "name": "t",
+                      "fill": "$text-secondary",
+                      "textGrowth": "fixed-width",
+                      "width": 620,
+                      "content": "Adds X-Session-Id and X-Agent-Id to every request, for a server that groups requests into sessions. Off by default: nothing about your agents goes with a request unless you turn it on.",
+                      "lineHeight": 1.4,
+                      "fontFamily": "$font-ui",
+                      "fontSize": 11,
+                      "fontWeight": "normal"
+                    }
+                  ]
+                },
+                {
+                  "type": "frame",
+                  "id": "ePtnt",
+                  "name": "sp",
+                  "width": "fill_container",
+                  "height": 1
+                },
+                {
+                  "type": "frame",
+                  "id": "GW0f4",
+                  "name": "Toggle on",
+                  "width": 30,
+                  "height": 16,
+                  "fill": "$accent",
+                  "stroke": "$accent",
+                  "strokeWidth": 1,
+                  "layout": "none",
+                  "children": [
+                    {
+                      "type": "rectangle",
+                      "id": "P5NXq2",
+                      "x": 16,
+                      "y": 1,
+                      "name": "knob",
+                      "fill": "$bg",
+                      "width": 12,
+                      "height": 12
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "type": "frame",
+              "id": "yoqv6",
+              "name": "install id",
+              "width": "fill_container",
+              "gap": 12,
+              "alignItems": "center",
+              "children": [
+                {
+                  "type": "frame",
+                  "id": "Yl4vM",
+                  "name": "l",
+                  "width": 620,
+                  "layout": "vertical",
+                  "gap": 2,
+                  "children": [
+                    {
+                      "type": "text",
+                      "id": "H6s1l",
+                      "name": "t",
+                      "fill": "$text-primary",
+                      "content": "Send install id",
+                      "lineHeight": 1.4,
+                      "fontFamily": "$font-ui",
+                      "fontSize": 12.5,
+                      "fontWeight": "normal"
+                    },
+                    {
+                      "type": "text",
+                      "id": "FKxdp",
+                      "name": "t",
+                      "fill": "$text-secondary",
+                      "textGrowth": "fixed-width",
+                      "width": 620,
+                      "content": "Adds X-Install-Id, this install's back-office id, to every request while you share traces and Tars is registered with your back-office, so deleting everything there can reach this endpoint's own copy. Needs the session headers. Never sent after a deletion.",
+                      "lineHeight": 1.4,
+                      "fontFamily": "$font-ui",
+                      "fontSize": 11,
+                      "fontWeight": "normal"
+                    },
+                    {
+                      "type": "frame",
+                      "id": "KfdKL",
+                      "name": "state",
+                      "gap": 6,
+                      "padding": [
+                        4,
+                        0,
+                        0,
+                        0
+                      ],
+                      "alignItems": "center",
+                      "children": [
+                        {
+                          "type": "rectangle",
+                          "id": "ECnX2",
+                          "name": "square",
+                          "fill": "$status-waiting",
+                          "width": 6,
+                          "height": 6
+                        },
+                        {
+                          "type": "text",
+                          "id": "hX52Y",
+                          "name": "t",
+                          "fill": "$status-waiting",
+                          "content": "sent once saved: you share traces and Tars is registered with your back-office",
+                          "lineHeight": 1.4,
+                          "fontFamily": "$font-mono",
+                          "fontSize": 10.5,
+                          "fontWeight": "normal"
+                        }
+                      ]
+                    }
+                  ]
+                },
+                {
+                  "type": "frame",
+                  "id": "SMgrO",
+                  "name": "sp",
+                  "width": "fill_container",
+                  "height": 1
+                },
+                {
+                  "type": "frame",
+                  "id": "y1OK2",
+                  "name": "Toggle on",
+                  "width": 30,
+                  "height": 16,
+                  "fill": "$accent",
+                  "stroke": "$accent",
+                  "strokeWidth": 1,
+                  "layout": "none",
+                  "children": [
+                    {
+                      "type": "rectangle",
+                      "id": "L9vHNP",
+                      "x": 16,
+                      "y": 1,
+                      "name": "knob",
+                      "fill": "$bg",
+                      "width": 12,
+                      "height": 12
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "type": "frame",
+          "id": "KxLRS",
+          "name": "state disabled: the session headers are off",
+          "width": "fill_container",
+          "fill": "$bg",
+          "stroke": "$border-strong",
+          "strokeWidth": 1,
+          "layout": "vertical",
+          "gap": 12,
+          "padding": [
+            14,
+            16
+          ],
+          "children": [
+            {
+              "type": "text",
+              "id": "yNyB4",
+              "name": "caption",
+              "fill": "$text-muted",
+              "content": "DISABLED: THE SESSION HEADERS ARE OFF",
+              "lineHeight": 1.4,
+              "fontFamily": "$font-mono",
+              "fontSize": 10,
+              "fontWeight": "normal"
+            },
+            {
+              "type": "frame",
+              "id": "k5kWcW",
+              "name": "headers",
+              "width": "fill_container",
+              "gap": 12,
+              "alignItems": "center",
+              "children": [
+                {
+                  "type": "frame",
+                  "id": "XTKAE",
+                  "name": "l",
+                  "width": 620,
+                  "layout": "vertical",
+                  "gap": 2,
+                  "children": [
+                    {
+                      "type": "text",
+                      "id": "os32u",
+                      "name": "t",
+                      "fill": "$text-primary",
+                      "content": "Send session headers",
+                      "lineHeight": 1.4,
+                      "fontFamily": "$font-ui",
+                      "fontSize": 12.5,
+                      "fontWeight": "normal"
+                    },
+                    {
+                      "type": "text",
+                      "id": "f8CYA",
+                      "name": "t",
+                      "fill": "$text-secondary",
+                      "textGrowth": "fixed-width",
+                      "width": 620,
+                      "content": "Adds X-Session-Id and X-Agent-Id to every request, for a server that groups requests into sessions. Off by default: nothing about your agents goes with a request unless you turn it on.",
+                      "lineHeight": 1.4,
+                      "fontFamily": "$font-ui",
+                      "fontSize": 11,
+                      "fontWeight": "normal"
+                    }
+                  ]
+                },
+                {
+                  "type": "frame",
+                  "id": "KFv41",
+                  "name": "sp",
+                  "width": "fill_container",
+                  "height": 1
+                },
+                {
+                  "type": "frame",
+                  "id": "EuJcP",
+                  "name": "Toggle off",
+                  "width": 30,
+                  "height": 16,
+                  "fill": "$surface-raised",
+                  "stroke": "$border",
+                  "strokeWidth": 1,
+                  "layout": "none",
+                  "children": [
+                    {
+                      "type": "rectangle",
+                      "id": "RvvcC",
+                      "x": 2,
+                      "y": 1,
+                      "name": "knob",
+                      "fill": "$text-secondary",
+                      "width": 12,
+                      "height": 12
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "type": "frame",
+              "id": "PvHMH",
+              "name": "install id",
+              "width": "fill_container",
+              "gap": 12,
+              "alignItems": "center",
+              "children": [
+                {
+                  "type": "frame",
+                  "id": "h1oB4",
+                  "name": "l",
+                  "width": 620,
+                  "layout": "vertical",
+                  "gap": 2,
+                  "children": [
+                    {
+                      "type": "text",
+                      "id": "eVtQZ",
+                      "name": "t",
+                      "fill": "$text-muted",
+                      "content": "Send install id",
+                      "lineHeight": 1.4,
+                      "fontFamily": "$font-ui",
+                      "fontSize": 12.5,
+                      "fontWeight": "normal"
+                    },
+                    {
+                      "type": "text",
+                      "id": "g5iIlZ",
+                      "name": "t",
+                      "fill": "$text-muted",
+                      "textGrowth": "fixed-width",
+                      "width": 620,
+                      "content": "Adds X-Install-Id, this install's back-office id, to every request while you share traces and Tars is registered with your back-office, so deleting everything there can reach this endpoint's own copy. Needs the session headers. Never sent after a deletion.",
+                      "lineHeight": 1.4,
+                      "fontFamily": "$font-ui",
+                      "fontSize": 11,
+                      "fontWeight": "normal"
+                    },
+                    {
+                      "type": "frame",
+                      "id": "NYTN1",
+                      "name": "state",
+                      "gap": 6,
+                      "padding": [
+                        4,
+                        0,
+                        0,
+                        0
+                      ],
+                      "alignItems": "center",
+                      "children": [
+                        {
+                          "type": "text",
+                          "id": "xWMx7",
+                          "name": "t",
+                          "fill": "$text-muted",
+                          "content": "turn on the session headers first: the install id goes only with them",
+                          "lineHeight": 1.4,
+                          "fontFamily": "$font-mono",
+                          "fontSize": 10.5,
+                          "fontWeight": "normal"
+                        }
+                      ]
+                    }
+                  ]
+                },
+                {
+                  "type": "frame",
+                  "id": "LgSYU",
+                  "name": "sp",
+                  "width": "fill_container",
+                  "height": 1
+                },
+                {
+                  "type": "frame",
+                  "id": "iwBLz",
+                  "name": "Toggle off",
+                  "opacity": 0.4,
+                  "width": 30,
+                  "height": 16,
+                  "fill": "$surface-raised",
+                  "stroke": "$border",
+                  "strokeWidth": 1,
+                  "layout": "none",
+                  "children": [
+                    {
+                      "type": "rectangle",
+                      "id": "dEx3I",
+                      "x": 2,
+                      "y": 1,
+                      "name": "knob",
+                      "fill": "$text-secondary",
+                      "width": 12,
+                      "height": 12
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "type": "frame",
+          "id": "V7pUU",
+          "name": "state on, not sent: sharing is off",
+          "width": "fill_container",
+          "fill": "$bg",
+          "stroke": "$border-strong",
+          "strokeWidth": 1,
+          "layout": "vertical",
+          "gap": 12,
+          "padding": [
+            14,
+            16
+          ],
+          "children": [
+            {
+              "type": "text",
+              "id": "R2Aet",
+              "name": "caption",
+              "fill": "$text-muted",
+              "content": "ON, NOT SENT: SHARING IS OFF",
+              "lineHeight": 1.4,
+              "fontFamily": "$font-mono",
+              "fontSize": 10,
+              "fontWeight": "normal"
+            },
+            {
+              "type": "frame",
+              "id": "zZ9iK",
+              "name": "headers",
+              "width": "fill_container",
+              "gap": 12,
+              "alignItems": "center",
+              "children": [
+                {
+                  "type": "frame",
+                  "id": "mzomM",
+                  "name": "l",
+                  "width": 620,
+                  "layout": "vertical",
+                  "gap": 2,
+                  "children": [
+                    {
+                      "type": "text",
+                      "id": "Mvi50",
+                      "name": "t",
+                      "fill": "$text-primary",
+                      "content": "Send session headers",
+                      "lineHeight": 1.4,
+                      "fontFamily": "$font-ui",
+                      "fontSize": 12.5,
+                      "fontWeight": "normal"
+                    },
+                    {
+                      "type": "text",
+                      "id": "NwjbR",
+                      "name": "t",
+                      "fill": "$text-secondary",
+                      "textGrowth": "fixed-width",
+                      "width": 620,
+                      "content": "Adds X-Session-Id and X-Agent-Id to every request, for a server that groups requests into sessions. Off by default: nothing about your agents goes with a request unless you turn it on.",
+                      "lineHeight": 1.4,
+                      "fontFamily": "$font-ui",
+                      "fontSize": 11,
+                      "fontWeight": "normal"
+                    }
+                  ]
+                },
+                {
+                  "type": "frame",
+                  "id": "jA9Rv",
+                  "name": "sp",
+                  "width": "fill_container",
+                  "height": 1
+                },
+                {
+                  "type": "frame",
+                  "id": "FeRdA",
+                  "name": "Toggle on",
+                  "width": 30,
+                  "height": 16,
+                  "fill": "$accent",
+                  "stroke": "$accent",
+                  "strokeWidth": 1,
+                  "layout": "none",
+                  "children": [
+                    {
+                      "type": "rectangle",
+                      "id": "naLcc",
+                      "x": 16,
+                      "y": 1,
+                      "name": "knob",
+                      "fill": "$bg",
+                      "width": 12,
+                      "height": 12
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "type": "frame",
+              "id": "X2Iyht",
+              "name": "install id",
+              "width": "fill_container",
+              "gap": 12,
+              "alignItems": "center",
+              "children": [
+                {
+                  "type": "frame",
+                  "id": "NcATY",
+                  "name": "l",
+                  "width": 620,
+                  "layout": "vertical",
+                  "gap": 2,
+                  "children": [
+                    {
+                      "type": "text",
+                      "id": "lAOoX",
+                      "name": "t",
+                      "fill": "$text-primary",
+                      "content": "Send install id",
+                      "lineHeight": 1.4,
+                      "fontFamily": "$font-ui",
+                      "fontSize": 12.5,
+                      "fontWeight": "normal"
+                    },
+                    {
+                      "type": "text",
+                      "id": "T9f3X",
+                      "name": "t",
+                      "fill": "$text-secondary",
+                      "textGrowth": "fixed-width",
+                      "width": 620,
+                      "content": "Adds X-Install-Id, this install's back-office id, to every request while you share traces and Tars is registered with your back-office, so deleting everything there can reach this endpoint's own copy. Needs the session headers. Never sent after a deletion.",
+                      "lineHeight": 1.4,
+                      "fontFamily": "$font-ui",
+                      "fontSize": 11,
+                      "fontWeight": "normal"
+                    },
+                    {
+                      "type": "frame",
+                      "id": "Qk5vm",
+                      "name": "state",
+                      "gap": 6,
+                      "padding": [
+                        4,
+                        0,
+                        0,
+                        0
+                      ],
+                      "alignItems": "center",
+                      "children": [
+                        {
+                          "type": "rectangle",
+                          "id": "djyjb",
+                          "name": "square",
+                          "fill": "$status-waiting",
+                          "width": 6,
+                          "height": 6
+                        },
+                        {
+                          "type": "text",
+                          "id": "EwKgB",
+                          "name": "t",
+                          "fill": "$status-waiting",
+                          "content": "not sent now: sharing is off. It goes again once you share traces",
+                          "lineHeight": 1.4,
+                          "fontFamily": "$font-mono",
+                          "fontSize": 10.5,
+                          "fontWeight": "normal"
+                        }
+                      ]
+                    }
+                  ]
+                },
+                {
+                  "type": "frame",
+                  "id": "Qy8xG",
+                  "name": "sp",
+                  "width": "fill_container",
+                  "height": 1
+                },
+                {
+                  "type": "frame",
+                  "id": "qEnuD",
+                  "name": "Toggle on",
+                  "width": 30,
+                  "height": 16,
+                  "fill": "$accent",
+                  "stroke": "$accent",
+                  "strokeWidth": 1,
+                  "layout": "none",
+                  "children": [
+                    {
+                      "type": "rectangle",
+                      "id": "CdinO",
+                      "x": 16,
+                      "y": 1,
+                      "name": "knob",
+                      "fill": "$bg",
+                      "width": 12,
+                      "height": 12
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "type": "frame",
+          "id": "gHU0K",
+          "name": "state on, not sent: not registered",
+          "width": "fill_container",
+          "fill": "$bg",
+          "stroke": "$border-strong",
+          "strokeWidth": 1,
+          "layout": "vertical",
+          "gap": 12,
+          "padding": [
+            14,
+            16
+          ],
+          "children": [
+            {
+              "type": "text",
+              "id": "Cg5Il",
+              "name": "caption",
+              "fill": "$text-muted",
+              "content": "ON, NOT SENT: NOT REGISTERED",
+              "lineHeight": 1.4,
+              "fontFamily": "$font-mono",
+              "fontSize": 10,
+              "fontWeight": "normal"
+            },
+            {
+              "type": "frame",
+              "id": "wOqtz",
+              "name": "headers",
+              "width": "fill_container",
+              "gap": 12,
+              "alignItems": "center",
+              "children": [
+                {
+                  "type": "frame",
+                  "id": "c6obi",
+                  "name": "l",
+                  "width": 620,
+                  "layout": "vertical",
+                  "gap": 2,
+                  "children": [
+                    {
+                      "type": "text",
+                      "id": "gt1Wd",
+                      "name": "t",
+                      "fill": "$text-primary",
+                      "content": "Send session headers",
+                      "lineHeight": 1.4,
+                      "fontFamily": "$font-ui",
+                      "fontSize": 12.5,
+                      "fontWeight": "normal"
+                    },
+                    {
+                      "type": "text",
+                      "id": "eiri9",
+                      "name": "t",
+                      "fill": "$text-secondary",
+                      "textGrowth": "fixed-width",
+                      "width": 620,
+                      "content": "Adds X-Session-Id and X-Agent-Id to every request, for a server that groups requests into sessions. Off by default: nothing about your agents goes with a request unless you turn it on.",
+                      "lineHeight": 1.4,
+                      "fontFamily": "$font-ui",
+                      "fontSize": 11,
+                      "fontWeight": "normal"
+                    }
+                  ]
+                },
+                {
+                  "type": "frame",
+                  "id": "k7LVeH",
+                  "name": "sp",
+                  "width": "fill_container",
+                  "height": 1
+                },
+                {
+                  "type": "frame",
+                  "id": "KbX7f",
+                  "name": "Toggle on",
+                  "width": 30,
+                  "height": 16,
+                  "fill": "$accent",
+                  "stroke": "$accent",
+                  "strokeWidth": 1,
+                  "layout": "none",
+                  "children": [
+                    {
+                      "type": "rectangle",
+                      "id": "sUtJh",
+                      "x": 16,
+                      "y": 1,
+                      "name": "knob",
+                      "fill": "$bg",
+                      "width": 12,
+                      "height": 12
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "type": "frame",
+              "id": "r5BQmi",
+              "name": "install id",
+              "width": "fill_container",
+              "gap": 12,
+              "alignItems": "center",
+              "children": [
+                {
+                  "type": "frame",
+                  "id": "CI0sp",
+                  "name": "l",
+                  "width": 620,
+                  "layout": "vertical",
+                  "gap": 2,
+                  "children": [
+                    {
+                      "type": "text",
+                      "id": "uTDgP",
+                      "name": "t",
+                      "fill": "$text-primary",
+                      "content": "Send install id",
+                      "lineHeight": 1.4,
+                      "fontFamily": "$font-ui",
+                      "fontSize": 12.5,
+                      "fontWeight": "normal"
+                    },
+                    {
+                      "type": "text",
+                      "id": "t8CLhw",
+                      "name": "t",
+                      "fill": "$text-secondary",
+                      "textGrowth": "fixed-width",
+                      "width": 620,
+                      "content": "Adds X-Install-Id, this install's back-office id, to every request while you share traces and Tars is registered with your back-office, so deleting everything there can reach this endpoint's own copy. Needs the session headers. Never sent after a deletion.",
+                      "lineHeight": 1.4,
+                      "fontFamily": "$font-ui",
+                      "fontSize": 11,
+                      "fontWeight": "normal"
+                    },
+                    {
+                      "type": "frame",
+                      "id": "Q6VLx",
+                      "name": "state",
+                      "gap": 6,
+                      "padding": [
+                        4,
+                        0,
+                        0,
+                        0
+                      ],
+                      "alignItems": "center",
+                      "children": [
+                        {
+                          "type": "rectangle",
+                          "id": "Gd8fL",
+                          "name": "square",
+                          "fill": "$status-waiting",
+                          "width": 6,
+                          "height": 6
+                        },
+                        {
+                          "type": "text",
+                          "id": "dhyl0",
+                          "name": "t",
+                          "fill": "$status-waiting",
+                          "content": "not sent now: Tars is not registered with your back-office",
+                          "lineHeight": 1.4,
+                          "fontFamily": "$font-mono",
+                          "fontSize": 10.5,
+                          "fontWeight": "normal"
+                        }
+                      ]
+                    }
+                  ]
+                },
+                {
+                  "type": "frame",
+                  "id": "uxSpJ",
+                  "name": "sp",
+                  "width": "fill_container",
+                  "height": 1
+                },
+                {
+                  "type": "frame",
+                  "id": "eA1f3",
+                  "name": "Toggle on",
+                  "width": 30,
+                  "height": 16,
+                  "fill": "$accent",
+                  "stroke": "$accent",
+                  "strokeWidth": 1,
+                  "layout": "none",
+                  "children": [
+                    {
+                      "type": "rectangle",
+                      "id": "EhS2l",
+                      "x": 16,
+                      "y": 1,
+                      "name": "knob",
+                      "fill": "$bg",
+                      "width": 12,
+                      "height": 12
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "type": "frame",
+          "id": "a5nUB1",
+          "name": "state on, not sent: Tars is not sending it",
+          "width": "fill_container",
+          "fill": "$bg",
+          "stroke": "$border-strong",
+          "strokeWidth": 1,
+          "layout": "vertical",
+          "gap": 12,
+          "padding": [
+            14,
+            16
+          ],
+          "children": [
+            {
+              "type": "text",
+              "id": "KvE46",
+              "name": "caption",
+              "fill": "$text-muted",
+              "content": "ON, NOT SENT: TARS IS NOT SENDING IT",
+              "lineHeight": 1.4,
+              "fontFamily": "$font-mono",
+              "fontSize": 10,
+              "fontWeight": "normal"
+            },
+            {
+              "type": "frame",
+              "id": "dyByz",
+              "name": "headers",
+              "width": "fill_container",
+              "gap": 12,
+              "alignItems": "center",
+              "children": [
+                {
+                  "type": "frame",
+                  "id": "VdH3J",
+                  "name": "l",
+                  "width": 620,
+                  "layout": "vertical",
+                  "gap": 2,
+                  "children": [
+                    {
+                      "type": "text",
+                      "id": "nIHBu",
+                      "name": "t",
+                      "fill": "$text-primary",
+                      "content": "Send session headers",
+                      "lineHeight": 1.4,
+                      "fontFamily": "$font-ui",
+                      "fontSize": 12.5,
+                      "fontWeight": "normal"
+                    },
+                    {
+                      "type": "text",
+                      "id": "n01nM",
+                      "name": "t",
+                      "fill": "$text-secondary",
+                      "textGrowth": "fixed-width",
+                      "width": 620,
+                      "content": "Adds X-Session-Id and X-Agent-Id to every request, for a server that groups requests into sessions. Off by default: nothing about your agents goes with a request unless you turn it on.",
+                      "lineHeight": 1.4,
+                      "fontFamily": "$font-ui",
+                      "fontSize": 11,
+                      "fontWeight": "normal"
+                    }
+                  ]
+                },
+                {
+                  "type": "frame",
+                  "id": "g6bbH",
+                  "name": "sp",
+                  "width": "fill_container",
+                  "height": 1
+                },
+                {
+                  "type": "frame",
+                  "id": "R890e1",
+                  "name": "Toggle on",
+                  "width": 30,
+                  "height": 16,
+                  "fill": "$accent",
+                  "stroke": "$accent",
+                  "strokeWidth": 1,
+                  "layout": "none",
+                  "children": [
+                    {
+                      "type": "rectangle",
+                      "id": "bKkmm",
+                      "x": 16,
+                      "y": 1,
+                      "name": "knob",
+                      "fill": "$bg",
+                      "width": 12,
+                      "height": 12
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "type": "frame",
+              "id": "hGQNK",
+              "name": "install id",
+              "width": "fill_container",
+              "gap": 12,
+              "alignItems": "center",
+              "children": [
+                {
+                  "type": "frame",
+                  "id": "nm6zZ",
+                  "name": "l",
+                  "width": 620,
+                  "layout": "vertical",
+                  "gap": 2,
+                  "children": [
+                    {
+                      "type": "text",
+                      "id": "cCAyg",
+                      "name": "t",
+                      "fill": "$text-primary",
+                      "content": "Send install id",
+                      "lineHeight": 1.4,
+                      "fontFamily": "$font-ui",
+                      "fontSize": 12.5,
+                      "fontWeight": "normal"
+                    },
+                    {
+                      "type": "text",
+                      "id": "A1ZJtL",
+                      "name": "t",
+                      "fill": "$text-secondary",
+                      "textGrowth": "fixed-width",
+                      "width": 620,
+                      "content": "Adds X-Install-Id, this install's back-office id, to every request while you share traces and Tars is registered with your back-office, so deleting everything there can reach this endpoint's own copy. Needs the session headers. Never sent after a deletion.",
+                      "lineHeight": 1.4,
+                      "fontFamily": "$font-ui",
+                      "fontSize": 11,
+                      "fontWeight": "normal"
+                    },
+                    {
+                      "type": "frame",
+                      "id": "n0tdWm",
+                      "name": "state",
+                      "gap": 6,
+                      "padding": [
+                        4,
+                        0,
+                        0,
+                        0
+                      ],
+                      "alignItems": "center",
+                      "children": [
+                        {
+                          "type": "rectangle",
+                          "id": "aFHyo",
+                          "name": "square",
+                          "fill": "$status-waiting",
+                          "width": 6,
+                          "height": 6
+                        },
+                        {
+                          "type": "text",
+                          "id": "Rdl8Z",
+                          "name": "t",
+                          "fill": "$status-waiting",
+                          "content": "not sent now: Tars is not sending it, and its log says why",
+                          "lineHeight": 1.4,
+                          "fontFamily": "$font-mono",
+                          "fontSize": 10.5,
+                          "fontWeight": "normal"
+                        }
+                      ]
+                    }
+                  ]
+                },
+                {
+                  "type": "frame",
+                  "id": "SWL9z",
+                  "name": "sp",
+                  "width": "fill_container",
+                  "height": 1
+                },
+                {
+                  "type": "frame",
+                  "id": "OezbP",
+                  "name": "Toggle on",
+                  "width": 30,
+                  "height": 16,
+                  "fill": "$accent",
+                  "stroke": "$accent",
+                  "strokeWidth": 1,
+                  "layout": "none",
+                  "children": [
+                    {
+                      "type": "rectangle",
+                      "id": "C1HAy",
+                      "x": 16,
+                      "y": 1,
+                      "name": "knob",
+                      "fill": "$bg",
+                      "width": 12,
+                      "height": 12
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "type": "text",
+          "id": "O0p2vx",
+          "name": "t",
+          "fill": "$text-secondary",
+          "textGrowth": "fixed-width",
+          "width": 1340,
+          "content": "Beside the session headers, in the endpoint's form, the owner's only: no agent turns it on. Off by default. Turning the session headers off turns it off, and while they are off it cannot be turned on. Its line follows main's own answer (the upload state's installIdSent), which is the install's, not this endpoint's: while the switch differs from what is saved (turned on and not saved yet, or a new endpoint), nothing goes to this endpoint yet, and the line says \"sent once saved\". Saved, \"sent now\" only when main sends the id. When main does not, the line says the reason the window can tell: a deletion not confirmed yet, sharing off, or Tars not registered with the back-office; and when none of these is the reason (an id main will not send, or an install a deletion left behind), \"not sent now: Tars is not sending it, and its log says why\".",
+          "lineHeight": 1.4,
+          "fontFamily": "$font-ui",
+          "fontSize": 12,
+          "fontWeight": "normal"
+        },
+        {
+          "type": "text",
+          "id": "xL1d9",
+          "name": "t",
+          "fill": "$text-muted",
+          "textGrowth": "fixed-width",
+          "width": 1340,
+          "content": "Rules kept: controls 26 or 32 px; an active state is a box; tokens only.",
+          "lineHeight": 1.4,
+          "fontFamily": "$font-ui",
+          "fontSize": 11,
+          "fontWeight": "normal"
+        }
+      ]
     }
   ],
   "themes": {

@@ -4,9 +4,9 @@ import { useCallback, useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { Button, FieldError, Input, PasswordInput, StatusSquare } from '@/components/ui';
 import type { StatusTone } from '@/components/ui';
-import type { EndpointView, EndpointWait } from '@/types/electron';
+import type { EndpointView, EndpointWait, UploadState } from '@/types/electron';
 import { useEndpoints } from '@/hooks/useEndpoints';
-import { useUnsavedNote } from '@/components/Traces/hooks';
+import { useUnsavedNote, useUploadState } from '@/components/Traces/hooks';
 import { clauseOf, clockOf, clockSecondsOf, healthOf, modelsLineOf, reasonOf, usedByOf } from '@/lib/traces-format';
 import { SettingsCard } from './SettingsCard';
 import { SettingsRow } from './SettingsRow';
@@ -38,6 +38,24 @@ const countOf = (m: Record<string, string>) => {
   const n = Object.keys(m).length;
   return n > 0 ? ` · ${n} extra header${n === 1 ? '' : 's'}` : '';
 };
+
+/**
+ * Whether an endpoint's install id goes now (`Settings · Inference endpoints · send install id`), as main answers it:
+ * "sent now" only when the upload state's `installIdSent` says so (trace-upload.ts currentInstallId). Otherwise the
+ * reason the window can tell (a deletion not confirmed, sharing off, not registered), else that Tars is not sending
+ * it (an id main will not send, an install a deletion left behind), and the app's log says why.
+ * `installIdSent` is the install's answer, not this endpoint's: while the form's switch differs from what is saved
+ * (turned on and not saved yet, or a new endpoint), nothing goes to this endpoint yet, so "sent once saved" (the
+ * Audit's Info on #686 at 17719d981).
+ */
+function installLineOf(u: UploadState, unsaved: boolean): { word: string; tone: StatusTone } {
+  if (u.installIdSent && unsaved) return { word: 'sent once saved: you share traces and Tars is registered with your back-office', tone: 'waiting' };
+  if (u.installIdSent) return { word: 'sent now: you share traces and Tars is registered with your back-office', tone: 'running' };
+  if (u.deletionOwed) return { word: 'not sent now: a deletion is not confirmed yet', tone: 'waiting' };
+  if (!u.consentAt) return { word: 'not sent now: sharing is off. It goes again once you share traces', tone: 'waiting' };
+  if (!u.registered) return { word: 'not sent now: Tars is not registered with your back-office', tone: 'waiting' };
+  return { word: 'not sent now: Tars is not sending it, and its log says why', tone: 'waiting' };
+}
 
 /**
  * A state word in its tone, with its square: the frames' `state` line. One line, cut at its end; `wrap` keeps every
@@ -377,6 +395,9 @@ function EndpointForm({ endpoint, onDone }: { endpoint?: EndpointView; onDone: (
   const [hold, setHold] = useState(String(endpoint?.holdMaxSeconds ?? DEFAULT_HOLD));
   const [allowTraces, setAllowTraces] = useState(endpoint?.allowTraces ?? false);
   const [sessionHeaders, setSessionHeaders] = useState(endpoint?.sendSessionHeaders ?? false);
+  /** X-Install-Id: the owner's only, and only with the session headers (main refuses it without them). */
+  const [installHeader, setInstallHeader] = useState(endpoint?.sendInstallHeader ?? false);
+  const upload = useUploadState();
   const [plainHttp, setPlainHttp] = useState(endpoint?.allowPlainHttp ?? false);
   /** What the editor showed as it opened: its save names it, so a change an agent made since is refused, not taken. */
   const [shown] = useState(() => (endpoint ? shownOf(endpoint) : undefined));
@@ -412,7 +433,7 @@ function EndpointForm({ endpoint, onDone }: { endpoint?: EndpointView; onDone: (
     }
     try {
       const extraHeaders = Object.fromEntries(headers.filter(h => h.name.trim() !== '' || h.value !== '').map(h => [h.name.trim(), h.value]));
-      const saved = await api.save({ id: endpoint?.id, name: name.trim(), baseUrl: baseUrl.trim(), allowTraces, holdMaxSeconds: holdSeconds, sendSessionHeaders: sessionHeaders, allowPlainHttp: isHttp && plainHttp, extraHeaders, ...(shown ? { shown } : {}) });
+      const saved = await api.save({ id: endpoint?.id, name: name.trim(), baseUrl: baseUrl.trim(), allowTraces, holdMaxSeconds: holdSeconds, sendSessionHeaders: sessionHeaders, sendInstallHeader: sessionHeaders && installHeader, allowPlainHttp: isHttp && plainHttp, extraHeaders, ...(shown ? { shown } : {}) });
       if (!saved.ok) {
         // An agent changed the endpoint since this editor opened: nothing was saved. The editor closes, main's
         // sentence goes under the row, and the list read again shows the change, to approve or put back.
@@ -559,7 +580,22 @@ function EndpointForm({ endpoint, onDone }: { endpoint?: EndpointView; onDone: (
             Adds X-Session-Id and X-Agent-Id to every request, for a server that groups requests into sessions. Off by default: nothing about your agents goes with a request unless you turn it on.
           </p>
         </div>
-        <Toggle label="Send session headers" enabled={sessionHeaders} onChange={() => setSessionHeaders(v => !v)} />
+        <Toggle label="Send session headers" enabled={sessionHeaders} onChange={() => { if (sessionHeaders) setInstallHeader(false); setSessionHeaders(!sessionHeaders); }} />
+      </div>
+
+      <div data-install-id className="flex items-center gap-3">
+        <div className="min-w-0 flex-1">
+          <p className={`text-[12.5px] ${sessionHeaders ? 'text-foreground' : 'text-muted-foreground'}`}>Send install id</p>
+          <p className="mt-0.5 max-w-[620px] text-[11px] leading-tight text-muted-foreground">
+            Adds X-Install-Id, this install&apos;s back-office id, to every request while you share traces and Tars is registered with your back-office, so deleting everything there can reach this endpoint&apos;s own copy. Needs the session headers. Never sent after a deletion.
+          </p>
+          {!sessionHeaders ? (
+            <p className="mt-1 font-mono text-[10.5px] text-muted-foreground">turn on the session headers first: the install id goes only with them</p>
+          ) : installHeader && upload ? (
+            <div className="mt-1"><State wrap {...installLineOf(upload, (sessionHeaders && installHeader) !== (endpoint?.sendInstallHeader ?? false))} /></div>
+          ) : null}
+        </div>
+        <Toggle label="Send install id" enabled={sessionHeaders && installHeader} disabled={!sessionHeaders} onChange={() => setInstallHeader(v => !v)} />
       </div>
 
       <div data-extra-headers className="space-y-2">
