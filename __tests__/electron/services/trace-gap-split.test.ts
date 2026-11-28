@@ -70,6 +70,10 @@ import { assertThrowaway } from '../../setup/throwaway-dirs';
  * 14. (Added before its code, 28/11: the Audit of #688.) The tool calls' rows sit outside the store's cap: neither the
  *     store's size (what the sweep weighs) nor the session's bytes count them, so a session of many calls grows the
  *     store past its cap unseen; or the same call read again is counted twice.
+ * 15. (Added before its code, 28/11: the Audit of #678, the back office takes whole numbers.) A duration, a byte count
+ *     or an exit that is not a whole number leaves, from a log that writes times with fractions, and the back office
+ *     refuses the whole batch: a call's `ms` and `truncatedBytes`, and every part of a gap, are whole numbers; an exit
+ *     that is not a whole number is no exit.
  */
 
 assertThrowaway({ DATA_DIR, PRIVATE_DIR });
@@ -481,5 +485,28 @@ describe('the store\'s cap', () => {
     // The session deleted, its calls go with it.
     traceStore().remove({ traceIds: [traceId] });
     expect(traceStore().stats().bytes).toBeLessThan(storeBefore);
+  });
+});
+
+describe('whole numbers', () => {
+  it('15: a call\'s time, cut and exit leave as whole numbers, whatever the log wrote', () => {
+    expect(toolCallRecordOf({ callId: 'c', itemStartedAt: 1000.4, itemEndedAt: 1803.9, keptBytes: 100.5, sentBytes: 10.2, exit: 2.5 }))
+      .toEqual({ toolCallId: 'c', exit: null, ms: 804, denied: false, timedOut: false, failed: false, truncated: true, truncatedBytes: 90 });
+    expect(toolCallRecordOf({ callId: 'p', wallMs: 12.7, exit: 0 })).toMatchObject({ ms: 13, exit: 0 });
+  });
+
+  it('15: every part of a gap is a whole number when the calls\' times have fractions', () => {
+    agent('q');
+    const { traceId } = open('q');
+    const t0 = Date.now() + 1000;
+    const said = { role: 'user', content: 'go' };
+    request(traceId, t0, [said], { calls: ['a'] });
+    request(traceId, t0 + 1010, [said, asks(['a']), ...answers(['a'])]);
+    // It began before the previous reply ended (t0 + 10): its part inside the gap, 10 to 501.3, keeps a fraction.
+    noteToolCall('q', { callId: 'a', itemStartedAt: t0 + 5.3, itemEndedAt: t0 + 500.9 });
+    const gap = lastRequest(traceId).gap!;
+    expect(gap.toolMs).toBe(491);
+    for (const [k, v] of Object.entries(gap)) if (typeof v === 'number') expect(Number.isInteger(v), `${k}: ${v}`).toBe(true);
+    for (const c of lastRequest(traceId).toolCalls!) expect(Number.isInteger(c.ms), `ms: ${c.ms}`).toBe(true);
   });
 });
