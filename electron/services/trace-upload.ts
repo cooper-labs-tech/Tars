@@ -60,6 +60,12 @@ export interface UploaderDeps {
   training(): { value: boolean; owed: boolean };
   /** The back-office took this value (a 2xx, or a registration that carried it): owed no more, if it still stands. */
   trainingSent(value: boolean): void;
+  /**
+   * Whether a session's "no" is on the private list (traces-runtime.ts TRACES_TRAINING_DENIED_FILE). The store's stamp
+   * is under ~/.tars, which every agent is handed: a session goes as trainable only when its stamp says yes and this
+   * says no (the Audit's M1 on #690).
+   */
+  trainingDenied(traceId: string): boolean;
   /** A batch's body, compressed, at most (4 MiB: half the back-office's 8 MiB, the margin it advises). */
   maxBatchBytes?: number;
   fetch?: typeof fetch;
@@ -422,7 +428,7 @@ export class TraceUploader {
       tokensIn: Number(t.tokens_in), tokensCached: Number(t.tokens_cached), tokensOut: Number(t.tokens_out),
       mixed: t.mixed === true, unknownTurns: Number(t.unknown_turns ?? 0), outcome: t.outcome ? scrub(t.outcome) : undefined,
       // #678's per session field, and nothing else in it: false once the switch was off while the session ran.
-      consent: { training: (t.consent as { training?: unknown } | undefined)?.training === true },
+      consent: { training: (t.consent as { training?: unknown } | undefined)?.training === true && !this.deps.trainingDenied(traceId) },
     };
     const turns = doc.turns.map(x => ({
       turnId: String(x.turn_id), sessionId: traceId, index: Number(x.turn_index), startedAt: Number(x.started_at), endedAt: opt(x.ended_at as number),
@@ -513,7 +519,7 @@ export class TraceUploader {
     if (!payload) return null;
     return {
       // What the session would carry, for the window to show beside the document (trace feature A5).
-      consent: { training: this.deps.store.session(traceId)?.session.consent.training === true },
+      consent: { training: this.deps.store.session(traceId)?.session.consent.training === true && !this.deps.trainingDenied(traceId) },
       document: {
         batches: payload.batches.map(b => ({ batchId: b.id, body: JSON.parse(b.body.toString('utf8')) })),
         blobs: Object.fromEntries([...payload.blobs.entries()].map(([h, b]) => [h, JSON.parse(b.toString('utf8'))])),

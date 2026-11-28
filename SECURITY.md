@@ -1214,6 +1214,12 @@ used to train models", stands beside sharing. What leaves, and who decides:
 - Each session carries `consent: { training }`, as the switch stood while it ran: off at any moment, false for good.
   Turned off while a session runs, the session goes again with false. A session recorded before the switch existed
   reads false.
+- A session's "no" is kept twice: its stamp in the trace store, which the window reads, and its id on a list in
+  `~/.tars-private/traces-training-denied.json` (0600), for the sessions running at an off and those opened while
+  off. The store is under `~/.tars`, which every agent is handed, so the upload and the preview send `true` only when
+  the stamp says yes and the list does not name the session: an agent that sets the stamp back to yes changes nothing.
+  A list that cannot be read denies every session; one not yet written holds in memory and is written again every
+  minute. The sweep prunes it with the sessions it names.
 - The install's current value goes to the back-office on every change (`PUT /v1/installs/me/consent` with
   `{ training }` alone and the install token), and with the registration. It covers the sessions already sent. A change
   the back-office has not taken stays owed across a restart, is sent again until a 2xx, and goes with sharing off
