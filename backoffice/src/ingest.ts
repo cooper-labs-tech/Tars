@@ -5,7 +5,7 @@ import { zstdCompressSync } from 'node:zlib';
 import { type Ctx, json, clientAddr, smallJson, readJson, authInstall, assertRoom, type Install } from './http.ts';
 import { HttpError, readRaw, decodeBody } from './body.ts';
 import { validateBatch, type Batch } from './batch.ts';
-import { inTx, type Tx } from './db.ts';
+import { inTx, nextChange, type Tx } from './db.ts';
 import { mintToken } from './tokens.ts';
 import { LIMITS } from './config.ts';
 import { deleteInstall, deleteSession } from './purge.ts';
@@ -41,14 +41,44 @@ export async function register(ctx: Ctx, req: IncomingMessage, res: ServerRespon
     `SELECT count(*) FILTER (WHERE addr_hash = $1)::int AS mine, count(*)::int AS all FROM registrations WHERE at > now() - interval '1 hour'`, [addrHash]);
   const c = counts.rows[0]!;
   if (c.mine >= s.registrationsPerHourPerAddress || c.all >= s.registrationsPerHour) throw new HttpError(429, 'rate_limited', undefined, { retryAfter: 3600 });
+  const consent = isRecord(value) && value.consent !== undefined ? consentOf(value.consent) : null;
   const id = randomUUID();
   const { token, hash } = mintToken('install');
   await inTx(ctx.db, async (tx) => {
     await tx.query('INSERT INTO installs (id, token_hash, client_name, client_version, platform) VALUES ($1, $2, $3, $4, $5)',
       [id, hash, field(client.name), field(client.version), field(client.platform)]);
     await tx.query('INSERT INTO registrations (addr_hash) VALUES ($1)', [addrHash]);
+    if (consent) await recordConsent(tx, id, consent.training);
   });
   json(res, 201, { installId: id, token, limits: limitsOf(s), retentionDays: s.retentionDays });
+}
+
+/** `{training: boolean}` and nothing else, or a 400. */
+function consentOf(v: unknown): { training: boolean } {
+  if (!isRecord(v) || typeof v.training !== 'boolean' || Object.keys(v).some((k) => k !== 'training')) {
+    throw new HttpError(400, 'bad_request', 'consent must be {training: boolean}');
+  }
+  return { training: v.training };
+}
+
+/**
+ * An install's current training consent, and one row of the readers' consent feed for the change, numbered under
+ * the change lock (db.ts) so the feed's cursor misses nothing. The rows go with the install (a foreign key).
+ */
+async function recordConsent(tx: Tx, installId: string, training: boolean): Promise<Date> {
+  const seq = await nextChange(tx);
+  const at = (await tx.query<{ at: Date }>('INSERT INTO install_consent_changes (seq, install_id, training) VALUES ($1, $2, $3) RETURNING at',
+    [seq, installId, training])).rows[0]!.at;
+  await tx.query('UPDATE installs SET consent_training = $2, consent_at = $3 WHERE id = $1', [installId, training, at]);
+  return at;
+}
+
+export async function putConsent(ctx: Ctx, req: IncomingMessage, res: ServerResponse): Promise<void> {
+  const inst = await authInstall(ctx, req);
+  const { value } = await smallJson(req);
+  const { training } = consentOf(value);
+  const at = await inTx(ctx.db, (tx) => recordConsent(tx, inst.id, training));
+  json(res, 200, { training, at: at.getTime() });
 }
 
 export async function me(ctx: Ctx, req: IncomingMessage, res: ServerResponse): Promise<void> {
@@ -142,6 +172,18 @@ const SESSION_COLS: Col[] = [
   ['finalStatus', 'final_status', 'text'], ['turnCount', 'turn_count', 'int'], ['requestCount', 'request_count', 'int'],
   ['tokensIn', 'tokens_in', 'bigint'], ['tokensCached', 'tokens_cached', 'bigint'], ['tokensOut', 'tokens_out', 'bigint'],
   ['mixed', 'mixed', 'bool'], ['unknownTurns', 'unknown_turns', 'int'], ['outcome', 'outcome', 'jsonb'],
+  ['environment', 'environment', 'jsonb'], ['events', 'events', 'jsonb'], ['start', 'start', 'jsonb'], ['lostDemand', 'lost_demand', 'jsonb'], ['lostDemandOmitted', 'lost_demand_omitted', 'int'],
+  ['maskingVersion', 'masking_version', 'text'], ['maskCounts', 'mask_counts', 'jsonb'],
+  ['rttMedianMs', 'rtt_median_ms', 'float8'], ['clockOffsetMs', 'clock_offset_ms', 'float8'], ['consent', 'consent', 'jsonb'],
+  ['contextWindowGiven', 'context_window_given', 'int'], ['outputCapGiven', 'output_cap_given', 'int'], ['autoCompaction', 'auto_compaction', 'text'],
+  ['compactions', 'compactions', 'jsonb'], ['compactionsOmitted', 'compactions_omitted', 'int'],
+];
+// What a turn changed in the repository: the heads and trees, the counts, and the survival of its lines.
+const TURN_WORKSPACE: Col[] = [
+  ['startHead', 'start_head', 'text'], ['endHead', 'end_head', 'text'], ['startTree', 'start_tree', 'text'], ['endTree', 'end_tree', 'text'],
+  ['filesChanged', 'files_changed', 'int'], ['linesAdded', 'lines_added', 'int'], ['linesRemoved', 'lines_removed', 'int'],
+  ['changedLines', 'changed_lines', 'int'], ['survivedLines', 'survived_lines', 'int'], ['reverted', 'reverted', 'bool'],
+  ['survivalBasis', 'survival_basis', 'text'],
 ];
 const TURN_COLS: Col[] = [
   ['sessionId', 'session_id', 'text'], ['index', 'turn_index', 'int'], T('startedAt', 'started_at'), T('endedAt', 'ended_at'),
@@ -149,7 +191,8 @@ const TURN_COLS: Col[] = [
   ['toolErrorCount', 'tool_error_count', 'int'], ['toolMs', 'tool_ms', 'bigint'], ['modelMs', 'model_ms', 'bigint'],
   ['tokensIn', 'tokens_in', 'bigint'], ['tokensCached', 'tokens_cached', 'bigint'], ['tokensOut', 'tokens_out', 'bigint'],
   ['finalStatus', 'final_status', 'text'], ['finalFinishReason', 'final_finish_reason', 'text'], ['author', 'author', 'text'],
-  ['authorDetail', 'author_detail', 'text'],
+  ['authorDetail', 'author_detail', 'text'], ['taskRef', 'task_ref', 'text'], ['interventions', 'interventions', 'jsonb'],
+  ...TURN_WORKSPACE,
 ];
 const REQUEST_COLS: Col[] = [
   ['sessionId', 'session_id', 'text'], ['turnId', 'turn_id', 'text'], ['seq', 'seq', 'int'], ['upstreamRequestId', 'upstream_request_id', 'text'],
@@ -157,7 +200,9 @@ const REQUEST_COLS: Col[] = [
   ['params', 'params', 'jsonb'], ['toolsHash', 'tools_hash', 'text'], T('startedAt', 'started_at'), ['ttftMs', 'ttft_ms', 'bigint'],
   ['totalMs', 'total_ms', 'bigint'], ['tokensIn', 'tokens_in', 'bigint'], ['tokensCached', 'tokens_cached', 'bigint'],
   ['tokensOut', 'tokens_out', 'bigint'], ['status', 'status', 'int'], ['error', 'error', 'text'], ['finishReason', 'finish_reason', 'text'],
-  ['streamed', 'streamed', 'bool'], ['side', 'side', 'bool'], ['reqBytes', 'req_bytes', 'bigint'], ['respBytes', 'resp_bytes', 'bigint'],
+  ['streamed', 'streamed', 'bool'], ['side', 'side', 'bool'], ['liveSessions', 'live_sessions', 'int'], ['cancel', 'cancel', 'jsonb'], ['rttMs', 'rtt_ms', 'float8'], ['clockOffsetMs', 'clock_offset_ms', 'float8'],
+  ['queueMs', 'queue_ms', 'float8'], ['upstreamMs', 'upstream_ms', 'float8'],
+  ['contextReset', 'context_reset', 'jsonb'], ['gap', 'gap', 'jsonb'], ['toolCalls', 'tool_calls', 'jsonb'], ['toolCallsOmitted', 'tool_calls_omitted', 'int'], ['reqBytes', 'req_bytes', 'bigint'], ['respBytes', 'resp_bytes', 'bigint'],
 ];
 
 /** One INSERT ... SELECT FROM jsonb_to_recordset ... ON CONFLICT per table: a batch is a few queries, never one per row. */
@@ -170,12 +215,25 @@ function upsertSql(table: string, keyField: string, keyCol: string, cols: Col[],
   return `INSERT INTO ${table} (${names}) SELECT ${values} FROM jsonb_to_recordset($2::jsonb) AS x(${rec})
           ON CONFLICT (install_id, ${keyCol}) DO UPDATE SET ${updates}`;
 }
+/**
+ * Columns a row sent again without keeps as they were: a client before them (or one that has not read them yet)
+ * leaves them out, and that must not erase what a newer one sent. Only a value replaces a value.
+ */
+function keepWhenAbsent(sql: string, table: string, columns: string[]): string {
+  let out = sql;
+  for (const c of columns) {
+    const next = out.replace(`${c} = EXCLUDED.${c}`, `${c} = coalesce(EXCLUDED.${c}, ${table}.${c})`);
+    if (next === out) throw new Error(`${table}.${c} is not an updated column`);
+    out = next;
+  }
+  return out;
+}
 const SQL = {
-  sessions: upsertSql('sessions', 'sessionId', 'session_id', SESSION_COLS, { cols: ['changed_seq'], vals: [`nextval('change_seq')`] }).replace(
-    /DO UPDATE SET /, 'DO UPDATE SET received_at = now(), '),
-  turns: upsertSql('turns', 'turnId', 'turn_id', TURN_COLS),
+  sessions: keepWhenAbsent(upsertSql('sessions', 'sessionId', 'session_id', SESSION_COLS, { cols: ['changed_seq'], vals: [`nextval('change_seq')`] }).replace(
+    /DO UPDATE SET /, 'DO UPDATE SET received_at = now(), '), 'sessions', ['environment', 'events', 'start', 'lost_demand', 'lost_demand_omitted', 'masking_version', 'mask_counts', 'rtt_median_ms', 'clock_offset_ms', 'consent', 'context_window_given', 'output_cap_given', 'auto_compaction', 'compactions', 'compactions_omitted']),
+  turns: keepWhenAbsent(upsertSql('turns', 'turnId', 'turn_id', TURN_COLS), 'turns', ['task_ref', 'interventions', ...TURN_WORKSPACE.map(([, c]) => c)]),
   // A request sent again without its side mark keeps the one it had: only true or false replaces it.
-  requests: upsertSql('requests', 'requestId', 'request_id', REQUEST_COLS).replace('side = EXCLUDED.side', 'side = coalesce(EXCLUDED.side, requests.side)'),
+  requests: keepWhenAbsent(upsertSql('requests', 'requestId', 'request_id', REQUEST_COLS), 'requests', ['side', 'live_sessions', 'cancel', 'rtt_ms', 'clock_offset_ms', 'queue_ms', 'upstream_ms', 'context_reset', 'gap', 'tool_calls', 'tool_calls_omitted']),
 };
 
 /** The last row of each id wins, as it would had the rows come in separate batches. */

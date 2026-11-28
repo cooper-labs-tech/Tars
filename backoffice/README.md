@@ -4,7 +4,9 @@ A small server anyone can host. Tars installs whose users opted in upload their 
 and readers the operator trusts read them back. It is generic: no reader is named or assumed, and
 any Tars user can point their Tars at their own instance.
 
-- `API.md`: the HTTP API, for the uploader in Tars and for readers.
+- `API.md`: the HTTP API, for the uploader in Tars and for readers. Its § 8 lists the fields added to v1 since
+  its first draft, with the migration that stores each. A Tars that sends a field this server does not know is
+  refused (422), so the server is updated before the Tars that send new fields.
 - `deploy/`: a systemd unit, an nginx site and a backup script for one Linux server behind Cloudflare.
 - The runbook is in the repository's `OPERATIONS.md` ("Trace back-office"), the boundaries in
   `SECURITY.md` (§ 9).

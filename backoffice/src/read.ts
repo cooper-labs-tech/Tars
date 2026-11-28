@@ -14,7 +14,9 @@ const HASH = /^[0-9a-f]{64}$/;
 
 const SESSION_SELECT = `install_id, session_id, agent_id, project_key, harness, harness_version, native_session_id,
   endpoint_key, endpoint_name, model, started_at, ended_at, final_status, turn_count, request_count, tokens_in, tokens_cached,
-  tokens_out, mixed, unknown_turns, outcome, received_at`;
+  tokens_out, mixed, unknown_turns, outcome, environment, events, start, lost_demand, lost_demand_omitted, masking_version, mask_counts, rtt_median_ms, clock_offset_ms, consent, context_window_given, output_cap_given, auto_compaction, compactions, compactions_omitted, received_at,
+  (SELECT consent_training FROM installs i WHERE i.id = sessions.install_id) AS install_consent_training,
+  (SELECT consent_at FROM installs i WHERE i.id = sessions.install_id) AS install_consent_at`;
 
 function session(r: QueryResultRow) {
   return {
@@ -24,6 +26,15 @@ function session(r: QueryResultRow) {
     model: r.model, startedAt: ms(r.started_at), endedAt: ms(r.ended_at), finalStatus: r.final_status, turnCount: r.turn_count,
     requestCount: r.request_count, tokensIn: r.tokens_in, tokensCached: r.tokens_cached, tokensOut: r.tokens_out, mixed: r.mixed,
     unknownTurns: r.unknown_turns, outcome: r.outcome ?? undefined, receivedAt: ms(r.received_at),
+    // Always present: null is "the uploading Tars did not send it" (one before the field, or one that could not read it).
+    environment: r.environment ?? null, events: r.events ?? null, start: r.start ?? null, lostDemand: r.lost_demand ?? null, lostDemandOmitted: r.lost_demand_omitted ?? null,
+    maskingVersion: r.masking_version ?? null, maskCounts: r.mask_counts ?? null,
+    // The session's own consent as it was recorded, and its install's current one (PUT /v1/installs/me/consent).
+    consent: r.consent ?? null,
+    contextWindowGiven: r.context_window_given ?? null, outputCapGiven: r.output_cap_given ?? null,
+    autoCompaction: r.auto_compaction ?? null, compactions: r.compactions ?? null, compactionsOmitted: r.compactions_omitted ?? null,
+    installConsent: r.install_consent_training === null || r.install_consent_training === undefined ? null : { training: r.install_consent_training, at: ms(r.install_consent_at) },
+    rttMedianMs: r.rtt_median_ms ?? null, clockOffsetMs: r.clock_offset_ms ?? null,
   };
 }
 
@@ -53,7 +64,7 @@ function limitOf(url: URL): number {
  * cursor is the highest change committed when the page was read: under the lock of db.ts, no change
  * numbered at or below it can still be on its way, so a filtered reader never rescans.
  */
-async function page(ctx: Ctx, table: 'sessions' | 'tombstones', seqCol: string, select: string, where: string[], args: unknown[], cursor: bigint, limit: number) {
+async function page(ctx: Ctx, table: 'sessions' | 'tombstones' | 'install_consent_changes', seqCol: string, select: string, where: string[], args: unknown[], cursor: bigint, limit: number) {
   return inTx(ctx.db, async (tx) => {
     await tx.query('SET TRANSACTION ISOLATION LEVEL REPEATABLE READ READ ONLY');
     const top = (await tx.query<{ n: string | null }>(`SELECT max(${seqCol})::text AS n FROM ${table}`)).rows[0]!.n;
@@ -94,6 +105,19 @@ export async function listDeletions(ctx: Ctx, req: IncomingMessage, res: ServerR
   });
 }
 
+/**
+ * Every change of an install's training consent, oldest first, by the same cursor as the deletions: a reader learns
+ * of an install that turned training off and then sent nothing more. A deleted install's changes go with it.
+ */
+export async function listConsentChanges(ctx: Ctx, req: IncomingMessage, res: ServerResponse, url: URL): Promise<void> {
+  await authReader(ctx, req);
+  const p = await page(ctx, 'install_consent_changes', 'seq', 'install_id, training, at', [], [], cursorOf(url), limitOf(url));
+  json(res, 200, {
+    changes: p.rows.map((r) => ({ install: r.install_id, training: r.training, at: ms(r.at) })),
+    nextCursor: p.nextCursor, more: p.more,
+  });
+}
+
 export async function getSession(ctx: Ctx, req: IncomingMessage, res: ServerResponse, install: string, sessionId: string): Promise<void> {
   await authReader(ctx, req);
   if (!UUID.test(install) || !ID.test(sessionId)) throw new HttpError(404, 'not_found');
@@ -123,6 +147,11 @@ export async function getSession(ctx: Ctx, req: IncomingMessage, res: ServerResp
       toolErrorCount: t.tool_error_count, toolMs: t.tool_ms ?? undefined, modelMs: t.model_ms ?? undefined, tokensIn: t.tokens_in,
       tokensCached: t.tokens_cached, tokensOut: t.tokens_out, finalStatus: t.final_status ?? undefined,
       finalFinishReason: t.final_finish_reason ?? undefined, author: t.author ?? undefined, authorDetail: t.author_detail ?? undefined,
+      taskRef: t.task_ref ?? null, interventions: t.interventions ?? null,
+      startHead: t.start_head ?? null, endHead: t.end_head ?? null, startTree: t.start_tree ?? null, endTree: t.end_tree ?? null,
+      filesChanged: t.files_changed ?? null, linesAdded: t.lines_added ?? null, linesRemoved: t.lines_removed ?? null,
+      changedLines: t.changed_lines ?? null, survivedLines: t.survived_lines ?? null, reverted: t.reverted ?? null,
+      survivalBasis: t.survival_basis ?? null,
     })),
     requests: requests.rows.map((r) => ({ ...request(r), messages: byRequest.get(r.request_id) ?? [] })),
     messages: messages.rows.map((m) => ({
@@ -139,6 +168,9 @@ function request(r: QueryResultRow) {
     tokensIn: r.tokens_in ?? undefined, tokensCached: r.tokens_cached ?? undefined, tokensOut: r.tokens_out ?? undefined,
     status: r.status ?? undefined, error: r.error ?? undefined, finishReason: r.finish_reason ?? undefined, streamed: r.streamed ?? undefined,
     side: r.side ?? null, // always present: null is "the uploading Tars did not say", which readers treat as side
+    liveSessions: r.live_sessions ?? null, cancel: r.cancel ?? null,
+    rttMs: r.rtt_ms ?? null, clockOffsetMs: r.clock_offset_ms ?? null, queueMs: r.queue_ms ?? null, upstreamMs: r.upstream_ms ?? null,
+    contextReset: r.context_reset ?? null, gap: r.gap ?? null, toolCalls: r.tool_calls ?? null, toolCallsOmitted: r.tool_calls_omitted ?? null,
     reqBytes: r.req_bytes ?? undefined, respBytes: r.resp_bytes ?? undefined,
   };
 }

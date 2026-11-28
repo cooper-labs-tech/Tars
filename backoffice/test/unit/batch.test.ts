@@ -14,6 +14,70 @@
 // 9. A request's `side` mark (the owner's decision of 26/11) is refused when it is a boolean, or
 //    taken when it is anything else ("yes", 1, "true"), or required, which would refuse every
 //    upload from a Tars before the mark.
+// 10. A session's `environment` (27/11: the machine and the system, exact values) takes a key it does
+//     not know (a serial number, a host name would pass), a value of the wrong type, a string over
+//     200, cores, memory or a UTC offset out of range, or is not an object; or a valid one, all
+//     values null included, is refused.
+// 11. A session's `events` (power events) takes something other than an array of {at, kind}, a
+//     kind other than sleep, wake, battery or ac, a key besides those two, or more than 10,000;
+//     or a valid list, the empty one included, is refused.
+// 12. A request's `liveSessions` takes a negative, fractional or absurd count, or a valid one is
+//     refused.
+// 13 again (Backend-4's note, 27/11): a `start.branch` over 255 bytes is refused, which costs the whole batch,
+//     instead of being cut to 255 bytes at a character's edge; or one over 4,096 characters is taken.
+// 13. A session's `start` (27/11, what started it) takes a key it does not know, a trigger or a via
+//     outside the client's closed lists, a task ref not of the form t- and 8 hex, a commit that is
+//     not 40 or 64 hex, an id over its bound, a branch over 255 bytes, or a time of the wrong form,
+//     or goes without its trigger; or a valid one, the trigger alone included, is refused.
+// 14. A session's `lostDemand` takes an item other than {kind: queue_drop, ref, queuedAt, at, reason},
+//     a reason outside the client's six, a key besides those, or more than 1,000; or a valid list is
+//     refused.
+// 15. A request's `cancel` takes a `by` other than harness, tars, proxy or endpoint, a cause that is
+//     not one of that `by`'s, or anything but {by, cause, at, deliveredBytes} of their types; or a
+//     valid one is refused.
+// 16. A turn's `taskRef` (the task its instruction came from) takes something other than t- and 8
+//     hex, or a valid one is refused.
+// 17. A session's `maskingVersion` takes something other than a string of at most 40, or its
+//     `maskCounts` takes a key other than SECRET, EMAIL, IP, PERSON, HOME and PHONE, goes without
+//     one of them, or takes a count that is not an int >= 0; or valid ones are refused.
+// 18. A turn's `interventions` takes a key other than interrupted, restarted, next, corrected and
+//     redelegated, one of them in another shape (a `during` other than answer or tools, a name
+//     where a kind belongs, a negative delay, `corrected` other than true, a `to` over 64), or a
+//     valid one is refused: every key alone, all together, and a fractional delay.
+// 19 again (#677's Audit, 27/11): a request's `rttMs` measured negative (clock rates, whole ms) is valid, from
+//     -10^10 to 10^10; the session's `rttMedianMs` stays 0 or more.
+// 19. The timings (27/11, from the endpoint's Server-Timing): a session's `rttMedianMs` and
+//     `clockOffsetMs`, a request's `rttMs`, `clockOffsetMs`, `queueMs` and `upstreamMs`, each in
+//     milliseconds and fractional. A negative round trip, queue or upstream, a value that is not a
+//     finite number, or one over 10^10 is taken; or a valid one, a negative clock offset and a
+//     fraction included, is refused.
+// 20. A turn's workspace (27/11): `startHead`, `endHead`, `startTree`, `endTree` take something other
+//     than 40 or 64 lowercase hex; `filesChanged`, `linesAdded`, `linesRemoved`, `changedLines`,
+//     `survivedLines` take a negative or fractional count; `reverted` a non-boolean; `survivalBasis`
+//     a value other than session_end, merged or deleted; or valid ones are refused.
+// 18 again (#680's closed lists, 27/11): `interrupted.by` other than esc, ctrl_c, cli, stop, remove, quit or sleep,
+//     `restarted.by` other than restart or replace, or `next.by` other than user, orchestrator, agent, relay, tars
+//     or unknown, is taken.
+// 22. A session's `lostDemandOmitted` (the lost tasks the client left out of the list) takes a negative or
+//     fractional count, or a valid one is refused.
+// 23. A session's context (C2, 28/11): `contextWindowGiven` outside 1,024 to 10,000,000, `outputCapGiven` outside
+//     1 to 10,000,000, `autoCompaction` other than on or off, or `compactions` other than a list of at most 1,000
+//     {at, kind: compact|summarize|truncate, before?, after?, requestId?, source: harness|wire} is taken; or valid
+//     ones, the empty list included, are refused.
+// 24. A request's `contextReset` takes a kind other than compact, summarize, truncate or new, a `droppedTokens`
+//     under 1, or another key; or a valid one is refused.
+// 25. A request's `gap` (C1) takes an `ms` or `heldMs` that is not an int >= 0 or missing, a `toolMs`,
+//     `inputWaitMs` or `harnessMs` other than an int >= 0 or null, an `inputBy` outside #680's authors, or
+//     another key; or a valid one, nulls included, is refused. Its sum is not checked (the client's tolerance).
+// 26. A request's `toolCalls` takes more than 64, an item without its four booleans, a `toolCallId` over 128
+//     characters, an `ms` other than an int >= 0 or null, an `exit` other than an int or null, a
+//     `truncatedBytes` under 1, or another key; `toolCallsOmitted` under 1; or valid ones are refused.
+// 27. A session's `compactionsOmitted` (C2 after #687's Audit: the compactions past the newest 200 Tars keeps)
+//     takes something other than an int >= 1, or a valid one is refused.
+// 21. A session's `consent` (27/11, the training consent it was recorded under) takes anything but
+//     {training: boolean}, or a valid one is refused.
+// 10 again (the client's own contract, 27/11): every environment value may be null, the
+//     architecture Tars runs as included, and a negative UTC offset is valid.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { validateBatch } from '../../src/batch.ts';
@@ -93,4 +157,287 @@ test('9. side: a boolean or nothing', () => {
   }
   assert.ok(!('errors' in validateBatch(ok)), 'a request without side, from a Tars before the mark, is taken');
   for (const side of ['yes', 'true', 1, 0, {}]) assert.ok(errs({ ...ok, requests: [{ ...request, side }] }).length, String(side));
+});
+
+const environment = {
+  osName: 'macOS', osVersion: '15.6.1', kernel: '24.6.0', arch: 'arm64', machineModel: 'Mac15,3', chip: 'Apple M3', cpuCores: 8,
+  ramBytes: 17179869184, tarsVersion: '2.0.7', tarsArch: 'arm64', locale: 'de-DE', timeZone: 'Europe/Berlin', utcOffsetMinutes: 60, onBattery: false,
+};
+const withSession = (over: Record<string, unknown>) => ({ ...ok, sessions: [{ ...session, ...over }] });
+
+test('10. environment: the known keys, each of its type', () => {
+  const r = validateBatch(withSession({ environment, nativeSessionId: 'n-1' }));
+  assert.ok(!('errors' in r), JSON.stringify(r));
+  assert.deepEqual(r.sessions[0]!.environment, environment);
+  const nulls = Object.fromEntries(Object.keys(environment).map((k) => [k, null]));
+  assert.ok(!('errors' in validateBatch(withSession({ environment: nulls }))), 'every value unknown is still an environment, tarsArch included');
+  assert.ok(!('errors' in validateBatch(withSession({ environment: {} }))), 'an empty environment');
+  assert.ok(!('errors' in validateBatch(withSession({ environment: { ...environment, utcOffsetMinutes: -300, ramBytes: 2 ** 36 } }))), 'west of UTC, and memory over 2^31');
+  const bad: Array<Record<string, unknown> | unknown> = [
+    'macOS', [], { ...environment, serialNumber: 'C02XYZ' }, { ...environment, hostName: 'my-mac' }, { ...environment, cpuCores: '8' },
+    { ...environment, cpuCores: -1 }, { ...environment, cpuCores: 1.5 }, { ...environment, cpuCores: 100_000 }, { ...environment, ramBytes: -1 },
+    { ...environment, utcOffsetMinutes: 1000 }, { ...environment, utcOffsetMinutes: 30.5 }, { ...environment, onBattery: 'no' },
+    { ...environment, chip: 'x'.repeat(201) }, { ...environment, locale: 5 }, { ...environment, tarsArch: 64 },
+  ];
+  for (const e of bad) assert.ok(errs(withSession({ environment: e })).length, JSON.stringify(e).slice(0, 80));
+});
+
+test('11. events: a list of {at, kind}', () => {
+  const events = [{ at: 1, kind: 'sleep' }, { at: 2, kind: 'wake' }, { at: 3, kind: 'battery' }, { at: 4, kind: 'ac' }];
+  const r = validateBatch(withSession({ events }));
+  assert.ok(!('errors' in r), JSON.stringify(r));
+  assert.deepEqual(r.sessions[0]!.events, events);
+  assert.ok(!('errors' in validateBatch(withSession({ events: [] }))), 'no event yet');
+  const bad: unknown[] = [
+    {}, 'sleep', [{ at: 1, kind: 'reboot' }], [{ at: 1, kind: 'sleep', by: 'lid' }], [{ at: -1, kind: 'sleep' }], [{ at: 1.5, kind: 'wake' }],
+    [{ kind: 'wake' }], [{ at: 1 }], ['sleep'], Array.from({ length: 10_001 }, (_, i) => ({ at: i, kind: 'sleep' })),
+  ];
+  for (const e of bad) assert.ok(errs(withSession({ events: e })).length, JSON.stringify(e).slice(0, 80));
+});
+
+test('12. liveSessions: a count', () => {
+  for (const n of [0, 1, 40]) assert.ok(!('errors' in validateBatch({ ...ok, requests: [{ ...request, liveSessions: n }] })), String(n));
+  for (const n of [-1, 1.5, '3', true, 1_000_001]) assert.ok(errs({ ...ok, requests: [{ ...request, liveSessions: n }] }).length, String(n));
+});
+
+const start = {
+  trigger: 'task', via: 'api', taskRef: 't-0a1b2c3d', taskId: 'task-1', requesterAgentId: 'agent-0', queuedAt: 10, handedAt: 12,
+  firstRequestAt: 15, commit: '0123456789abcdef0123456789abcdef01234567', branch: 'feat/x', redelegatedFrom: 'tr_old',
+};
+
+test('13. start: what started the session', () => {
+  const r = validateBatch(withSession({ start }));
+  assert.ok(!('errors' in r), JSON.stringify(r));
+  assert.deepEqual(r.sessions[0]!.start, start);
+  assert.ok(!('errors' in validateBatch(withSession({ start: { trigger: 'unknown' } }))), 'the trigger alone');
+  for (const trigger of ['owner', 'task', 'channel', 'restart', 'start', 'wake', 'redelegation', 'unknown']) {
+    assert.ok(!('errors' in validateBatch(withSession({ start: { trigger } }))), trigger);
+  }
+  for (const via of ['window', 'chat', 'api', 'telegram', 'slack', 'discord', 'hermes', 'relay', 'settings', 'asked', 'tars']) {
+    assert.ok(!('errors' in validateBatch(withSession({ start: { trigger: 'owner', via } }))), via);
+  }
+  assert.ok(!('errors' in validateBatch(withSession({ start: { ...start, commit: 'a'.repeat(64) } }))), 'a sha-256 commit');
+  assert.ok(!('errors' in validateBatch(withSession({ start: { ...start, taskId: 'x'.repeat(200), branch: 'é'.repeat(127) } }))), 'at the bounds');
+  // 13 again (Backend-4, 27/11): a branch over 255 bytes is cut there, at a character's edge, never refused for it.
+  const cut = validateBatch(withSession({ start: { ...start, branch: 'é'.repeat(128) } }));
+  assert.ok(!('errors' in cut), JSON.stringify(cut));
+  assert.equal((cut.sessions[0]!.start as { branch: string }).branch, 'é'.repeat(127), '256 bytes of two-byte letters cut to 254, not split');
+  const long = validateBatch(withSession({ start: { ...start, branch: 'b'.repeat(300) } }));
+  assert.ok(!('errors' in long) && (long.sessions[0]!.start as { branch: string }).branch === 'b'.repeat(255));
+  const bad: unknown[] = [
+    'task', [], {}, { ...start, trigger: undefined }, { ...start, who: 'someone' }, { ...start, trigger: 'Owner Name' }, { ...start, trigger: 'reboot' },
+    { ...start, via: 'fax' }, { ...start, queuedAt: -1 }, { ...start, handedAt: '12' }, { ...start, branch: 'b'.repeat(4097) },
+    { ...start, taskRef: 7 }, { ...start, taskRef: 'ref-1' }, { ...start, taskRef: 't-0A1B2C3D' }, { ...start, commit: '<SECRET_1>' },
+    { ...start, commit: 'abc123' }, { ...start, taskId: 'x'.repeat(201) }, { ...start, requesterAgentId: 'x'.repeat(201) },
+    { ...start, redelegatedFrom: 'x'.repeat(65) },
+  ];
+  for (const s of bad) assert.ok(errs(withSession({ start: s })).length, JSON.stringify(s).slice(0, 80));
+});
+
+test('14. lostDemand: tasks that left the queue unstarted', () => {
+  const lost = [{ kind: 'queue_drop', ref: 't-00000002', queuedAt: 20, at: 30, reason: 'cancelled' }];
+  const r = validateBatch(withSession({ lostDemand: lost }));
+  assert.ok(!('errors' in r), JSON.stringify(r));
+  assert.deepEqual(r.sessions[0]!.lostDemand, lost);
+  for (const reason of ['cancelled', 'taken_back', 'dropped_with_stop', 'queue_cleared', 'agent_removed', 'not_handed_again']) {
+    assert.ok(!('errors' in validateBatch(withSession({ lostDemand: [{ ...lost[0], reason }] }))), reason);
+  }
+  const bad: unknown[] = [
+    {}, [{ ...lost[0], kind: 'crash' }], [{ ...lost[0], by: 'x' }], [{ ...lost[0], reason: 'Not A Word' }], [{ ...lost[0], reason: 'forgotten' }],
+    [{ ...lost[0], at: -1 }], [{ ...lost[0], ref: 'ref-2' }], [{ kind: 'queue_drop', ref: 't-00000002', queuedAt: 1, at: 2 }],
+    Array.from({ length: 1001 }, () => lost[0]),
+  ];
+  for (const l of bad) assert.ok(errs(withSession({ lostDemand: l })).length, JSON.stringify(l).slice(0, 80));
+});
+
+test('15. cancel: who cut a request, why, when, what reached the harness', () => {
+  const cancel = { by: 'harness', cause: 'abandoned_while_held', at: 40, deliveredBytes: 0 };
+  const r = validateBatch({ ...ok, requests: [{ ...request, cancel }] });
+  assert.ok(!('errors' in r), JSON.stringify(r));
+  assert.deepEqual(r.requests[0]!.cancel, cancel);
+  const causes: Record<string, string[]> = {
+    harness: ['esc', 'ctrl_c', 'cli_interrupt', 'abandoned_while_held', 'unknown'],
+    tars: ['stop', 'restart', 'sleep', 'remove', 'quit', 'replace'],
+    proxy: ['hold_ceiling'],
+    endpoint: ['stream_cut'],
+  };
+  for (const [by, list] of Object.entries(causes)) {
+    for (const cause of list) assert.ok(!('errors' in validateBatch({ ...ok, requests: [{ ...request, cancel: { ...cancel, by, cause } }] })), `${by} ${cause}`);
+  }
+  const bad: unknown[] = [
+    'harness', { ...cancel, by: 'Some One' }, { ...cancel, by: 'user' }, { ...cancel, cause: '' }, { ...cancel, cause: 'teleport' },
+    { ...cancel, by: 'tars', cause: 'esc' }, { ...cancel, by: 'endpoint', cause: 'hold_ceiling' }, { ...cancel, at: 1.5 },
+    { ...cancel, deliveredBytes: -1 }, { ...cancel, note: 'x' }, { by: 'harness', cause: 'abandoned_while_held', at: 40 },
+  ];
+  for (const c of bad) assert.ok(errs({ ...ok, requests: [{ ...request, cancel: c }] }).length, JSON.stringify(c).slice(0, 80));
+});
+
+test('17. masking: the version and the six counts', () => {
+  const maskCounts = { SECRET: 2, EMAIL: 1, IP: 0, PERSON: 3, HOME: 4, PHONE: 0 };
+  const r = validateBatch(withSession({ maskingVersion: 'tars-scrub-2', maskCounts }));
+  assert.ok(!('errors' in r), JSON.stringify(r));
+  assert.deepEqual([r.sessions[0]!.maskingVersion, r.sessions[0]!.maskCounts], ['tars-scrub-2', maskCounts]);
+  const five: Record<string, number> = { ...maskCounts };
+  delete five.PHONE;
+  const bad: Array<Record<string, unknown>> = [
+    { maskingVersion: 2 }, { maskingVersion: 'v'.repeat(41) }, { maskCounts: five }, { maskCounts: { ...maskCounts, NAME: 1 } },
+    { maskCounts: { ...maskCounts, EMAIL: -1 } }, { maskCounts: { ...maskCounts, IP: 1.5 } }, { maskCounts: { ...maskCounts, HOME: '4' } }, { maskCounts: [] },
+  ];
+  for (const b of bad) assert.ok(errs(withSession(b)).length, JSON.stringify(b).slice(0, 80));
+});
+
+test('18. a turn\'s interventions', () => {
+  const all = {
+    interrupted: { at: 5, by: 'esc', during: 'answer' }, restarted: { at: 6, by: 'restart' }, next: { by: 'user', delaySec: 12.5 },
+    corrected: true, redelegated: { to: 'tr_later', at: 7 },
+  };
+  const r = validateBatch({ ...ok, turns: [{ ...turn, interventions: all }] });
+  assert.ok(!('errors' in r), JSON.stringify(r));
+  assert.deepEqual(r.turns[0]!.interventions, all);
+  for (const [k, v] of Object.entries(all)) {
+    assert.ok(!('errors' in validateBatch({ ...ok, turns: [{ ...turn, interventions: { [k]: v } }] })), `${k} alone`);
+  }
+  assert.ok(!('errors' in validateBatch({ ...ok, turns: [{ ...turn, interventions: { interrupted: { ...all.interrupted, during: 'tools', by: 'cli' } } }] })), 'during tools');
+  const bad: unknown[] = [
+    [], 'interrupted', { paused: { at: 1 } }, { interrupted: { ...all.interrupted, during: 'thinking' } }, { interrupted: { ...all.interrupted, by: 'Some One' } },
+    { interrupted: { at: 5, by: 'esc' } }, { restarted: { at: -1, by: 'stop' } }, { next: { by: 'user', delaySec: -1 } }, { next: { by: 'user' } },
+    { corrected: false }, { corrected: 'yes' }, { redelegated: { to: 'x'.repeat(65), at: 7 } }, { redelegated: { to: 'tr_later' } },
+    { next: { ...all.next, note: 'x' } }, { interrupted: { ...all.interrupted, by: 'teleport' } }, { restarted: { at: 6, by: 'stop' } },
+    { next: { by: 'chat', delaySec: 1 } },
+  ];
+  for (const b of bad) assert.ok(errs({ ...ok, turns: [{ ...turn, interventions: b }] }).length, JSON.stringify(b).slice(0, 80));
+});
+
+test('19. the timings', () => {
+  const s = { rttMedianMs: 41.5, clockOffsetMs: -12.25 };
+  const q = { rttMs: 40.75, clockOffsetMs: -3.5, queueMs: 0, upstreamMs: 812.3 };
+  const r = validateBatch({ ...ok, sessions: [{ ...session, ...s }], requests: [{ ...request, ...q }] });
+  assert.ok(!('errors' in r), JSON.stringify(r));
+  assert.deepEqual([r.sessions[0]!.rttMedianMs, r.sessions[0]!.clockOffsetMs], [41.5, -12.25]);
+  assert.deepEqual([r.requests[0]!.rttMs, r.requests[0]!.clockOffsetMs, r.requests[0]!.queueMs, r.requests[0]!.upstreamMs], [40.75, -3.5, 0, 812.3]);
+  for (const [k, v] of [['rttMedianMs', -1], ['rttMedianMs', '41'], ['clockOffsetMs', 1e11], ['clockOffsetMs', -1e11], ['clockOffsetMs', true]] as const) {
+    assert.ok(errs({ ...ok, sessions: [{ ...session, [k]: v }] }).length, `session ${k} ${v}`);
+  }
+  assert.ok(!('errors' in validateBatch({ ...ok, requests: [{ ...request, rttMs: -0.5 }] })), 'a request\'s round trip measured negative is kept as measured');
+  for (const [k, v] of [['rttMs', -1e11], ['queueMs', -1], ['upstreamMs', 1e11], ['upstreamMs', '812'], ['clockOffsetMs', {}], ['rttMs', []]] as const) {
+    assert.ok(errs({ ...ok, requests: [{ ...request, [k]: v }] }).length, `request ${k} ${v}`);
+  }
+});
+
+test('20. a turn\'s workspace', () => {
+  const w = {
+    startHead: 'a'.repeat(40), endHead: 'b'.repeat(40), startTree: 'c'.repeat(64), endTree: 'd'.repeat(64), filesChanged: 3, linesAdded: 120,
+    linesRemoved: 7, changedLines: 127, survivedLines: 100, reverted: false, survivalBasis: 'merged',
+  };
+  const r = validateBatch({ ...ok, turns: [{ ...turn, ...w }] });
+  assert.ok(!('errors' in r), JSON.stringify(r));
+  for (const [k, v] of Object.entries(w)) assert.equal((r.turns[0] as Record<string, unknown>)[k], v, k);
+  for (const basis of ['session_end', 'merged', 'deleted']) assert.ok(!('errors' in validateBatch({ ...ok, turns: [{ ...turn, survivalBasis: basis }] })), basis);
+  const bad: Array<[string, unknown]> = [
+    ['startHead', 'abc'], ['endHead', 'A'.repeat(40)], ['startTree', 'c'.repeat(63)], ['endTree', 7], ['filesChanged', -1], ['linesAdded', 1.5],
+    ['linesRemoved', '7'], ['changedLines', -3], ['survivedLines', true], ['reverted', 'no'], ['survivalBasis', 'rebased'],
+  ];
+  for (const [k, v] of bad) assert.ok(errs({ ...ok, turns: [{ ...turn, [k]: v }] }).length, `${k} ${String(v)}`);
+});
+
+test('18 again. the interventions\' closed lists', () => {
+  const lists: Array<[string, (by: string) => unknown, string[]]> = [
+    ['interrupted', (by) => ({ interrupted: { at: 1, by, during: 'answer' } }), ['esc', 'ctrl_c', 'cli', 'stop', 'remove', 'quit', 'sleep']],
+    ['restarted', (by) => ({ restarted: { at: 1, by } }), ['restart', 'replace']],
+    ['next', (by) => ({ next: { by, delaySec: 0 } }), ['user', 'orchestrator', 'agent', 'relay', 'tars', 'unknown']],
+  ];
+  for (const [name, make, values] of lists) {
+    for (const by of values) assert.ok(!('errors' in validateBatch({ ...ok, turns: [{ ...turn, interventions: make(by) }] })), `${name} ${by}`);
+  }
+});
+
+test('22. lostDemandOmitted: a count', () => {
+  for (const n of [0, 1, 250]) assert.ok(!('errors' in validateBatch(withSession({ lostDemandOmitted: n }))), String(n));
+  for (const n of [-1, 1.5, '3', true]) assert.ok(errs(withSession({ lostDemandOmitted: n })).length, String(n));
+});
+
+test('21. a session\'s consent', () => {
+  for (const training of [true, false]) {
+    const r = validateBatch(withSession({ consent: { training } }));
+    assert.ok(!('errors' in r), JSON.stringify(r));
+    assert.deepEqual(r.sessions[0]!.consent, { training });
+  }
+  for (const c of [true, {}, { training: 'yes' }, { training: 1 }, { training: true, resale: true }, []]) {
+    assert.ok(errs(withSession({ consent: c })).length, JSON.stringify(c));
+  }
+});
+
+test('23. a session\'s context and compactions', () => {
+  const compactions = [
+    { at: 10, kind: 'compact', before: 180000, after: 40000, requestId: 'r-1', source: 'harness' },
+    { at: 20, kind: 'truncate', source: 'wire' },
+  ];
+  const good = { contextWindowGiven: 200000, outputCapGiven: 32000, autoCompaction: 'on', compactions };
+  const r = validateBatch(withSession(good));
+  assert.ok(!('errors' in r), JSON.stringify(r));
+  for (const [k, v] of Object.entries(good)) assert.deepEqual((r.sessions[0] as Record<string, unknown>)[k], v, k);
+  assert.ok(!('errors' in validateBatch(withSession({ compactions: [], autoCompaction: 'off', contextWindowGiven: 1024, outputCapGiven: 1 }))), 'at the bounds, no compaction');
+  const bad: Array<Record<string, unknown>> = [
+    { contextWindowGiven: 1023 }, { contextWindowGiven: 10_000_001 }, { contextWindowGiven: 2.5 }, { outputCapGiven: 0 }, { outputCapGiven: 10_000_001 },
+    { autoCompaction: true }, { autoCompaction: 'auto' }, { compactions: {} }, { compactions: [{ at: 1, kind: 'squash', source: 'wire' }] },
+    { compactions: [{ at: 1, kind: 'compact' }] }, { compactions: [{ at: 1, kind: 'compact', source: 'log' }] },
+    { compactions: [{ at: 1, kind: 'compact', source: 'wire', before: -1 }] }, { compactions: [{ at: 1, kind: 'compact', source: 'wire', note: 'x' }] },
+    { compactions: [{ at: 1, kind: 'compact', source: 'wire', requestId: 'a b' }] }, { compactions: Array.from({ length: 1001 }, (_, i) => ({ at: i, kind: 'compact', source: 'wire' })) },
+  ];
+  for (const b of bad) assert.ok(errs(withSession(b)).length, JSON.stringify(b).slice(0, 80));
+});
+
+test('24. a request\'s contextReset', () => {
+  for (const kind of ['compact', 'summarize', 'truncate', 'new']) {
+    assert.ok(!('errors' in validateBatch({ ...ok, requests: [{ ...request, contextReset: { kind } }] })), kind);
+  }
+  const r = validateBatch({ ...ok, requests: [{ ...request, contextReset: { kind: 'compact', droppedTokens: 140000 } }] });
+  assert.ok(!('errors' in r) && (r.requests[0]!.contextReset as { droppedTokens: number }).droppedTokens === 140000);
+  for (const c of [{ kind: 'reset' }, { droppedTokens: 5 }, { kind: 'new', droppedTokens: 0 }, { kind: 'new', why: 'x' }, 'new']) {
+    assert.ok(errs({ ...ok, requests: [{ ...request, contextReset: c }] }).length, JSON.stringify(c));
+  }
+});
+
+test('25. a request\'s gap', () => {
+  const gap = { ms: 5000, toolMs: 3000, inputWaitMs: 1500, inputBy: 'user', heldMs: 0, harnessMs: 500 };
+  const r = validateBatch({ ...ok, requests: [{ ...request, gap }] });
+  assert.ok(!('errors' in r), JSON.stringify(r));
+  assert.deepEqual(r.requests[0]!.gap, gap);
+  assert.ok(!('errors' in validateBatch({ ...ok, requests: [{ ...request, gap: { ms: 10, toolMs: null, inputWaitMs: null, heldMs: 0, harnessMs: null } }] })), 'nulls, no inputBy');
+  assert.ok(!('errors' in validateBatch({ ...ok, requests: [{ ...request, gap: { ...gap, ms: 1 } }] })), 'a sum over ms is the client\'s to judge');
+  for (const by of ['user', 'orchestrator', 'agent', 'relay', 'tars', 'unknown']) {
+    assert.ok(!('errors' in validateBatch({ ...ok, requests: [{ ...request, gap: { ...gap, inputBy: by } }] })), by);
+  }
+  const bad: unknown[] = [
+    { ...gap, ms: -1 }, { ...gap, ms: undefined }, { ...gap, heldMs: 1.5 }, { ...gap, heldMs: undefined }, { ...gap, toolMs: -1 },
+    { ...gap, inputWaitMs: '1500' }, { ...gap, harnessMs: 2.5 }, { ...gap, inputBy: 'chat' }, { ...gap, note: 'x' }, [],
+  ];
+  for (const g of bad) assert.ok(errs({ ...ok, requests: [{ ...request, gap: g }] }).length, JSON.stringify(g));
+});
+
+test('26. a request\'s toolCalls', () => {
+  const call = { toolCallId: 'call_3f9a8b7c6d5e4f3a2b1c0d9e', exit: 0, ms: 1200, denied: false, timedOut: false, failed: false, truncated: true, truncatedBytes: 4096 };
+  const r = validateBatch({ ...ok, requests: [{ ...request, toolCalls: [call, { ...call, exit: null, ms: null, truncated: false, truncatedBytes: undefined }], toolCallsOmitted: 3 }] });
+  assert.ok(!('errors' in r), JSON.stringify(r));
+  assert.deepEqual((r.requests[0]!.toolCalls as unknown[])[0], call);
+  assert.ok(!('errors' in validateBatch({ ...ok, requests: [{ ...request, toolCalls: [{ ...call, exit: -1073741819, toolCallId: 'x'.repeat(128) }] }] })), 'a negative exit, an id at the bound');
+  assert.ok(!('errors' in validateBatch({ ...ok, requests: [{ ...request, toolCalls: Array.from({ length: 64 }, () => call) }] })), '64 calls');
+  const badCalls: unknown[] = [
+    Array.from({ length: 65 }, () => call), [{ ...call, denied: undefined }], [{ ...call, truncated: 'no' }], [{ ...call, toolCallId: 'x'.repeat(129) }],
+    [{ ...call, toolCallId: undefined }], [{ ...call, ms: -1 }], [{ ...call, exit: 1.5 }], [{ ...call, truncatedBytes: 0 }], [{ ...call, name: 'shell' }], {},
+  ];
+  for (const t of badCalls) assert.ok(errs({ ...ok, requests: [{ ...request, toolCalls: t }] }).length, JSON.stringify(t).slice(0, 80));
+  for (const n of [0, -1, 1.5]) assert.ok(errs({ ...ok, requests: [{ ...request, toolCallsOmitted: n }] }).length, String(n));
+});
+
+test('27. compactionsOmitted: a count', () => {
+  for (const n of [1, 200, 1_000_000]) assert.ok(!('errors' in validateBatch(withSession({ compactionsOmitted: n }))), String(n));
+  for (const n of [0, -1, 1.5, '3', true]) assert.ok(errs(withSession({ compactionsOmitted: n })).length, String(n));
+});
+
+test('16. a turn\'s taskRef', () => {
+  const r = validateBatch({ ...ok, turns: [{ ...turn, taskRef: 't-0a1b2c3d' }] });
+  assert.ok(!('errors' in r), JSON.stringify(r));
+  assert.equal(r.turns[0]!.taskRef, 't-0a1b2c3d');
+  for (const taskRef of ['ref-1', 't-0a1b2c3', 't-0a1b2c3d4', 7]) assert.ok(errs({ ...ok, turns: [{ ...turn, taskRef }] }).length, String(taskRef));
 });

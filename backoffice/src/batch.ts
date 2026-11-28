@@ -4,8 +4,48 @@
 type Spec =
   | { t: 'id' } | { t: 'hash' } | { t: 'hex'; max: number } | { t: 'str'; max: number }
   | { t: 'int' } | { t: 'bool' } | { t: 'enum'; of: readonly string[] } | { t: 'obj'; maxBytes: number }
-  | { t: 'msgs' };
-type Shape = Record<string, Spec & { req?: boolean }>;
+  | { t: 'msgs' } | { t: 'count'; max: number } | { t: 'env' } | { t: 'events' }
+  | { t: 'shape'; shape: Shape } | { t: 'list'; shape: Shape; max: number }
+  | { t: 're'; re: RegExp; desc: string } | { t: 'cancel' }
+  | { t: 'num' } | { t: 'true' } | { t: 'ms'; signed: boolean } | { t: 'range'; min: number; max: number };
+type Shape = { [k: string]: Spec & { req?: boolean } };
+
+// A session's environment (27/11, the machine and the system at its start, exact values): these keys and no other,
+// so that nothing a client should not send (a serial number, a host name, a user name) can ride along. Each value
+// may be null, "the client could not read it" (the client's contract, the architecture Tars runs as included).
+type EnvValue = { kind: 'str'; max: number } | { kind: 'int'; min: number; max: number } | { kind: 'bool' };
+const ENV_TEXT: EnvValue = { kind: 'str', max: 200 };
+const ENVIRONMENT: Record<string, EnvValue> = {
+  osName: ENV_TEXT, osVersion: ENV_TEXT, kernel: ENV_TEXT, arch: ENV_TEXT, machineModel: ENV_TEXT, chip: ENV_TEXT,
+  cpuCores: { kind: 'int', min: 0, max: 4096 }, ramBytes: { kind: 'int', min: 0, max: Number.MAX_SAFE_INTEGER },
+  tarsVersion: ENV_TEXT, tarsArch: { kind: 'str', max: 40 }, locale: ENV_TEXT, timeZone: ENV_TEXT,
+  utcOffsetMinutes: { kind: 'int', min: -840, max: 840 }, onBattery: { kind: 'bool' },
+};
+const EVENT_KINDS = ['sleep', 'wake', 'battery', 'ac'];
+const MAX_EVENTS = 10_000;
+
+function checkEnvironment(v: unknown): string | null {
+  if (!isObj(v)) return 'an object of the environment keys';
+  for (const [k, x] of Object.entries(v)) {
+    const s = ENVIRONMENT[k];
+    if (!s) return `an object of the environment keys (${k} is not one)`;
+    if (x === null) continue;
+    if (s.kind === 'str' && !(typeof x === 'string' && x.length <= s.max)) return `${k}: a string of at most ${s.max}, or null`;
+    if (s.kind === 'int' && !(Number.isSafeInteger(x) && (x as number) >= s.min && (x as number) <= s.max)) return `${k}: an integer from ${s.min} to ${s.max}, or null`;
+    if (s.kind === 'bool' && typeof x !== 'boolean') return `${k}: a boolean, or null`;
+  }
+  return null;
+}
+
+function checkEvents(v: unknown): string | null {
+  if (!Array.isArray(v) || v.length > MAX_EVENTS) return `an array of at most ${MAX_EVENTS} events`;
+  for (const e of v) {
+    if (!isObj(e) || Object.keys(e).some((k) => k !== 'at' && k !== 'kind') || !isInt(e.at) || !EVENT_KINDS.includes(e.kind as string)) {
+      return `items of {at: int, kind: ${EVENT_KINDS.join('|')}}`;
+    }
+  }
+  return null;
+}
 
 const ID = /^[A-Za-z0-9._:-]{1,128}$/;
 const HASH = /^[0-9a-f]{64}$/;
@@ -13,16 +53,82 @@ const r = <S extends Spec>(s: S) => ({ ...s, req: true });
 const id = { t: 'id' } as const, hash = { t: 'hash' } as const, int = { t: 'int' } as const, bool = { t: 'bool' } as const;
 const str = (max: number) => ({ t: 'str', max }) as const;
 
+// The client's closed lists and forms (27/11, its authors' contract): a kind is one of its list, never free text.
+const TASK_REF = { t: 're', re: /^t-[0-9a-f]{8}$/, desc: 't- and 8 lowercase hex' } as const;
+const COMMIT = { t: 're', re: /^(?:[0-9a-f]{40}|[0-9a-f]{64})$/, desc: '40 or 64 lowercase hex' } as const;
+const enumOf = (...of: string[]) => ({ t: 'enum', of }) as const;
+// What started a session: its trigger and how it came, by kind, and what is known of its task and its commit.
+const START: Shape = {
+  trigger: r(enumOf('owner', 'task', 'channel', 'restart', 'start', 'wake', 'redelegation', 'unknown')),
+  via: enumOf('window', 'chat', 'api', 'telegram', 'slack', 'discord', 'hermes', 'relay', 'settings', 'asked', 'tars'),
+  taskRef: TASK_REF, taskId: str(200), requesterAgentId: str(200), queuedAt: int, handedAt: int, firstRequestAt: int,
+  commit: COMMIT, branch: str(4096), redelegatedFrom: str(64),
+};
+// A task that left the agent's queue never to start, while the session ran.
+const LOST_DEMAND: Shape = {
+  kind: r(enumOf('queue_drop')), ref: r(TASK_REF), queuedAt: r(int), at: r(int),
+  reason: r(enumOf('cancelled', 'taken_back', 'dropped_with_stop', 'queue_cleared', 'agent_removed', 'not_handed_again')),
+};
+// Who cut a request (by), why (a cause of that `by`'s own list), when, and how many bytes had reached the harness.
+const CANCEL_CAUSES: Record<string, readonly string[]> = {
+  harness: ['esc', 'ctrl_c', 'cli_interrupt', 'abandoned_while_held', 'unknown'],
+  tars: ['stop', 'restart', 'sleep', 'remove', 'quit', 'replace'],
+  proxy: ['hold_ceiling'],
+  endpoint: ['stream_cut'],
+};
+const CANCEL: Shape = { by: r(enumOf(...Object.keys(CANCEL_CAUSES))), cause: r(str(40)), at: r(int), deliveredBytes: r(int) };
+// A whole number within bounds (an exit code may be negative).
+const range = (min: number, max: number) => ({ t: 'range', min, max }) as const;
+const AUTHORS = ['user', 'orchestrator', 'agent', 'relay', 'tars', 'unknown'];
+// What the harness was given at launch and its compactions (C2, 28/11).
+const COMPACTION: Shape = {
+  at: r(int), kind: r(enumOf('compact', 'summarize', 'truncate')), before: int, after: int, requestId: id, source: r(enumOf('harness', 'wire')),
+};
+// How a request's history was rewritten since the one before it.
+const CONTEXT_RESET: Shape = { kind: r(enumOf('compact', 'summarize', 'truncate', 'new')), droppedTokens: range(1, Number.MAX_SAFE_INTEGER) };
+// The time before a request, split into its parts (C1, 28/11); each part null when the log does not say. The parts'
+// sum is the client's to judge, within its own tolerance.
+const GAP: Shape = { ms: r(int), toolMs: int, inputWaitMs: int, inputBy: enumOf(...AUTHORS), heldMs: r(int), harnessMs: int };
+// One tool call of a request: the model's id, its exit, its time, and what happened to it.
+const TOOL_CALL: Shape = {
+  toolCallId: r(str(128)), exit: range(Number.MIN_SAFE_INTEGER, Number.MAX_SAFE_INTEGER), ms: int,
+  denied: r(bool), timedOut: r(bool), failed: r(bool), truncated: r(bool), truncatedBytes: range(1, Number.MAX_SAFE_INTEGER),
+};
+// The timings, from the endpoint's Server-Timing: milliseconds, fractional; a clock offset may be negative.
+const MS = { t: 'ms', signed: false } as const;
+const SIGNED_MS = { t: 'ms', signed: true } as const;
+// How a session's content was masked on the client: the masking's version and its six counts, all required.
+const MASK_COUNTS: Shape = { SECRET: r(int), EMAIL: r(int), IP: r(int), PERSON: r(int), HOME: r(int), PHONE: r(int) };
+// What was done to a turn: its first interruption and restart, the next instruction's author kind and delay, a
+// correction, and the later session that took its task. Every `by` from the client's closed lists (#680): a kind, never a name.
+const INTERVENTIONS: Shape = {
+  interrupted: { t: 'shape', shape: { at: r(int), by: r(enumOf('esc', 'ctrl_c', 'cli', 'stop', 'remove', 'quit', 'sleep')), during: r(enumOf('answer', 'tools')) } },
+  restarted: { t: 'shape', shape: { at: r(int), by: r(enumOf('restart', 'replace')) } },
+  next: { t: 'shape', shape: { by: r(enumOf('user', 'orchestrator', 'agent', 'relay', 'tars', 'unknown')), delaySec: r({ t: 'num' }) } },
+  corrected: { t: 'true' },
+  redelegated: { t: 'shape', shape: { to: r(str(64)), at: r(int) } },
+};
+
 const SESSION: Shape = {
   sessionId: r(id), agentId: id, projectKey: { t: 'hex', max: 64 }, harness: r(str(40)), harnessVersion: str(40),
   nativeSessionId: str(128), endpointKey: str(64), endpointName: str(60), model: r(str(200)), startedAt: r(int), endedAt: int,
   finalStatus: r({ t: 'enum', of: ['open', 'done', 'failed', 'abandoned'] }), turnCount: r(int), requestCount: r(int),
   tokensIn: r(int), tokensCached: r(int), tokensOut: r(int), mixed: bool, unknownTurns: int, outcome: { t: 'obj', maxBytes: 16 * 1024 },
+  environment: { t: 'env' }, events: { t: 'events' },
+  start: { t: 'shape', shape: START }, lostDemand: { t: 'list', shape: LOST_DEMAND, max: 1000 }, lostDemandOmitted: int,
+  maskingVersion: str(40), maskCounts: { t: 'shape', shape: MASK_COUNTS },
+  rttMedianMs: MS, clockOffsetMs: SIGNED_MS,
+  consent: { t: 'shape', shape: { training: r(bool) } },
+  contextWindowGiven: range(1024, 10_000_000), outputCapGiven: range(1, 10_000_000), autoCompaction: enumOf('on', 'off'),
+  compactions: { t: 'list', shape: COMPACTION, max: 1000 }, compactionsOmitted: range(1, Number.MAX_SAFE_INTEGER),
 };
 const TURN: Shape = {
   turnId: r(id), sessionId: r(id), index: r(int), startedAt: r(int), endedAt: int, gapBeforeMs: int, requestCount: r(int),
   toolCallCount: r(int), toolErrorCount: r(int), toolMs: int, modelMs: int, tokensIn: r(int), tokensCached: r(int), tokensOut: r(int),
-  finalStatus: str(20), finalFinishReason: str(40), author: str(40), authorDetail: str(128),
+  finalStatus: str(20), finalFinishReason: str(40), author: str(40), authorDetail: str(128), taskRef: TASK_REF,
+  interventions: { t: 'shape', shape: INTERVENTIONS },
+  startHead: COMMIT, endHead: COMMIT, startTree: COMMIT, endTree: COMMIT, filesChanged: int, linesAdded: int, linesRemoved: int,
+  changedLines: int, survivedLines: int, reverted: bool, survivalBasis: enumOf('session_end', 'merged', 'deleted'),
 };
 const REQUEST: Shape = {
   requestId: r(id), sessionId: r(id), turnId: r(id), seq: r(int), upstreamRequestId: str(128),
@@ -30,6 +136,11 @@ const REQUEST: Shape = {
   modelRequested: str(200), modelServed: str(200), params: { t: 'obj', maxBytes: 16 * 1024 }, toolsHash: hash, startedAt: r(int),
   ttftMs: int, totalMs: int, tokensIn: int, tokensCached: int, tokensOut: int, status: int, error: str(2000), finishReason: str(40),
   streamed: bool, side: bool, reqBytes: int, respBytes: int, messages: r({ t: 'msgs' }),
+  liveSessions: { t: 'count', max: 1_000_000 }, cancel: { t: 'cancel' },
+  // A request's round trip is kept as measured, negative included (clock rates, whole ms); a session's median is not.
+  rttMs: SIGNED_MS, clockOffsetMs: SIGNED_MS, queueMs: MS, upstreamMs: MS,
+  contextReset: { t: 'shape', shape: CONTEXT_RESET }, gap: { t: 'shape', shape: GAP },
+  toolCalls: { t: 'list', shape: TOOL_CALL, max: 64 }, toolCallsOmitted: range(1, Number.MAX_SAFE_INTEGER),
 };
 const MESSAGE: Shape = {
   hash: r(hash), role: r({ t: 'enum', of: ['system', 'user', 'assistant', 'tool', 'developer'] }), createdAt: r(int), size: r(int),
@@ -60,6 +171,29 @@ function checkValue(s: Spec, v: unknown): string | null {
     case 'bool': return typeof v === 'boolean' ? null : 'a boolean';
     case 'enum': return typeof v === 'string' && s.of.includes(v) ? null : `one of ${s.of.join(', ')}`;
     case 'obj': return isObj(v) && Buffer.byteLength(JSON.stringify(v)) <= s.maxBytes ? null : `an object of at most ${s.maxBytes} bytes`;
+    case 'count': return isInt(v) && (v as number) <= s.max ? null : `an integer from 0 to ${s.max}`;
+    case 'env': return checkEnvironment(v);
+    case 'events': return checkEvents(v);
+    case 're': return typeof v === 'string' && s.re.test(v) ? null : s.desc;
+    case 'num': return typeof v === 'number' && Number.isFinite(v) && v >= 0 ? null : 'a number >= 0';
+    case 'range': return Number.isSafeInteger(v) && (v as number) >= s.min && (v as number) <= s.max ? null : `an integer from ${s.min} to ${s.max}`;
+    case 'ms': return typeof v === 'number' && Number.isFinite(v) && Math.abs(v) <= 1e10 && (s.signed || v >= 0) ? null : `milliseconds, ${s.signed ? '' : '>= 0, '}at most 1e10 in size`;
+    case 'true': return v === true ? null : 'true';
+    case 'cancel': {
+      const e = checkShape(v, CANCEL);
+      if (e) return e;
+      const c = v as { by: string; cause: string };
+      return CANCEL_CAUSES[c.by]!.includes(c.cause) ? null : `cause must be one of ${c.by}'s: ${CANCEL_CAUSES[c.by]!.join(', ')}`;
+    }
+    case 'shape': return checkShape(v, s.shape);
+    case 'list': {
+      if (!Array.isArray(v) || v.length > s.max) return `an array of at most ${s.max}`;
+      for (const item of v) {
+        const e = checkShape(item, s.shape);
+        if (e) return `items: ${e}`;
+      }
+      return null;
+    }
     case 'msgs': {
       if (!Array.isArray(v) || v.length > MESSAGE_REFS) return `an array of at most ${MESSAGE_REFS}`;
       for (const m of v) {
@@ -71,6 +205,22 @@ function checkValue(s: Spec, v: unknown): string | null {
       return null;
     }
   }
+}
+
+/** An object of the shape's keys and no other, each of its type, the required ones present: the first fault, or null. */
+function checkShape(v: unknown, shape: Shape): string | null {
+  if (!isObj(v)) return `an object of ${Object.keys(shape).join(', ')}`;
+  for (const k of Object.keys(v)) if (!(k in shape) && v[k] !== undefined) return `${k} is not a key of it`;
+  for (const [k, s] of Object.entries(shape)) {
+    const x = v[k];
+    if (x === undefined || x === null) {
+      if (s.req) return `${k} is required`;
+      continue;
+    }
+    const e = checkValue(s, x);
+    if (e) return `${k} must be ${e}`;
+  }
+  return null;
 }
 
 function checkRow(kind: string, i: number, row: unknown, shape: Shape, errors: string[]) {
@@ -85,6 +235,20 @@ function checkRow(kind: string, i: number, row: unknown, shape: Shape, errors: s
     const e = checkValue(s, v);
     if (e) errors.push(`${kind}[${i}].${k}: must be ${e}`);
   }
+}
+
+/** The longest start of a string that fits in `max` UTF-8 bytes, never splitting a character. */
+function cutToBytes(s: string, max: number): string {
+  if (Buffer.byteLength(s) <= max) return s;
+  let out = '';
+  let size = 0;
+  for (const ch of s) {
+    const n = Buffer.byteLength(ch);
+    if (size + n > max) break;
+    out += ch;
+    size += n;
+  }
+  return out;
 }
 
 export function validateBatch(body: unknown): Batch | { errors: string[] } {
@@ -103,5 +267,11 @@ export function validateBatch(body: unknown): Batch | { errors: string[] } {
     (out as unknown as Record<string, unknown[]>)[kind] = v;
     if (errors.length > 50) break;
   }
-  return errors.length ? { errors: errors.slice(0, 50) } : out;
+  if (errors.length) return { errors: errors.slice(0, 50) };
+  // A branch name Tars does not bound (Backend-4, 27/11): cut to 255 bytes rather than refuse the batch for it.
+  for (const s of out.sessions) {
+    const start = s.start as { branch?: string } | undefined;
+    if (start?.branch !== undefined) start.branch = cutToBytes(start.branch, 255);
+  }
+  return out;
 }

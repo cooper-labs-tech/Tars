@@ -65,8 +65,11 @@ with backoff. Every write below is idempotent, so a retry never duplicates anyth
 ### `POST /v1/installs` (no token)
 
 ```json
-{ "client": { "name": "tars", "version": "2.0.7", "platform": "darwin" } }
+{ "client": { "name": "tars", "version": "2.0.7", "platform": "darwin" }, "consent": { "training": false } }
 ```
+
+`consent` is optional: the install's training consent as it registers (§ 3, consent). Anything but
+`{training: boolean}` is a `400`.
 
 `201`:
 
@@ -91,6 +94,18 @@ with backoff. Every write below is idempotent, so a retry never duplicates anyth
   "retentionDays": 90
 }
 ```
+
+### `PUT /v1/installs/me/consent`
+
+The install's current training consent, `{ "training": true | false }` and nothing else (`400` otherwise). Send it
+whenever the user changes it, and again until it is answered: setting the same value twice is harmless.
+
+`200 {"training": false, "at": 1763600000000}`.
+
+- The value is kept on the install, and shows as `installConsent` on every read of its sessions (§ 6.2).
+- Each call adds one change to the readers' consent feed (§ 6.6), so a reader learns of a change even when the
+  install sends nothing after it. The value given at registration is a change too.
+- Only the install's own token sets it.
 
 ### `DELETE /v1/installs/me`
 
@@ -210,6 +225,48 @@ missing blob, then `PUT` the batch, and send any `missingBlobs` it reports.
 | `mixed` | bool | no | Text written by a model the client does not trace entered the session |
 | `unknownTurns` | int ≥ 0 | no | Turns whose author the client could not attribute |
 | `outcome` | object ≤ 16 KiB | no | Free-form evidence of how the session ended (task status, branch, head, tests, gates) |
+| `environment` | Environment | no | The machine and the system at the session's start, exact values (below). Sent again without it, a session keeps the one it had |
+| `events` | array ≤ 10,000 | no | Power events during the session, `{ "at": ms, "kind": "sleep" \| "wake" \| "battery" \| "ac" }`, no other key. The list as a whole: a session sent with it replaces the list it had, sent without it keeps it |
+| `start` | Start | no | What started the session (below). Sent again without it, a session keeps it |
+| `lostDemand` | array ≤ 1,000 | no | Tasks that left the agent's queue never to start while the session ran: `{ "kind": "queue_drop", "ref": task ref, "queuedAt": ms, "at": ms, "reason": "cancelled" \| "taken_back" \| "dropped_with_stop" \| "queue_cleared" \| "agent_removed" \| "not_handed_again" }`, all required, no other key. The list as a whole, kept when absent |
+| `lostDemandOmitted` | int ≥ 0 | no | How many lost tasks the client left out of `lostDemand`, past its own bound. Kept when absent |
+| `maskingVersion` | string ≤ 40 | no | The version of the masking the client applied to the content before upload. Kept when absent |
+| `maskCounts` | object | no | What that masking replaced, by type: exactly `SECRET`, `EMAIL`, `IP`, `PERSON`, `HOME` and `PHONE`, each an int ≥ 0, all required, no other key. Kept when absent |
+| `consent` | `{ "training": bool }` | no | The training consent the session was recorded under, no other key. Kept when absent |
+| `contextWindowGiven` | int 1,024 to 10,000,000 | no | The context window Tars gave the harness at launch. Kept when absent |
+| `outputCapGiven` | int 1 to 10,000,000 | no | The output cap Tars gave it. Kept when absent |
+| `autoCompaction` | `"on"` \| `"off"` | no | Whether the harness compacts its history on its own; absent when not measured. Kept when absent |
+| `compactions` | array ≤ 1,000 | no | One per compaction, by time: `{ "at": ms, "kind": "compact" \| "summarize" \| "truncate", "before"?: int ≥ 0, "after"?: int ≥ 0, "requestId"?: id, "source": "harness" \| "wire" }`, no other key. The list as a whole: sent with it, a session's list is replaced; sent without it, kept |
+| `compactionsOmitted` | int ≥ 1 | no | How many compactions the client left out of `compactions`, past the newest it keeps (Tars keeps 200). Kept when absent |
+| `rttMedianMs` | ms, a number from 0 to 10^10 | no | The median round trip of the session's requests, from the endpoint's Server-Timing. Kept when absent |
+| `clockOffsetMs` | ms, a number from -10^10 to 10^10 | no | The endpoint's clock against the client's, from the lowest round trip. Kept when absent |
+
+A *task ref* is `t-` and 8 lowercase hex characters. Every kind below is one of a closed list, the client's own: anything else refuses the batch.
+
+**Start.** An object of these keys and no other:
+
+| Key | Type |
+|---|---|
+| `trigger` | required: `owner`, `task`, `channel`, `restart`, `start`, `wake`, `redelegation` or `unknown` |
+| `via` | how it came, by kind, never who: `window`, `chat`, `api`, `telegram`, `slack`, `discord`, `hermes`, `relay`, `settings`, `asked` or `tars` |
+| `taskRef` | task ref |
+| `taskId`, `requesterAgentId` | string ≤ 200 |
+| `redelegatedFrom` | string ≤ 64: the session that had this task before |
+| `queuedAt`, `handedAt`, `firstRequestAt` | ms |
+| `commit` | 40 or 64 lowercase hex |
+| `branch` | string ≤ 4,096 characters. The server keeps at most its first 255 bytes, cut at a character's edge: a longer name is cut, never refused (Tars does not bound it, and git hosts refuse refs over 255 bytes) |
+
+**Environment.** An object of these keys and no other; a key may be left out. Any other key (a serial number,
+a host name, a user name) refuses the batch.
+
+| Key | Type |
+|---|---|
+| `osName`, `osVersion`, `kernel`, `arch`, `machineModel`, `chip`, `tarsVersion`, `locale`, `timeZone` | string ≤ 200, or null when the client could not read it |
+| `tarsArch` | string ≤ 40, the architecture Tars itself runs as, or null |
+| `cpuCores` | integer 0 to 4096, or null |
+| `ramBytes` | integer ≥ 0, or null |
+| `utcOffsetMinutes` | integer -840 to 840, the time zone's offset at the session's start, or null |
+| `onBattery` | bool, or null when the system does not say |
 
 ### Turn
 
@@ -228,6 +285,13 @@ missing blob, then `PUT` the batch, and send any `missingBlobs` it reports.
 | `finalFinishReason` | string ≤ 40 | no | |
 | `author` | string ≤ 40 | no | `user`, `orchestrator`, `chat`, `relay`, `agent`, `tars`, `unknown` |
 | `authorDetail` | string ≤ 128 | no | An agent or chat id; never a person's name |
+| `taskRef` | task ref | no | The task the turn's instruction came from. Sent again without it, a turn keeps it |
+| `interventions` | object | no | What was done to the turn, each key optional, no other: `interrupted {at, by, during: "answer" \| "tools"}`, `restarted {at, by}`, `next {by, delaySec}` (the next instruction's author kind and its delay in seconds, a number ≥ 0), `corrected: true`, `redelegated {to: a session id ≤ 64, at}`. Each `by` is a kind from its closed list: `interrupted`: `esc`, `ctrl_c`, `cli`, `stop`, `remove`, `quit`, `sleep`; `restarted`: `restart`, `replace`; `next`: `user`, `orchestrator`, `agent`, `relay`, `tars`, `unknown`. Kept when absent |
+| `startHead`, `endHead` | 40 or 64 lowercase hex | no | The commit the turn started from and ended on, as git names them |
+| `startTree`, `endTree` | 40 or 64 lowercase hex | no | The tree hashes at the turn's start and end |
+| `filesChanged`, `linesAdded`, `linesRemoved`, `changedLines`, `survivedLines` | int ≥ 0 | no | What the turn changed, and how many of its changed lines survive |
+| `reverted` | bool | no | |
+| `survivalBasis` | `session_end` \| `merged` \| `deleted` | no | What the survival was measured against. A session uploaded again after a merge or a deleted branch updates these; one sent without them keeps them |
 
 ### Request
 
@@ -249,6 +313,15 @@ missing blob, then `PUT` the batch, and send any `missingBlobs` it reports.
 | `finishReason` | string ≤ 40 | no | |
 | `streamed` | bool | no | |
 | `side` | bool | no | `true` for a harness's side request (a title request with no tools, a memory request with another system prompt), `false` for the agent's own loop. Leave it out when the client does not know. A request sent again without it keeps the mark it had |
+| `liveSessions` | int 0 to 1,000,000 | no | How many sessions were live on the install when the request was sent. Sent again without it, a request keeps the count it had |
+| `cancel` | object | no | A request cut before the endpoint answered: `{ "by", "cause", "at": ms, "deliveredBytes": int }`, all required, no other key, the cause one of its `by`'s: `harness`: `esc`, `ctrl_c`, `cli_interrupt`, `abandoned_while_held`, `unknown`; `tars`: `stop`, `restart`, `sleep`, `remove`, `quit`, `replace`; `proxy`: `hold_ceiling`; `endpoint`: `stream_cut`. Kept when absent |
+| `rttMs` | ms, a number from -10^10 to 10^10 | no | The round trip, kept as measured: the endpoint's span can read longer than the client's (clock rates, whole ms), so it may be negative. Absent when the endpoint sends no Server-Timing, never 0. Kept when absent |
+| `queueMs`, `upstreamMs` | ms, a number from 0 to 10^10 | no | The endpoint's queue and upstream times from its Server-Timing. Absent when it sends no such header, never 0. Kept when absent |
+| `contextReset` | object | no | On the first request after its history was rewritten: `{ "kind": "compact" \| "summarize" \| "truncate" \| "new", "droppedTokens"?: int ≥ 1 }`, no other key. Kept when absent |
+| `gap` | object | no | The time before the request, split: `{ "ms": int ≥ 0, "toolMs", "inputWaitMs", "harnessMs": int ≥ 0 or null, "heldMs": int ≥ 0, "inputBy"?: "user" \| "orchestrator" \| "agent" \| "relay" \| "tars" \| "unknown" }`, no other key. `ms` and `heldMs` are required. The parts' sum is not checked here. Kept when absent |
+| `toolCalls` | array ≤ 64 | no | The request's tool calls: `{ "toolCallId": string ≤ 128, "exit": int or null, "ms": int ≥ 0 or null, "denied", "timedOut", "failed", "truncated": bool (all four required), "truncatedBytes"?: int ≥ 1 }`, no other key. Kept when absent |
+| `toolCallsOmitted` | int ≥ 1 | no | How many tool calls past the 64 sent. Kept when absent |
+| `clockOffsetMs` | ms, a number from -10^10 to 10^10 | no | |
 | `reqBytes`, `respBytes` | int ≥ 0 | no | |
 | `messages` | array ≤ 10,000 | yes | `{ "position": int, "hash": sha256, "direction": "input" \| "output" }`: what the request sent, in order, then what it produced |
 
@@ -305,6 +378,16 @@ Every request read back, here and in § 6.5, carries `side`, always present:
   so a side request is never passed off as a main one. The server never turns a missing mark into
   `false`.
 
+The fields added after a client may have been built without them are always present when read, with `null` for
+"the uploading Tars did not send it":
+
+- every session, here and in § 6.1: `environment`, `events`, `start`, `lostDemand`, `lostDemandOmitted`,
+  `maskingVersion`, `maskCounts`, `rttMedianMs`, `clockOffsetMs`, `consent`, `contextWindowGiven`, `outputCapGiven`,
+  `autoCompaction`, `compactions` and `compactionsOmitted`, each as sent; and `installConsent`, the install's current training consent,
+  `{ "training": bool, "at": ms }`, or `null` when it has never set one;
+- every request, here and in § 6.5: `liveSessions`, `cancel`, `rttMs`, `clockOffsetMs`, `queueMs`, `upstreamMs`, `contextReset`, `gap`, `toolCalls` and `toolCallsOmitted`;
+- every turn, here: `taskRef`, `interventions`, and its workspace (`startHead` to `survivalBasis`).
+
 ### 6.3 `GET /v1/read/blobs/{hash}`
 
 - The blob's bytes, `Content-Type: application/octet-stream`, with its SHA-256 in `ETag`.
@@ -331,6 +414,19 @@ What was deleted, so a reader deletes its own copies:
 The requests carrying that upstream request id (normally one), each with its `install`, `sessionId`
 and `turnId`, for a reader that starts from its own request id.
 
+### 6.6 `GET /v1/read/install-consent`
+
+Every change of an install's training consent, oldest first:
+
+```json
+{ "changes": [ { "install": "...", "training": false, "at": 1763600000000 } ], "nextCursor": "...", "more": false }
+```
+
+- One change per `PUT /v1/installs/me/consent`, and one for the value given at registration.
+- Same cursor rules as § 6.1. A reader that keeps sessions must read this feed: an install that turns training
+  off and then sends nothing would otherwise never be seen, and its sessions already read would stay eligible.
+- A deleted install's changes go with it; its deletion is in § 6.4.
+
 ## 7. What a client sends, and does not
 
 The server stores what it is given, so privacy is decided on the client:
@@ -340,6 +436,10 @@ The server stores what it is given, so privacy is decided on the client:
   names; a reader only needs to group sessions by project, which the key allows. The same project
   on two installs gets two unrelated keys.
 - **Endpoints:** an `endpointKey` of the same kind, and a display name. Never a base URL or a key.
+- **The machine:** a session's `environment` holds exact values (the model, the chip, the cores, the memory, the
+  system, the locale, the time zone), and only the keys of § 5's table, so no serial number, host name or user
+  name can come with them. The server keeps them on the session's own row: every deletion of the session or the
+  install takes them, and the operator's deletion log and the server's log never hold them.
 - **Content:** message and tool blobs, after the client's own scrubbing of secrets.
 - **Never:** API keys, tokens, environment variables, user names or email addresses as metadata,
   nor an agent's name (free text a person typed; the `agentId` is enough to join on, and a
@@ -365,3 +465,9 @@ before the clients.
 | Added | Field |
 |---|---|
 | 26/11/2026 | `side` on a request (§ 5, read back in §§ 6.2 and 6.5), migration `002_request_side` |
+| 27/11/2026 | `environment` and `events` on a session (read back in §§ 6.1 and 6.2), `liveSessions` on a request (§§ 6.2 and 6.5), migration `003_session_environment` |
+| 27/11/2026 | `start` and `lostDemand` on a session, `taskRef` on a turn, `cancel` on a request (read back the same way), migration `004_session_start` |
+| 27/11/2026 | `maskingVersion` and `maskCounts` on a session, `interventions` on a turn (read back the same way), migration `005_masking_and_interventions` |
+| 27/11/2026 | the timings (`rttMedianMs`, `clockOffsetMs` on a session; `rttMs`, `clockOffsetMs`, `queueMs`, `upstreamMs` on a request) and a turn's workspace, migration `006_timing_and_workspace` |
+| 27/11/2026 | the training consent: `consent` on registration and on a session, `PUT /v1/installs/me/consent`, `installConsent` on session reads, the feed `GET /v1/read/install-consent` (§ 6.6), migration `007_training_consent` |
+| 28/11/2026 | what the harness was given and its compactions on a session (`contextWindowGiven`, `outputCapGiven`, `autoCompaction`, `compactions`, `compactionsOmitted`); `contextReset`, `gap`, `toolCalls` and `toolCallsOmitted` on a request, migration `008_context_and_tool_calls` |

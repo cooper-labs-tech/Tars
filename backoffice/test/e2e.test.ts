@@ -32,6 +32,84 @@
 //     but 200 with nothing deleted, which would tell it what others hold.
 // D6. Without the install's token (none, a reader's) something is deleted.
 // D7. The operator's deletion log has no receipt for it, or the install's stored bytes still count what went.
+//
+// A session's environment and power events, a request's live count (27/11, the first trace wave): the ways it
+// can fail, written before the code.
+// E1. A session sent with `environment` or `events`, or a request with `liveSessions`, is refused as an unknown field,
+//     so every upload of a Tars that sends them fails.
+// E2. They are not stored, or not read back: the session on the list (§ 6.1) and in the detail (§ 6.2), the request
+//     in the detail and on the join (§ 6.5), each with the shape it was sent in.
+// E3. A session or request sent without them (an older Tars) reads back other than `null`, or without the key.
+// E4. Sent again without them, a session or request loses the ones it had.
+// E5. A malformed one is taken: an environment key it does not know (a serial number), a wrong type, a kind of
+//     event it does not know, a negative count. The batch must be refused whole (422), and nothing of it stored.
+// E6. A deleted session leaves its environment, its events or its requests' counts in any table.
+// E7. The environment reaches the operator's deletion log, or the server's own log.
+// E8. Migration 003 over a database that holds them: its down loses a row or a value other than the three new
+//     ones, or its up gives the rows from before it a value other than `null`.
+//
+// What started a session, the demand it never served, and a request's cancel (27/11, the second trace wave): the
+// ways it can fail, written before the code.
+// L1. A session sent with `start` or `lostDemand`, a turn with `taskRef`, or a request with `cancel`, is refused as an unknown field.
+// L2. They are not stored, or not read back with the shape they were sent in: the session on the list and in the
+//     detail, the request in the detail and on the join.
+// L3. Sent without them (an older Tars), they read back other than `null`, or without the key.
+// L4. Sent again without them, a session or request loses them.
+// L5. A malformed one is taken (a key not in the shape, a name where a word belongs, a negative time); the batch
+//     must be refused whole.
+// L6. A deleted session leaves them in any table; migration 004's down loses anything else, its up reads them null.
+// L8. A `start.branch` over 255 bytes refuses the whole batch instead of being cut.
+// L7. A session uploaded again after its end with a changed outcome (its pull request merged) is not updated, or a
+//     reader holding its cursor does not get it again. And `lostDemandOmitted` is refused or not read back.
+//
+// How a session was masked, and what was done to each turn (27/11, the third trace wave): the ways it can fail,
+// written before the code.
+// K1. A session sent with `maskingVersion` or `maskCounts`, or a turn with `interventions`, is refused as unknown.
+// K2. They are not stored, or not read back with their shape: the session on the list and in the detail, the turn
+//     in the detail.
+// K3. Sent without them (an older Tars), they read back other than `null`, or without the key.
+// K4. Sent again without them, a session or turn loses them.
+// K5. A malformed one is taken (a seventh count, a missing one, a name where a kind belongs, `during` outside its
+//     two); the batch must be refused whole.
+// K6. A deleted session leaves them in any table; migration 005's down loses anything else, its up reads them null.
+//
+// The timings and a turn's workspace (27/11, the fourth trace wave): the ways it can fail, written before the code.
+// T1. A session sent with `rttMedianMs` or `clockOffsetMs`, a request with `rttMs`, `clockOffsetMs`, `queueMs` or
+//     `upstreamMs`, or a turn with its workspace (heads, trees, counts, `reverted`, `survivalBasis`), is refused.
+// T2. They are not stored exactly (a fraction rounded, a negative offset lost), or not read back: the session on
+//     the list and in the detail, the request in the detail and on the join, the turn in the detail.
+// T3. Sent without them (an older Tars, or an endpoint without Server-Timing), they read back other than `null`.
+// T4. A session uploaded again after its end (a merge, a deleted branch) does not update a turn's survival; or one
+//     sent again without a value loses the one it had.
+// T5. A malformed one is taken (a negative queue time, a head not 40 or 64 hex, a basis outside its three).
+// T6. Migration 006's down loses anything else, its up reads them null.
+//
+// The training consent (27/11, A5): the ways it can fail, written before the code.
+// C1. A session sent with `consent {training}` is refused, or not read back; one sent without it reads other than null.
+// C2. An install cannot set its current value (PUT /v1/installs/me/consent), or sets it without its token, or with a
+//     reader's, or with a value that is not a boolean.
+// C3. The current value is not on every read of the install's sessions (`installConsent`), or another install's
+//     shows on them.
+// C4. An install that turns training off and then uploads nothing is never seen: the consent feed
+//     (GET /v1/read/install-consent) must show the change. Two changes show both, in order; a cursor gives only
+//     what came after it.
+// C5. An install's token reads the feed, or a reader's token is refused it.
+// C6. The value set at registration is not in the feed.
+// C7. A deleted install's changes stay in the feed (its tombstone is in the deletions feed already).
+// C8. Migration 007's down loses anything else, its up reads them null.
+//
+// What the harness was given, its compactions, and each request's reset, gap and tool calls (28/11, C1 and C2):
+// the ways it can fail, written before the code.
+// X1. A session sent with `contextWindowGiven`, `outputCapGiven`, `autoCompaction`, `compactions` (sent `[]` on every
+//     session) or `compactionsOmitted` (#687's Audit), or a request with `contextReset`, `gap`, `toolCalls` or
+//     `toolCallsOmitted`, is refused.
+// X2. They are not stored, or not read back as sent: the session on the list and in the detail, the request in the
+//     detail and on the join; a gap's nulls and a tool call's null exit kept as null.
+// X3. Sent without them (an older Tars), they read back other than `null`, or without the key.
+// X4. Sent again without them, a session or request loses them.
+// X5. A malformed one is taken (a window under 1,024, a compaction kind outside its three, a gap's author outside
+//     #680's list, a 65th tool call); the batch must be refused whole.
+// X6. Migration 008's down loses anything else, its up reads them null.
 import { describe, it, before, after } from 'node:test';
 import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
@@ -84,6 +162,50 @@ const h = Object.fromEntries(Object.entries(msgs).map(([k, v]) => [k, sha(v)])) 
 const toolsHash = sha(tools);
 const T0 = Math.floor(Date.now() / 1000) * 1000 - 3_600_000;
 const PROJECT = 'a'.repeat(64);
+// A session's environment as Tars reads it (exact values), and its power events.
+const ENV = {
+  osName: 'macOS', osVersion: '15.6.1', kernel: '24.6.0', arch: 'arm64', machineModel: 'Mac15,3', chip: 'Chip-E2E-7731', cpuCores: 8,
+  ramBytes: 17179869184, tarsVersion: '2.0.7', tarsArch: 'arm64', locale: 'de-DE', timeZone: 'Europe/Berlin', utcOffsetMinutes: 60, onBattery: false,
+};
+const EVENTS = [{ at: T0 + 1000, kind: 'sleep' }, { at: T0 + 2000, kind: 'wake' }];
+// What started a session, the tasks it lost, and a request cut while held.
+const START = {
+  trigger: 'task', via: 'api', taskRef: 't-0e2e0001', taskId: 'task-e2e-1', requesterAgentId: 'agent-0', queuedAt: T0 - 5000, handedAt: T0 - 4000,
+  firstRequestAt: T0, commit: '0123456789abcdef0123456789abcdef01234567', branch: 'feat/e2e', redelegatedFrom: 'tr_before',
+};
+const LOST = [{ kind: 'queue_drop', ref: 't-0e2e0002', queuedAt: T0 - 3000, at: T0 + 500, reason: 'cancelled' }];
+const CANCEL = { by: 'harness', cause: 'abandoned_while_held', at: T0 + 3000, deliveredBytes: 0 };
+// The timings, from the endpoint's Server-Timing, and what a turn changed in the repository.
+const TIMING_SESSION = { rttMedianMs: 41.5, clockOffsetMs: -12.25 };
+const TIMING_REQUEST = { rttMs: 40.75, clockOffsetMs: -3.5, queueMs: 0, upstreamMs: 812.3 };
+const WORKSPACE = {
+  startHead: 'a'.repeat(40), endHead: 'b'.repeat(40), startTree: 'c'.repeat(64), endTree: 'd'.repeat(64), filesChanged: 3, linesAdded: 120,
+  linesRemoved: 7, changedLines: 127, survivedLines: 127, reverted: false, survivalBasis: 'session_end',
+};
+// The columns migration 006 adds, left out where a migration step compares every other value.
+// What the harness was given and its compactions (C2), a request's context reset, its gap and its tool calls (C1).
+const CONTEXT = {
+  contextWindowGiven: 200000, outputCapGiven: 32000, autoCompaction: 'on', compactionsOmitted: 7,
+  compactions: [{ at: T0 + 1500, kind: 'compact', before: 180000, after: 40000, requestId: 'req-2', source: 'harness' }, { at: T0 + 2200, kind: 'truncate', source: 'wire' }],
+};
+const CONTEXT_RESET = { kind: 'compact', droppedTokens: 140000 };
+const GAP = { ms: 5000, toolMs: 3000, inputWaitMs: 1500, inputBy: 'user', heldMs: 0, harnessMs: 500 };
+const TOOL_CALLS = [
+  { toolCallId: 'call_3f9a8b7c6d5e4f3a2b1c0d9e', exit: 0, ms: 1200, denied: false, timedOut: false, failed: false, truncated: true, truncatedBytes: 4096 },
+  { toolCallId: 'call_0a1b2c3d4e5f6a7b8c9d0e1f', exit: null, ms: null, denied: true, timedOut: false, failed: false, truncated: false },
+];
+// The columns migration 008 adds, left out where a migration step compares every other value.
+const WAVE_EIGHT_COLUMNS = ['context_window_given', 'output_cap_given', 'auto_compaction', 'compactions', 'compactions_omitted', 'context_reset', 'gap', 'tool_calls', 'tool_calls_omitted'];
+const WAVE_FOUR_COLUMNS = [
+  'rtt_median_ms', 'clock_offset_ms', 'rtt_ms', 'queue_ms', 'upstream_ms', 'start_head', 'end_head', 'start_tree', 'end_tree',
+  'files_changed', 'lines_added', 'lines_removed', 'changed_lines', 'survived_lines', 'reverted', 'survival_basis',
+];
+// How a session was masked, and what was done to a turn.
+const MASK = { maskingVersion: 'tars-scrub-2', maskCounts: { SECRET: 2, EMAIL: 1, IP: 0, PERSON: 3, HOME: 4, PHONE: 0 } };
+const INTERVENTIONS = {
+  interrupted: { at: T0 + 2500, by: 'esc', during: 'answer' }, restarted: { at: T0 + 2600, by: 'restart' }, next: { by: 'user', delaySec: 12.5 },
+  corrected: true, redelegated: { to: 'tr_later', at: T0 + 9000 },
+};
 
 function session(over: Record<string, unknown> = {}) {
   return {
@@ -183,7 +305,8 @@ describe('trace back-office, end to end', () => {
     assert.match(s.html, /<option value="closed" selected>/);
     const noCsrf = await form('/admin/settings', { registration: 'open' });
     assert.equal(note('admin.postWithoutCsrf', noCsrf.status), 403);
-    const open = await form('/admin/settings', { csrf: csrfOf(s.html), registration: 'open' });
+    // The suite's own pace: dozens of calls from one install, more than the default burst; the rate step sets its own.
+    const open = await form('/admin/settings', { csrf: csrfOf(s.html), registration: 'open', ratePerMinute: '600', burst: '600' });
     assert.equal(open.status, 303);
   });
 
@@ -332,6 +455,335 @@ describe('trace back-office, end to end', () => {
     assert.equal(note('read.blob.zstd', res.headers.get('content-encoding')), 'zstd');
   });
 
+  it('takes a session\'s environment and power events and a request\'s live count, reads them back, and refuses them malformed', async () => {
+    const detail = async () => (await call('GET', `/v1/read/sessions/${installA.id}/sess-1`, { token: reader.token })).json;
+    // E3. Sent without them: null, never absent.
+    const before = await detail();
+    assert.deepEqual(note('env.before', [before.session.environment, before.session.events, before.requests.map((r: any) => ['liveSessions' in r, r.liveSessions])]),
+      [null, null, [[true, null], [true, null], [true, null]]]);
+    assert.ok('environment' in before.session && 'events' in before.session);
+    // E1, E2. Sent with them.
+    const sent = await call('PUT', '/v1/batches/batch-env', { token: installA.token, body: {
+      schema: 1, sessions: [session({ finalStatus: 'done', endedAt: T0 + 6000, environment: ENV, events: EVENTS, nativeSessionId: 'native-1' })],
+      requests: [{ ...requests[0], liveSessions: 3 }],
+    } });
+    assert.equal(sent.status, 200, String(sent.buf));
+    const after = await detail();
+    assert.deepEqual(after.session.environment, ENV);
+    assert.deepEqual(after.session.events, EVENTS);
+    assert.equal(after.session.nativeSessionId, 'native-1');
+    assert.deepEqual(note('env.liveSessions', after.requests.map((r: any) => [r.requestId, r.liveSessions])), [['req-1', 3], ['req-2', null], ['req-t', null]]);
+    const listed = (await call('GET', '/v1/read/sessions?agent=agent-1', { token: reader.token })).json.sessions;
+    assert.deepEqual(note('env.list', listed.map((s: any) => [s.sessionId, s.environment?.chip, s.events?.length])), [['sess-1', ENV.chip, EVENTS.length]]);
+    assert.deepEqual(listed[0].environment, ENV);
+    const joined = (await call('GET', '/v1/read/requests?upstreamRequestId=up-111', { token: reader.token })).json.requests;
+    assert.deepEqual(joined.map((r: any) => r.liveSessions), [3]);
+    // E4. Sent again without them: kept.
+    const older = await call('PUT', '/v1/batches/batch-env-older', { token: installA.token, body: {
+      schema: 1, sessions: [session({ finalStatus: 'done', endedAt: T0 + 6000 })], requests: [requests[0]],
+    } });
+    assert.equal(older.status, 200, String(older.buf));
+    const kept = await detail();
+    assert.deepEqual(note('env.keptAfterOlder', [kept.session.environment?.chip, kept.session.events?.length, kept.requests[0].liveSessions]), [ENV.chip, EVENTS.length, 3]);
+    // E5. Malformed: refused whole, nothing of it stored.
+    const bad: Array<[string, Record<string, unknown>, Record<string, unknown>]> = [
+      ['serial', { environment: { ...ENV, serialNumber: 'C02-NOT-SENT' } }, {}],
+      ['coresAsText', { environment: { ...ENV, cpuCores: '8' } }, {}],
+      ['eventKind', { events: [{ at: T0, kind: 'reboot' }] }, {}],
+      ['negativeLive', {}, { liveSessions: -1 }],
+    ];
+    const codes: Array<[string, number, string]> = [];
+    for (const [name, s, r] of bad) {
+      const put = await call('PUT', `/v1/batches/batch-bad-${name}`, { token: installA.token, body: {
+        schema: 1, sessions: [session({ finalStatus: 'done', endedAt: T0 + 6000, environment: { ...ENV, chip: 'Never stored' }, ...s })],
+        requests: [{ ...requests[0], liveSessions: 99, ...r }],
+      } });
+      codes.push([name, put.status, put.json.error]);
+    }
+    assert.deepEqual(note('env.malformed', codes), bad.map(([n]) => [n, 422, 'invalid_batch']));
+    const still = await detail();
+    assert.deepEqual([still.session.environment?.chip, still.requests[0].liveSessions], [ENV.chip, 3]);
+  });
+
+  it('takes what started a session, the demand it lost and a request\'s cancel, reads them back, and refuses them malformed', async () => {
+    const detail = async () => (await call('GET', `/v1/read/sessions/${installA.id}/sess-1`, { token: reader.token })).json;
+    // L3. Sent without them: null, never absent.
+    const before = await detail();
+    assert.deepEqual(note('start.before', [('start' in before.session), before.session.start, ('lostDemand' in before.session), before.session.lostDemand,
+      before.requests.map((r: any) => ['cancel' in r, r.cancel]), before.turns.map((t: any) => ['taskRef' in t, t.taskRef])]),
+      [true, null, true, null, [[true, null], [true, null], [true, null]], [[true, null]]]);
+    // L1, L2. Sent with them, and the turn's task.
+    const sent = await call('PUT', '/v1/batches/batch-start', { token: installA.token, body: {
+      schema: 1, sessions: [session({ finalStatus: 'done', endedAt: T0 + 6000, start: START, lostDemand: LOST, lostDemandOmitted: 4 })],
+      turns: [{ ...turn, taskRef: START.taskRef }], requests: [{ ...requests[1], cancel: CANCEL }],
+    } });
+    assert.equal(sent.status, 200, String(sent.buf));
+    const after = await detail();
+    assert.deepEqual(after.session.start, START);
+    assert.deepEqual(after.session.lostDemand, LOST);
+    assert.deepEqual(note('start.turnTaskRef', after.turns.map((t: any) => t.taskRef)), [START.taskRef]);
+    assert.equal(note('start.lostDemandOmitted', after.session.lostDemandOmitted), 4);
+    // L8. A branch over 255 bytes, which Tars does not bound, is cut, not refused with the whole batch.
+    const longBranch = await call('PUT', '/v1/batches/batch-start-long-branch', { token: installA.token, body: {
+      schema: 1, sessions: [session({ sessionId: 'sess-branch', agentId: 'agent-branch', finalStatus: 'done', endedAt: T0 + 6000, start: { trigger: 'owner', branch: 'x'.repeat(300) } })],
+    } });
+    assert.equal(longBranch.status, 200, String(longBranch.buf));
+    const branch = (await call('GET', `/v1/read/sessions/${installA.id}/sess-branch`, { token: reader.token })).json.session.start.branch;
+    assert.equal(note('start.longBranchLength', branch.length), 255);
+    assert.equal((await call('DELETE', '/v1/sessions/sess-branch', { token: installA.token })).status, 200, 'gone again, so the steps after count as before');
+    // L7. The session's pull request is merged after it ended: the client uploads it again, and a reader that kept its
+    // cursor gets the session once more, with the outcome as it is now.
+    const cursorNow = (await call('GET', '/v1/read/sessions?limit=500', { token: reader.token })).json.nextCursor;
+    const prMerged = { pr: { number: 12, state: 'merged', at: T0 + 20_000 }, tasks: [{ id: 'task-e2e-1', status: 'done', alsoIn: ['tr_before'] }] };
+    const late = await call('PUT', '/v1/batches/batch-start-merged', { token: installA.token, body: {
+      schema: 1, sessions: [session({ finalStatus: 'done', endedAt: T0 + 6000, outcome: prMerged })],
+    } });
+    assert.equal(late.status, 200, String(late.buf));
+    const since = (await call('GET', `/v1/read/sessions?cursor=${cursorNow}`, { token: reader.token })).json.sessions;
+    assert.deepEqual(note('start.outcomeAfterMerge', since.map((s: any) => [s.sessionId, s.outcome?.pr?.state, s.outcome?.tasks?.[0]?.alsoIn])), [['sess-1', 'merged', ['tr_before']]]);
+    assert.deepEqual(note('start.cancels', after.requests.map((r: any) => [r.requestId, r.cancel])), [['req-1', null], ['req-2', CANCEL], ['req-t', null]]);
+    const listed = (await call('GET', '/v1/read/sessions?agent=agent-1', { token: reader.token })).json.sessions;
+    assert.deepEqual(note('start.list', listed.map((s: any) => [s.sessionId, s.start?.trigger, s.lostDemand?.length])), [['sess-1', 'task', 1]]);
+    const joined = (await call('GET', '/v1/read/requests?upstreamRequestId=up-222', { token: reader.token })).json.requests;
+    assert.deepEqual(joined.map((r: any) => r.cancel), [CANCEL]);
+    // L4. Sent again without them: kept.
+    const older = await call('PUT', '/v1/batches/batch-start-older', { token: installA.token, body: {
+      schema: 1, sessions: [session({ finalStatus: 'done', endedAt: T0 + 6000 })], turns: [turn], requests: [requests[1]],
+    } });
+    assert.equal(older.status, 200, String(older.buf));
+    const kept = await detail();
+    assert.deepEqual(note('start.keptAfterOlder', [kept.session.start?.taskRef, kept.session.lostDemand?.length, kept.requests[1].cancel?.cause, kept.turns[0].taskRef]),
+      [START.taskRef, 1, CANCEL.cause, START.taskRef]);
+    // L5. Malformed: refused whole.
+    const bad: Array<[string, Record<string, unknown>, Record<string, unknown>]> = [
+      ['startKey', { start: { ...START, requester: 'Someone' } }, {}],
+      ['triggerName', { start: { ...START, trigger: 'Some Person' } }, {}],
+      ['triggerOutsideList', { start: { ...START, trigger: 'reboot' } }, {}],
+      ['causeOfAnother', {}, { cancel: { ...CANCEL, by: 'tars', cause: 'esc' } }],
+      ['lostKind', { lostDemand: [{ ...LOST[0], kind: 'crash' }] }, {}],
+      ['cancelTime', {}, { cancel: { ...CANCEL, at: -1 } }],
+    ];
+    const codes: Array<[string, number, string]> = [];
+    for (const [name, s, r] of bad) {
+      const put = await call('PUT', `/v1/batches/batch-bad-start-${name}`, { token: installA.token, body: {
+        schema: 1, sessions: [session({ finalStatus: 'done', endedAt: T0 + 6000, start: { trigger: 'owner' }, ...s })], requests: [{ ...requests[1], ...r }],
+      } });
+      codes.push([name, put.status, put.json.error]);
+    }
+    assert.deepEqual(note('start.malformed', codes), bad.map(([n]) => [n, 422, 'invalid_batch']));
+    const still = await detail();
+    assert.deepEqual([still.session.start?.trigger, still.requests[1].cancel?.at], [START.trigger, CANCEL.at]);
+  });
+
+  it('takes how a session was masked and what was done to each turn, reads them back, and refuses them malformed', async () => {
+    const detail = async () => (await call('GET', `/v1/read/sessions/${installA.id}/sess-1`, { token: reader.token })).json;
+    // K3. Sent without them: null, never absent.
+    const before = await detail();
+    assert.deepEqual(note('mask.before', [('maskingVersion' in before.session), before.session.maskingVersion, ('maskCounts' in before.session),
+      before.session.maskCounts, before.turns.map((t: any) => ['interventions' in t, t.interventions])]), [true, null, true, null, [[true, null]]]);
+    // K1, K2. Sent with them.
+    const sent = await call('PUT', '/v1/batches/batch-mask', { token: installA.token, body: {
+      schema: 1, sessions: [session({ finalStatus: 'done', endedAt: T0 + 6000, ...MASK })], turns: [{ ...turn, interventions: INTERVENTIONS }],
+    } });
+    assert.equal(sent.status, 200, String(sent.buf));
+    const after = await detail();
+    assert.deepEqual([after.session.maskingVersion, after.session.maskCounts], [MASK.maskingVersion, MASK.maskCounts]);
+    assert.deepEqual(note('mask.interventions', after.turns[0].interventions), INTERVENTIONS);
+    const listed = (await call('GET', '/v1/read/sessions?agent=agent-1', { token: reader.token })).json.sessions;
+    assert.deepEqual(note('mask.list', listed.map((s: any) => [s.sessionId, s.maskingVersion, s.maskCounts?.PERSON])), [['sess-1', MASK.maskingVersion, 3]]);
+    // K4. Sent again without them: kept.
+    const older = await call('PUT', '/v1/batches/batch-mask-older', { token: installA.token, body: {
+      schema: 1, sessions: [session({ finalStatus: 'done', endedAt: T0 + 6000 })], turns: [turn],
+    } });
+    assert.equal(older.status, 200, String(older.buf));
+    const kept = await detail();
+    assert.deepEqual(note('mask.keptAfterOlder', [kept.session.maskingVersion, kept.session.maskCounts?.HOME, kept.turns[0].interventions?.next?.delaySec]),
+      [MASK.maskingVersion, 4, 12.5]);
+    // K5. Malformed: refused whole.
+    const five: Record<string, number> = { ...MASK.maskCounts };
+    delete five.PHONE;
+    const bad: Array<[string, Record<string, unknown>, Record<string, unknown>]> = [
+      ['seventhCount', { maskCounts: { ...MASK.maskCounts, NAME: 1 } }, {}],
+      ['missingCount', { maskCounts: five }, {}],
+      ['duringOutside', {}, { interventions: { interrupted: { ...INTERVENTIONS.interrupted, during: 'thinking' } } }],
+      ['nameAsKind', {}, { interventions: { next: { by: 'Some Person', delaySec: 1 } } }],
+    ];
+    const codes: Array<[string, number, string]> = [];
+    for (const [name, s, t] of bad) {
+      const put = await call('PUT', `/v1/batches/batch-bad-mask-${name}`, { token: installA.token, body: {
+        schema: 1, sessions: [session({ finalStatus: 'done', endedAt: T0 + 6000, maskingVersion: 'never-stored', ...s })], turns: [{ ...turn, ...t }],
+      } });
+      codes.push([name, put.status, put.json.error]);
+    }
+    assert.deepEqual(note('mask.malformed', codes), bad.map(([n]) => [n, 422, 'invalid_batch']));
+    const still = await detail();
+    assert.deepEqual([still.session.maskingVersion, still.turns[0].interventions?.interrupted?.by], [MASK.maskingVersion, 'esc']);
+  });
+
+  it('takes the timings and a turn\'s workspace, reads them back exactly, updates survival on a later upload, and refuses them malformed', async () => {
+    const detail = async () => (await call('GET', `/v1/read/sessions/${installA.id}/sess-1`, { token: reader.token })).json;
+    const wsOf = (t: any) => Object.fromEntries(Object.keys(WORKSPACE).map((k) => [k, t[k]]));
+    // T3. Sent without them: null, never absent.
+    const before = await detail();
+    assert.deepEqual(note('timing.before', [before.session.rttMedianMs, before.session.clockOffsetMs, before.requests.map((r: any) => Object.keys(TIMING_REQUEST).map((k) => [k in r, r[k]])),
+      Object.values(wsOf(before.turns[0]))]), [null, null, before.requests.map(() => Object.keys(TIMING_REQUEST).map(() => [true, null])), Object.keys(WORKSPACE).map(() => null)]);
+    // T1, T2. Sent with them.
+    const sent = await call('PUT', '/v1/batches/batch-timing', { token: installA.token, body: {
+      schema: 1, sessions: [session({ finalStatus: 'done', endedAt: T0 + 6000, ...TIMING_SESSION })], turns: [{ ...turn, ...WORKSPACE }],
+      requests: [{ ...requests[0], ...TIMING_REQUEST }],
+    } });
+    assert.equal(sent.status, 200, String(sent.buf));
+    const after = await detail();
+    assert.deepEqual(note('timing.session', [after.session.rttMedianMs, after.session.clockOffsetMs]), [41.5, -12.25]);
+    assert.deepEqual(note('timing.request', Object.keys(TIMING_REQUEST).map((k) => after.requests[0][k])), Object.values(TIMING_REQUEST));
+    assert.deepEqual(note('workspace.turn', wsOf(after.turns[0])), WORKSPACE);
+    const listed = (await call('GET', '/v1/read/sessions?agent=agent-1', { token: reader.token })).json.sessions;
+    assert.deepEqual(listed.map((s: any) => [s.rttMedianMs, s.clockOffsetMs]), [[41.5, -12.25]]);
+    const joined = (await call('GET', '/v1/read/requests?upstreamRequestId=up-111', { token: reader.token })).json.requests;
+    assert.deepEqual(joined.map((r: any) => [r.rttMs, r.upstreamMs]), [[40.75, 812.3]]);
+    // A round trip measured negative (the endpoint's span read longer than ours) is kept as measured.
+    const negative = await call('PUT', '/v1/batches/batch-timing-negative', { token: installA.token, body: { schema: 1, requests: [{ ...requests[1], rttMs: -2.5 }] } });
+    assert.equal(negative.status, 200, String(negative.buf));
+    assert.equal(note('timing.negativeRtt', (await detail()).requests[1].rttMs), -2.5);
+    // T4. After the branch is merged, the session goes up again: survival updated. Then one without them keeps them.
+    const merged = { survivedLines: 100, survivalBasis: 'merged' };
+    const again = await call('PUT', '/v1/batches/batch-timing-merged', { token: installA.token, body: {
+      schema: 1, sessions: [session({ finalStatus: 'done', endedAt: T0 + 6000, ...TIMING_SESSION })], turns: [{ ...turn, ...WORKSPACE, ...merged }],
+    } });
+    assert.equal(again.status, 200, String(again.buf));
+    const older = await call('PUT', '/v1/batches/batch-timing-older', { token: installA.token, body: {
+      schema: 1, sessions: [session({ finalStatus: 'done', endedAt: T0 + 6000 })], turns: [turn], requests: [requests[0]],
+    } });
+    assert.equal(older.status, 200, String(older.buf));
+    const kept = await detail();
+    assert.deepEqual(note('workspace.afterMergeThenOlder', [wsOf(kept.turns[0]), kept.session.rttMedianMs, kept.requests[0].queueMs]),
+      [{ ...WORKSPACE, ...merged }, 41.5, 0]);
+    // T5. Malformed: refused whole.
+    const bad: Array<[string, Record<string, unknown>, Record<string, unknown>, Record<string, unknown>]> = [
+      ['negativeQueue', {}, {}, { queueMs: -1 }],
+      ['offsetAsText', { clockOffsetMs: '-12' }, {}, {}],
+      ['shortHead', {}, { startHead: 'abc123' }, {}],
+      ['basisOutside', {}, { survivalBasis: 'rebased' }, {}],
+    ];
+    const codes: Array<[string, number, string]> = [];
+    for (const [name, s, t, q] of bad) {
+      const put = await call('PUT', `/v1/batches/batch-bad-timing-${name}`, { token: installA.token, body: {
+        schema: 1, sessions: [session({ finalStatus: 'done', endedAt: T0 + 6000, rttMedianMs: 999, ...s })], turns: [{ ...turn, filesChanged: 999, ...t }],
+        requests: [{ ...requests[0], ...q }],
+      } });
+      codes.push([name, put.status, put.json.error]);
+    }
+    assert.deepEqual(note('timing.malformed', codes), bad.map(([n]) => [n, 422, 'invalid_batch']));
+    const still = await detail();
+    assert.deepEqual([still.session.rttMedianMs, still.turns[0].filesChanged], [41.5, 3]);
+  });
+
+  it('keeps each install\'s training consent, on its sessions and in a feed readers follow, and drops it with the install', async () => {
+    const detail = async () => (await call('GET', `/v1/read/sessions/${installA.id}/sess-1`, { token: reader.token })).json;
+    const feed = async (cursor = '') => (await call('GET', `/v1/read/install-consent${cursor ? `?cursor=${cursor}` : ''}`, { token: reader.token })).json;
+    // C1, C3. Nothing sent yet: null, never absent.
+    const before = await detail();
+    assert.deepEqual(note('consent.before', [('consent' in before.session), before.session.consent, ('installConsent' in before.session), before.session.installConsent]),
+      [true, null, true, null]);
+    const start = await feed();
+    assert.deepEqual(start.changes, []);
+    // C2. Only the install's own token, only a boolean.
+    const refused = [
+      (await call('PUT', '/v1/installs/me/consent', { body: { training: true } })).status,
+      (await call('PUT', '/v1/installs/me/consent', { token: reader.token, body: { training: true } })).status,
+      (await call('PUT', '/v1/installs/me/consent', { token: installA.token, body: { training: 'yes' } })).status,
+      (await call('PUT', '/v1/installs/me/consent', { token: installA.token, body: { training: true, resale: true } })).status,
+    ];
+    assert.deepEqual(note('consent.refused', refused), [401, 401, 400, 400]);
+    const on = await call('PUT', '/v1/installs/me/consent', { token: installA.token, body: { training: true } });
+    assert.equal(on.status, 200, String(on.buf));
+    assert.equal(on.json.training, true);
+    // C1. A session recorded under consent; C3: the install's current value on its reads.
+    const sent = await call('PUT', '/v1/batches/batch-consent', { token: installA.token, body: {
+      schema: 1, sessions: [session({ finalStatus: 'done', endedAt: T0 + 6000, consent: { training: true } })],
+    } });
+    assert.equal(sent.status, 200, String(sent.buf));
+    const after = await detail();
+    assert.deepEqual(note('consent.session', [after.session.consent, after.session.installConsent?.training]), [{ training: true }, true]);
+    const listed = (await call('GET', '/v1/read/sessions?agent=agent-1', { token: reader.token })).json.sessions;
+    assert.deepEqual(listed.map((s: any) => [s.consent?.training, s.installConsent?.training]), [[true, true]]);
+    // C4. Turned off, then nothing uploaded: the feed shows it, both changes in order, and a cursor only what follows.
+    const off = await call('PUT', '/v1/installs/me/consent', { token: installA.token, body: { training: false } });
+    assert.equal(off.status, 200);
+    const changes = await feed();
+    assert.deepEqual(note('consent.feed', changes.changes.map((c: any) => [c.install, c.training, typeof c.at])),
+      [[installA.id, true, 'number'], [installA.id, false, 'number']]);
+    const firstOnly = await call('GET', '/v1/read/install-consent?limit=1', { token: reader.token });
+    const rest = await feed(firstOnly.json.nextCursor);
+    assert.deepEqual(rest.changes.map((c: any) => c.training), [false]);
+    assert.deepEqual((await feed(changes.nextCursor)).changes, []);
+    assert.equal((await detail()).session.installConsent.training, false, 'the session read shows the current value');
+    // A re-send without consent keeps the session's own.
+    await call('PUT', '/v1/batches/batch-consent-older', { token: installA.token, body: { schema: 1, sessions: [session({ finalStatus: 'done', endedAt: T0 + 6000 })] } });
+    assert.deepEqual((await detail()).session.consent, { training: true });
+    // C5. An install's token does not read the feed.
+    assert.equal(note('consent.feedWithInstallToken', (await call('GET', '/v1/read/install-consent', { token: installA.token })).status), 401);
+    // C6, C7. Set at registration, then the install deleted: its changes leave the feed.
+    const c = await call('POST', '/v1/installs', { body: { client: { name: 'tars', version: '2.0.7', platform: 'linux' }, consent: { training: false } } });
+    assert.equal(c.status, 201, String(c.buf));
+    const withC = await feed(changes.nextCursor);
+    assert.deepEqual(note('consent.atRegistration', withC.changes.map((x: any) => [x.install === c.json.installId, x.training])), [[true, false]]);
+    assert.equal((await call('DELETE', '/v1/installs/me', { token: c.json.token })).status, 200);
+    const afterDelete = await feed();
+    assert.ok(!afterDelete.changes.some((x: any) => x.install === c.json.installId), 'a deleted install\'s changes are gone');
+    note('consent.afterDelete', afterDelete.changes.length);
+  });
+
+  it('takes what the harness was given, its compactions, and each request\'s reset, gap and tool calls, and refuses them malformed', async () => {
+    const detail = async () => (await call('GET', `/v1/read/sessions/${installA.id}/sess-1`, { token: reader.token })).json;
+    const sessionKeys = Object.keys(CONTEXT);
+    const requestKeys = ['contextReset', 'gap', 'toolCalls', 'toolCallsOmitted'];
+    // X3. Sent without them: null, never absent.
+    const before = await detail();
+    assert.deepEqual(note('context.before', [sessionKeys.map((k) => [k in before.session, before.session[k]]), before.requests.map((r: any) => requestKeys.map((k) => [k in r, r[k]]))]),
+      [sessionKeys.map(() => [true, null]), before.requests.map(() => requestKeys.map(() => [true, null]))]);
+    // X1, X2. Sent with them.
+    const sent = await call('PUT', '/v1/batches/batch-context', { token: installA.token, body: {
+      schema: 1, sessions: [session({ finalStatus: 'done', endedAt: T0 + 6000, ...CONTEXT })],
+      requests: [{ ...requests[1], contextReset: CONTEXT_RESET, gap: GAP, toolCalls: TOOL_CALLS, toolCallsOmitted: 3 }],
+    } });
+    assert.equal(sent.status, 200, String(sent.buf));
+    const after = await detail();
+    assert.deepEqual(note('context.session', Object.fromEntries(sessionKeys.map((k) => [k, after.session[k]]))), CONTEXT);
+    const req2 = after.requests[1];
+    assert.deepEqual(note('context.request', [req2.contextReset, req2.gap, req2.toolCalls, req2.toolCallsOmitted]), [CONTEXT_RESET, GAP, TOOL_CALLS, 3]);
+    assert.deepEqual(after.requests[0].gap, null);
+    const listed = (await call('GET', '/v1/read/sessions?agent=agent-1', { token: reader.token })).json.sessions;
+    assert.deepEqual(listed.map((s: any) => [s.contextWindowGiven, s.autoCompaction, s.compactions?.length]), [[200000, 'on', 2]]);
+    const joined = (await call('GET', '/v1/read/requests?upstreamRequestId=up-222', { token: reader.token })).json.requests;
+    assert.deepEqual(joined.map((r: any) => [r.gap?.ms, r.toolCalls?.length, r.contextReset?.kind]), [[5000, 2, 'compact']]);
+    // X4. Sent again without them: kept.
+    const older = await call('PUT', '/v1/batches/batch-context-older', { token: installA.token, body: {
+      schema: 1, sessions: [session({ finalStatus: 'done', endedAt: T0 + 6000 })], requests: [requests[1]],
+    } });
+    assert.equal(older.status, 200, String(older.buf));
+    const kept = await detail();
+    assert.deepEqual(note('context.keptAfterOlder', [kept.session.contextWindowGiven, kept.session.compactions?.length, kept.requests[1].gap?.ms, kept.requests[1].toolCallsOmitted]),
+      [200000, 2, 5000, 3]);
+    // X5. Malformed: refused whole.
+    const bad: Array<[string, Record<string, unknown>, Record<string, unknown>]> = [
+      ['smallWindow', { contextWindowGiven: 512 }, {}],
+      ['compactionKind', { compactions: [{ at: T0, kind: 'squash', source: 'wire' }] }, {}],
+      ['gapAuthor', {}, { gap: { ...GAP, inputBy: 'Some Person' } }],
+      ['sixtyFifthCall', {}, { toolCalls: Array.from({ length: 65 }, () => TOOL_CALLS[0]) }],
+    ];
+    const codes: Array<[string, number, string]> = [];
+    for (const [name, s, q] of bad) {
+      const put = await call('PUT', `/v1/batches/batch-bad-context-${name}`, { token: installA.token, body: {
+        schema: 1, sessions: [session({ finalStatus: 'done', endedAt: T0 + 6000, outputCapGiven: 999, ...s })], requests: [{ ...requests[1], toolCallsOmitted: 99, ...q }],
+      } });
+      codes.push([name, put.status, put.json.error]);
+    }
+    assert.deepEqual(note('context.malformed', codes), bad.map(([n]) => [n, 422, 'invalid_batch']));
+    const still = await detail();
+    assert.deepEqual([still.session.outputCapGiven, still.requests[1].toolCallsOmitted], [32000, 3]);
+  });
+
   it('migrates a database that holds requests: down keeps every row but the marks, up reads them back unknown', async () => {
     // M1, M2. The server stopped, as an operator migrates; what it logged so far is kept for the artefact.
     const earlier = srv.log.slice();
@@ -339,24 +791,74 @@ describe('trace back-office, end to end', () => {
     const client = new pg.Client({ host: db.env.PGHOST, port: Number(db.env.PGPORT), user: db.env.PGUSER, database: db.env.PGDATABASE });
     await client.connect();
     try {
-      // Every table's rows, compared without `side`: a count and a digest per table.
+      // Every table's rows, compared without the columns 002 and 003 add: a count and a digest per table.
       const rows = async () => {
-        const tables = (await client.query("SELECT tablename FROM pg_tables WHERE schemaname = 'public' AND tablename <> 'schema_migrations' ORDER BY 1")).rows.map((r) => r.tablename as string);
+        const tables = (await client.query("SELECT tablename FROM pg_tables WHERE schemaname = 'public' AND tablename NOT IN ('schema_migrations', 'install_consent_changes') ORDER BY 1")).rows.map((r) => r.tablename as string);
         const out: Record<string, string> = {};
         for (const t of tables) {
-          const r = (await client.query(`SELECT count(*)::int AS n, md5(coalesce(string_agg(x, '|' ORDER BY x), '')) AS d FROM (SELECT (to_jsonb(t) - 'side')::text AS x FROM "${t}" t) s`)).rows[0];
+          const r = (await client.query(`SELECT count(*)::int AS n, md5(coalesce(string_agg(x, '|' ORDER BY x), '')) AS d FROM (SELECT (to_jsonb(t) - 'side' - 'environment' - 'events' - 'live_sessions' - 'start' - 'lost_demand' - 'lost_demand_omitted' - 'cancel' - 'task_ref' - 'masking_version' - 'mask_counts' - 'interventions' - ${WAVE_FOUR_COLUMNS.map((c) => `'${c}'`).join(' - ')} - 'consent' - 'consent_training' - 'consent_at' - ${WAVE_EIGHT_COLUMNS.map((c) => `'${c}'`).join(' - ')})::text AS x FROM "${t}" t) s`)).rows[0];
           out[t] = `${r.n}:${r.d}`;
         }
         return out;
       };
       const marks = async () => (await client.query('SELECT request_id, side FROM requests ORDER BY request_id')).rows.map((r) => [r.request_id, r.side]);
+      const waveOne = async () => [
+        (await client.query("SELECT session_id, environment->>'chip' AS chip, jsonb_array_length(events) AS n FROM sessions WHERE environment IS NOT NULL OR events IS NOT NULL ORDER BY 1")).rows.map((r) => [r.session_id, r.chip, r.n]),
+        (await client.query('SELECT request_id, live_sessions FROM requests WHERE live_sessions IS NOT NULL ORDER BY 1')).rows.map((r) => [r.request_id, r.live_sessions]),
+      ];
       const before = note('migrate.withData.before', await rows());
       assert.deepEqual(note('migrate.withData.marksBefore', await marks()), [['req-1', false], ['req-2', true], ['req-t', true]]);
-      note('migrate.withData.down', runCli(['migrate', 'down'], env).trim());
-      assert.deepEqual(note('migrate.withData.afterDown', await rows()), before, 'the down kept every request and value but the marks');
+      assert.deepEqual(note('migrate.withData.waveOneBefore', await waveOne()), [[['sess-1', ENV.chip, EVENTS.length]], [['req-1', 3]]]);
+      const waveTwo = async () => [
+        (await client.query("SELECT session_id, start->>'trigger' AS t, jsonb_array_length(lost_demand) AS n FROM sessions WHERE start IS NOT NULL OR lost_demand IS NOT NULL ORDER BY 1")).rows.map((r) => [r.session_id, r.t, r.n]),
+        (await client.query("SELECT request_id, cancel->>'cause' AS c FROM requests WHERE cancel IS NOT NULL ORDER BY 1")).rows.map((r) => [r.request_id, r.c]),
+      ];
+      assert.deepEqual(note('migrate.withData.waveTwoBefore', await waveTwo()), [[['sess-1', 'task', 1]], [['req-2', CANCEL.cause]]]);
+      const waveThree = async () => [
+        (await client.query('SELECT session_id, masking_version, mask_counts->>\'PERSON\' AS p FROM sessions WHERE masking_version IS NOT NULL OR mask_counts IS NOT NULL ORDER BY 1')).rows.map((r) => [r.session_id, r.masking_version, r.p]),
+        (await client.query("SELECT turn_id, interventions->'interrupted'->>'by' AS b FROM turns WHERE interventions IS NOT NULL ORDER BY 1")).rows.map((r) => [r.turn_id, r.b]),
+      ];
+      assert.deepEqual(note('migrate.withData.waveThreeBefore', await waveThree()), [[['sess-1', MASK.maskingVersion, '3']], [['turn-1', 'esc']]]);
+      const waveFour = async () => [
+        (await client.query('SELECT session_id, rtt_median_ms, clock_offset_ms FROM sessions WHERE rtt_median_ms IS NOT NULL OR clock_offset_ms IS NOT NULL ORDER BY 1')).rows.map((r) => [r.session_id, r.rtt_median_ms, r.clock_offset_ms]),
+        (await client.query('SELECT request_id, rtt_ms, upstream_ms FROM requests WHERE rtt_ms IS NOT NULL OR upstream_ms IS NOT NULL ORDER BY 1')).rows.map((r) => [r.request_id, r.rtt_ms, r.upstream_ms]),
+        (await client.query('SELECT turn_id, survival_basis, survived_lines FROM turns WHERE survival_basis IS NOT NULL ORDER BY 1')).rows.map((r) => [r.turn_id, r.survival_basis, r.survived_lines]),
+      ];
+      assert.deepEqual(note('migrate.withData.waveFourBefore', await waveFour()), [[['sess-1', 41.5, -12.25]], [['req-1', 40.75, 812.3], ['req-2', -2.5, null]], [['turn-1', 'merged', 100]]]);
+      const waveFive = async () => [
+        (await client.query("SELECT session_id, consent->>'training' AS t FROM sessions WHERE consent IS NOT NULL ORDER BY 1")).rows.map((r) => [r.session_id, r.t]),
+        (await client.query('SELECT consent_training AS t FROM installs WHERE consent_training IS NOT NULL')).rows.map((r) => r.t),
+      ];
+      assert.deepEqual(note('migrate.withData.waveFiveBefore', await waveFive()), [[['sess-1', 'true']], [false]]);
+      const waveEight = async () => [
+        (await client.query('SELECT session_id, context_window_given, auto_compaction, jsonb_array_length(compactions) AS n FROM sessions WHERE context_window_given IS NOT NULL OR compactions IS NOT NULL ORDER BY 1')).rows.map((r) => [r.session_id, r.context_window_given, r.auto_compaction, r.n]),
+        (await client.query("SELECT request_id, context_reset->>'kind' AS k, (gap->>'ms')::int AS g, jsonb_array_length(tool_calls) AS t, tool_calls_omitted AS o FROM requests WHERE context_reset IS NOT NULL OR gap IS NOT NULL OR tool_calls IS NOT NULL ORDER BY 1")).rows.map((r) => [r.request_id, r.k, r.g, r.t, r.o]),
+      ];
+      assert.deepEqual(note('migrate.withData.waveEightBefore', await waveEight()), [[['sess-1', CONTEXT.contextWindowGiven, 'on', 2]], [['req-2', 'compact', GAP.ms, 2, 3]]]);
+      // X6, C8, T6, K6, L6, E8, M2. Down through 008, 007, 006, 005, 004, 003, then 002.
+      note('migrate.withData.down008', runCli(['migrate', 'down'], env).trim());
+      assert.deepEqual(note('migrate.withData.afterDown008', await rows()), before, 'the down of 008 kept every row and value but its own');
+      note('migrate.withData.down007', runCli(['migrate', 'down'], env).trim());
+      assert.deepEqual(note('migrate.withData.afterDown007', await rows()), before, 'the down of 007 kept every row and value but its own');
+      note('migrate.withData.down006', runCli(['migrate', 'down'], env).trim());
+      assert.deepEqual(note('migrate.withData.afterDown006', await rows()), before, 'the down of 006 kept every row and value but its own');
+      note('migrate.withData.down005', runCli(['migrate', 'down'], env).trim());
+      assert.deepEqual(note('migrate.withData.afterDown005', await rows()), before, 'the down of 005 kept every row and value but its own');
+      note('migrate.withData.down004', runCli(['migrate', 'down'], env).trim());
+      assert.deepEqual(note('migrate.withData.afterDown004', await rows()), before, 'the down of 004 kept every row and value but its own');
+      note('migrate.withData.down003', runCli(['migrate', 'down'], env).trim());
+      assert.deepEqual(note('migrate.withData.afterDown003', await rows()), before, 'the down of 003 kept every row and value but its own');
+      note('migrate.withData.down002', runCli(['migrate', 'down'], env).trim());
+      assert.deepEqual(note('migrate.withData.afterDown', await rows()), before, 'the down of 002 kept every request and value but the marks');
       note('migrate.withData.up', runCli(['migrate', 'up'], env).trim());
       assert.deepEqual(await rows(), before, 'the up kept every request and value');
       assert.deepEqual(note('migrate.withData.marksAfterUp', await marks()), [['req-1', null], ['req-2', null], ['req-t', null]]);
+      assert.deepEqual(note('migrate.withData.waveOneAfterUp', await waveOne()), [[], []]);
+      assert.deepEqual(note('migrate.withData.waveTwoAfterUp', await waveTwo()), [[], []]);
+      assert.deepEqual(note('migrate.withData.waveThreeAfterUp', await waveThree()), [[], []]);
+      assert.deepEqual(note('migrate.withData.waveFourAfterUp', await waveFour()), [[], [], []]);
+      assert.deepEqual(note('migrate.withData.waveFiveAfterUp', await waveFive()), [[], []]);
+      assert.deepEqual(note('migrate.withData.waveEightAfterUp', await waveEight()), [[], []]);
     } finally {
       // Up again and serving whatever this step found, so a failure here is this step's alone.
       runCli(['migrate', 'up'], env);
@@ -420,7 +922,7 @@ describe('trace back-office, end to end', () => {
     const run = await form('/admin/retention/run', { csrf: csrfOf(s.html) });
     assert.equal(run.status, 303);
     const del = await call('GET', '/v1/read/deletions', { token: reader.token });
-    assert.deepEqual(note('retention.deletions', del.json.deletions.map((d: any) => [d.install, d.sessionId, d.reason])), [[installB.id, 'old-1', 'retention']]);
+    assert.deepEqual(note('retention.deletions', del.json.deletions.filter((d: any) => d.reason === 'retention').map((d: any) => [d.install, d.sessionId, d.reason])), [[installB.id, 'old-1', 'retention']]);
     const gone = await call('GET', `/v1/read/sessions/${installB.id}/old-1`, { token: reader.token });
     assert.equal(gone.status, 404);
   });
@@ -440,8 +942,9 @@ describe('trace back-office, end to end', () => {
     const meta = (hash: string, raw: Buffer, role: string) => ({ hash, role, createdAt: T0, size: raw.length });
     for (const [id, refs] of [['b-del', [h.system, sha(twice), sha(only)]], ['b-del2', [sha(twice)]]] as const) {
       const put = await call('PUT', `/v1/batches/${id}.1`, { token: installB.token, body: {
-        schema: 1, sessions: [session({ sessionId: id, finalStatus: 'done', endedAt: T0 + 10_000, turnCount: 1, requestCount: 1 })],
-        turns: [{ ...turn, turnId: `${id}-t`, sessionId: id }], requests: [req(id, [...refs])],
+        schema: 1, sessions: [session({ sessionId: id, finalStatus: 'done', endedAt: T0 + 10_000, turnCount: 1, requestCount: 1, environment: { ...ENV, chip: `Chip-${id}-7731` }, events: EVENTS,
+          start: { ...START, branch: `Chip-${id}-7731-branch` }, lostDemand: LOST, ...MASK, maskingVersion: `Chip-${id}-7731` })],
+        turns: [{ ...turn, turnId: `${id}-t`, sessionId: id, interventions: { redelegated: { to: `Chip-${id}-7731-to`, at: T0 } } }], requests: [{ ...req(id, [...refs]), liveSessions: 5, cancel: CANCEL }],
         messages: [meta(h.system, msgs.system, 'system'), meta(sha(twice), twice, 'user'), meta(sha(only), only, 'assistant')].filter((m) => (refs as readonly string[]).includes(m.hash)),
       } });
       assert.equal(put.status, 200, String(put.buf));
@@ -478,6 +981,26 @@ describe('trace back-office, end to end', () => {
     note('sessionDelete.storedBytes', [storedBefore, storedAfter]);
     assert.ok(storedAfter < storedBefore, 'the stored bytes count what went');
     assert.ok((await page('/admin/deletions')).html.includes(d.json.receipt), 'the receipt is in the owner\'s deletion log');
+    // E6, E7. Nothing of b-del's environment, events or counts is left in any table, its log line holds none of it,
+    // and neither does the server's own log.
+    const client = new pg.Client({ host: db.env.PGHOST, port: Number(db.env.PGPORT), user: db.env.PGUSER, database: db.env.PGDATABASE });
+    await client.connect();
+    try {
+      const tables = (await client.query("SELECT tablename FROM pg_tables WHERE schemaname = 'public'")).rows.map((r) => r.tablename as string);
+      const holding: string[] = [];
+      for (const t of tables) {
+        const n = (await client.query(`SELECT count(*)::int AS n FROM "${t}" x WHERE to_jsonb(x)::text LIKE '%Chip-b-del-7731%'`)).rows[0].n;
+        if (n) holding.push(t);
+      }
+      assert.deepEqual(note('env.afterSessionDelete.tablesHolding', holding), []);
+      const b2 = (await client.query("SELECT environment->>'chip' AS chip, jsonb_array_length(events) AS n FROM sessions WHERE session_id = 'b-del2'")).rows;
+      assert.deepEqual(b2.map((r) => [r.chip, r.n]), [['Chip-b-del2-7731', EVENTS.length]], 'the session kept keeps its own');
+      const log = JSON.stringify((await client.query('SELECT * FROM deletion_log')).rows);
+      assert.ok(!/Chip-|Mac15,3|Europe\/Berlin/.test(log), 'the operator\'s deletion log holds no environment');
+    } finally {
+      await client.end();
+    }
+    assert.ok(!/Chip-|Mac15,3|Europe\/Berlin/.test(srv.log.join('')), 'the server\'s log holds no environment');
 
     // D3, D4. Readers are told once, with the id, under a reason they know; a retry deletes nothing and tells no one.
     const again = await call('DELETE', '/v1/sessions/b-del', { token: installB.token });
