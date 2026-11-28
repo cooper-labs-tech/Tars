@@ -48,8 +48,9 @@ import { codexCompactions, qwenCompactions, readHarnessCompactions } from '../..
  *     this session's (the newest) is missed.
  * C17. (I-4) The logs are read synchronously at a session's end: the main process waits on a file of up to 8 MiB.
  * From the Audit of #678 (28/11, its I-1), written before the fix:
- * C18. A count leaves the machine as a fraction (a harness log's `before` or `after`, a request's `droppedTokens` from
- *     an endpoint's fractional usage): the back-office takes them as whole numbers, and the whole batch is refused.
+ * C18. A count leaves the machine as a fraction: a harness log's `before` or `after`; an endpoint's fractional usage, in
+ *     the tokens of a request, its turn and its session, and in the `droppedTokens` taken from them. The back-office
+ *     takes them as whole numbers, and the whole batch is refused.
  * C11. (Found by C1's run, 27/11.) A request sent again with the same history, whose last message is the summary (or
  *     any instruction), opens a turn of its own.
  * C10. What the harness was given (`contextWindowGiven`, `outputCapGiven`, `autoCompaction`), the compactions and each
@@ -401,11 +402,11 @@ describe('the Audit of #678', () => {
     ].map(l => JSON.stringify(l)).join('\n');
     expect(codexCompactions(codex)).toEqual([{ at: Date.parse('2026-11-27T16:23:30.718Z'), kind: 'compact', before: 7801, after: 600 }]);
 
-    // In the batch: the endpoint counted fractions, and a compaction kept from before carries them.
+    // In the batch: the endpoint counted fractions, and the log read at the session's end wrote its counts with one.
     const u1 = user('Fix the parser.');
     store.ingest(rec(T0, [u1], 7000.7));
     store.ingest(rec(T0 + 3000, [u1, user('Another language model started... SUMMARY')], 600.2));
-    store.applyHarnessCompactions('t1', [{ at: T0 + 20_000, kind: 'summarize', before: 5000.5, after: 900.4 }]);
+    store.applyHarnessCompactions('t1', qwenCompactions(qwen));
     const preview = new TraceUploader({
       store, installFile: path.join(dir, 'private', 'install.json'), settings: () => ({ url: '' }), setDeletion: () => {}, eligible: () => true,
       scrubContext: () => ({ homeDirs: ['/Users/someone'], knownSecrets: [], envValues: [] }), client: { name: 'tars', version: 't', platform: 'darwin' },
@@ -419,6 +420,22 @@ describe('the Audit of #678', () => {
     expect(counts.length).toBeGreaterThanOrEqual(5);
     expect(counts.filter(v => !Number.isInteger(v)), 'a count that is not whole').toEqual([]);
     expect(body.requests.map(r => r.contextReset ?? null)).toEqual([null, { kind: 'compact', droppedTokens: 6401 }]);
-    expect(body.sessions[0].compactions.find(c => c.source === 'harness')).toMatchObject({ before: 5001, after: 900 });
+    expect(body.sessions[0].compactions.find(c => c.source === 'harness')).toMatchObject({ before: 7869, after: 1086 });
+    expect(body.sessions[0]).toMatchObject({ tokensIn: 7601 });
+
+    // The batch as the back-office checks it: every number whole, but the timings it takes as fractional milliseconds
+    // and the free-form objects (a request's params, a session's outcome).
+    const FRACTIONAL_MS = new Set(['rttMs', 'clockOffsetMs', 'queueMs', 'upstreamMs', 'rttMedianMs', 'delaySec']);
+    const FREE_FORM = new Set(['params', 'outcome']);
+    const fractions: string[] = [];
+    const walk = (v: unknown, at: string): void => {
+      if (typeof v === 'number') { if (!Number.isInteger(v)) fractions.push(`${at} = ${v}`); return; }
+      if (Array.isArray(v)) { v.forEach((x, i) => walk(x, `${at}[${i}]`)); return; }
+      if (v && typeof v === 'object') {
+        for (const [k, x] of Object.entries(v)) if (!FRACTIONAL_MS.has(k) && !FREE_FORM.has(k)) walk(x, at ? `${at}.${k}` : k);
+      }
+    };
+    walk(body, '');
+    expect(fractions, 'the numbers the back-office would refuse').toEqual([]);
   });
 });
