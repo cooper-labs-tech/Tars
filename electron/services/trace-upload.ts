@@ -9,12 +9,21 @@ import { partsOf, type TraceStore } from './trace-store';
 import { scrubValue, SCRUB_VERSION, type ScrubContext } from './trace-scrub';
 import { TOOL_CALLS_PER_REQUEST_MAX, type ToolCallRecord } from './tool-calls';
 
-/** A request's tool calls as they leave: the first TOOL_CALLS_PER_REQUEST_MAX, and how many more there were. */
+/**
+ * A request's tool calls as they leave: those whose id the back-office takes (TOOL_CALL_ID_CHARS_MAX), the first
+ * TOOL_CALLS_PER_REQUEST_MAX of them, and how many more there were.
+ */
 function toolCallsOf(calls: unknown): { toolCalls?: ToolCallRecord[]; toolCallsOmitted?: number } {
   if (!Array.isArray(calls) || !calls.length) return {};
-  const sent = calls.slice(0, TOOL_CALLS_PER_REQUEST_MAX) as ToolCallRecord[];
-  return { toolCalls: sent, ...(calls.length > sent.length ? { toolCallsOmitted: calls.length - sent.length } : {}) };
+  // A call whose id the back-office would refuse is left out whole and counted, never cut: a cut id names another call,
+  // and the whole batch would be refused for it.
+  const fit = (calls as ToolCallRecord[]).filter(c => [...String(c.toolCallId)].length <= TOOL_CALL_ID_CHARS_MAX);
+  const sent = fit.slice(0, TOOL_CALLS_PER_REQUEST_MAX);
+  return { ...(sent.length ? { toolCalls: sent } : {}), ...(calls.length > sent.length ? { toolCallsOmitted: calls.length - sent.length } : {}) };
 }
+
+/** The longest tool call id the back-office takes, in characters. */
+export const TOOL_CALL_ID_CHARS_MAX = 128;
 
 /** The longest branch the back-office takes, in bytes (UTF-8). */
 export const MAX_BRANCH_BYTES = 255;
