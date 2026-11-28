@@ -13,14 +13,17 @@ import { clockOf, dayClockOf, dayOf, reasonOf } from '@/lib/traces-format';
 import { StateLine } from './bits';
 import { tracesApi, useUnsavedNote } from './hooks';
 
-/** One list of the notice, its items under a caption, each after a dot in its tone. */
-function Bullets({ caption, items, tone }: { caption: string; items: string[]; tone: string }) {
+/**
+ * One list of the notice, its items under a caption, each after a dot in its tone. `columns`: the list spans its
+ * width in two columns read down then across, for a list main lengthens (`Traces · upload · states`, the notice).
+ */
+function Bullets({ caption, items, tone, columns }: { caption: string; items: string[]; tone: string; columns?: boolean }) {
   return (
     <div className="min-w-0 space-y-1.5">
       <PanelCaption>{caption}</PanelCaption>
-      <ul className="space-y-1">
+      <ul className={columns ? 'columns-2 gap-6' : 'space-y-1'}>
         {items.map(t => (
-          <li key={t} className="flex gap-2 text-[11.5px] leading-[1.45] text-text-secondary">
+          <li key={t} className={`flex gap-2 text-[11.5px] leading-[1.45] text-text-secondary${columns ? ' break-inside-avoid pb-1' : ''}`}>
             <span className={`font-mono ${tone}`}>·</span><span className="min-w-0">{t}</span>
           </li>
         ))}
@@ -535,10 +538,8 @@ export function UploadView() {
             {notice.onlyAfter && (
               <p data-only-after className="text-[12px] text-status-waiting">{`Only sessions started after ${dayClockOf(Date.parse(notice.onlyAfter))} are sent: what was recorded before your deletion never is.`}</p>
             )}
-            <div className="grid grid-cols-2 gap-6">
-              <Bullets caption="WHAT LEAVES" items={notice.leaves} tone="text-status-waiting" />
-              <Bullets caption="WHAT STAYS" items={notice.stays} tone="text-status-running" />
-            </div>
+            <Bullets caption="WHAT LEAVES" items={notice.leaves} tone="text-status-waiting" columns />
+            <Bullets caption="WHAT STAYS" items={notice.stays} tone="text-status-running" columns />
             <div className="grid grid-cols-2 gap-6">
               <Bullets caption="SCRUBBING CATCHES" items={notice.scrubbing.catches} tone="text-muted-foreground" />
               <Bullets caption="IT CANNOT CATCH" items={notice.scrubbing.cannot} tone="text-status-error" />
