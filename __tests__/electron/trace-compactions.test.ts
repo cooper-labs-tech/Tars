@@ -51,6 +51,9 @@ import { codexCompactions, qwenCompactions, readHarnessCompactions } from '../..
  * C18. A count leaves the machine as a fraction: a harness log's `before` or `after`; an endpoint's fractional usage, in
  *     the tokens of a request, its turn and its session, and in the `droppedTokens` taken from them. The back-office
  *     takes them as whole numbers, and the whole batch is refused.
+ * From the Audit of #687 at e534063f4 (28/11), written before the fix:
+ * C20. A broken endpoint answers a negative usage: the count stays negative in the request, its turn and its session.
+ *     The back-office takes counts as whole numbers of 0 or more, and the whole batch is refused.
  * C11. (Found by C1's run, 27/11.) A request sent again with the same history, whose last message is the summary (or
  *     any instruction), opens a turn of its own.
  * C10. What the harness was given (`contextWindowGiven`, `outputCapGiven`, `autoCompaction`), the compactions and each
@@ -437,5 +440,35 @@ describe('the Audit of #678', () => {
     };
     walk(body, '');
     expect(fractions, 'the numbers the back-office would refuse').toEqual([]);
+  });
+
+  it('C20: a negative usage from a broken endpoint goes out as 0', () => {
+    const u1 = user('Fix the parser.');
+    store.ingest({ ...rec(T0, [u1], 7000), responseBody: Buffer.from(JSON.stringify({
+      model: 'open-coder', choices: [{ index: 0, message: { role: 'assistant', content: 'ok' }, finish_reason: 'stop' }],
+      usage: { prompt_tokens: -120.4, completion_tokens: -3, prompt_tokens_details: { cached_tokens: -1 } },
+    })) });
+    const preview = new TraceUploader({
+      store, installFile: path.join(dir, 'private', 'install.json'), settings: () => ({ url: '' }), setDeletion: () => {}, eligible: () => true,
+      scrubContext: () => ({ homeDirs: ['/Users/someone'], knownSecrets: [], envValues: [] }), client: { name: 'tars', version: 't', platform: 'darwin' },
+      withdrawConsent: () => {},
+    }).preview('t1')!;
+    const body = preview.document.batches[0].body as { sessions: Array<Record<string, unknown>>; turns: Array<Record<string, unknown>>; requests: Array<Record<string, unknown>> };
+    const counts = (r: Record<string, unknown>) => ({ tokensIn: r.tokensIn, tokensCached: r.tokensCached, tokensOut: r.tokensOut });
+    const zero = { tokensIn: 0, tokensCached: 0, tokensOut: 0 };
+    expect(counts(body.requests[0])).toEqual(zero);
+    expect(counts(body.turns[0])).toEqual(zero);
+    expect(counts(body.sessions[0])).toEqual(zero);
+
+    // No count below 0 anywhere in the batch, but the timings the back-office takes signed and the free-form objects.
+    const SIGNED_OR_FREE = new Set(['rttMs', 'clockOffsetMs', 'queueMs', 'upstreamMs', 'rttMedianMs', 'delaySec', 'params', 'outcome']);
+    const negatives: string[] = [];
+    const walk = (v: unknown, at: string): void => {
+      if (typeof v === 'number') { if (v < 0) negatives.push(`${at} = ${v}`); return; }
+      if (Array.isArray(v)) { v.forEach((x, i) => walk(x, `${at}[${i}]`)); return; }
+      if (v && typeof v === 'object') for (const [k, x] of Object.entries(v)) if (!SIGNED_OR_FREE.has(k)) walk(x, at ? `${at}.${k}` : k);
+    };
+    walk(body, '');
+    expect(negatives, 'the counts the back-office would refuse').toEqual([]);
   });
 });
