@@ -1226,8 +1226,9 @@ used to train models", stands beside sharing. What leaves, and who decides:
   prunes it with the sessions it names.
 - The restart case, as for the switch: a write of the list refused, then Tars stopped before a retry holds. A session
   added then is on no list after the restart, so it is not trainable (it fails closed). A session taken off then is
-  still listed after the restart; it stays not trainable through its stamp, which the off set to no in the store at
-  the same moment, unless that write failed too.
+  still listed after the restart; it stays not trainable through its stamp alone, which the off set to no in the store
+  at the same moment (unless that write failed too), and since the store is under `~/.tars` an agent could write that
+  stamp back to yes: this is the one case the list does not cover.
 - The install's current value goes to the back-office on every change (`PUT /v1/installs/me/consent` with
   `{ training }` alone and the install token), and with the registration. It covers the sessions already sent. A change
   the back-office has not taken stays owed across a restart, is sent again until a 2xx, and goes with sharing off
