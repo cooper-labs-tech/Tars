@@ -242,7 +242,10 @@ function trainingSent(value: boolean): void {
     writeTraining({ value, owed: false });
   } catch (err) {
     console.error(`[traces] the back-office took the training value, and the file still says it is owed (${describeSecretFileError(err)}): it is sent again, which is harmless`);
+    return;
   }
+  // The window drops its "not yet sent" line now, not at its next read (the held path is told by persistHeldTraining).
+  deps?.emit('traces:changed');
 }
 
 /** What the window shows of the switch. */
