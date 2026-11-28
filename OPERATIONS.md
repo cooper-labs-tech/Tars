@@ -1295,6 +1295,9 @@ the agents rather than raising the ceiling.
 - Opted-in sessions then go every 5 minutes, and 30 s after a change: scrubbed, keyed, resumable.
 - The install is in `~/.tars-private/traces-install.json`.
 - "Delete everything sent" calls the back-office's `DELETE /v1/installs/me`, then forgets the install.
+- A session sent and then deleted here, by you or by retention, is deleted there too at the next pass
+  (`DELETE /v1/sessions/<id>`), with sharing off as well; one the size cap removes stays there. A refused delete waits
+  as the uploads do and is tried again, a restart included.
 
 **The external reader.** Rotate its token in the back-office (shown once), then read on loopback:
 
@@ -1303,7 +1306,13 @@ curl -s -H "Authorization: Bearer $(cat ~/.tars-private/traces-reader-token)" \
   "http://127.0.0.1:31415/api/traces/sessions?limit=50&project=/path/to/project-a"   # then &cursor=<nextCursor>
 curl -s -H "Authorization: Bearer $(cat ~/.tars-private/traces-reader-token)" \
   http://127.0.0.1:31415/api/traces/sessions/<traceId>
+curl -s -H "Authorization: Bearer $(cat ~/.tars-private/traces-reader-token)" \
+  "http://127.0.0.1:31415/api/traces/deletions?limit=100"   # then &cursor=<nextCursor>
 ```
+
+- `/api/traces/deletions` returns the sessions deleted since the cursor, oldest first: `sessionId`, `reason` (`user`,
+  `retention` or `cap`) and `at`, with `nextCursor` (kept even on an empty page) and `more`. A reader that keeps
+  copies reads it and deletes them. Tombstones are kept 365 days.
 
 - `/api/traces/sessions` returns the sessions new or grown since the cursor, in the order they changed. Its filters
   are `project`, `harness`, `model`, `endpoint`, `agent`, `from` and `to` (ms).

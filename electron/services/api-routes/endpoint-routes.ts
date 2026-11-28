@@ -15,7 +15,8 @@ import type { TraceFilter } from '../trace-store';
  *   extra headers (`extraHeaders`, a map of names to values, never a credential) it changes, waits for the owner's
  *   approval in the window (services/inference-endpoints.ts); no route approves. The
  *   shared token reads and changes nothing but the list.
- * - `/api/traces/*`: the external trace reader's token only (api-server.ts resolveCaller), read-only.
+ * - `/api/traces/*`: the external trace reader's token only (api-server.ts resolveCaller), read-only: the sessions
+ *   new or grown since a cursor, one session, one request, and the sessions deleted since a cursor.
  */
 
 const ENDPOINT = /^\/api\/endpoints\/(ep-[0-9a-f]{6})$/;
@@ -146,6 +147,15 @@ export function registerEndpointRoutes(app: RouteApp, ctx: RouteContext): void {
   app.get('/api/traces/sessions', async (req, send) => {
     if (!req.traceReader) { send({ error: 'Unauthorized' }, 401); return; }
     send(traceStore().changes(filterOf(req.url)));
+  });
+
+  // The sessions deleted here (by the user, retention or the cap), so a reader deletes its own copies: the
+  // back-office's deletions feed's shape (backoffice/API.md § 6.4), one install.
+  app.get('/api/traces/deletions', async (req, send) => {
+    if (!req.traceReader) { send({ error: 'Unauthorized' }, 401); return; }
+    const q = req.url.searchParams;
+    const limit = q.get('limit');
+    send(traceStore().deletions({ cursor: q.get('cursor') || undefined, limit: limit !== null && /^\d+$/.test(limit) ? Number(limit) : undefined }));
   });
 
   app.get(TRACE, async (req, send) => {

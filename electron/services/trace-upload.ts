@@ -22,6 +22,10 @@ import { scrubValue, SCRUB_VERSION, type ScrubContext } from './trace-scrub';
  *   sequence, so a retry of the same state is replayed, never doubled.
  * - **Resumable**: what was sent is kept in the store (`uploads`), by change sequence, so a restart sends only what
  *   is new or grew. A failure waits (backoff, or Retry-After for a 429 or 503) and the next pass goes on.
+ * - **Per-session deletes**: a session sent, then deleted here by the user or by retention, is owed a
+ *   `DELETE /v1/sessions/{sessionId}` (the store's tombstones), sent first in a pass, retried as every other call, to
+ *   the install it was sent to and at the address the user set. With sharing off too: a delete carries no content,
+ *   only the id of a session the back-office already holds. Never while a whole deletion is owed or under way.
  * - **Never** a session whose project or agent is not opted in at the time of sending, a person's name as a turn's
  *   author detail, an endpoint's address or key, or anything outside the traced sessions.
  */
@@ -108,6 +112,9 @@ const ROLES = new Set(['system', 'user', 'assistant', 'tool', 'developer']);
 const QUEUE_PAGE = 5000;
 const PASS_PAGES = 200;
 const PASS_SESSIONS = 2000;
+/** One pass sends at most this many per-session deletes, read DELETE_PAGE at a time. */
+const PASS_DELETES = 2000;
+const DELETE_PAGE = 100;
 const sha256 = (b: Buffer): string => createHash('sha256').update(b).digest('hex');
 
 export class TraceUploader {
@@ -171,6 +178,9 @@ export class TraceUploader {
     const s = this.deps.settings();
     if (!s.deletionOwed) return false;
     if (this.readInstall()) return true;
+    // There but unreadable for a moment (its JSON caught mid-write, a lock an antivirus or an indexer took): the
+    // deletion the user asked for stays owed (the Audit's pre-existing Low at fff13140c).
+    if (!this.installFileGone()) return true;
     this.deps.setDeletion({ owed: false, since: s.since });
     this.clearedUnsaid = true;
     return false;
@@ -267,15 +277,55 @@ export class TraceUploader {
     return this.halts === 0 && !!now.consentAt && now.url === url;
   }
 
-  /** One pass: what is new or grew, for sessions opted in now. Never throws. */
+  /** Whether per-session deletes may go now: not halted, no whole deletion owed, the address as it was at the start. */
+  private mayDelete(url: string): boolean {
+    const now = this.deps.settings();
+    return this.halts === 0 && !now.deletionOwed && now.url === url;
+  }
+
+  /** The install a per-session delete goes to: the one registered at the address set, while a delete is owed. */
+  private deletesDue(url: string): boolean {
+    const install = this.readInstall();
+    return !!install && install.url === url && this.deps.store.owedDeletes(1).length > 0;
+  }
+
+  /** One pass: the per-session deletes owed, then what is new or grew, for sessions opted in now. Never throws. */
+  /** Whether the install file is not there at all (ENOENT), as opposed to there and unreadable for a moment. */
+  private installFileGone(): boolean {
+    try {
+      fs.statSync(this.deps.installFile);
+      return false;
+    } catch (err) {
+      return (err as NodeJS.ErrnoException).code === 'ENOENT';
+    }
+  }
+
+  /** Owed deletes forgotten: their install is gone, so none can ever go. A store that refuses it is said, not thrown. */
+  private forgetOwedDeletes(why: string): void {
+    try {
+      this.deps.store.forgetOwedDeletes();
+    } catch (err) {
+      console.error(`[traces] ${why}, and its owed deletes stay owed here: ${describeSecretFileError(err)}`);
+    }
+  }
+
   async runOnce(): Promise<{ sent: number; failed: number; skipped?: 'off' | 'waiting' | 'busy' }> {
+    // No install file left (removed by hand): the deletes owed to it can never go. Only a file truly absent: one read
+    // badly for a moment (its JSON caught mid-write, a read refused) still holds its debt (the Audit's Low at
+    // 9a1e9e8c4). A 401 forgets them on its own path.
+    try {
+      if (this.installFileGone() && this.deps.store.owedDeletes(1).length) this.forgetOwedDeletes('this install is gone');
+    } catch (err) {
+      console.error(`[traces] the owed deletes could not be read: ${describeSecretFileError(err)}`);
+    }
     const s = this.deps.settings();
-    if (!s.url || !s.consentAt || this.owed() || this.halts > 0) return { sent: 0, failed: 0, skipped: 'off' };
+    if (!s.url || this.owed() || this.halts > 0) return { sent: 0, failed: 0, skipped: 'off' };
+    if (!s.consentAt && !this.deletesDue(s.url)) return { sent: 0, failed: 0, skipped: 'off' };
     if (this.nextTryAt !== undefined && this.now() < this.nextTryAt) return { sent: 0, failed: 0, skipped: 'waiting' };
     if (this.running) return { sent: 0, failed: 0, skipped: 'busy' };
     this.running = true;
     this.abort = new AbortController();
-    const pass = this.passOnce(s.url);
+    const pass = this.passOnce(s.url, !!s.consentAt);
     this.pass = pass;
     try {
       return await pass;
@@ -286,31 +336,52 @@ export class TraceUploader {
     }
   }
 
-  private async passOnce(url: string): Promise<{ sent: number; failed: number }> {
+  /** The per-session deletes owed, oldest first, each marked sent once the back-office took it. Throws as call() does. */
+  private async sendDeletes(install: Install, url: string): Promise<void> {
+    let done = 0;
+    while (done < PASS_DELETES) {
+      const owed = this.deps.store.owedDeletes(Math.min(DELETE_PAGE, PASS_DELETES - done));
+      if (!owed.length) return;
+      for (const d of owed) {
+        if (!this.mayDelete(url)) return;
+        await this.call(install, install.url, 'DELETE', `/v1/sessions/${encodeURIComponent(d.traceId)}`);
+        this.deps.store.deleteSent(d.seq);
+        done++;
+      }
+    }
+  }
+
+  private async passOnce(url: string, sharing: boolean): Promise<{ sent: number; failed: number }> {
     let sent = 0;
     try {
-      // The consent is read again before a registration and before each session: a deletion, or a withdrawn
-      // consent, stops the pass between two calls (the re-audit's M1 at ec6951aa5).
-      if (!this.mayGoOn(url)) return { sent, failed: 0 };
-      let install = this.readInstall();
-      if (!install || install.url !== url) install = await this.register(url);
-      // The queue a page at a time, by change: a page with nothing to send (sessions of a project opted out, say) is
-      // passed over, never the end (the Audit's L2 at c447c1ceb). At most PASS_SESSIONS sent in one pass.
-      let afterSeq = 0;
-      for (let page = 0; page < PASS_PAGES && sent < PASS_SESSIONS; page++) {
-        const since = this.deps.settings().since;
-        const rows = this.deps.store.uploadQueue(QUEUE_PAGE, { afterSeq, since });
-        if (!rows.length) break;
-        afterSeq = rows[rows.length - 1].seq;
-        for (const q of rows) {
-          if (sent >= PASS_SESSIONS) break;
-          if (!this.sendable(q, this.deps.settings().since)) continue;
-          if (!this.mayGoOn(url)) return { sent, failed: 0 };
-          await this.sendSession(install, q.traceId, q.seq);
-          this.deps.store.markUploaded(q.traceId, q.seq, this.now());
-          sent++;
+      // The deletes owed first, so a failing upload never holds them back, and only to the install they are owed to,
+      // registered at the address set (a new registration forgets them: resetUploads).
+      const held = this.readInstall();
+      if (held && held.url === url) await this.sendDeletes(held, url);
+      if (sharing) {
+        // The consent is read again before a registration and before each session: a deletion, or a withdrawn
+        // consent, stops the pass between two calls (the re-audit's M1 at ec6951aa5).
+        if (!this.mayGoOn(url)) return { sent, failed: 0 };
+        let install = this.readInstall();
+        if (!install || install.url !== url) install = await this.register(url);
+        // The queue a page at a time, by change: a page with nothing to send (sessions of a project opted out, say)
+        // is passed over, never the end (the Audit's L2 at c447c1ceb). At most PASS_SESSIONS sent in one pass.
+        let afterSeq = 0;
+        for (let page = 0; page < PASS_PAGES && sent < PASS_SESSIONS; page++) {
+          const since = this.deps.settings().since;
+          const rows = this.deps.store.uploadQueue(QUEUE_PAGE, { afterSeq, since });
+          if (!rows.length) break;
+          afterSeq = rows[rows.length - 1].seq;
+          for (const q of rows) {
+            if (sent >= PASS_SESSIONS) break;
+            if (!this.sendable(q, this.deps.settings().since)) continue;
+            if (!this.mayGoOn(url)) return { sent, failed: 0 };
+            await this.sendSession(install, q.traceId, q.seq);
+            this.deps.store.markUploaded(q.traceId, q.seq, this.now());
+            sent++;
+          }
+          if (rows.length < QUEUE_PAGE) break;
         }
-        if (rows.length < QUEUE_PAGE) break;
       }
       this.failures = 0;
       this.nextTryAt = undefined;
@@ -327,6 +398,8 @@ export class TraceUploader {
         // The consent first: an install file that will not go must not leave sharing on.
         this.deps.withdrawConsent();
         this.dropInstall();
+        // Its copies went with it: no delete owed to it can go, or needs to (the Audit's I-2 at 98e921347).
+        this.forgetOwedDeletes('the back-office forgot this install');
         this.notice = 'forgotten';
         this.lastError = 'This back-office no longer knows this Tars. Nothing is sent until you share again.';
         this.nextTryAt = undefined;
@@ -487,6 +560,9 @@ export class TraceUploader {
   }
 
   private async sendSession(install: Install, traceId: string, seq: number): Promise<void> {
+    // Before any call: from here the back-office may hold the session, whole or in part, so a delete made while its
+    // batches land, or after a pass that failed half way, owes it one (the Audit's M1 at 98e921347).
+    this.deps.store.markSending(traceId, this.now());
     const payload = this.buildPayload(install.secret, traceId, seq);
     if (!payload) return;
     const { blobs, batches } = payload;

@@ -406,7 +406,8 @@ export function traceUploader(): TraceUploader {
 
 function uploadPass(): void {
   const t = traceSettingsOf(deps?.getSettings());
-  if (!t.uploadUrl || !uploadConsentAt()) return;
+  // Without consent a pass still sends the per-session deletes owed to the install (trace-upload.ts runOnce decides).
+  if (!t.uploadUrl) return;
   traceUploader().runOnce()
     .then((r) => { if (r.sent || r.failed) deps?.emit('traces:changed'); })
     .catch((err) => { console.error(`[traces] an upload pass failed: ${describeSecretFileError(err)}`); });
