@@ -466,8 +466,9 @@ describe('the log decides nothing', () => {
 
 const WHERE = () => path.join(project, '.worktrees', 'load', RUN, 'fix-retry-1');
 const last = (n: number) => f.log.filter(x => x.n === n).at(-1) as Record<string, unknown> | undefined;
-/** The agent works and rests: its turn ends. What it wrote is in its worktree. */
+/** The agent works until `at`, then rests: its turn ends. What it wrote is in its worktree. */
 async function sessionEnds(agentId: string, at: number, wrote?: Record<string, string>) {
+  await c.advance(at);
   for (const [file, text] of Object.entries(wrote ?? {})) fs.writeFileSync(path.join(WHERE(), file), text);
   setStatus(agentId, 'running');
   setStatus(agentId, 'waiting');
