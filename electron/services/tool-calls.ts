@@ -77,11 +77,15 @@ const num = (v: unknown): number | undefined => (typeof v === 'number' && Number
 function parse(line: string): Json | null {
   if (!line || line[0] !== '{') return null;
   try {
-    const v = JSON.parse(line);
-    return v && typeof v === 'object' && !Array.isArray(v) ? v as Json : null;
+    return objectOf(JSON.parse(line));
   } catch {
     return null;
   }
+}
+
+/** A parsed line, when it is an object: what the readers below take. */
+function objectOf(v: unknown): Json | null {
+  return v && typeof v === 'object' && !Array.isArray(v) ? v as Json : null;
 }
 
 /** The flags and numbers of a part, the false and absent ones left out. */
@@ -91,7 +95,12 @@ function partOf(p: ToolCallPart): ToolCallPart {
 
 /** One line of a codex rollout, read for its tool calls; null for any other line. */
 export function codexToolPartOf(line: string): ToolCallPart | null {
-  const entry = parse(line);
+  return codexToolPartOfEntry(parse(line));
+}
+
+/** The same, from the line already parsed: the watcher parses each line once, for its tool call and its event. */
+export function codexToolPartOfEntry(value: unknown): ToolCallPart | null {
+  const entry = objectOf(value);
   if (!entry) return null;
   const p = asObj(entry.payload);
   if (entry.type === 'event_msg' && p.type === 'item_completed') {
@@ -138,7 +147,12 @@ function textOf(content: unknown): string {
 
 /** One line of a pi session file, read for its tool calls: a batch's start, a call's result, or null. */
 export function piToolLineOf(line: string): { batchAt: number } | { part: ToolCallPart } | null {
-  const entry = parse(line);
+  return piToolLineOfEntry(parse(line));
+}
+
+/** The same, from the line already parsed: the watcher parses each line once, for its tool call and its event. */
+export function piToolLineOfEntry(value: unknown): { batchAt: number } | { part: ToolCallPart } | null {
+  const entry = objectOf(value);
   if (!entry || entry.type !== 'message') return null;
   const m = asObj(entry.message);
   if (m.role === 'assistant') {

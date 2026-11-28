@@ -2,7 +2,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 import type { HookPost } from './codex-sessions';
 import { reportOf } from './terminal-answer';
-import { piToolLineOf, type ToolCallPart } from './tool-calls';
+import { piToolLineOfEntry, type ToolCallPart } from './tool-calls';
 
 export type { HookPost };
 
@@ -50,6 +50,11 @@ function textOf(content: unknown): string {
 export function piEventOf(line: string): PiEvent | null {
   let entry: unknown;
   try { entry = JSON.parse(line); } catch { return null; }
+  return piEventOfEntry(entry);
+}
+
+/** The same, from the line already parsed: the watcher parses each line once, for its event and its tool call. */
+export function piEventOfEntry(entry: unknown): PiEvent | null {
   if (!entry || typeof entry !== 'object' || Array.isArray(entry)) return null;
   const e = entry as { type?: unknown; id?: unknown; message?: unknown };
   if (e.type === 'session') return typeof e.id === 'string' && e.id ? { kind: 'session', id: e.id } : null;
@@ -214,10 +219,13 @@ export class PiSessionWatch {
     f.partial = lines.pop() ?? '';
     for (const line of lines) {
       // A batch of tool calls begun, or one call's result, for the agent's traced session (trace feature C1).
-      const call = this.deps.toolCall ? piToolLineOf(line) : null;
+      // Each line parsed once, for its tool call and its event.
+      let entry: unknown;
+      try { entry = JSON.parse(line); } catch { continue; }
+      const call = this.deps.toolCall ? piToolLineOfEntry(entry) : null;
       if (call && 'batchAt' in call) f.batchAt = call.batchAt;
       else if (call) this.deps.toolCall!(agentId, f.batchAt === undefined ? call.part : { ...call.part, startedAt: f.batchAt });
-      const event = piEventOf(line);
+      const event = piEventOfEntry(entry);
       if (!event) continue;
       if (event.kind === 'session') {
         if (!f.registered) {

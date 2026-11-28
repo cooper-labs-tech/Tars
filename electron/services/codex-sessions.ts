@@ -2,7 +2,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 import { codexHome, codexRolloutOf } from '../providers/codex-cli';
 import { reportOf } from './terminal-answer';
-import { codexToolPartOf, type ToolCallPart } from './tool-calls';
+import { codexToolPartOfEntry, type ToolCallPart } from './tool-calls';
 
 /**
  * Codex's turns, read from its own session log and told to Tars the way Claude Code's hooks tell it (2.0.4).
@@ -68,6 +68,11 @@ function errorText(error: unknown): string | null {
 export function codexEventOf(line: string): CodexEvent | null {
   let entry: unknown;
   try { entry = JSON.parse(line); } catch { return null; }
+  return codexEventOfEntry(entry);
+}
+
+/** The same, from the line already parsed: the watcher parses each line once, for its event and its tool call. */
+export function codexEventOfEntry(entry: unknown): CodexEvent | null {
   if (!entry || typeof entry !== 'object' || Array.isArray(entry)) return null;
   const { type, payload, timestamp } = entry as { type?: unknown; payload?: unknown; timestamp?: unknown };
   if (!payload || typeof payload !== 'object') return null;
@@ -435,10 +440,13 @@ export class CodexSessionWatch {
     }
     // A last line with no end yet is still being written: it waits for the rest (linesOf).
     for (const line of linesOf(b, chunk)) {
+      // Each line parsed once (a command's line holds up to 64 KiB of its output), for its tool call and its event.
+      let entry: unknown;
+      try { entry = JSON.parse(line); } catch { continue; }
       // A tool call's command end or output line, for the agent's traced session (trace feature C1).
-      const call = this.deps.toolCall ? codexToolPartOf(line) : null;
+      const call = this.deps.toolCall ? codexToolPartOfEntry(entry) : null;
       if (call) this.deps.toolCall!(b.agentId, call);
-      const event = codexEventOf(line);
+      const event = codexEventOfEntry(entry);
       if (!event) continue;
       if (event.kind === 'session') {
         if (!b.registered) {

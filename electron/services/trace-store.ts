@@ -352,6 +352,11 @@ CREATE TABLE IF NOT EXISTS tool_calls (
 /** A call belongs to a session when it happened within it, give or take this. */
 const TOOL_CALL_SLACK_MS = 1000;
 
+/** What a tool call's row weighs in the store's size and its session's bytes: its id and its facts, in bytes. */
+function toolCallRowBytes(callId: string, partJson: string): number {
+  return Buffer.byteLength(callId) + Buffer.byteLength(partJson);
+}
+
 /** The time a set of intervals covers, each counted once where they overlap (calls run at once). */
 function unionMs(spans: Array<[number, number]>): number {
   let total = 0;
@@ -838,7 +843,9 @@ export class TraceStore {
     if (merged === before) return false;
     this.db.prepare(`INSERT INTO tool_calls (trace_id, tool_call_id, part_json) VALUES (?, ?, ?)
       ON CONFLICT(trace_id, tool_call_id) DO UPDATE SET part_json = excluded.part_json`).run(traceId, part.callId, merged);
-    this.db.prepare('UPDATE traces SET updated_seq = ? WHERE trace_id = ?').run(this.nextSeq(), traceId);
+    // The row weighs in the session's bytes as it weighs in the store's size (stats): what it adds, once.
+    const grew = toolCallRowBytes(part.callId, merged) - (before === undefined ? 0 : toolCallRowBytes(part.callId, before));
+    this.db.prepare('UPDATE traces SET bytes = bytes + ?, updated_seq = ? WHERE trace_id = ?').run(grew, this.nextSeq(), traceId);
     return true;
   }
 
@@ -1156,15 +1163,17 @@ export class TraceStore {
   }
 
   /**
-   * The store's size (its blobs, and a fixed cost per request for the rows), counts, and per project the sessions and
+   * The store's size (its blobs, a fixed cost per request for the rows, and the tool calls' rows by what they hold), counts, and per project the sessions and
    * the bytes they wrote first. A blob shared by two projects counts for the one that wrote it.
    */
   stats(): { bytes: number; sessions: number; requests: number; blobs: number; oldest?: number; bodiesDropped: boolean; byProject: Array<{ projectPath: string; sessions: number; bytes: number }> } {
     const b = this.db.prepare('SELECT COUNT(*) AS n, COALESCE(SUM(stored), 0) AS s FROM blobs').get() as { n: number; s: number };
     const t = this.db.prepare('SELECT COUNT(*) AS n, MIN(started_at) AS oldest FROM traces').get() as { n: number; oldest: number | null };
     const r = this.db.prepare('SELECT COUNT(*) AS n FROM requests').get() as { n: number };
+    // The tool calls' rows, by what they hold (trace feature C1): as toolCallRowBytes counts them for their session.
+    const c = this.db.prepare('SELECT COALESCE(SUM(length(CAST(tool_call_id AS BLOB)) + length(CAST(part_json AS BLOB))), 0) AS s FROM tool_calls').get() as { s: number };
     const byProject = this.db.prepare('SELECT project_path AS projectPath, COUNT(*) AS sessions, COALESCE(SUM(bytes), 0) AS bytes FROM traces GROUP BY project_path ORDER BY project_path').all() as Array<{ projectPath: string; sessions: number; bytes: number }>;
-    return { bytes: b.s + r.n * ROW_BYTES, sessions: t.n, requests: r.n, blobs: b.n, oldest: t.oldest ?? undefined, bodiesDropped: this.bodiesDropped, byProject };
+    return { bytes: b.s + r.n * ROW_BYTES + c.s, sessions: t.n, requests: r.n, blobs: b.n, oldest: t.oldest ?? undefined, bodiesDropped: this.bodiesDropped, byProject };
   }
 
   private dropOrphanBlobs(): void {
