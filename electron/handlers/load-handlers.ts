@@ -124,8 +124,13 @@ export function registerLoadHandlers(deps: LoadHandlerDeps): { window: LoadWindo
     isRunning: runId => window.isRunning(runId),
     endRun: (runId, stopped) => window.endRun(runId, stopped),
     grantHarnesses: project => readGrants(dirs.grants).find(g => g.path === project)?.harnesses ?? [],
+    // Where the owner's grant runs the project's load agents, from the private file at each read (the Audit's M1 on #691).
+    grantTarget: (project) => {
+      const g = readGrants(dirs.grants).find(x => x.path === project);
+      return g ? { endpointId: g.endpointId ?? null, model: g.model ?? null } : undefined;
+    },
     loadAgents: () => [...deps.agents.values()].filter(a => a.load === true)
-      .map(a => ({ id: a.id, name: a.name ?? a.id, projectPath: a.projectPath, provider: String(a.provider ?? ''), status: a.status })),
+      .map(a => ({ id: a.id, name: a.name ?? a.id, projectPath: a.projectPath, provider: String(a.provider ?? ''), status: a.status, endpointId: a.endpointId ?? null, model: a.model ?? null })),
     // The busy cap's seam, shaped like #593's capVerdict (core/project-cap.ts): every arrival allowed until it lands.
     busyCap: () => ({ ok: true }),
     git: (cwd, args) => safeGit(cwd, args, { timeout: 60_000 }).then(r => r.stdout),
