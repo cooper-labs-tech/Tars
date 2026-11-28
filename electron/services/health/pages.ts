@@ -5,6 +5,6 @@
  * checks this list against src/app on disk.
  */
 export const APP_PAGES: ReadonlySet<string> = new Set([
-  '/', '/agents', '/chat', '/chats', '/crons', '/kanban', '/logs', '/memory', '/project', '/projects',
+  '/', '/agents', '/chat', '/chats', '/crons', '/kanban', '/load-window', '/logs', '/memory', '/project', '/projects',
   '/resources', '/review', '/settings', '/skills', '/traces', '/tray-panel', '/usage', '/vault', '/whats-new',
 ]);
