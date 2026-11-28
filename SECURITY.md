@@ -1264,6 +1264,15 @@ would be sent.
 - A turn's author goes by kind (user, orchestrator, agent), never a name.
 - A session's environment goes as exact values (the owner's decision of 27/11): the machine's model, chip, cores and
   memory, the system, Tars's version, the locale and the time zone, each on its own line of the notice.
+- A gate's verdict (`POST /api/verdicts`, the tool `record_verdict`) is recorded by an agent with its own token, in
+  its own name and for its own project: the shared token, Tars's pass and a gateway's secret are refused, and so is a
+  body naming another agent. Any agent of a project may record a `qa` or `audit` verdict, never on its own work (its
+  traced turns made the judged head or a commit before it), and the record keeps who did, with its name and role from
+  the fleet. `ci` is Tars's alone. It goes up in the outcome's `gates` without its report's path or its recorder's
+  name, which stay here.
+- **What a verdict is not:** verdicts live in `traces.db`, which agents can write, like every trace row. A verdict is
+  a label from a cooperative fleet, held by the route and the tool, not a proof against an agent that edits the
+  file. A list of gate agents the owner designates would be the stronger form; it is the owner's to ask for.
 - A turn's workspace goes as numbers and hashes only: the commits at its start and end as git names them (as the
   session's outcome already sends its head), two tree hashes that name no file, its files and lines counted, and
   their survival. Never a path or a line of the files.

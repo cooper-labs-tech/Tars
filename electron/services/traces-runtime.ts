@@ -32,6 +32,7 @@ import { TraceUploader } from './trace-upload';
 import type { ToolCallPart } from './tool-calls';
 import { ENDED_GRACE_MS, HarnessToolLogs, type FollowedSession } from './harness-tool-logs';
 import { WorkspaceRecorder } from './turn-workspace';
+import { ciVerdicts, recordVerdict, relinkSession, type VerdictCaller, type VerdictInput } from './gate-verdicts';
 import { SECRET_FIELDS, keysKeptAfter, withKeptKeys } from './settings-secrets';
 
 /**
@@ -424,6 +425,33 @@ let workspace: WorkspaceRecorder | null = null;
 export function turnWorkspace(): WorkspaceRecorder {
   if (!workspace) workspace = new WorkspaceRecorder({ store: traceStore() });
   return workspace;
+}
+
+/**
+ * A gate's verdict, recorded by the agent that gates (api-routes/verdict-routes.ts): linked to the traced turns that
+ * made the judged head, then CI's own verdict on the same pull request read from its checks, off the call's path.
+ */
+export async function recordGateVerdict(caller: VerdictCaller, v: VerdictInput): Promise<Awaited<ReturnType<typeof recordVerdict>>> {
+  const r = await recordVerdict({ store: traceStore(), branchOf: runningBranchOf }, caller, v);
+  if (r.changed) changed();
+  if (v.gate !== 'ci') {
+    void ciVerdicts({ store: traceStore() }, caller, v.pr).then((ci) => { if (ci) changed(); }, () => undefined);
+  }
+  return r;
+}
+
+/**
+ * The branch of a traced session still running: the one the folder its workspace is recorded in is on now (the read
+ * the session's end makes for its outcome, gitOutcome). Null for a session that is not running, or a detached head.
+ */
+async function runningBranchOf(traceId: string): Promise<string | null> {
+  for (const s of sessions.values()) {
+    if (!s.traced || s.traceId !== traceId) continue;
+    const agent = agentOf(s.agentId);
+    const { branch } = await gitOutcome(agent?.worktreePath || agent?.projectPath);
+    return branch && branch !== 'HEAD' ? branch : null;
+  }
+  return null;
 }
 
 /** The folder an agent works in: its worktree, else its project. */
@@ -852,22 +880,31 @@ export function closeEndpointSession(token: string | undefined): void {
   const agent = agentOf(live.agentId);
   const folder = agent?.worktreePath || agent?.projectPath;
   // The last turn's end, then each turn's survival (turn-workspace.ts).
-  void turnWorkspace().sessionEnded(live.traceId, endedAt, folder);
-  void gitOutcome(folder).then((git) => {
+  const lastTurn = turnWorkspace().sessionEnded(live.traceId, endedAt, folder).catch(() => undefined);
+  const ended = gitOutcome(folder).then((git) => {
     try {
       const counts = traceStore().requestCounts(live.traceId);
       const tasks = tasksOf(live, endedAt);
       const ownId = [...live.named].find(([, n]) => n.ref === live.startRef)?.[0];
       const task = tasks.find(t => t.id === ownId) ?? tasks[0];
+      // endTrace puts the gates already linked back into the outcome it writes, within what the tasks leave of 12 KiB
+      // (trace-store.ts refreshGates): the tasks first, then the gates.
       traceStore().endTrace(live.traceId, endedAt, boundOutcomeTasks({
         ...git, heldRequests: counts.held, requestErrors: counts.errors, abandonedWhileHeld: counts.abandoned,
         ...(task ? { task } : {}), ...(tasks.length ? { tasks } : {}),
       }));
       changed();
+      return true;
     } catch (err) {
       console.error(`[traces] session not ended: ${(err as Error).message}`);
+      return false;
     }
   });
+  // Once the last turn's head and the branch are known: the project's verdicts linked again for this session.
+  void Promise.all([lastTurn, ended]).then(async ([, ok]) => {
+    if (!ok || !folder) return;
+    if (await relinkSession({ store: traceStore() }, live.traceId, folder)) changed();
+  }).catch((err) => console.error(`[traces] verdicts not linked again at the session's end: ${(err as Error).message}`));
 }
 
 /**

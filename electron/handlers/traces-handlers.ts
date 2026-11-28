@@ -352,6 +352,7 @@ export function registerTracesHandlers(deps: TracesHandlerDeps): void {
       'for each turn, a hash of the working tree at its start and at its end, which names no file (startTree, endTree)',
       'for each turn, how many files it changed and how many lines it added and removed (filesChanged, linesAdded, linesRemoved)',
       'for each turn, how many of the lines it added are still there when the session ends, and again when its branch is merged or deleted (changedLines, survivedLines, reverted, survivalBasis)',
+      'the gates\' verdicts on the pull request heads the session\'s turns made, in its outcome: QA, Audit or CI, merge or no merge, when, the pull request\'s number and head, the turns it covers, who recorded it and in what role, and the test counts (never the report\'s path or the recorder\'s name)',
     ],
     stays: [
       'your keys and Tars\'s tokens (masked before upload)', 'sessions of projects and agents not opted in', 'the endpoints\' keys and addresses', 'anything outside traced sessions',

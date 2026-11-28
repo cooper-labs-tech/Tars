@@ -178,6 +178,17 @@ const DELETE_PAGE = 100;
 const sha256 = (b: Buffer): string => createHash('sha256').update(b).digest('hex');
 
 /**
+ * The outcome as it goes up: a gate's report path (a file on this computer) stays here, and so does its recorder's
+ * name, as every agent's name does (its id and role go).
+ */
+function withoutReports(outcome: unknown): unknown {
+  if (!outcome || typeof outcome !== 'object') return outcome;
+  const o = outcome as { gates?: unknown };
+  if (!Array.isArray(o.gates)) return outcome;
+  return { ...o, gates: o.gates.map((g) => { if (!g || typeof g !== 'object') return g; const { report: _r, byName: _n, ...rest } = g as Record<string, unknown>; return rest; }) };
+}
+
+/**
  * What a turn changed in the agent's repository, as it goes up: numbers and hashes only (the commits as git names
  * them, as the session's outcome.head already goes; the tree hashes; the counts; survival), never a path or a line.
  * An unknown value is left out, never sent as 0.
@@ -586,7 +597,7 @@ export class TraceUploader {
       model: String(t.model), startedAt: Number(t.started_at), endedAt: opt(t.ended_at as number),
       finalStatus: String(t.final_status), turnCount: Number(t.turn_count), requestCount: Number(t.request_count),
       tokensIn: Number(t.tokens_in), tokensCached: Number(t.tokens_cached), tokensOut: Number(t.tokens_out),
-      mixed: t.mixed === true, unknownTurns: Number(t.unknown_turns ?? 0), outcome: t.outcome ? scrub(t.outcome) : undefined,
+      mixed: t.mixed === true, unknownTurns: Number(t.unknown_turns ?? 0), outcome: t.outcome ? scrub(withoutReports(t.outcome)) : undefined,
       // The harness's own session id, the machine and the system, the power events: each its own line in the notice.
       nativeSessionId: within(t.native_session_id, MAX_SESSION_ID_CHARS), environment: opt(t.environment as Record<string, unknown>),
       events: Array.isArray(t.events) ? t.events : [],
