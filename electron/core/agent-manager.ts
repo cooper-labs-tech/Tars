@@ -30,7 +30,6 @@ import { cliPathDirs } from '../utils/cli-path-dirs';
 import { getProvider } from '../providers';
 import { extractStatusLine } from '../utils/ansi';
 import { carriedByTrim } from '../utils/terminal-modes';
-import { updateSharedJsonSync } from '../utils/shared-file';
 import { renameReplacingSync } from '../platform/rename-replacing';
 import { scheduleTick } from '../utils/agents-tick';
 import { getTasmaniaStatus } from '../services/tasmania-client';
@@ -42,7 +41,7 @@ import { clearNoTerminal, markNoTerminal } from './no-terminal';
 import { currentApiCall } from '../services/api-routes/call-context';
 import { reportAgentToolError, reportHandledError, taskNeverStarted } from '../services/error-reports/handled';
 import { UNKNOWN_TOOL } from '../services/error-reports/report';
-import { trustsTooMuch } from '../utils/trust-too-much';
+import { ensureProjectTrusted } from './claude-trust';
 import { readProgramStatus, forgetProgramStatus } from '../services/program-status';
 
 /**
@@ -115,78 +114,8 @@ export function wireDialogProbe(): void {
   setTurnInProgressProbe(agentId => agents.get(agentId)?.status === 'running');
 }
 
-/**
- * Pre-populate Claude Code's workspace trust record for a given directory.
- *
- * BUG 6 fix: `--dangerously-skip-permissions` skips *runtime* permission
- * prompts (Edit/Write/Bash confirmations), but Claude Code has a SEPARATE
- * "workspace trust" dialog that fires on first launch in an unknown directory.
- * That dialog is gated by `~/.claude.json`'s
- * `projects[<absolute-path>].hasTrustDialogAccepted` flag: NOT by the
- * runtime permission mode. So even a bypass-mode agent hits the trust prompt
- * on first launch in a new project.
- *
- * Writing the flag ourselves before we spawn the claude process makes the
- * trust dialog never appear. Safe to call repeatedly and idempotent.
- *
- * Every live Claude Code reads and rewrites this file, so it is changed through
- * updateSharedJsonSync: never in place, never when the flag is already there,
- * with its 0600 mode kept. See that function for the risk that remains.
- */
-export function ensureProjectTrusted(projectPath: string): void {
-  if (!projectPath) return;
-  if (trustsTooMuch(projectPath)) {
-    console.warn(`ensureProjectTrusted: ${projectPath} would trust every folder below it, left for Claude Code to ask`);
-    return;
-  }
-  const claudeJsonPath = path.join(os.homedir(), '.claude.json');
-  type ClaudeConfig = {
-    projects?: Record<string, {
-      hasTrustDialogAccepted?: boolean;
-      projectOnboardingSeenCount?: number;
-      [key: string]: unknown;
-    }>;
-    [key: string]: unknown;
-  };
-
-  // Claude Code reads the flag under the folder it starts in, as the system
-  // names it: the real path. A project reached through a link (anything under
-  // macOS's /var or /tmp, a checkout linked elsewhere) trusted under the
-  // spelling Tars saved alone still showed the dialog, and the agent's first
-  // task answered it. Both are written; trustsTooMuch has judged both.
-  const keys = [projectPath];
-  try {
-    const real = fs.realpathSync.native(projectPath);
-    if (real !== projectPath) keys.push(real);
-  } catch {
-    // Not there yet: the saved spelling is all there is.
-  }
-
-  try {
-    const outcome = updateSharedJsonSync<ClaudeConfig>(claudeJsonPath, config => {
-      if (keys.every(key => config?.projects?.[key]?.hasTrustDialogAccepted === true)) return undefined;
-      const projects = { ...config?.projects };
-      for (const key of keys) {
-        const existing = projects[key] ?? {};
-        projects[key] = {
-          ...existing,
-          hasTrustDialogAccepted: true,
-          projectOnboardingSeenCount: existing.projectOnboardingSeenCount ?? 1,
-        };
-      }
-      return { ...config, projects };
-    });
-    if (outcome === 'written') {
-      console.log(`ensureProjectTrusted: marked ${projectPath} trusted in ~/.claude.json`);
-    } else if (outcome === 'unreadable') {
-      console.warn(`ensureProjectTrusted: ${claudeJsonPath} is not valid JSON, left untouched`);
-    } else if (outcome === 'busy') {
-      console.warn(`ensureProjectTrusted: ${claudeJsonPath} kept changing, trust for ${projectPath} not written`);
-    }
-  } catch (err) {
-    console.warn(`ensureProjectTrusted: failed to update ${claudeJsonPath}:`, err);
-  }
-}
+// Claude Code's workspace trust for every folder an agent's CLI is handed, before it starts (core/claude-trust.ts).
+export { ensureProjectTrusted };
 
 export let agentsLoaded = false;
 
@@ -1220,6 +1149,9 @@ export async function launchIntoTerminal(
   // QA's L1 on #448). A launch that owes it says so after (startAgentCli).
   oweToFirstMessage(ptyProcess, '');
   if (start.platform === 'win32') return startCliInTerminal(agent, start, opts);
+  // Typed into a terminal opened earlier: the folders the line hands now, a secondary folder set since included
+  // (agent:setSecondaryProject only saves it), trusted before Claude Code reads them.
+  ensureProjectTrusted(start.cwd, agent);
   if (opts.ready) await opts.ready(ptyProcess);
   // codex typed into a shell already there, one reused too: noted as it starts (core/agent-pty.ts).
   if (getProvider(agent.provider).binaryName === 'codex') codexLaunching(agent.id, start.cwd);
@@ -1268,7 +1200,7 @@ async function initAgentPtyLocked(
 
 /** The CLI as the terminal's process, with the launch's folder and environment (win32: nothing is typed into a shell). */
 function spawnCli(agent: AgentStatus, launch: DirectLaunch): { ptyProcess: pty.IPty; cwd: string } {
-  ensureProjectTrusted(launch.cwd);
+  ensureProjectTrusted(launch.cwd, agent);
   console.log(`Starting the CLI of agent ${agent.id} in ${launch.cwd}: ${launch.file}`);
   const ptyProcess = spawnAgentPty({
     binaryName: getProvider(agent.provider).binaryName,
@@ -1292,9 +1224,9 @@ async function spawnShell(agent: AgentStatus): Promise<{ ptyProcess: pty.IPty; c
     cwd = os.homedir();
   }
 
-  // BUG 6: pre-accept Claude Code's workspace trust dialog for this cwd so
-  // bypass-mode agents never see the first-launch prompt.
-  ensureProjectTrusted(cwd);
+  // BUG 6: pre-accept Claude Code's workspace trust dialog for this cwd and the
+  // folders the agent is handed, so bypass-mode agents never see it.
+  ensureProjectTrusted(cwd, agent);
 
   console.log(`Initializing PTY for restored agent ${agent.id} in ${cwd}`);
 

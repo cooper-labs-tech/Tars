@@ -652,8 +652,8 @@ function registerAgentHandlers(deps: IpcHandlerDependencies): void {
       const workingDir = agent.worktreePath || agent.projectPath;
       const cwd = fs.existsSync(workingDir) ? workingDir : os.homedir();
 
-      // BUG 6: pre-accept Claude Code's workspace trust dialog for this cwd.
-      ensureProjectTrusted(cwd);
+      // BUG 6: pre-accept Claude Code's workspace trust dialog for this cwd and the folders the agent is handed.
+      ensureProjectTrusted(cwd, agent);
 
       // Local provider uses Claude provider env vars + Tasmania env vars.
       // Override CLAUDE_PROVIDER to 'local' so usage tracking records the correct provider.

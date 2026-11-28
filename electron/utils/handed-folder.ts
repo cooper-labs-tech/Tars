@@ -1,6 +1,6 @@
 import * as fs from 'fs';
 import * as path from 'path';
-import { PRIVATE_DIR } from '../constants';
+import { DATA_DIR, PRIVATE_DIR } from '../constants';
 import { isUnder, samePath } from '../platform/path-compare';
 
 /**
@@ -75,4 +75,21 @@ export function handedSecondaryFolder(folder: string | undefined): string | unde
   if (!problem) return folder;
   console.warn(`[launch] folder not handed: ${problem}`);
   return undefined;
+}
+
+/**
+ * The folders a claude agent's line hands with --add-dir (providers/claude-provider.ts), in its order: its secondary
+ * folder, a template's folders that exist, each as handedSecondaryFolder allows, and ~/.tars, which every agent is
+ * handed. The one list both the line and its trust are made from (core/claude-trust.ts): Claude Code stops before its
+ * first turn on any of these it does not trust (measured on 2.1.332, 27/11).
+ */
+export function claudeAddedFolders(agent: { secondaryProjectPath?: string | null; obsidianVaultPaths?: string[] | null }): string[] {
+  const folders: string[] = [];
+  const secondary = handedSecondaryFolder(agent.secondaryProjectPath ?? undefined);
+  if (secondary) folders.push(secondary);
+  for (const vp of agent.obsidianVaultPaths ?? []) {
+    if (handedSecondaryFolder(vp) && fs.existsSync(vp)) folders.push(vp);
+  }
+  folders.push(DATA_DIR);
+  return folders;
 }

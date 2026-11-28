@@ -730,7 +730,8 @@ describe("Claude's own files, written only through updateSharedJsonSync", () => 
     // them, and at least the helper's own write calls among all the others.
     const byFile = (file: string) => new Set(real.helperWrites.filter(w => w.file === file).map(w => w.site.split(':')[0]));
     expect([...byFile('~/.claude.json')].sort()).toEqual(expect.arrayContaining([
-      path.join('electron', 'core', 'agent-manager.ts'),
+      // The workspace trust written before an agent starts (agent-manager.ts until the folders it is handed joined it).
+      path.join('electron', 'core', 'claude-trust.ts'),
       path.join('electron', 'services', 'mcp-orchestrator.ts'),
     ]));
     expect([...byFile('~/.claude/settings.json')].sort()).toEqual(expect.arrayContaining([

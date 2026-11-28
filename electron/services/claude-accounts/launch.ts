@@ -3,6 +3,7 @@ import type { AgentStatus, ClaudeAccountsSettings } from '../../types';
 import type { AccountEnv, AccountEnvPurpose } from '../../core/account-env';
 import { DEFAULT_ACCOUNT_ID, readAccountsSettings } from './registry';
 import { claudeCredentialOverrides, projectsProblem, provisionAccountDir } from './provision';
+import { ensureProjectTrusted } from '../../core/claude-trust';
 import { readAccountUsage } from './counters';
 import { chooseAccount, type AccountUsage, type Choice } from './choose';
 import { blockedUntil, getAuth, noteMove, recentMoves, takeMove } from './state';
@@ -138,6 +139,8 @@ function envFor(agent: AgentStatus, settings: ClaudeAccountsSettings, choice: Ch
     const home = ctx.home ?? os.homedir();
     provisionAccountDir(account.configDir, home, { projectPath: ctx.cwd });
     if (ctx.cwd !== agent.projectPath && agent.projectPath) provisionAccountDir(account.configDir, home, { projectPath: agent.projectPath });
+    // Its CLI reads this account's .claude.json: the folders it is handed trusted there too (core/claude-trust.ts).
+    ensureProjectTrusted(ctx.cwd ?? agent.projectPath, agent, { configDir: account.configDir });
   } catch (err) {
     console.warn(`[claude-accounts] ${name}: on account 1, since ${account.label} cannot be used: ${err instanceof Error ? err.message : String(err)}`);
     return defaultEnv();

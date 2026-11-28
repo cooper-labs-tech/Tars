@@ -27,7 +27,7 @@
 | `electron/preload.ts` | The only bridge to the renderer: `contextBridge.exposeInMainWorld('electronAPI', …)`. Every new IPC channel is declared here first |
 | `electron/constants/index.ts` | `DATA_DIR` = `~/.tars`, `PRIVATE_DIR` = `~/.tars-private` (what agents are not handed), `API_PORT` = 31415, the file paths for agents/settings/kanban/vault/token, `GITHUB_REPO`, the MIME map used by the `app://` handler |
 | `electron/types/index.ts` | `AgentStatus`, `AppSettings`, `CLIPaths`, `AgentProvider`, `AgentPermissionMode`, `AgentEffort`. A new setting or provider starts here |
-| `electron/core/agent-manager.ts` | The agent `Map`, persistence to `agents.json`, `initAgentPty`, `ensureProjectTrusted` (pre-writes `hasTrustDialogAccepted` in `~/.claude.json`), `killStalePty` |
+| `electron/core/agent-manager.ts` | The agent `Map`, persistence to `agents.json`, `initAgentPty`, `ensureProjectTrusted` (from `core/claude-trust.ts`: pre-writes `hasTrustDialogAccepted` for the agent's folder and every folder its line hands, in `~/.claude.json` and the Claude account's own), `killStalePty` |
 | `electron/core/pty-manager.ts` | Four PTY maps (agent / quick / skill / plugin), `killAllPty`, and `writeProgrammaticInput`: the bracket-paste + delayed `\r` dance Claude Code's TUI requires |
 | `electron/core/window-manager.ts` | `BrowserWindow` (1600×1000, `hiddenInset`, `#121212`), window hardening, and the `app://` and `local-file://` protocol handlers |
 | `electron/handlers/ipc-handlers.ts` | 3009 lines, nearly every `ipcMain.handle`. Start here when a renderer call has no backend |

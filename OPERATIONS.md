@@ -2367,8 +2367,10 @@ The environment is `process.env` plus:
   `--add-dir`;
 - Tasmania env, when applicable.
 
-`ensureProjectTrusted(cwd)` pre-accepts Claude Code's workspace-trust dialog for the cwd, so
-bypass-mode agents never stall on the first-launch prompt.
+`ensureProjectTrusted(cwd, agent)` (`core/claude-trust.ts`) pre-accepts Claude Code's workspace-trust
+dialog for the cwd and for every folder the agent's line hands with `--add-dir` (`~/.tars`, and for
+claude its secondary folder and a template's folders), in the `.claude.json` its CLI reads (the Claude
+account's own with several accounts on), so bypass-mode agents never stall on a trust question.
 
 No agent terminal starts under 2 GB free on the home folder's disk: `/start`, `/dispatch` and
 `/message` answer 507 with `diskFull` and the space left, and the window's start is refused with the same
