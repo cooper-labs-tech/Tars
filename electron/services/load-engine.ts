@@ -3,8 +3,9 @@ import * as path from 'path';
 import { writeSecretFileSync } from '../utils/secret-file';
 import { resolveWorktreePath } from '../utils/worktree-path';
 import { LOAD_HARNESSES, type LoadHarness, type LoadTask } from './load-pool';
-import type { LoadArrival, LoadBlockReason, LoadRunAgent } from './load-run-record';
+import type { LoadArrival, LoadBlockReason, LoadRunAgent, LoadTestResult } from './load-run-record';
 import { loadBranchOf } from './load-session';
+import type { StepResult } from './load-steps';
 
 /**
  * The load window's engine (trace feature C3, part 2): an approved run's arrivals at their time, each admitted or
@@ -26,6 +27,22 @@ import { loadBranchOf } from './load-session';
  *   and its worktree and branch removed, from the private state only.
  * - **After a crash or a quit:** the worktrees the private state names are removed, and a run that was running ends
  *   in error, "Tars restarted during the window": nothing can tell what its sessions did meanwhile.
+ *
+ * Part 3:
+ * - **The setup** (the task's lines, from the snapshot): a task with lines asks for the heavy-run slot when it
+ *   arrives and never waits for it (not free: blocked `heavy_slot`, before any worktree); granted, its lines run one
+ *   after the other in the worktree, within 10 minutes in all, before the session; a line that fails or reaches the cap
+ *   ends the task there (`error`, with the line and why), with no session.
+ * - **The test** (its test_cmd), after the session, in the worktree: it waits for the slot up to the task's cap (the
+ *   wait recorded apart from the session's own time), then runs with that cap: `passed`, `failed` (its exit code, or at
+ *   its cap, its tree killed), or `not_run` (`none`, `heavy_slot` within the cap: never a failure, the window goes on;
+ *   `stopped`). The diff stat is taken before it, between the worktree's tree after the setup and at the session's end.
+ * - **The trace** of the session is tagged once its test ended (`outcome.load`): `load:<run>`, its task, arrival,
+ *   split, train_ok, diff stat and test.
+ * - **The disk floor:** checked every quarter of a minute while the run has anything open, and at each arrival; under
+ *   it the run ends `disk_floor`, its sessions are stopped and every setup or test in flight killed. The window's end by
+ *   time stops nothing: a running session keeps its cap and its test.
+ * - A minute is `deps.minuteMs` (60 000; a test build's DOROTHY_E2E_LOAD_MINUTE_MS, load-handlers.ts).
  */
 
 export interface LoadRunPlan {
@@ -46,7 +63,7 @@ export interface LoadEngineDeps {
   plan(runId: string): LoadRunPlan | undefined;
   isRunning(runId: string): boolean;
   /** Ends the run in the private approval (load-window.ts), with its reason. */
-  endRun(runId: string, stop: { reason: 'error'; at: number; detail: string }): void;
+  endRun(runId: string, stop: { reason: 'error' | 'disk_floor'; at: number; detail: string }): void;
   /** The harnesses the project's grant runs. */
   grantHarnesses(project: string): string[];
   /** Where the project's grant runs its load agents, from the private grant: its endpoint and model, or none. */
@@ -68,10 +85,38 @@ export interface LoadEngineDeps {
   onStatus(fn: (agentId: string) => void): () => void;
   /** The run's log: an arrival as it now stands. */
   logArrival(runId: string, arrival: LoadArrival): void;
+  /** A minute of the window's clocks, in ms: 60 000, or a test build's DOROTHY_E2E_LOAD_MINUTE_MS. */
+  minuteMs: number;
+  /** The heavy-run slot (services/heavy-slot-runtime.ts): granted now or not (a setup), or within a time (a test). */
+  slot: {
+    takeNow(ask: LoadSlotAsk): Promise<LoadLease | undefined>;
+    takeWithin(ask: LoadSlotAsk, ms: number, signal: AbortSignal): Promise<{ lease?: LoadLease; waitedMs: number }>;
+  };
+  /** Runs one step of a task, a setup line or its test_cmd (load-steps.ts, in a step's environment). */
+  runStep(o: { command: string; cwd: string; capMs: number; signal: AbortSignal }): Promise<StepResult>;
+  /** The free disk, in GB (health/machine.ts), and the floor under which the run stops (the heavy runs' floor). */
+  freeDiskGb(): number | null;
+  diskFloorGb(): number;
+  /** The trace the agent's current terminal records (traces-runtime.ts liveTraceOf). */
+  traceOf(agentId: string): string | undefined;
+  /** Merges a load session's tags into its trace's outcome (trace-store.ts mergeLoadOutcome). */
+  tagTrace(traceId: string, load: Record<string, unknown>): void;
 }
 
+export interface LoadSlotAsk { label: string; agentId: string; agentName: string; projectPath: string }
+export interface LoadLease { release(): void }
+
 interface Made { runId: string; n: number; project: string; path: string; branch: string; agentId: string }
-interface Session { runId: string; arrival: LoadArrival; made: Made; capTimer: unknown; sawRunning: boolean }
+interface Session {
+  runId: string; arrival: LoadArrival; made: Made; task: LoadTask; agentName: string; capTimer: unknown; sawRunning: boolean;
+  /** Stops a setup line in flight. */
+  ac: AbortController;
+  /** The setup under way: the line it runs, and since when. */
+  setupLine?: number; setupAt?: number;
+  /** The worktree's tree after the setup: what the diff stat starts from. */
+  baseTree?: string;
+  launchedAt?: number;
+}
 
 /** What a load task's session is told before its task. */
 export function loadPreamble(projectName: string): string {
@@ -82,9 +127,93 @@ export function loadPreamble(projectName: string): string {
 
 const RESTING = new Set(['waiting', 'idle', 'completed', 'stopped', 'error']);
 
+/** An arrival without what it was doing: the step it was at is over. */
+function withoutPhase(a: LoadArrival): LoadArrival {
+  const copy = { ...a };
+  delete copy.phase;
+  return copy;
+}
+
 export function createLoadEngine(deps: LoadEngineDeps) {
   const timers = new Map<string, unknown[]>();
   const open = new Map<string, Session>();
+  /** Each run's steps in flight (a setup line, a test, a wait for the slot): what a stop of the run kills. */
+  const inFlight = new Map<string, Set<AbortController>>();
+  /** Each run's tasks between their session's end and their cleanup (the test, the tags). */
+  const finishing = new Map<string, number>();
+  const diskTimers = new Map<string, unknown>();
+  const SETUP_CAP_MIN = 10;
+
+  const track = (runId: string, ac: AbortController) => {
+    const set = inFlight.get(runId) ?? new Set();
+    set.add(ac);
+    inFlight.set(runId, set);
+    return () => { set.delete(ac); };
+  };
+  const askOf = (s: Session, what: 'setup' | 'test'): LoadSlotAsk => ({
+    label: `load window ${s.runId}: ${what} of ${s.task.task_id} (arrival ${s.arrival.n})`,
+    agentId: s.made.agentId, agentName: s.agentName, projectPath: s.made.project,
+  });
+
+  /** The worktree is still the folder Tars made, reached through no link: else git and the steps stay out of it. */
+  function intact(m: Made): boolean {
+    try {
+      if (fs.lstatSync(m.path).isSymbolicLink()) return false;
+      return fs.realpathSync(m.path) === path.join(fs.realpathSync(m.project), path.relative(m.project, m.path));
+    } catch {
+      return false;
+    }
+  }
+
+  /** The worktree's tree as it stands, its ignored files left out (`git add -A`, `git write-tree`). */
+  async function treeOf(m: Made): Promise<string | undefined> {
+    if (!intact(m)) return undefined;
+    try {
+      await deps.git(m.path, ['add', '-A']);
+      return (await deps.git(m.path, ['write-tree'])).trim() || undefined;
+    } catch {
+      return undefined;
+    }
+  }
+
+  /** What the session changed: from the tree after the setup to the tree at its end. */
+  async function diffStatOf(s: Session): Promise<LoadArrival['diffStat']> {
+    if (!s.baseTree) return undefined;
+    const end = await treeOf(s.made);
+    if (!end) return undefined;
+    try {
+      const out = await deps.git(s.made.path, ['diff', '--shortstat', s.baseTree, end]);
+      const num = (re: RegExp) => Number(re.exec(out)?.[1] ?? 0);
+      return { files: num(/(\d+) files? changed/), insertions: num(/(\d+) insertions?\(\+\)/), deletions: num(/(\d+) deletions?\(-\)/) };
+    } catch {
+      return undefined;
+    }
+  }
+
+  /** The task's test after its session: the slot within its cap, then its run with that cap. */
+  async function runTest(s: Session): Promise<LoadTestResult> {
+    if (!s.task.test_cmd) return { result: 'not_run', reason: 'none' };
+    if (!intact(s.made)) return { result: 'not_run', reason: 'worktree_moved' };
+    const capMs = s.task.time_cap_min * deps.minuteMs;
+    const ac = new AbortController();
+    const untrack = track(s.runId, ac);
+    try {
+      const got = await deps.slot.takeWithin(askOf(s, 'test'), capMs, ac.signal);
+      if (ac.signal.aborted) { got.lease?.release(); return { result: 'not_run', reason: 'stopped', slotWaitMs: got.waitedMs }; }
+      if (!got.lease) return { result: 'not_run', reason: 'heavy_slot', slotWaitMs: got.waitedMs };
+      try {
+        const r = await deps.runStep({ command: s.task.test_cmd, cwd: s.made.path, capMs, signal: ac.signal });
+        const timed = { slotWaitMs: got.waitedMs, durationMs: r.durationMs };
+        if (r.aborted) return { result: 'not_run', reason: 'stopped', ...timed };
+        if (r.atCap) return { result: 'failed', atCap: true, ...timed };
+        return r.exitCode === 0 ? { result: 'passed', exitCode: 0, ...timed } : { result: 'failed', ...(r.exitCode !== null ? { exitCode: r.exitCode } : {}), ...timed };
+      } finally {
+        got.lease.release();
+      }
+    } finally {
+      untrack();
+    }
+  }
 
   /** The private state: the worktrees made (what cleanup reads), and each run's progress (what the card shows). */
   interface State { worktrees: Made[]; progress: Record<string, LoadArrival[]> }
@@ -158,15 +287,50 @@ export function createLoadEngine(deps: LoadEngineDeps) {
     }
   }
 
-  async function end(s: Session, how: NonNullable<LoadArrival['end']>): Promise<void> {
+  async function end(s: Session, how: NonNullable<LoadArrival['end']>, detail?: string): Promise<void> {
     if (open.get(s.made.agentId) !== s) return;
     open.delete(s.made.agentId);
     deps.clearTimer(s.capTimer);
-    s.arrival = { ...s.arrival, end: how, endedAt: deps.now() };
+    s.ac.abort();
+    const at = deps.now();
+    const ran = s.launchedAt !== undefined;
+    const arrival = withoutPhase(s.arrival);
+    s.arrival = {
+      ...arrival, end: how, endedAt: at,
+      ...(detail ? { endDetail: detail } : {}),
+      ...(ran ? { sessionMs: at - s.launchedAt! } : {}),
+      // A setup the stop cut: which line it was at.
+      ...(s.setupLine !== undefined && !arrival.setup && how === 'stopped'
+        ? { setup: { result: 'stopped' as const, lines: s.task.setup.length, line: s.setupLine, durationMs: at - (s.setupAt ?? at) } } : {}),
+      ...(ran && how !== 'stopped' ? { phase: 'test' as const } : {}),
+    };
     note(s.runId, s.arrival);
-    await deps.stopSession(s.made.agentId).catch(err => console.error(`[load] the session of ${s.made.agentId} did not stop: ${(err as Error).message}`));
-    deps.release(s.made.agentId);
-    await removeWorktree(s.made);
+    finishing.set(s.runId, (finishing.get(s.runId) ?? 0) + 1);
+    try {
+      await deps.stopSession(s.made.agentId).catch(err => console.error(`[load] the session of ${s.made.agentId} did not stop: ${(err as Error).message}`));
+      if (ran) {
+        // What the session changed, before its test writes anything; then the test; then the trace's tags.
+        const diffStat = await diffStatOf(s);
+        const test: LoadTestResult = how === 'stopped' ? { result: 'not_run', reason: 'stopped' } : await runTest(s);
+        const done = withoutPhase(s.arrival);
+        s.arrival = { ...done, ...(diffStat ? { diffStat } : {}), test };
+        note(s.runId, s.arrival);
+        if (s.arrival.traceId) {
+          try {
+            deps.tagTrace(s.arrival.traceId, {
+              tag: `load:${s.runId}`, runId: s.runId, taskId: s.task.task_id, n: s.arrival.n, split: s.task.split, trainOk: s.task.train_ok,
+              ...(diffStat ? { diffStat } : {}), test,
+            });
+          } catch (err) {
+            console.error(`[load] the trace ${s.arrival.traceId} was not tagged: ${(err as Error).message}`);
+          }
+        }
+      }
+      deps.release(s.made.agentId);
+      await removeWorktree(s.made);
+    } finally {
+      finishing.set(s.runId, (finishing.get(s.runId) ?? 1) - 1);
+    }
   }
 
   deps.onStatus((agentId) => {
@@ -199,6 +363,7 @@ export function createLoadEngine(deps: LoadEngineDeps) {
     }
     const task = plan.tasks.find(t => t.task_id === planned.taskId);
     if (!task) return;
+    if (await underFloor(runId)) return;
     const now = deps.now();
     const arrival: LoadArrival = { n: planned.n, taskId: planned.taskId, plannedAt: planned.plannedAt, actualAt: now };
     const block = (reason: LoadBlockReason, detail?: string) => {
@@ -222,29 +387,70 @@ export function createLoadEngine(deps: LoadEngineDeps) {
     const made: Made = { runId, n: planned.n, project: task.project, path: where, branch, agentId: agent.id };
     // Its place and its agent held before anything awaits: another arrival due at the same moment is admitted against
     // it, never past max_concurrent or onto the same agent.
-    const s: Session = { runId, arrival: started, made, capTimer: undefined, sawRunning: false };
+    const s: Session = { runId, arrival: started, made, task, agentName: agent.name, capTimer: undefined, sawRunning: false, ac: new AbortController() };
     open.set(agent.id, s);
+    // Setup lines take the heavy-run slot now or never: not free, blocked heavy_slot, before any worktree.
+    let lease: LoadLease | undefined;
+    if (task.setup.length > 0) {
+      lease = await deps.slot.takeNow(askOf(s, 'setup')).catch(() => undefined);
+      if (!lease) {
+        open.delete(agent.id);
+        block('heavy_slot', 'the heavy-run slot was not free for its setup');
+        return;
+      }
+    }
     // Named before git makes it: a crash in between leaves nothing the next start does not know of.
     writeState([...readState(), made]);
     try {
       await deps.git(task.project, ['worktree', 'add', '-b', branch, where, `${task.base_commit}^{commit}`]);
     } catch (err) {
+      lease?.release();
       open.delete(agent.id);
       writeState(readState().filter(w => w.path !== where));
       fail(`git worktree add: ${(err as Error).message.split('\n')[0]}`);
       return;
     }
     console.log(`[load] arrival ${planned.n} of ${runId} starts: ${agent.id} in ${where}`);
-    note(runId, started);
+    s.arrival = { ...started, ...(lease ? { phase: 'setup' as const } : {}) };
+    note(runId, s.arrival);
     // Its worktree set and its TMPDIR emptied (load-handlers.ts): a session started without either would start on
     // what an earlier one left, so none starts.
     try {
       deps.prepare(agent.id, where);
     } catch (err) {
+      lease?.release();
       console.error(`[load] arrival ${planned.n} of ${runId}: ${agent.id} not prepared: ${(err as Error).message}`);
       await end(s, 'error');
       return;
     }
+    if (lease) {
+      // Its lines one after the other, in the worktree, within 10 minutes in all; one that fails ends the task there.
+      const lines = task.setup.length;
+      const startedAt = deps.now();
+      const deadline = startedAt + SETUP_CAP_MIN * deps.minuteMs;
+      s.setupAt = startedAt;
+      const untrack = track(runId, s.ac);
+      try {
+        for (let i = 0; i < lines; i++) {
+          s.setupLine = i + 1;
+          const r = await deps.runStep({ command: task.setup[i], cwd: where, capMs: Math.max(0, deadline - deps.now()), signal: s.ac.signal });
+          // A stop of the run ended the task meanwhile (end() records the line it was at).
+          if (r.aborted || open.get(agent.id) !== s) return;
+          if (r.atCap || r.exitCode !== 0) {
+            s.arrival = { ...s.arrival, setup: { result: r.atCap ? 'at_cap' : 'failed', lines, line: i + 1, ...(r.exitCode !== null && !r.atCap ? { exitCode: r.exitCode } : {}), durationMs: deps.now() - startedAt } };
+            await end(s, 'error', r.atCap ? `setup line ${i + 1} reached the ${SETUP_CAP_MIN}-minute cap` : `setup line ${i + 1} exited ${r.exitCode ?? 'without a code'}`);
+            return;
+          }
+        }
+      } finally {
+        untrack();
+        lease.release();
+      }
+      s.setupLine = undefined;
+      s.arrival = { ...s.arrival, setup: { result: 'passed', lines, durationMs: deps.now() - startedAt } };
+    }
+    // What the session changes is measured from here: the setup's files are no change of its.
+    s.baseTree = await treeOf(made);
     // The grant and the record read again at launch: a record moved since the admission runs nothing.
     const now_ = deps.loadAgents().find(a => a.id === agent.id);
     if (!now_ || !onGrant(task, now_)) {
@@ -259,12 +465,51 @@ export function createLoadEngine(deps: LoadEngineDeps) {
       await end(s, 'error');
       return;
     }
-    s.capTimer = deps.setTimer(() => { void end(s, 'at_cap'); }, task.time_cap_min * 60_000);
+    if (open.get(agent.id) !== s) return;
+    s.launchedAt = deps.now();
+    const traceId = deps.traceOf(agent.id);
+    const after = withoutPhase(s.arrival);
+    s.arrival = { ...after, phase: 'session', ...(traceId ? { traceId } : {}) };
+    note(runId, s.arrival);
+    s.capTimer = deps.setTimer(() => { void end(s, 'at_cap'); }, task.time_cap_min * deps.minuteMs);
   }
 
   function cancel(runId: string): void {
     for (const t of timers.get(runId) ?? []) deps.clearTimer(t);
     timers.delete(runId);
+  }
+
+  /** Whether the run has anything of its own under way: a session, a setup, a test. */
+  const busy = (runId: string) => [...open.values()].some(s => s.runId === runId) || (finishing.get(runId) ?? 0) > 0;
+
+  /**
+   * Under the disk floor: the run ends `disk_floor` (when it still ran), its sessions are stopped and every step in
+   * flight killed. True when it was.
+   */
+  async function underFloor(runId: string): Promise<boolean> {
+    const free = deps.freeDiskGb();
+    const floor = deps.diskFloorGb();
+    if (free === null || free >= floor) return false;
+    const detail = `${free} GB free, under the ${floor} GB floor`;
+    console.error(`[load] ${runId} stops at the disk floor: ${detail}`);
+    if (deps.isRunning(runId)) deps.endRun(runId, { reason: 'disk_floor', at: deps.now(), detail });
+    await stop(runId);
+    return true;
+  }
+
+  /** Reads the disk every quarter of a minute while the run runs or has anything under way. */
+  function watchDisk(runId: string): void {
+    const tick = () => {
+      diskTimers.delete(runId);
+      void (async () => {
+        if (!deps.isRunning(runId) && !busy(runId)) return;
+        if (await underFloor(runId)) return;
+        diskTimers.set(runId, deps.setTimer(tick, deps.minuteMs / 4));
+      })();
+    };
+    const was = diskTimers.get(runId);
+    if (was !== undefined) deps.clearTimer(was);
+    diskTimers.set(runId, deps.setTimer(tick, deps.minuteMs / 4));
   }
 
   /** Arms the run's arrivals, each at its planned time (one already due starts at once). */
@@ -275,11 +520,15 @@ export function createLoadEngine(deps: LoadEngineDeps) {
     cancel(runId);
     const now = deps.now();
     timers.set(runId, plan.planned.map(p => deps.setTimer(() => { void arrive(runId, p); }, p.plannedAt - now)));
+    watchDisk(runId);
   }
 
-  /** The run stopped: no more arrivals, and every open session of it ended, stopped, and cleaned. */
+  /** The run stopped: no more arrivals, every step in flight killed, and every open session ended, stopped, and cleaned. */
   async function stop(runId: string): Promise<void> {
     cancel(runId);
+    const disk = diskTimers.get(runId);
+    if (disk !== undefined) { deps.clearTimer(disk); diskTimers.delete(runId); }
+    for (const ac of inFlight.get(runId) ?? []) ac.abort();
     await Promise.all([...open.values()].filter(s => s.runId === runId).map(s => end(s, 'stopped')));
   }
 

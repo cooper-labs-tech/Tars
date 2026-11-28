@@ -53,9 +53,11 @@ export function runStep(o: { command: string; cwd: string; env: Record<string, s
   const started = Date.now();
   return new Promise((resolve) => {
     const win = process.platform === 'win32';
+    // Exactly the step's environment: what stepEnv kept, nothing of Tars's own added by spawn.
+    const env = o.env as NodeJS.ProcessEnv;
     const child = win
-      ? spawn(process.env.ComSpec || 'cmd.exe', ['/d', '/s', '/c', o.command], { cwd: o.cwd, env: o.env, stdio: 'ignore', windowsHide: true, windowsVerbatimArguments: true })
-      : spawn('/bin/sh', ['-c', o.command], { cwd: o.cwd, env: o.env, stdio: 'ignore', detached: true });
+      ? spawn(process.env.ComSpec || 'cmd.exe', ['/d', '/s', '/c', o.command], { cwd: o.cwd, env, stdio: 'ignore', windowsHide: true, windowsVerbatimArguments: true })
+      : spawn('/bin/sh', ['-c', o.command], { cwd: o.cwd, env, stdio: 'ignore', detached: true });
     let atCap = false;
     let aborted = false;
     let settled = false;
