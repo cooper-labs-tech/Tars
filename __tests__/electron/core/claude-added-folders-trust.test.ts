@@ -35,6 +35,14 @@ import * as path from 'node:path';
  *     there.
  * 11. Over-correction: a start with no agent yet (agent:create's shell) loses its own folder's trust; a user's entry
  *     loses its other keys; the file is rewritten when nothing is missing.
+ * 12. (QA's gate, 28/11, MT9.) The API's start (spawnAgentSession, the path an orchestrator's start_agent takes, and a
+ *     dispatch to an agent with no session) trusts the working folder alone, as main did. Its terminal comes from
+ *     spawnAgentPty directly, never through spawnShell or launchIntoTerminal, so that call is its only trust. Its case is
+ *     in __tests__/electron/services/api-routes/api-start-trusts-added-folders.test.ts: the route's harness stands in
+ *     for agent-manager, which this file runs for real.
+ * 13. (QA's gate, 28/11, MT11.) win32's start, the CLI in the shell's place (startCliInTerminal, spawnCli), trusts the
+ *     working folder alone. Driven on every system with the launch Windows builds (a DirectLaunch), the terminal's
+ *     spawn stood in for.
  *
  * The negative witness is main at 58f2863b4, which writes the agent's folder alone, in ~/.claude.json alone.
  */
@@ -45,7 +53,19 @@ vi.mock('electron', () => ({
   Notification: vi.fn(),
 }));
 
-import { ensureProjectTrusted, launchIntoTerminal, initAgentPty } from '../../../electron/core/agent-manager';
+// 13: win32's start opens its terminal with the CLI as its process, through spawnAgentPty: a stand-in terminal here,
+// never a real process; and it waits for Tars's own port, which no test listens on.
+vi.mock('../../../electron/core/agent-pty', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('../../../electron/core/agent-pty')>()),
+  spawnAgentPty: vi.fn(() => ({ pid: 4343, process: 'claude', write: vi.fn(), kill: vi.fn(), resize: vi.fn(), onData: vi.fn(() => ({ dispose() {} })), onExit: vi.fn(() => ({ dispose() {} })) })),
+}));
+vi.mock('../../../electron/core/api-listening', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('../../../electron/core/api-listening')>()),
+  apiListening: async () => true,
+}));
+
+import { ensureProjectTrusted, launchIntoTerminal, initAgentPty, startCliInTerminal } from '../../../electron/core/agent-manager';
+import type { DirectLaunch } from '../../../electron/platform/launch';
 import { getAllProviders, getProvider } from '../../../electron/providers';
 import { toLaunch } from '../../../electron/platform/launch';
 import { ptyProcesses } from '../../../electron/core/pty-manager';
@@ -195,6 +215,21 @@ describe('9. a start typed into a terminal already open', () => {
     // Windows types no line into a shell: its CLI replaces the shell (spawnCli), the case of the spawn.
     if (launch.platform === 'win32') return;
     await launchIntoTerminal(a, terminal as never, launch, { ptyProcesses, initAgentPty });
+    const trusted = trustedIn(homeFile());
+    for (const dir of [...spellings(project), ...spellings(secondary), ...spellings(DATA_DIR)]) expect(trusted).toContain(dir);
+  });
+});
+
+describe('13. win32\'s start, the CLI in the shell\'s place', () => {
+  it('trusts every folder its line hands before the CLI runs, not the working folder alone', async () => {
+    const a = agent({ secondaryProjectPath: secondary });
+    // The launch Windows builds: the CLI is the terminal's process, nothing is typed into a shell.
+    const launch: DirectLaunch = {
+      platform: 'win32', file: process.execPath, commandLine: `--add-dir "${secondary}" --add-dir "${DATA_DIR}"`,
+      argv: [process.execPath, '--add-dir', secondary, '--add-dir', DATA_DIR], cwd: project, env: { ...process.env }, runsCommand: true,
+    };
+    await startCliInTerminal(a, launch, { ptyProcesses, initAgentPty: (x) => initAgentPty(x, null, () => {}, () => {}) });
+    expect(a.ptyId, 'the CLI\'s terminal was opened').toBeTruthy();
     const trusted = trustedIn(homeFile());
     for (const dir of [...spellings(project), ...spellings(secondary), ...spellings(DATA_DIR)]) expect(trusted).toContain(dir);
   });
