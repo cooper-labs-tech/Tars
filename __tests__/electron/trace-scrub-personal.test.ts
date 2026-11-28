@@ -68,7 +68,15 @@ import { personNamesOf, usablePersonName } from '../../electron/services/trace-p
  *     a home written ~alice.
  * E2. (The Audit on #679 at 7197cae43, written before its fix.) An e-mail written with %40, the commonest encoding
  *     (an API URL's query, a mailto:, a URL's user part, bare), passes; or it takes another number than the same
- *     address written plainly; or a %40 that is in no e-mail (a percentage, a handle) is masked.
+ *     address written plainly; or a %40 that is in no e-mail (a percentage, a handle) is masked. Each form, masked or
+ *     kept, is a case of its own (the orchestrator's ask on #679 at cec320051).
+ * E3. (The Audit's I-7 at cec320051, the owner's decision through the orchestrator, written before its fix.) A plain
+ *     @ after a %40 the address rule cannot read as its own @ passes: an encoded user part whose right side has no
+ *     dot (`https://ada%40corp@host/`, an internal mail domain is still a person's address) and `a%40b@host.tld`.
+ *     The old rule, the local part taking any % before a plain @, goes after the %40 one: both are masked whole again.
+ * Not a failure (the Audit's I-6 at cec320051): an address right after an encoded character (`mailto%3A`, `%3C`,
+ * `to=%20`, `%22`) takes that character into its span and its key. It is masked, under a second number from the same
+ * address written plainly: nothing passes, and the numbers only link less.
  *
  * Unicode:
  * X1. A name next to an accented letter is cut (JavaScript's \b knows ASCII only); an e-mail with Unicode letters is
@@ -121,16 +129,76 @@ describe('masking personal data', () => {
     expect(one('https://cleo@host.example.com/repo')).toBe('https://<EMAIL_1>/repo');
   });
 
-  it('E2: an e-mail written with %40 goes, under the number of the same address written plainly; a %40 in no e-mail stays', () => {
-    const s = session();
-    expect(s.text('curl "https://api.example.org/users?email=will.pruitt%40mail.example.com&x=1"')).toBe('curl "https://api.example.org/users?email=<EMAIL_1>&x=1"');
-    expect(s.text('<a href="mailto:will.pruitt%40mail.example.com">write</a>')).toBe('<a href="mailto:<EMAIL_1>">write</a>');
-    expect(s.text('git clone https://will.pruitt%40mail.example.com:s3cr3tpass@git.example.org/r.git')).toBe('git clone https://<EMAIL_1>:<SECRET_1>@git.example.org/r.git');
-    expect(s.text('reach will.pruitt%40mail.example.com, or WILL.PRUITT%40MAIL.EXAMPLE.COM')).toBe('reach <EMAIL_1>, or <EMAIL_1>');
-    expect(s.text('the same as will.pruitt@mail.example.com; then ada%40example.org')).toBe('the same as <EMAIL_1>; then <EMAIL_2>');
-    // An encoded address as a URL's whole user part: the address, then its host, never one address of both.
-    expect(s.text('https://will.pruitt%40mail.example.com@git.example.org/r.git')).toBe('https://<EMAIL_1>@git.example.org/r.git');
-    for (const kept of ['save 30%40 today', 'width: 100%40px', 'name=%40handle and q=%40', 'ratio 1%40.5']) expect(one(kept), kept).toBe(kept);
+  describe('E2: an e-mail written with %40 goes, under the number of the same address written plainly', () => {
+    it('in a query string', () => {
+      expect(one('curl "https://api.example.org/users?email=will.pruitt%40mail.example.com&x=1"')).toBe('curl "https://api.example.org/users?email=<EMAIL_1>&x=1"');
+    });
+    it('in a mailto:', () => {
+      expect(one('<a href="mailto:will.pruitt%40mail.example.com">write</a>')).toBe('<a href="mailto:<EMAIL_1>">write</a>');
+    });
+    it('in a mailto: encoded whole (its %3A taken into the span, I-6)', () => {
+      expect(one('open mailto%3Aada%40example.org now')).toBe('open <EMAIL_1> now');
+    });
+    it('between encoded angle brackets (the opening %3C taken into the span, I-6)', () => {
+      expect(one('from %3Cada%40example.org%3E')).toBe('from <EMAIL_1>%3E');
+    });
+    it('after an encoded space (taken into the span, I-6)', () => {
+      expect(one('send to=%20ada%40example.org&x=1')).toBe('send to=<EMAIL_1>&x=1');
+    });
+    it('with an encoded plus in its local part', () => {
+      expect(one('q=ada%2Bci%40example.org')).toBe('q=<EMAIL_1>');
+    });
+    it('as a URL\'s user part before a password: the address and the password, its host kept', () => {
+      expect(one('git clone https://will.pruitt%40mail.example.com:s3cr3tpass@git.example.org/r.git')).toBe('git clone https://<EMAIL_1>:<SECRET_1>@git.example.org/r.git');
+    });
+    it('as a URL\'s whole user part: the address, then its host, never one address of both', () => {
+      expect(one('https://will.pruitt%40mail.example.com@git.example.org/r.git')).toBe('https://<EMAIL_1>@git.example.org/r.git');
+    });
+    it('a %40 then a dotted domain then a plain @: the address, then the host', () => {
+      expect(one('a%40b.example@host.tld')).toBe('<EMAIL_1>@host.tld');
+    });
+    it('one number for every spelling of one address, in any case; a second one after an encoded character (I-6)', () => {
+      const s = session();
+      expect(['Ada%40Example.org', 'ada@example.org', 'ADA%40EXAMPLE.ORG', 'mailto:ada%40example.org', 'mailto%3Aada%40example.org'].map(t => s.text(t)))
+        .toEqual(['<EMAIL_1>', '<EMAIL_1>', '<EMAIL_1>', 'mailto:<EMAIL_1>', '<EMAIL_2>']);
+      expect(s.text('reach will.pruitt%40mail.example.com, or WILL.PRUITT%40MAIL.EXAMPLE.COM')).toBe('reach <EMAIL_3>, or <EMAIL_3>');
+      expect(s.text('the same as will.pruitt@mail.example.com')).toBe('the same as <EMAIL_3>');
+    });
+  });
+
+  describe('E2: a %40 in no e-mail stays as it is', () => {
+    for (const kept of [
+      'save 30%40 today', // a percentage
+      'width: 100%40px',
+      'name=%40handle and q=%40', // a handle, a bare %40
+      'ratio 1%40.5',
+      'https://registry.npmjs.org/%40types%2Fnode', // npm's scope
+      'go get mod%40v1.2.3', // a version, its last part no word
+      'pull image%40sha256:0123456789abcdef', // a digest
+      'a%40%40b.example', // a doubled %40
+      'ada%2540example.org', // encoded twice: the notice's "otherwise URL-encoded"
+    ]) {
+      it(kept, () => { expect(one(kept)).toBe(kept); });
+    }
+  });
+
+  describe('E2: the plain forms as before', () => {
+    it('a git remote over ssh stays', () => { expect(one('git@github.com:org/repo.git')).toBe('git@github.com:org/repo.git'); });
+    it('a % in a local part', () => { expect(one('x%y@example.com')).toBe('<EMAIL_1>'); });
+    it('a % ending a local part', () => { expect(one('100%@example.com')).toBe('<EMAIL_1>'); });
+    it('after an encoded quote (taken into the span, I-6)', () => { expect(one('%22ada@example.org')).toBe('<EMAIL_1>'); });
+    it('an encoded user part beside a password stays a username; its password goes', () => {
+      expect(one('https://ada%40corp:pw@git.example.net/r.git')).toBe('https://ada%40corp:<SECRET_1>@git.example.net/r.git');
+    });
+  });
+
+  describe('E3: a plain @ after a %40 the address rule cannot read (I-7, the owner\'s decision)', () => {
+    it('an encoded user part whose right side has no dot, before its host: masked whole', () => {
+      expect(one('https://ada%40corp@git.example.net/org/repo.git')).toBe('https://<EMAIL_1>/org/repo.git');
+    });
+    it('a %40 then an undotted name then a plain @: masked whole', () => {
+      expect(one('a%40b@example.com')).toBe('<EMAIL_1>');
+    });
   });
 
   it('N2: IP addresses go, IPv4 and IPv6', () => {
