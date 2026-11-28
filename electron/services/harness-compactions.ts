@@ -36,7 +36,8 @@ const SAFE_SESSION_ID = /^[A-Za-z0-9][A-Za-z0-9-]{0,127}$/;
 
 type Json = Record<string, unknown>;
 const asObj = (v: unknown): Json => (v && typeof v === 'object' && !Array.isArray(v) ? v as Json : {});
-const num = (v: unknown): number | undefined => (typeof v === 'number' && Number.isFinite(v) && v >= 0 ? v : undefined);
+/** A token count as the back-office takes it, a whole number (the Audit of #678, I-1): a log's fraction is rounded. */
+const num = (v: unknown): number | undefined => (typeof v === 'number' && Number.isFinite(v) && v >= 0 ? Math.round(v) : undefined);
 
 function linesOf(text: string): Json[] {
   const out: Json[] = [];

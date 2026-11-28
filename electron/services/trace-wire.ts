@@ -23,6 +23,8 @@ const asObj = (v: unknown): Json => (v && typeof v === 'object' && !Array.isArra
 const asArr = (v: unknown): unknown[] => (Array.isArray(v) ? v : []);
 const asStr = (v: unknown): string => (typeof v === 'string' ? v : '');
 const asNum = (v: unknown): number => (typeof v === 'number' && Number.isFinite(v) ? v : 0);
+/** A token count as the back-office takes it, a whole number (the Audit of #678, I-1): an endpoint's fraction is rounded. */
+const tokenCount = (v: unknown): number => Math.round(asNum(v));
 
 /** The traced surface a request path is, or null for anything else (models, count_tokens, unknown routes). */
 export function surfaceOf(pathname: string): Surface | null {
@@ -137,12 +139,12 @@ function sseEvents(text: string): Json[] {
 
 function chatUsage(u: unknown): WireResponse['usage'] {
   const o = asObj(u);
-  return { input: asNum(o.prompt_tokens), cached: asNum(asObj(o.prompt_tokens_details).cached_tokens), output: asNum(o.completion_tokens) };
+  return { input: tokenCount(o.prompt_tokens), cached: tokenCount(asObj(o.prompt_tokens_details).cached_tokens), output: tokenCount(o.completion_tokens) };
 }
 
 function responsesUsage(u: unknown): WireResponse['usage'] {
   const o = asObj(u);
-  return { input: asNum(o.input_tokens), cached: asNum(asObj(o.input_tokens_details).cached_tokens), output: asNum(o.output_tokens) };
+  return { input: tokenCount(o.input_tokens), cached: tokenCount(asObj(o.input_tokens_details).cached_tokens), output: tokenCount(o.output_tokens) };
 }
 
 const RESPONSES_CALLS = new Set(['function_call', 'custom_tool_call', 'local_shell_call', 'computer_call', 'mcp_call']);
@@ -220,7 +222,7 @@ function readMessages(streamed: boolean, text: string): WireResponse {
     const content = asArr(b.content);
     return {
       output: { role: 'assistant', content }, finishReason: asStr(b.stop_reason) || undefined, modelServed: asStr(b.model) || undefined,
-      usage: { input: asNum(u.input_tokens), cached: asNum(u.cache_read_input_tokens), output: asNum(u.output_tokens) },
+      usage: { input: tokenCount(u.input_tokens), cached: tokenCount(u.cache_read_input_tokens), output: tokenCount(u.output_tokens) },
       toolCalls: content.filter(c => asObj(c).type === 'tool_use').length,
     };
   }
@@ -234,9 +236,9 @@ function readMessages(streamed: boolean, text: string): WireResponse {
       const m = asObj(e.message);
       model = asStr(m.model) || undefined;
       const u = asObj(m.usage);
-      usage.input = asNum(u.input_tokens);
-      usage.cached = asNum(u.cache_read_input_tokens);
-      usage.output = asNum(u.output_tokens);
+      usage.input = tokenCount(u.input_tokens);
+      usage.cached = tokenCount(u.cache_read_input_tokens);
+      usage.output = tokenCount(u.output_tokens);
     } else if (type === 'content_block_start') {
       blocks.set(asNum(e.index), { ...asObj(e.content_block) });
     } else if (type === 'content_block_delta') {
@@ -250,7 +252,7 @@ function readMessages(streamed: boolean, text: string): WireResponse {
     } else if (type === 'message_delta') {
       finish = asStr(asObj(e.delta).stop_reason) || finish;
       const u = asObj(e.usage);
-      if (u.output_tokens !== undefined) usage.output = asNum(u.output_tokens);
+      if (u.output_tokens !== undefined) usage.output = tokenCount(u.output_tokens);
     }
   }
   const content = [...blocks.entries()].sort((a, b) => a[0] - b[0]).map(([, b]) => {
