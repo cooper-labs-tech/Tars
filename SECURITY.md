@@ -1214,12 +1214,20 @@ used to train models", stands beside sharing. What leaves, and who decides:
 - Each session carries `consent: { training }`, as the switch stood while it ran: off at any moment, false for good.
   Turned off while a session runs, the session goes again with false. A session recorded before the switch existed
   reads false.
-- A session's "no" is kept twice: its stamp in the trace store, which the window reads, and its id on a list in
-  `~/.tars-private/traces-training-denied.json` (0600), for the sessions running at an off and those opened while
-  off. The store is under `~/.tars`, which every agent is handed, so the upload and the preview send `true` only when
-  the stamp says yes and the list does not name the session: an agent that sets the stamp back to yes changes nothing.
-  A list that cannot be read denies every session; one not yet written holds in memory and is written again every
-  minute. The sweep prunes it with the sessions it names.
+- Trainable is a positive, private fact. `~/.tars-private/traces-training-allowed.json` (0600) lists the sessions
+  Tars opened while training was on; a session leaves it when the switch goes off while it runs. A session is
+  trainable only when that list names it and its stamp in the trace store says yes. The store is under `~/.tars`,
+  which every agent is handed: an agent that sets a stamp back to yes, or copies a session under a new id, makes
+  nothing trainable. One rule decides it wherever the field leaves (`trace-store.ts` summaryOf): the external
+  reader's session document and change list, the export, the upload and the preview.
+- The list is read once per run and held in memory. A change is written at once, and again every minute until a write
+  holds, and the window is told while it does not. A list that cannot be read is set aside (`.unreadable-<time>`) and
+  a new one started: none of the sessions recorded before counts as trainable, and the window is told. The sweep
+  prunes it with the sessions it names.
+- The restart case, as for the switch: a write of the list refused, then Tars stopped before a retry holds. A session
+  added then is on no list after the restart, so it is not trainable (it fails closed). A session taken off then is
+  still listed after the restart; it stays not trainable through its stamp, which the off set to no in the store at
+  the same moment, unless that write failed too.
 - The install's current value goes to the back-office on every change (`PUT /v1/installs/me/consent` with
   `{ training }` alone and the install token), and with the registration. It covers the sessions already sent. A change
   the back-office has not taken stays owed across a restart, is sent again until a 2xx, and goes with sharing off

@@ -291,8 +291,10 @@ consent, opted-in sessions are uploaded:
   stays unsent and is tried again on the backoff, never sent without the mark;
 - each session with `consent: { training }` (trace feature A5): the owner's switch "May be used to train models" as
   it stood while the session ran, false once it was off at any moment, false for a session recorded before it existed.
-  The same field is in the export's `traces` row and the read API's session document. The back-office is #678's,
-  which takes the field first;
+  True only for a session on the private list of those Tars opened while training was on
+  (`~/.tars-private/traces-training-allowed.json`), whatever the store's stamp says: one rule (`trace-store.ts`
+  summaryOf) for the export's `traces` row, the read API's session document and change list, the upload and the
+  preview. The back-office is #678's, which takes the field first;
 - resumed after a restart, with backoff.
 
 **Training consent** (trace feature A5). The switch is on by default (`TRAINING_DEFAULT`), set by the window's

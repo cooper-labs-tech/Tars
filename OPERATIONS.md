@@ -1298,9 +1298,10 @@ the agents rather than raising the ceiling.
 - "May be used to train models" is on by default, and set in the back-office page only. It is kept in
   `~/.tars-private/traces-training.json` (`training`, and `owed` while the back-office has not taken a change). Each
   change goes as `PUT /v1/installs/me/consent` within seconds, sharing on or off; one refused stays owed and is sent
-  at the next pass, after a restart too. Each session carries the value it ran under in `consent.training`; the ids
-  of the sessions whose training is off are also kept in `~/.tars-private/traces-training-denied.json`, which wins
-  over the store's stamp (an unreadable list: every session is off).
+  at the next pass, after a restart too. Each session carries the value it ran under in `consent.training`: true only
+  for a session on `~/.tars-private/traces-training-allowed.json`, the list of those opened while training was on and
+  never turned off since. An unreadable list is set aside (`.unreadable-<time>`, kept for you to read) and a new one
+  started: the sessions before it read false, and the window says so.
 
 **The external reader.** Rotate its token in the back-office (shown once), then read on loopback:
 

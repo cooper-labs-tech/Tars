@@ -219,7 +219,10 @@ const num = (v: unknown): number => (typeof v === 'number' ? v : 0);
 const optNum = (v: unknown): number | undefined => (typeof v === 'number' ? v : undefined);
 const optStr = (v: unknown): string | undefined => (typeof v === 'string' && v !== '' ? v : undefined);
 
-function summaryOf(r: Row): TraceSessionSummary {
+/** Whether a session may be used to train models, beyond its stamp: the runtime's private list (TraceStore options). */
+export type Trainable = (traceId: string) => boolean;
+
+function summaryOf(r: Row, trainable: Trainable): TraceSessionSummary {
   return {
     traceId: String(r.trace_id), projectPath: String(r.project_path), agentId: String(r.agent_id), agentName: optStr(r.agent_name),
     harness: String(r.harness), harnessVersion: optStr(r.harness_version), endpointId: String(r.endpoint_id), endpointName: optStr(r.endpoint_name),
@@ -228,8 +231,10 @@ function summaryOf(r: Row): TraceSessionSummary {
     turnCount: num(r.turn_count), requestCount: num(r.request_count),
     tokensIn: num(r.tokens_in), tokensCached: num(r.tokens_cached), tokensOut: num(r.tokens_out),
     bytes: num(r.bytes), mixed: r.mixed === 1, unknownTurns: num(r.unknown_turns),
-    // Only a stamp of 1 is a yes: a session with none (recorded before the switch existed) is not one.
-    consent: { training: r.training === 1 },
+    // The one rule wherever the field leaves (the reader's list and document, the export, the upload, the preview): a
+    // stamp of 1, which an agent can write (the store is under ~/.tars), and the session on the private list of those
+    // Tars opened while training was on, which no agent reaches (the Audit's M1 on #690).
+    consent: { training: r.training === 1 && trainable(String(r.trace_id)) },
   };
 }
 
@@ -298,8 +303,11 @@ function roleOf(message: unknown): string {
 export class TraceStore {
   private db: Database.Database;
   private bodiesDropped = false;
+  /** What makes a stamped session trainable; none given, no session is (it fails closed). */
+  private readonly trainable: Trainable;
 
-  constructor(file: string) {
+  constructor(file: string, opts: { trainable?: Trainable } = {}) {
+    this.trainable = opts.trainable ?? (() => false);
     fs.mkdirSync(path.dirname(file), { recursive: true, mode: 0o700 });
     this.db = new Database(file);
     try { fs.chmodSync(file, 0o600); } catch { /* Windows: modes do not apply */ }
@@ -597,7 +605,7 @@ export class TraceStore {
       COALESCE(SUM(tokens_cached), 0) AS tokensCached, COALESCE(SUM(tokens_out), 0) AS tokensOut`;
     const totals = this.db.prepare(`SELECT ${sums} FROM traces WHERE ${w.sql}`).get(...w.args) as TraceTotals;
     const byProject = this.db.prepare(`SELECT project_path AS projectPath, ${sums} FROM traces WHERE ${w.sql} GROUP BY project_path ORDER BY project_path`).all(...w.args) as Array<TraceTotals & { projectPath: string }>;
-    return { sessions: rows.slice(0, limit).map(summaryOf), nextCursor: more ? Buffer.from(`o:${offset + limit}`).toString('base64url') : undefined, totals, byProject };
+    return { sessions: rows.slice(0, limit).map(r => summaryOf(r, this.trainable)), nextCursor: more ? Buffer.from(`o:${offset + limit}`).toString('base64url') : undefined, totals, byProject };
   }
 
   /** For an external trace reader: every session new or grown since the cursor, in the order it changed. */
@@ -606,7 +614,7 @@ export class TraceStore {
     const since = decodeCursor(f.cursor);
     const rows = this.db.prepare(`SELECT * FROM traces WHERE updated_seq > ? AND ${w.sql} ORDER BY updated_seq ASC LIMIT ?`).all(since, ...w.args, this.limitOf(f)) as Row[];
     const last = rows.length ? num(rows[rows.length - 1].updated_seq) : since;
-    return { sessions: rows.map(summaryOf), nextCursor: encodeCursor(last) };
+    return { sessions: rows.map(r => summaryOf(r, this.trainable)), nextCursor: encodeCursor(last) };
   }
 
   session(traceId: string): { session: TraceSessionSummary; outcome?: TraceOutcome; turns: TraceTurnView[] } | null {
@@ -622,7 +630,7 @@ export class TraceStore {
       attempts: num(r.attempts), heldMs: num(r.held_ms), bodiesDropped: r.bodies_dropped === 1,
     });
     return {
-      session: summaryOf(trace),
+      session: summaryOf(trace, this.trainable),
       outcome: trace.outcome_json ? JSON.parse(String(trace.outcome_json)) : undefined,
       turns: turns.map(t => ({
         turnId: String(t.turn_id), index: num(t.turn_index), startedAt: num(t.started_at), endedAt: optNum(t.ended_at),
