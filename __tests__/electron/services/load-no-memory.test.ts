@@ -103,11 +103,15 @@ describe('qwen-code (N3, N4)', () => {
     const load = qwen.buildInteractiveCommand({ agentId: 'load-1', binaryPath: '/bin/qwen', prompt: 'go', orchestratorMode: false, load: true });
     const worker = qwen.buildInteractiveCommand({ agentId: 'work-1', binaryPath: '/bin/qwen', prompt: 'go', orchestratorMode: false });
     for (const name of tarsMcpServerNames()) expect(load).toContain(`--disable-mcp-server '${name}'`);
-    expect(load).toContain(`--exclude-tools ${LOAD_MEMORY_TOOLS.join(' ')}`);
+    // One --exclude-tools per tool, each followed by another option: the prompt is never read as a tool's name
+    // (measured on 0.25.2: the repeated form excludes each tool, and the session gets its prompt).
+    for (const tool of LOAD_MEMORY_TOOLS) expect(load).toContain(`--exclude-tools '${tool}' --`);
     expect(load).not.toContain(`--include-directories '${DATA_DIR}'`);
     expect(worker).toContain(`--include-directories '${DATA_DIR}'`);
     expect(worker).not.toContain('save_memory');
-    expect(pairs(qwenLoadArgs())).toEqual(tarsMcpServerNames().map(n => `--disable-mcp-server ${n}`));
+    expect(pairs(qwenLoadArgs())).toEqual([
+      ...LOAD_MEMORY_TOOLS.map(t => `--exclude-tools ${t}`), ...tarsMcpServerNames().map(n => `--disable-mcp-server ${n}`),
+    ]);
   });
 
   it('a load agent\'s settings switch every memory of its own off; another agent\'s say nothing of memory', () => {
