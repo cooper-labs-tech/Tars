@@ -32,6 +32,10 @@ interface UiState {
    *  update until the next launch. The sidebar row clears this, so there is
    *  always a way back to it. */
   updateBannerDismissed: boolean;
+  /** The Load window card's view, set by its head's switch and by what opens the card at Projects. */
+  loadView: 'window' | 'projects';
+  /** A page of More asked to open from outside the sidebar (a project page's Load agents card): NewShell opens it. */
+  moreRequest: { page: string; at: number } | null;
 
   setMobileMenuOpen: (open: boolean) => void;
   toggleMobileMenu: () => void;
@@ -40,6 +44,8 @@ interface UiState {
   setVaultUnreadCount: (count: number) => void;
   setPendingUpdateVersion: (version: string | null) => void;
   setUpdateBannerDismissed: (dismissed: boolean) => void;
+  setLoadView: (view: 'window' | 'projects') => void;
+  requestMore: (page: string) => void;
 }
 
 export const useStore = create<UiState>((set) => ({
@@ -48,6 +54,8 @@ export const useStore = create<UiState>((set) => ({
   vaultUnreadCount: 0,
   pendingUpdateVersion: null,
   updateBannerDismissed: false,
+  loadView: 'window',
+  moreRequest: null,
 
   setMobileMenuOpen: (open) => set({ mobileMenuOpen: open }),
   toggleMobileMenu: () => set((state) => ({ mobileMenuOpen: !state.mobileMenuOpen })),
@@ -56,4 +64,6 @@ export const useStore = create<UiState>((set) => ({
   setVaultUnreadCount: (count) => set({ vaultUnreadCount: count }),
   setPendingUpdateVersion: (version) => set({ pendingUpdateVersion: version }),
   setUpdateBannerDismissed: (dismissed) => set({ updateBannerDismissed: dismissed }),
+  setLoadView: (view) => set({ loadView: view }),
+  requestMore: (page) => set({ moreRequest: { page, at: Date.now() } }),
 }));

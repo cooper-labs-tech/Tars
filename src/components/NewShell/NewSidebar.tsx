@@ -16,6 +16,7 @@ import { useElectronAgents } from '@/hooks/useElectron';
 import { shellPlaceFor, type ShellPlace } from '@/lib/new-shell';
 import { useStore } from '@/store';
 import { MORE_PAGES, type MorePageId } from './more-pages';
+import { LoadSidebarRow } from '@/components/LoadWindow';
 
 /** The main menu of `Shell · chats · empty`: Chat and Projects, then the three pages kept for now. */
 const MAIN: Array<{ place: ShellPlace; href: string; label: string; icon: typeof MessageSquare }> = [
@@ -214,6 +215,7 @@ export default function NewSidebar({ onOpenPage }: { onOpenPage: (id: MorePageId
             ))}
           </div>
         )}
+        <LoadSidebarRow onOpen={() => onOpenPage('load-window')} />
         <button
           type="button"
           aria-haspopup="menu"

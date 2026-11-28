@@ -90,10 +90,10 @@ export function PasswordInput({ className = '', width = 'full', error, disabled,
  * and a chevron drawn over the right inside edge. `className` lands on the
  * wrapper - it is the element that carries the field's box in the layout.
  */
-export function Select({ className = '', children, width = 'full', error, ...rest }: SelectHTMLAttributes<HTMLSelectElement> & FieldProps) {
+export function Select({ className = '', children, width = 'full', error, compact, ...rest }: SelectHTMLAttributes<HTMLSelectElement> & FieldProps) {
   return (
     <span className={`relative block ${WIDTHS[width]} ${className}`}>
-      <select className={`${BASE} ${CONTROL_HEIGHT} w-full ${border(error)} appearance-none pr-7`} {...rest}>{children}</select>
+      <select className={`${BASE} ${compact ? CONTROL_HEIGHT_SM : CONTROL_HEIGHT} w-full ${border(error)} appearance-none pr-7`} {...rest}>{children}</select>
       <ChevronDown className="w-3 h-3 text-muted-foreground absolute right-2 top-1/2 -translate-y-1/2 pointer-events-none" />
     </span>
   );

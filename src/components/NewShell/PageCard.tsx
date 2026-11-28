@@ -27,6 +27,7 @@ export function PageCard({ page, onClose }: { page: MorePage; onClose: () => voi
 
   const Icon = page.icon;
   const Page = page.Page;
+  const HeadExtra = page.HeadExtra;
   return (
     <div className="fixed inset-0 z-[80] bg-scrim flex items-center justify-center" onMouseDown={onClose}>
       <div
@@ -44,6 +45,7 @@ export function PageCard({ page, onClose }: { page: MorePage; onClose: () => voi
             <h2 className="font-serif text-[22px] leading-[1.15] text-foreground truncate">{page.label}</h2>
           </div>
           <div className="flex items-center gap-[10px] shrink-0">
+            {HeadExtra && <HeadExtra />}
             <span className="font-mono text-[10.5px] text-status-idle">esc</span>
             {/* A square of the small height: Button's own padding would leave the cross 4px. */}
             <button
@@ -56,7 +58,7 @@ export function PageCard({ page, onClose }: { page: MorePage; onClose: () => voi
             </button>
           </div>
         </div>
-        <div className="flex-1 min-h-0 overflow-y-auto px-[26px] pt-[18px] pb-[22px]">
+        <div className={page.bare ? 'flex-1 min-h-0 flex flex-col' : 'flex-1 min-h-0 overflow-y-auto px-[26px] pt-[18px] pb-[22px]'}>
           <CardTitleContext.Provider value={page.label}>
             <Page />
           </CardTitleContext.Provider>
