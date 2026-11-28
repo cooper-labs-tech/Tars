@@ -14,7 +14,7 @@ const HASH = /^[0-9a-f]{64}$/;
 
 const SESSION_SELECT = `install_id, session_id, agent_id, project_key, harness, harness_version, native_session_id,
   endpoint_key, endpoint_name, model, started_at, ended_at, final_status, turn_count, request_count, tokens_in, tokens_cached,
-  tokens_out, mixed, unknown_turns, outcome, environment, events, start, lost_demand, lost_demand_omitted, masking_version, mask_counts, rtt_median_ms, clock_offset_ms, consent, received_at,
+  tokens_out, mixed, unknown_turns, outcome, environment, events, start, lost_demand, lost_demand_omitted, masking_version, mask_counts, rtt_median_ms, clock_offset_ms, consent, context_window_given, output_cap_given, auto_compaction, compactions, received_at,
   (SELECT consent_training FROM installs i WHERE i.id = sessions.install_id) AS install_consent_training,
   (SELECT consent_at FROM installs i WHERE i.id = sessions.install_id) AS install_consent_at`;
 
@@ -31,6 +31,8 @@ function session(r: QueryResultRow) {
     maskingVersion: r.masking_version ?? null, maskCounts: r.mask_counts ?? null,
     // The session's own consent as it was recorded, and its install's current one (PUT /v1/installs/me/consent).
     consent: r.consent ?? null,
+    contextWindowGiven: r.context_window_given ?? null, outputCapGiven: r.output_cap_given ?? null,
+    autoCompaction: r.auto_compaction ?? null, compactions: r.compactions ?? null,
     installConsent: r.install_consent_training === null || r.install_consent_training === undefined ? null : { training: r.install_consent_training, at: ms(r.install_consent_at) },
     rttMedianMs: r.rtt_median_ms ?? null, clockOffsetMs: r.clock_offset_ms ?? null,
   };
@@ -168,6 +170,7 @@ function request(r: QueryResultRow) {
     side: r.side ?? null, // always present: null is "the uploading Tars did not say", which readers treat as side
     liveSessions: r.live_sessions ?? null, cancel: r.cancel ?? null,
     rttMs: r.rtt_ms ?? null, clockOffsetMs: r.clock_offset_ms ?? null, queueMs: r.queue_ms ?? null, upstreamMs: r.upstream_ms ?? null,
+    contextReset: r.context_reset ?? null, gap: r.gap ?? null, toolCalls: r.tool_calls ?? null, toolCallsOmitted: r.tool_calls_omitted ?? null,
     reqBytes: r.req_bytes ?? undefined, respBytes: r.resp_bytes ?? undefined,
   };
 }

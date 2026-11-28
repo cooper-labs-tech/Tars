@@ -233,6 +233,10 @@ missing blob, then `PUT` the batch, and send any `missingBlobs` it reports.
 | `maskingVersion` | string ≤ 40 | no | The version of the masking the client applied to the content before upload. Kept when absent |
 | `maskCounts` | object | no | What that masking replaced, by type: exactly `SECRET`, `EMAIL`, `IP`, `PERSON`, `HOME` and `PHONE`, each an int ≥ 0, all required, no other key. Kept when absent |
 | `consent` | `{ "training": bool }` | no | The training consent the session was recorded under, no other key. Kept when absent |
+| `contextWindowGiven` | int 1,024 to 10,000,000 | no | The context window Tars gave the harness at launch. Kept when absent |
+| `outputCapGiven` | int 1 to 10,000,000 | no | The output cap Tars gave it. Kept when absent |
+| `autoCompaction` | `"on"` \| `"off"` | no | Whether the harness compacts its history on its own; absent when not measured. Kept when absent |
+| `compactions` | array ≤ 1,000 | no | One per compaction, by time: `{ "at": ms, "kind": "compact" \| "summarize" \| "truncate", "before"?: int ≥ 0, "after"?: int ≥ 0, "requestId"?: id, "source": "harness" \| "wire" }`, no other key. The list as a whole: sent with it, a session's list is replaced; sent without it, kept |
 | `rttMedianMs` | ms, a number from 0 to 10^10 | no | The median round trip of the session's requests, from the endpoint's Server-Timing. Kept when absent |
 | `clockOffsetMs` | ms, a number from -10^10 to 10^10 | no | The endpoint's clock against the client's, from the lowest round trip. Kept when absent |
 
@@ -312,6 +316,10 @@ a host name, a user name) refuses the batch.
 | `cancel` | object | no | A request cut before the endpoint answered: `{ "by", "cause", "at": ms, "deliveredBytes": int }`, all required, no other key, the cause one of its `by`'s: `harness`: `esc`, `ctrl_c`, `cli_interrupt`, `abandoned_while_held`, `unknown`; `tars`: `stop`, `restart`, `sleep`, `remove`, `quit`, `replace`; `proxy`: `hold_ceiling`; `endpoint`: `stream_cut`. Kept when absent |
 | `rttMs` | ms, a number from -10^10 to 10^10 | no | The round trip, kept as measured: the endpoint's span can read longer than the client's (clock rates, whole ms), so it may be negative. Absent when the endpoint sends no Server-Timing, never 0. Kept when absent |
 | `queueMs`, `upstreamMs` | ms, a number from 0 to 10^10 | no | The endpoint's queue and upstream times from its Server-Timing. Absent when it sends no such header, never 0. Kept when absent |
+| `contextReset` | object | no | On the first request after its history was rewritten: `{ "kind": "compact" \| "summarize" \| "truncate" \| "new", "droppedTokens"?: int ≥ 1 }`, no other key. Kept when absent |
+| `gap` | object | no | The time before the request, split: `{ "ms": int ≥ 0, "toolMs", "inputWaitMs", "harnessMs": int ≥ 0 or null, "heldMs": int ≥ 0, "inputBy"?: "user" \| "orchestrator" \| "agent" \| "relay" \| "tars" \| "unknown" }`, no other key. `ms` and `heldMs` are required. The parts' sum is not checked here. Kept when absent |
+| `toolCalls` | array ≤ 64 | no | The request's tool calls: `{ "toolCallId": string ≤ 128, "exit": int or null, "ms": int ≥ 0 or null, "denied", "timedOut", "failed", "truncated": bool (all four required), "truncatedBytes"?: int ≥ 1 }`, no other key. Kept when absent |
+| `toolCallsOmitted` | int ≥ 1 | no | How many tool calls past the 64 sent. Kept when absent |
 | `clockOffsetMs` | ms, a number from -10^10 to 10^10 | no | |
 | `reqBytes`, `respBytes` | int ≥ 0 | no | |
 | `messages` | array ≤ 10,000 | yes | `{ "position": int, "hash": sha256, "direction": "input" \| "output" }`: what the request sent, in order, then what it produced |
@@ -373,7 +381,7 @@ The fields added after a client may have been built without them are always pres
 "the uploading Tars did not send it":
 
 - every session, here and in § 6.1: `environment`, `events`, `start`, `lostDemand`, `maskingVersion`, `maskCounts`, `rttMedianMs` and `clockOffsetMs`, each as sent;
-- every request, here and in § 6.5: `liveSessions`, `cancel`, `rttMs`, `clockOffsetMs`, `queueMs` and `upstreamMs`;
+- every request, here and in § 6.5: `liveSessions`, `cancel`, `rttMs`, `clockOffsetMs`, `queueMs`, `upstreamMs`, `contextReset`, `gap`, `toolCalls` and `toolCallsOmitted`;
 - every turn, here: `taskRef`, `interventions`, and its workspace (`startHead` to `survivalBasis`).
 
 ### 6.3 `GET /v1/read/blobs/{hash}`
@@ -458,3 +466,4 @@ before the clients.
 | 27/11/2026 | `maskingVersion` and `maskCounts` on a session, `interventions` on a turn (read back the same way), migration `005_masking_and_interventions` |
 | 27/11/2026 | the timings (`rttMedianMs`, `clockOffsetMs` on a session; `rttMs`, `clockOffsetMs`, `queueMs`, `upstreamMs` on a request) and a turn's workspace, migration `006_timing_and_workspace` |
 | 27/11/2026 | the training consent: `consent` on registration and on a session, `PUT /v1/installs/me/consent`, `installConsent` on session reads, the feed `GET /v1/read/install-consent` (§ 6.6), migration `007_training_consent` |
+| 28/11/2026 | what the harness was given and its compactions on a session (`contextWindowGiven`, `outputCapGiven`, `autoCompaction`, `compactions`); `contextReset`, `gap`, `toolCalls` and `toolCallsOmitted` on a request, migration `008_context_and_tool_calls` |

@@ -7,7 +7,7 @@ type Spec =
   | { t: 'msgs' } | { t: 'count'; max: number } | { t: 'env' } | { t: 'events' }
   | { t: 'shape'; shape: Shape } | { t: 'list'; shape: Shape; max: number }
   | { t: 're'; re: RegExp; desc: string } | { t: 'cancel' }
-  | { t: 'num' } | { t: 'true' } | { t: 'ms'; signed: boolean };
+  | { t: 'num' } | { t: 'true' } | { t: 'ms'; signed: boolean } | { t: 'range'; min: number; max: number };
 type Shape = { [k: string]: Spec & { req?: boolean } };
 
 // A session's environment (27/11, the machine and the system at its start, exact values): these keys and no other,
@@ -77,6 +77,23 @@ const CANCEL_CAUSES: Record<string, readonly string[]> = {
   endpoint: ['stream_cut'],
 };
 const CANCEL: Shape = { by: r(enumOf(...Object.keys(CANCEL_CAUSES))), cause: r(str(40)), at: r(int), deliveredBytes: r(int) };
+// A whole number within bounds (an exit code may be negative).
+const range = (min: number, max: number) => ({ t: 'range', min, max }) as const;
+const AUTHORS = ['user', 'orchestrator', 'agent', 'relay', 'tars', 'unknown'];
+// What the harness was given at launch and its compactions (C2, 28/11).
+const COMPACTION: Shape = {
+  at: r(int), kind: r(enumOf('compact', 'summarize', 'truncate')), before: int, after: int, requestId: id, source: r(enumOf('harness', 'wire')),
+};
+// How a request's history was rewritten since the one before it.
+const CONTEXT_RESET: Shape = { kind: r(enumOf('compact', 'summarize', 'truncate', 'new')), droppedTokens: range(1, Number.MAX_SAFE_INTEGER) };
+// The time before a request, split into its parts (C1, 28/11); each part null when the log does not say. The parts'
+// sum is the client's to judge, within its own tolerance.
+const GAP: Shape = { ms: r(int), toolMs: int, inputWaitMs: int, inputBy: enumOf(...AUTHORS), heldMs: r(int), harnessMs: int };
+// One tool call of a request: the model's id, its exit, its time, and what happened to it.
+const TOOL_CALL: Shape = {
+  toolCallId: r(str(128)), exit: range(Number.MIN_SAFE_INTEGER, Number.MAX_SAFE_INTEGER), ms: int,
+  denied: r(bool), timedOut: r(bool), failed: r(bool), truncated: r(bool), truncatedBytes: range(1, Number.MAX_SAFE_INTEGER),
+};
 // The timings, from the endpoint's Server-Timing: milliseconds, fractional; a clock offset may be negative.
 const MS = { t: 'ms', signed: false } as const;
 const SIGNED_MS = { t: 'ms', signed: true } as const;
@@ -102,6 +119,8 @@ const SESSION: Shape = {
   maskingVersion: str(40), maskCounts: { t: 'shape', shape: MASK_COUNTS },
   rttMedianMs: MS, clockOffsetMs: SIGNED_MS,
   consent: { t: 'shape', shape: { training: r(bool) } },
+  contextWindowGiven: range(1024, 10_000_000), outputCapGiven: range(1, 10_000_000), autoCompaction: enumOf('on', 'off'),
+  compactions: { t: 'list', shape: COMPACTION, max: 1000 },
 };
 const TURN: Shape = {
   turnId: r(id), sessionId: r(id), index: r(int), startedAt: r(int), endedAt: int, gapBeforeMs: int, requestCount: r(int),
@@ -120,6 +139,8 @@ const REQUEST: Shape = {
   liveSessions: { t: 'count', max: 1_000_000 }, cancel: { t: 'cancel' },
   // A request's round trip is kept as measured, negative included (clock rates, whole ms); a session's median is not.
   rttMs: SIGNED_MS, clockOffsetMs: SIGNED_MS, queueMs: MS, upstreamMs: MS,
+  contextReset: { t: 'shape', shape: CONTEXT_RESET }, gap: { t: 'shape', shape: GAP },
+  toolCalls: { t: 'list', shape: TOOL_CALL, max: 64 }, toolCallsOmitted: range(1, Number.MAX_SAFE_INTEGER),
 };
 const MESSAGE: Shape = {
   hash: r(hash), role: r({ t: 'enum', of: ['system', 'user', 'assistant', 'tool', 'developer'] }), createdAt: r(int), size: r(int),
@@ -155,6 +176,7 @@ function checkValue(s: Spec, v: unknown): string | null {
     case 'events': return checkEvents(v);
     case 're': return typeof v === 'string' && s.re.test(v) ? null : s.desc;
     case 'num': return typeof v === 'number' && Number.isFinite(v) && v >= 0 ? null : 'a number >= 0';
+    case 'range': return Number.isSafeInteger(v) && (v as number) >= s.min && (v as number) <= s.max ? null : `an integer from ${s.min} to ${s.max}`;
     case 'ms': return typeof v === 'number' && Number.isFinite(v) && Math.abs(v) <= 1e10 && (s.signed || v >= 0) ? null : `milliseconds, ${s.signed ? '' : '>= 0, '}at most 1e10 in size`;
     case 'true': return v === true ? null : 'true';
     case 'cancel': {
