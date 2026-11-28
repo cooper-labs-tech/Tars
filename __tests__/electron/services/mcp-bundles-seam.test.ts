@@ -19,7 +19,9 @@ import * as path from 'path';
  * 4. It is taken while HOME is the account's own: a dev run's registration writing the tree's paths into the real home's
  *    CLI configs, the #201 incident again.
  * 5. It is taken while a CLI home the registration writes into lies outside HOME: CODEX_HOME, XDG_CONFIG_HOME
- *    (opencode), GEMINI_CLI_HOME, GROK_HOME, PI_CODING_AGENT_DIR pointing at the real ones.
+ *    (opencode), GEMINI_CLI_HOME, GROK_HOME, PI_CODING_AGENT_DIR pointing at the real ones, or at a folder outside both
+ *    the sandbox and the account's home (another disk, a CODEX_HOME a shell left), whose real config the e2e's
+ *    registration would then write into.
  * 6. Under the seam a getter still points at the app's resources (the registration would mix both), or without it one
  *    points anywhere else; the folder is set once at start, not read from the environment at each call.
  *
@@ -111,6 +113,15 @@ describe('the E2E seam naming a tree\'s own bundles', () => {
     for (const name of CLI_HOMES) {
       expect(e2eMcpBundlesDir(env({ [name]: path.join(account, '.somewhere') }), false, { home: sandbox, account }), name).toBeNull();
       expect(e2eMcpBundlesDir(env({ [name]: path.join(sandbox, '.somewhere') }), false, { home: sandbox, account }), name).toBe(tree);
+    }
+    // Outside both the sandbox and the account's home (another disk, CODEX_HOME=/Volumes/other/.codex left by a shell):
+    // only the check that a CLI home lies inside HOME refuses it (QA's note on #664 at 848f13371).
+    const elsewhere = path.join(root, 'elsewhere');
+    for (const name of CLI_HOMES) {
+      warn.mockClear();
+      // Soft, so that each CLI home says whether it is refused.
+      expect.soft(e2eMcpBundlesDir(env({ [name]: path.join(elsewhere, `.${name.toLowerCase()}`) }), false, { home: sandbox, account }), name).toBeNull();
+      expect.soft(warn, name).toHaveBeenCalledWith(`[mcp] DOROTHY_E2E_MCP_BUNDLES ignored: ${name} lies outside the sandbox's HOME`);
     }
     warn.mockRestore();
   });
