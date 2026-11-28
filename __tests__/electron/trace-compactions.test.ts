@@ -47,6 +47,9 @@ import { codexCompactions, qwenCompactions, readHarnessCompactions } from '../..
  * C16. (I-3) Qwen Code's transcripts are taken in the order the folder lists them, 64 at most: in a folder of more,
  *     this session's (the newest) is missed.
  * C17. (I-4) The logs are read synchronously at a session's end: the main process waits on a file of up to 8 MiB.
+ * From the Audit of #678 (28/11, its I-1), written before the fix:
+ * C18. A count leaves the machine as a fraction (a harness log's `before` or `after`, a request's `droppedTokens` from
+ *     an endpoint's fractional usage): the back-office takes them as whole numbers, and the whole batch is refused.
  * C11. (Found by C1's run, 27/11.) A request sent again with the same history, whose last message is the summary (or
  *     any instruction), opens a turn of its own.
  * C10. What the harness was given (`contextWindowGiven`, `outputCapGiven`, `autoCompaction`), the compactions and each
@@ -383,5 +386,39 @@ describe('the Audit of #687', () => {
     const reading = readHarnessCompactions({ harness: 'codex', codexHome: path.join(dir, 'none'), nativeSessionId: 'sess-1', startedAt: T0, endedAt: T0 + 1000 });
     expect(reading).toBeInstanceOf(Promise);
     expect(await reading).toEqual([]);
+  });
+});
+
+describe('the Audit of #678', () => {
+  it('C18: a fractional count from a log or from the endpoint goes out whole', () => {
+    // From the logs: a harness that writes its counts with a fraction.
+    const qwen = JSON.stringify({ timestamp: '2026-11-27T16:24:07.579Z', type: 'system', subtype: 'chat_compression', systemPayload: { info: { originalTokenCount: 7868.6, newTokenCount: 1086.4, compressionStatus: 1 } } });
+    expect(qwenCompactions(qwen)).toEqual([{ at: Date.parse('2026-11-27T16:24:07.579Z'), kind: 'summarize', before: 7869, after: 1086 }]);
+    const codex = [
+      { timestamp: '2026-11-27T16:23:30.339Z', type: 'token_usage_record', payload: { response_id: 'resp_a', usage: { input_tokens: 7800.5 } } },
+      { timestamp: '2026-11-27T16:23:30.718Z', type: 'compacted', payload: { compaction_response_id: 'resp_c' } },
+      { timestamp: '2026-11-27T16:23:30.812Z', type: 'token_usage_record', payload: { response_id: 'resp_b', usage: { input_tokens: 600.2 } } },
+    ].map(l => JSON.stringify(l)).join('\n');
+    expect(codexCompactions(codex)).toEqual([{ at: Date.parse('2026-11-27T16:23:30.718Z'), kind: 'compact', before: 7801, after: 600 }]);
+
+    // In the batch: the endpoint counted fractions, and a compaction kept from before carries them.
+    const u1 = user('Fix the parser.');
+    store.ingest(rec(T0, [u1], 7000.7));
+    store.ingest(rec(T0 + 3000, [u1, user('Another language model started... SUMMARY')], 600.2));
+    store.applyHarnessCompactions('t1', [{ at: T0 + 20_000, kind: 'summarize', before: 5000.5, after: 900.4 }]);
+    const preview = new TraceUploader({
+      store, installFile: path.join(dir, 'private', 'install.json'), settings: () => ({ url: '' }), setDeletion: () => {}, eligible: () => true,
+      scrubContext: () => ({ homeDirs: ['/Users/someone'], knownSecrets: [], envValues: [] }), client: { name: 'tars', version: 't', platform: 'darwin' },
+      withdrawConsent: () => {},
+    }).preview('t1')!;
+    const body = preview.document.batches[0].body as { sessions: Array<{ compactions: Array<Record<string, unknown>> }>; requests: Array<Record<string, unknown>> };
+    const counts = [
+      ...body.sessions[0].compactions.flatMap(c => [c.at, c.before, c.after]),
+      ...body.requests.map(r => (r.contextReset as { droppedTokens?: number } | undefined)?.droppedTokens),
+    ].filter(v => v !== undefined);
+    expect(counts.length).toBeGreaterThanOrEqual(5);
+    expect(counts.filter(v => !Number.isInteger(v)), 'a count that is not whole').toEqual([]);
+    expect(body.requests.map(r => r.contextReset ?? null)).toEqual([null, { kind: 'compact', droppedTokens: 6401 }]);
+    expect(body.sessions[0].compactions.find(c => c.source === 'harness')).toMatchObject({ before: 5001, after: 900 });
   });
 });
