@@ -279,7 +279,8 @@ describe('a session', () => {
     e.start(RUN);
     await c.advance(T0);
     expect(f.launches).toEqual([]);
-    await vi.waitFor(() => expect(f.log.find(x => x.n === 1)).toMatchObject({ end: 'error' }));
+    // Each write of the arrival is logged: its last says how it ended.
+    await vi.waitFor(() => expect(f.log.filter(x => x.n === 1).at(-1)).toMatchObject({ end: 'error' }));
     expect(fs.existsSync(path.join(project, '.worktrees', 'load', RUN, 'fix-retry-1'))).toBe(false);
     // Its place is free: the next arrival starts.
     fails = false;
