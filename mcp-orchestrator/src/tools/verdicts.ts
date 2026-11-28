@@ -12,7 +12,7 @@ export function registerVerdictTools(server: McpServer): void {
   registerTools(server, [
     tool({
       name: "record_verdict",
-      description: "Record a gate's verdict on a pull request's head, as data: gate (qa or audit), the pull request's number, the judged head's full commit hash, merge or no_merge, and the test counts when you ran tests. Recorded in your own name and role, for your project; the latest verdict for a gate, pull request and head stands. Refused on your own work (your traced turns made that head or a commit before it). Tars links it to the traced turns that made that head and puts it in their sessions' outcome; CI's verdict Tars reads itself from the pull request's checks.",
+      description: "Record a gate's verdict on a pull request's head, as data: gate (qa or audit), the pull request's number, the judged head's full commit hash, merge or no_merge, and the test counts when you ran tests. Recorded in your own name and role, for your project; the latest verdict for a gate, pull request and head stands. Refused on your own work (one of your traced turns committed that head or a commit it holds; a checkout is no work). Tars links it to the traced turns that made that head and puts it in their sessions' outcome; CI's verdict Tars reads itself from the pull request's checks.",
       schema: {
         gate: z.enum(["qa", "audit"]).describe("Which gate judged."),
         pr: z.number().int().min(1).describe("The pull request's number."),

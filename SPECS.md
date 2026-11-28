@@ -369,9 +369,12 @@ from the window, or from an agent's drop file (`~/.tars/endpoint-keys/<name>.key
   - **Who records:** `qa` and `audit` by the agent that gates, through the MCP tool `record_verdict`
     (`POST /api/verdicts`), with its own token, in its own name, for its own project, with its name and role from the
     fleet. `ci` by Tars alone, from `gh pr checks` (all passed: merge; one failed: no_merge; running or none: nothing);
-    an agent's `ci` is refused. A qa or audit verdict on the recorder's own work is refused: one of its own traced
-    turns moved its checkout to the judged head, or to a linked ancestor. The latest per gate, pull request and head
-    stands.
+    an agent's `ci` is refused. A qa or audit verdict on the recorder's own work is refused, whatever branch it names:
+    a commit one of its own traced turns made (between the turn's start and end heads, committed while the turn ran,
+    within 2 s) is the judged head or an ancestor of it. A checkout, a pull or a fetch moved HEAD to commits made
+    before, and is no work; a merge commit a pull makes in the recorder's own turn counts as its work (a known limit).
+    That check runs first, within the same deadline, and a verdict whose check did not finish is refused too (503).
+    The latest per gate, pull request and head stands.
   - **Linked turns:** the project's turns whose end head is the judged head, in any session, turns that only sat on
     it included, on purpose: the verdict is on the state they ended in, and a reader tells the turns that moved the
     head by their start head. Also the turns on the pull request's branch whose end head is an ancestor of it

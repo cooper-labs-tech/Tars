@@ -47,6 +47,15 @@ import { sessionDocument } from '../../electron/services/trace-export';
  *     body; the upload carries the name, which it carries for no agent.
  * 17. An end head from the store that is not a hash reaches git (as an option, for one starting with `-`).
  * 18. The ancestor checks run on past an overall deadline (up to 200 heads, 5 s each).
+ * Added before their code, the Audit's two Infos at 88bfcfcd9 (28/11); "own work" is now a commit the recorder's own
+ * turn made (one between its start and end heads, committed during that turn), so 15's fixture dates its commits:
+ * 19. A recorder that names another branch than its own has its own ancestor commits left out of the check, and
+ *     records a verdict on its own work.
+ * 20. A traced gate whose own turn only checked out or pulled the judged head (it moved HEAD to a commit made before
+ *     the turn) is refused as if that were its work; or one whose own commit is on another line than the judged head
+ *     is refused.
+ * 21. The check of the recorder's own work, bounded by the same deadline, records the verdict when it could not
+ *     finish (it must refuse, and the route say why, 503).
  */
 
 let home: string;
@@ -55,6 +64,14 @@ let store: TraceStore;
 const T = 1_800_000_000_000;
 const git = (...args: string[]) => execFileSync('git', ['-c', 'user.name=t', '-c', 'user.email=t@example.com', '-c', 'commit.gpgSign=false', ...args], { cwd: repo, encoding: 'utf8' }).trim();
 const commit = (file: string, text: string, msg: string) => { fs.writeFileSync(path.join(repo, file), text); git('add', '-A'); git('commit', '-q', '-m', msg); return git('rev-parse', 'HEAD'); };
+/** A commit git dates at `atMs` (author and committer), as one a turn running then made. */
+const commitAt = (file: string, text: string, msg: string, atMs: number) => {
+  fs.writeFileSync(path.join(repo, file), text);
+  git('add', '-A');
+  const date = `@${Math.floor(atMs / 1000)} +0000`;
+  execFileSync('git', ['-c', 'user.name=t', '-c', 'user.email=t@example.com', '-c', 'commit.gpgSign=false', 'commit', '-q', '-m', msg], { cwd: repo, env: { ...process.env, GIT_AUTHOR_DATE: date, GIT_COMMITTER_DATE: date } });
+  return git('rev-parse', 'HEAD');
+};
 
 /**
  * A session of `project` on `branch` whose turns ended on these heads (started on `starts`, unknown when not given),
@@ -314,13 +331,16 @@ describe('gate verdicts', () => {
   });
 
   it('15: a qa or audit verdict on the recorder\'s own work is refused; a turn that only sat on the head is not its work', async () => {
-    // qa-agent's own traced turn made c1, from c0.
-    session('own', repo, 'feat/x', [c1], T + 600_000, { agentId: 'qa-agent', starts: [c0] });
-    expect(await recordVerdict(deps(), caller(), v({ pr: 31, head: c1 })), 'the head itself').toMatchObject({ recorded: false, refused: 'own-work' });
-    expect(await recordVerdict(deps(), caller(), v({ pr: 32, head: c2 })), 'an ancestor on the branch').toMatchObject({ recorded: false, refused: 'own-work' });
+    // qa-agent's own traced turn made `mine` on feat/x, from c2 (its turn opens at T + 601 s); another commit follows.
+    git('checkout', '-q', 'feat/x');
+    const mine = commitAt('m.txt', 'mine\n', 'mine', T + 601_500);
+    const after = commit('n.txt', 'after\n', 'after');
+    session('own', repo, 'feat/x', [mine], T + 600_000, { agentId: 'qa-agent', starts: [c2] });
+    expect(await recordVerdict(deps(), caller(), v({ pr: 31, head: mine })), 'the head itself').toMatchObject({ recorded: false, refused: 'own-work' });
+    expect(await recordVerdict(deps(), caller(), v({ pr: 32, head: after })), 'an ancestor on the branch').toMatchObject({ recorded: false, refused: 'own-work' });
     expect(store.verdictLinksOf('s1'), 'nothing written').toEqual([]);
     const call = routeWith({ callerOf: fleet, record: (c, x) => recordVerdict(deps(), c, x) });
-    const out = await call({ body: { gate: 'qa', pr: 32, head: c2, verdict: 'merge', branch: 'feat/x' }, callerAgentId: 'qa-agent' });
+    const out = await call({ body: { gate: 'qa', pr: 32, head: after, verdict: 'merge', branch: 'feat/x' }, callerAgentId: 'qa-agent' });
     expect(out.status).toBe(403);
     expect(JSON.stringify(out.data)).toContain('own work');
     // audit-agent's own turn only sat on c2 (it started there): not its work.
@@ -359,5 +379,39 @@ describe('gate verdicts', () => {
     const r = await recordVerdict(deps({ git: slow, deadlineMs: 700 }), caller(), v({ pr: 61 }));
     expect(Date.now() - at).toBeLessThan(2_000);
     expect(r).toMatchObject({ recorded: true, incomplete: true });
+  });
+
+  it('19: a recorder that names another branch than its own is still refused on its own work', async () => {
+    git('checkout', '-q', 'feat/x');
+    const mine = commitAt('m.txt', 'mine\n', 'mine', T + 601_500);
+    const after = commit('n.txt', 'after\n', 'after');
+    session('own', repo, 'feat/x', [mine], T + 600_000, { agentId: 'qa-agent', starts: [c2] });
+    expect(await recordVerdict(deps(), caller(), v({ pr: 71, head: after, branch: 'feat/other' })), 'another branch named').toMatchObject({ recorded: false, refused: 'own-work' });
+    expect(await recordVerdict(deps(), caller(), v({ pr: 72, head: after, branch: undefined })), 'no branch, gh absent').toMatchObject({ recorded: false, refused: 'own-work' });
+  });
+
+  it('20: a gate whose own turn only checked out the head records; so does one whose own commit is on another line', async () => {
+    // audit-agent's traced turn moved its checkout from c1 to c2, a commit made long before that turn.
+    session('checkout', repo, 'feat/x', [c2], T + 600_000, { agentId: 'audit-agent', starts: [c1] });
+    const audit = { ...caller(), agentId: 'audit-agent' };
+    expect((await recordVerdict(deps(), audit, v({ gate: 'audit', pr: 73, head: c2 }))).recorded, 'a checkout is no work').toBe(true);
+    // qa-agent's own turn made a commit on another branch, during that turn.
+    git('checkout', '-q', '-b', 'side', 'main');
+    const side = commitAt('s.txt', 'side\n', 'side', T + 801_500);
+    session('side-s', repo, 'side', [side], T + 800_000, { agentId: 'qa-agent', starts: [c0] });
+    expect((await recordVerdict(deps(), caller(), v({ pr: 74, head: c2 }))).recorded, 'its own commit on another line').toBe(true);
+  });
+
+  it('21: the check of the recorder\'s own work, not finished at the deadline, refuses, and the route says 503', async () => {
+    git('checkout', '-q', 'feat/x');
+    const mine = commitAt('m.txt', 'mine\n', 'mine', T + 601_500);
+    session('own', repo, 'feat/x', [mine], T + 600_000, { agentId: 'qa-agent', starts: [c2] });
+    const slow: VerdictDeps['git'] = () => new Promise((_, reject) => setTimeout(() => reject(new Error('slow')), 400));
+    const at = Date.now();
+    expect(await recordVerdict(deps({ git: slow, deadlineMs: 300 }), caller(), v({ pr: 75, head: c2, branch: undefined }))).toMatchObject({ recorded: false, refused: 'unchecked' });
+    expect(Date.now() - at).toBeLessThan(2_000);
+    const call = routeWith({ callerOf: fleet, record: (c, x) => recordVerdict(deps({ git: slow, deadlineMs: 300 }), c, x) });
+    const out = await call({ body: { gate: 'qa', pr: 75, head: c2, verdict: 'merge' }, callerAgentId: 'qa-agent' });
+    expect(out.status).toBe(503);
   });
 });

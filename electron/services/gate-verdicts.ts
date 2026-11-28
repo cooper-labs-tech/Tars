@@ -10,8 +10,10 @@ import type { TraceStore } from './trace-store';
  * - **Who records:** an agent, with its own token, in its own name (the route takes the name from the token, and
  *   refuses a body naming another agent), for its own project, with its name and role from the fleet. `qa` and
  *   `audit` only: Tars alone records `ci`, from the pull request's checks. Never on the recorder's own work: a qa or
- *   audit verdict is refused when one of the recorder's own traced turns moved its checkout to the judged head or to
- *   a linked ancestor (a turn that only sat on the head moved nothing).
+ *   audit verdict is refused when a commit one of the recorder's own traced turns made (between its start and end
+ *   heads, committed while it ran) is the judged head or an ancestor of it, whatever branch the verdict names; a
+ *   checkout, a pull or a fetch made no commit. Refused too when that check does not finish within the deadline.
+ *   A merge commit a pull makes in the recorder's own turn counts as its work (a known limit).
  * - **One per gate, pull request and head** in a project: the latest stands; the same again changes nothing.
  * - **Linked** to the turns of the recording agent's project whose end head (turn-workspace.ts) is the judged head,
  *   in any session, turns that only sat on it included (the verdict is on the state they ended in; a reader tells
@@ -49,8 +51,11 @@ export interface VerdictDeps {
 }
 export interface RecordResult {
   recorded: boolean;
-  /** Why it was not: one of the recorder's own traced turns made the head or a linked ancestor. */
-  refused?: 'own-work';
+  /**
+   * Why it was not: a commit one of the recorder's own traced turns made is the judged head or an ancestor of it
+   * (`own-work`), or that check did not finish within the deadline (`unchecked`).
+   */
+  refused?: 'own-work' | 'unchecked';
   changed: boolean;
   linked: Array<{ traceId: string; turnIndex: number }>;
   /** Ancestors left unchecked at the deadline. */
@@ -64,6 +69,9 @@ const BRANCH = /^[A-Za-z0-9._\/-]{1,200}$/;
 /** At most this many distinct heads are asked about as ancestors, for one verdict. */
 const MAX_ANCESTOR_CHECKS = 200;
 const DEADLINE_MS = 15_000;
+/** The commits read per turn of the recorder's own, and how far a commit's time may sit outside its turn (git's second). */
+const MAX_OWN_COMMITS = 200;
+const OWN_SLACK_MS = 2000;
 
 /** The verdict's fields, checked: closed values, a pull request number, a hash, counts that are whole and not negative. */
 export function parseVerdict(body: Record<string, unknown>): { ok: true; verdict: VerdictInput } | { ok: false; error: string } {
@@ -135,6 +143,38 @@ function runners(deps: VerdictDeps, deadline: number) {
       }
       return { found, incomplete: heads.filter(h => HEAD.test(h)).length > asked.length };
     },
+    /**
+     * Whether one of these turns made `head` or an ancestor of it: a commit between the turn's start and end heads,
+     * committed while the turn ran (its start, to its work's end, give or take OWN_SLACK_MS). A checkout, a pull or a
+     * fetch moves HEAD to commits made before: none of them counts. `unchecked` when the deadline came first; a turn
+     * git cannot read (a commit gone) proves nothing and is passed.
+     */
+    async ownWork(folder: string, turns: Array<{ startedAt: number; until: number | null; startHead: string | null; endHead: string }>, head: string): Promise<'own' | 'clear' | 'unchecked'> {
+      for (const t of turns) {
+        let ms = Math.min(5000, left());
+        if (ms <= 0) return 'unchecked';
+        const range = t.startHead && HEAD.test(t.startHead) ? [`${t.startHead}..${t.endHead}`] : [t.endHead];
+        let out: string;
+        try {
+          out = (await bounded(git(folder, ['log', '--format=%H %ct', `--max-count=${MAX_OWN_COMMITS}`, ...range, '--'], { timeout: ms }), ms)).stdout;
+        } catch {
+          if (left() <= 0) return 'unchecked';
+          continue;
+        }
+        const from = t.startedAt - OWN_SLACK_MS;
+        const to = t.until === null ? Infinity : t.until + OWN_SLACK_MS;
+        const made = out.split('\n').map(l => l.trim().split(' ')).filter(([h, ct]) => HEAD.test(h ?? '') && Number(ct) * 1000 >= from && Number(ct) * 1000 <= to).map(([h]) => h);
+        for (const c of made) {
+          if (c === head) return 'own';
+          ms = Math.min(5000, left());
+          if (ms <= 0) return 'unchecked';
+          const yes = await bounded(git(folder, ['merge-base', '--is-ancestor', c, head], { timeout: ms }), ms).then(() => true, () => false);
+          if (yes) return 'own';
+          if (left() <= 0) return 'unchecked';
+        }
+      }
+      return 'clear';
+    },
   };
 }
 
@@ -155,6 +195,13 @@ export async function recordVerdict(deps: VerdictDeps, caller: VerdictCaller, v:
   const store = deps.store;
   // Heads from the store are checked before anything uses them: one that is not a hash never reaches git.
   const candidates = store.verdictCandidates(caller.projectPath).filter(c => HEAD.test(c.endHead));
+  // Never a verdict on one's own work, checked first and whatever branch the verdict names: a commit one of the
+  // recorder's own turns made (not a checkout's) is the judged head or an ancestor of it. Not finished in time: refused.
+  if (v.gate !== 'ci') {
+    const own = candidates.filter(c => c.agentId === caller.agentId && c.startHead !== c.endHead);
+    const mine = own.length ? await run.ownWork(caller.folder, own, v.head) : 'clear';
+    if (mine !== 'clear') return { recorded: false, refused: mine === 'own' ? 'own-work' : 'unchecked', changed: false, linked: [] };
+  }
   // A session still running has no branch in its outcome yet: the one its folder is on.
   const branchOfRunning = new Map<string, string | null>();
   if (deps.branchOf) {
@@ -173,10 +220,6 @@ export async function recordVerdict(deps: VerdictDeps, caller: VerdictCaller, v:
     const r = await run.ancestors(caller.folder, [...new Set(onBranch.map(c => c.endHead))], v.head);
     incomplete = r.incomplete;
     linked.push(...onBranch.filter(c => r.found.has(c.endHead)));
-  }
-  // Never a verdict on one's own work: a turn of the recorder's own that moved its checkout to the head or an ancestor.
-  if (v.gate !== 'ci' && linked.some(c => c.agentId === caller.agentId && c.startHead !== c.endHead)) {
-    return { recorded: false, refused: 'own-work', changed: false, linked: [] };
   }
   const changed = store.inTransaction(() => {
     const put = store.putVerdict({

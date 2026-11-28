@@ -1345,14 +1345,19 @@ export class TraceStore {
    * The turns of a project's sessions that ended on a known head, with their session's branch: what a gate's verdict
    * may link to (gate-verdicts.ts).
    */
-  verdictCandidates(projectPath: string): Array<{ traceId: string; agentId: string; startedAt: number; turnIndex: number; startHead: string | null; endHead: string; branch: string | null }> {
-    return (this.db.prepare(`SELECT w.trace_id, tr.agent_id, w.started_at, t.turn_index, w.start_head, w.end_head, json_extract(tr.outcome_json, '$.branch') AS branch
+  /**
+   * `until`: when the turn's work ends, as its end head is read: the next turn's start, else its session's end; null
+   * for the last turn of a session still running.
+   */
+  verdictCandidates(projectPath: string): Array<{ traceId: string; agentId: string; startedAt: number; until: number | null; turnIndex: number; startHead: string | null; endHead: string; branch: string | null }> {
+    return (this.db.prepare(`SELECT w.trace_id, tr.agent_id, w.started_at, t.turn_index, w.start_head, w.end_head, json_extract(tr.outcome_json, '$.branch') AS branch,
+      COALESCE((SELECT MIN(t2.started_at) FROM turns t2 WHERE t2.trace_id = w.trace_id AND t2.started_at > w.started_at), tr.ended_at) AS until
       FROM workspace_turns w JOIN turns t ON t.trace_id = w.trace_id AND t.started_at = w.started_at
       JOIN traces tr ON tr.trace_id = w.trace_id
       WHERE tr.project_path = ? AND w.end_head IS NOT NULL ORDER BY w.trace_id, t.turn_index`).all(projectPath) as Row[])
       .map(r => ({
-        traceId: String(r.trace_id), agentId: String(r.agent_id), startedAt: num(r.started_at), turnIndex: num(r.turn_index),
-        startHead: optStr(r.start_head) ?? null, endHead: String(r.end_head), branch: optStr(r.branch) ?? null,
+        traceId: String(r.trace_id), agentId: String(r.agent_id), startedAt: num(r.started_at), until: optNum(r.until) ?? null,
+        turnIndex: num(r.turn_index), startHead: optStr(r.start_head) ?? null, endHead: String(r.end_head), branch: optStr(r.branch) ?? null,
       }));
   }
 
