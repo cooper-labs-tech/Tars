@@ -296,8 +296,8 @@ describe('the Projects view', () => {
     ];
     loadAgents = [{ id: 'a-1', name: 'Load 1', projectPath: projects.pub, provider: 'codex', endpointId: 'ep-1', model: 'open-coder-1' }];
     // What the engine holds of a run: its arrivals (never the run's log, the Audit's Infos on #685).
-    let engineHolds: { arrivals: LoadArrival[]; agents: [] } | undefined;
-    const w = createLoadWindow(deps({ progress: () => engineHolds }));
+    const engine: { holds?: { arrivals: LoadArrival[]; agents: [] } } = {};
+    const w = createLoadWindow(deps({ progress: () => engine.holds }));
     const v = await w.projects();
     expect(v.projects.map(x => x.path).sort()).toEqual(Object.values(projects).sort());
     expect(v.endpoints).toEqual([{ id: 'ep-1', name: 'Shared host', models: ['open-coder-1'] }]);
@@ -324,7 +324,7 @@ describe('the Projects view', () => {
     updateRun(path.join(dir, 'runs'), r.runId, x => ({ ...x, arrivals: [{ n: 1, taskId: 'pub-1', plannedAt: now, actualAt: now, agentId: 'a-1', harness: 'codex' }] }));
     expect((await w.projects()).projects.find(x => x.path === projects.pub)!.agents[0].inWindow).toBe(false);
     expect(r.runId).toBeTruthy();
-    engineHolds = { arrivals: [{ n: 1, taskId: 'pub-1', plannedAt: now, actualAt: now, agentId: 'a-1', harness: 'codex' }], agents: [] };
+    engine.holds = { arrivals: [{ n: 1, taskId: 'pub-1', plannedAt: now, actualAt: now, agentId: 'a-1', harness: 'codex' }], agents: [] };
     expect((await w.projects()).projects.find(x => x.path === projects.pub)!.agents[0].inWindow).toBe(true);
   });
 
