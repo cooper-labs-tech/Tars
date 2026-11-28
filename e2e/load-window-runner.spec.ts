@@ -175,22 +175,27 @@ process.exit(1);
     await expect.poll(() => record().arrivals.find(a => a.n === 3 && a.end)?.end ?? null, { timeout: 120_000 }).toBe('done');
     const requests = fs.existsSync(standinLog) ? fs.readFileSync(standinLog, 'utf8') : '';
     const loadId = (await fleet()).find(a => a.load === true)?.id;
-    const startContexts = () => app!.evaluate(({}, { dist, agentId }) => {
+    // Every trace of Load 1, oldest first: the terminal its creation opened, where no task ran, has no turn and no
+    // starting context; each session that ran the task has both.
+    const traces = () => app!.evaluate(({}, { dist, agentId }) => {
       const { traceStore } = process.mainModule!.require(`${dist}/services/traces-runtime.js`);
-      const ids = traceStore().list({ agentId }).sessions.map((s: Row) => s.traceId);
-      return ids.map((id: string) => traceStore().session(id)?.outcome?.load?.startContext?.sha256 ?? null);
-    }, { dist, agentId: loadId }) as Promise<Array<string | null>>;
-    await expect.poll(async () => (await startContexts()).filter(Boolean).length, { timeout: 30_000 }).toBe(2);
-    const hashes = await startContexts();
-    const noMemory = {
+      return traceStore().list({ agentId }).sessions
+        .map((s: Row) => ({ startedAt: s.startedAt as number, turns: s.turnCount as number, sha256: traceStore().session(s.traceId)?.outcome?.load?.startContext?.sha256 ?? null }))
+        .sort((a: Row, b: Row) => (a.startedAt as number) - (b.startedAt as number));
+    }, { dist, agentId: loadId }) as Promise<Array<{ startedAt: number; turns: number; sha256: string | null }>>;
+    const worked = async () => (await traces()).filter(t => t.turns > 0);
+    // Each reported on its own, so a red build shows every one that fails.
+    expect.soft((requests.match(/"method":"POST"/g) ?? []).length, 'the sessions reached the endpoint').toBeGreaterThan(0);
+    expect.soft(requests.includes(memoryMarker), 'the project\'s memory').toBe(false);
+    expect.soft(requests.includes(observationMarker), 'another session\'s observation').toBe(false);
+    const ended = await expect.poll(async () => (await worked()).filter(t => t.sha256).length, { timeout: 30_000 }).toBe(2).then(() => true, () => false);
+    const all = await traces();
+    const hashes = all.filter(t => t.turns > 0).map(t => t.sha256);
+    keep({ noMemory: {
       modelRequests: (requests.match(/"method":"POST"/g) ?? []).length,
       memoryMarkerReached: requests.includes(memoryMarker), observationMarkerReached: requests.includes(observationMarker),
-      startContexts: hashes,
-    };
-    keep({ noMemory });
-    expect.soft(noMemory.modelRequests, 'the sessions reached the endpoint').toBeGreaterThan(0);
-    expect.soft(noMemory.memoryMarkerReached, 'the project\'s memory').toBe(false);
-    expect.soft(noMemory.observationMarkerReached, 'another session\'s observation').toBe(false);
+      traces: all, bothEnded: ended,
+    } });
     expect.soft(hashes, 'two load sessions of the same task, one starting context').toEqual([expect.stringMatching(/^[0-9a-f]{64}$/), hashes[0]]);
     fs.copyFileSync(path.join(dir, 'load-runs', runId, 'run.json'), test.info().outputPath('run.json'));
     if (fs.existsSync(fakeLog)) fs.copyFileSync(fakeLog, test.info().outputPath('fake-cli.jsonl'));
