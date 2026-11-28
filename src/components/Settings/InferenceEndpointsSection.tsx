@@ -368,6 +368,29 @@ export const InferenceEndpointsSection = () => {
  * twice.", "The value of <name> is ...", and the field's own ("An endpoint takes 16 extra headers at most.", "An extra
  * header's name is one header token ...", "Extra headers are a map ...").
  */
+/** main's bounds and sentences for an endpoint's limits (services/endpoint-harness.ts, limitsError). */
+const MIN_CONTEXT_WINDOW = 1_024;
+const MAX_CONTEXT_WINDOW = 10_000_000;
+const WINDOW_REFUSED = 'The context window is a whole number of tokens from 1,024 to 10,000,000.';
+const CAP_REFUSED = 'The output cap is a whole number of tokens, at least 1 and no more than the context window.';
+
+/**
+ * A count of tokens as typed (`Settings · Inference endpoints · context window and output cap`): digits, with or
+ * without separators (65536, 65,536, 65 536, 65_536). null: empty, which clears it; NaN: not a whole number.
+ */
+function tokensOf(typed: string): number | null {
+  const t = typed.trim();
+  if (t === '') return null;
+  return /^\d{1,3}([,_ ]?\d{3})*$|^\d+$/.test(t) ? Number(t.replace(/[,_ ]/g, '')) : NaN;
+}
+
+/** Which limit main's refusal names, so its sentence goes under that row; null for any other refusal. */
+function limitRowOf(error: string): 'window' | 'cap' | null {
+  if (/^The context window\b|context window and output cap/.test(error)) return 'window';
+  if (/^The output cap\b/.test(error)) return 'cap';
+  return null;
+}
+
 function refusedRowOf(error: string, rows: Array<{ name: string }>): number | null {
   const named = rows.findIndex(r => {
     const n = r.name.trim();
@@ -387,6 +410,10 @@ function EndpointForm({ endpoint, onDone }: { endpoint?: EndpointView; onDone: (
   const [key, setKey] = useState('');
   const [replacingKey, setReplacingKey] = useState(!endpoint || !endpoint.keySet);
   const [hold, setHold] = useState(String(endpoint?.holdMaxSeconds ?? DEFAULT_HOLD));
+  const [windowTyped, setWindowTyped] = useState(endpoint?.contextWindow !== undefined ? String(endpoint.contextWindow) : '');
+  const [capTyped, setCapTyped] = useState(endpoint?.maxOutputTokens !== undefined ? String(endpoint.maxOutputTokens) : '');
+  /** main's refusal of the limits, in its words, under the row it names. */
+  const [limitError, setLimitError] = useState<{ row: 'window' | 'cap'; text: string } | null>(null);
   const [allowTraces, setAllowTraces] = useState(endpoint?.allowTraces ?? false);
   const [sessionHeaders, setSessionHeaders] = useState(endpoint?.sendSessionHeaders ?? false);
   /** X-Install-Id: the owner's only, and only with the session headers (main refuses it without them). */
@@ -409,7 +436,13 @@ function EndpointForm({ endpoint, onDone }: { endpoint?: EndpointView; onDone: (
 
   const holdSeconds = Number(hold);
   const holdOk = Number.isInteger(holdSeconds) && holdSeconds >= 0 && holdSeconds <= 3600;
-  const ready = !!api && name.trim() !== '' && baseUrl.trim() !== '' && holdOk && !busy;
+  // The model's limits, checked as main checks them: a window from 1,024 to 10,000,000, a cap from 1 up to the window
+  // (up to 10,000,000 without one). Empty clears either.
+  const contextWindow = tokensOf(windowTyped);
+  const outputCap = tokensOf(capTyped);
+  const windowBad = contextWindow !== null && !(Number.isInteger(contextWindow) && contextWindow >= MIN_CONTEXT_WINDOW && contextWindow <= MAX_CONTEXT_WINDOW);
+  const capBad = outputCap !== null && !(Number.isInteger(outputCap) && outputCap >= 1 && outputCap <= (windowBad || contextWindow === null ? MAX_CONTEXT_WINDOW : contextWindow));
+  const ready = !!api && name.trim() !== '' && baseUrl.trim() !== '' && holdOk && !windowBad && !capBad && !busy;
 
   const submit = async () => {
     if (!api) return;
@@ -427,11 +460,15 @@ function EndpointForm({ endpoint, onDone }: { endpoint?: EndpointView; onDone: (
     }
     try {
       const extraHeaders = Object.fromEntries(headers.filter(h => h.name.trim() !== '' || h.value !== '').map(h => [h.name.trim(), h.value]));
-      const saved = await api.save({ id: endpoint?.id, name: name.trim(), baseUrl: baseUrl.trim(), allowTraces, holdMaxSeconds: holdSeconds, sendSessionHeaders: sessionHeaders, sendInstallHeader: sessionHeaders && installHeader, allowPlainHttp: isHttp && plainHttp, extraHeaders, ...(shown ? { shown } : {}) });
+      setLimitError(null);
+      const saved = await api.save({ id: endpoint?.id, name: name.trim(), baseUrl: baseUrl.trim(), allowTraces, holdMaxSeconds: holdSeconds, sendSessionHeaders: sessionHeaders, sendInstallHeader: sessionHeaders && installHeader, allowPlainHttp: isHttp && plainHttp, extraHeaders, contextWindow, maxOutputTokens: outputCap, ...(shown ? { shown } : {}) });
       if (!saved.ok) {
         // An agent changed the endpoint since this editor opened: nothing was saved. The editor closes, main's
         // sentence goes under the row, and the list read again shows the change, to approve or put back.
         if (endpoint && isStale(saved.error)) { onDone({ id: endpoint.id, error: saved.error }); return; }
+        // main's refusal of a limit goes under the limit's row.
+        const limit = limitRowOf(saved.error);
+        if (limit) { setLimitError({ row: limit, text: saved.error }); setNote({ text: 'not saved: see the refused limit', tone: 'error' }); return; }
         // main's refusal of a header goes under the row it names; any other, under the base URL as before.
         const row = refusedRowOf(saved.error, headers);
         if (row !== null) { setHeadersError({ text: saved.error, row }); setNote({ text: 'not saved: see the refused header', tone: 'error' }); }
@@ -566,6 +603,29 @@ function EndpointForm({ endpoint, onDone }: { endpoint?: EndpointView; onDone: (
           <span className="font-mono text-[10.5px] text-muted-foreground">s</span>
         </div>
       </div>
+
+      {([
+        ['window', 'Context window', 'The model\'s real context window, in tokens (1,024 to 10,000,000). Tars gives it to the harness when it starts an agent on this endpoint, so the harness compacts before the endpoint refuses a prompt. Empty: the harness keeps its own guess.', windowTyped, setWindowTyped, windowBad ? WINDOW_REFUSED : null],
+        ['cap', 'Output cap', 'The most tokens the model writes in one answer (1 up to the context window). Tars gives it to the harness at start. Empty: the harness keeps its own.', capTyped, setCapTyped, capBad ? CAP_REFUSED : null],
+      ] as const).map(([row, label, help, value, set, typedError]) => {
+        const refused = typedError ?? (limitError?.row === row ? limitError.text : null);
+        return (
+          <div key={row} data-limit={row} className="space-y-1">
+            <div className="flex items-center gap-3">
+              <div className="min-w-0 flex-1">
+                <p className="text-[12.5px] text-foreground">{label}</p>
+                <p className="mt-0.5 max-w-[620px] text-[11px] leading-tight text-muted-foreground">{help}</p>
+              </div>
+              <div className="w-[150px] shrink-0 flex items-center gap-1.5">
+                <Input aria-label={`${label}, in tokens`} mono compact inputMode="numeric" placeholder="not set" value={value} error={!!refused}
+                  onChange={e => { set(e.target.value); setLimitError(null); }} />
+                <span className="font-mono text-[10.5px] text-muted-foreground">tokens</span>
+              </div>
+            </div>
+            {refused && <p data-limit-refused className="font-mono text-[10.5px] text-status-error">{refused}</p>}
+          </div>
+        );
+      })}
 
       <div className="flex items-center gap-3">
         <div className="min-w-0 flex-1">
