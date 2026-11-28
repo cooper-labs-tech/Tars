@@ -206,10 +206,12 @@ export function toolCallRecordOf(p: ToolCallPart): ToolCallRecord {
   // harness's count; none for a call denied before it ran.
   const span = p.itemStartedAt !== undefined && p.itemEndedAt !== undefined ? p.itemEndedAt - p.itemStartedAt : undefined;
   const ms = p.running ? p.wallMs : span ?? p.wallMs ?? (p.denied ? 0 : undefined);
-  const exit = p.running || p.exit === undefined || p.exit === -1 ? null : p.exit;
-  const cut = p.truncatedBytes ?? (p.keptBytes !== undefined && p.sentBytes !== undefined && p.keptBytes > p.sentBytes ? p.keptBytes - p.sentBytes : undefined);
+  // Whole numbers only leave (the back office refuses a batch for a fraction): a log may write times with fractions.
+  const exit = p.running || !Number.isInteger(p.exit) || p.exit === -1 ? null : p.exit!;
+  const bytes = p.truncatedBytes ?? (p.keptBytes !== undefined && p.sentBytes !== undefined && p.keptBytes > p.sentBytes ? p.keptBytes - p.sentBytes : undefined);
+  const cut = bytes === undefined ? undefined : Math.round(bytes);
   return {
-    toolCallId: p.callId, exit, ms: ms === undefined ? null : Math.max(0, ms),
+    toolCallId: p.callId, exit, ms: ms === undefined ? null : Math.max(0, Math.round(ms)),
     denied: p.denied === true, timedOut: p.timedOut === true, failed: !p.running && p.failed === true,
     truncated: p.truncated === true || !!cut,
     ...(cut ? { truncatedBytes: cut } : {}),

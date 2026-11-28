@@ -1078,8 +1078,9 @@ export class TraceStore {
         const client = Math.max(0, startedAt - from);
         // Its tools' run: the union of its calls, each cut to the gap; unknown while any of them is.
         const spans = ids.map(id => (parts.has(id) ? toolCallSpan(parts.get(id)!) : undefined));
+        // Whole milliseconds, as every part of a gap (a call's times may have fractions; the back office takes none).
         const toolMs = spans.every(s => s !== undefined)
-          ? unionMs(spans.map(s => [Math.max(from, s!.start), Math.min(startedAt, s!.start + s!.ms)]))
+          ? Math.round(unionMs(spans.map(s => [Math.max(from, s!.start), Math.min(startedAt, s!.start + s!.ms)])))
           : null;
         // The wait for typed words: only before the request that opens a turn, until they were typed.
         const turn = r.turn_id ? turnOf.get(String(r.turn_id)) : undefined;
@@ -1089,7 +1090,7 @@ export class TraceStore {
         const inputBy: TurnAuthor | undefined = opens && typedAt !== undefined ? (isOneOf(TURN_AUTHORS, turn!.author) ? turn!.author : 'unknown') : undefined;
         let harnessMs = toolMs === null || inputWaitMs === null ? null : client - toolMs - inputWaitMs;
         if (harnessMs !== null && harnessMs < 0) harnessMs = harnessMs >= -GAP_TOLERANCE_MS ? 0 : null;
-        const heldMs = num(r.held_ms);
+        const heldMs = Math.round(num(r.held_ms));
         entry.gap = { ms: client + heldMs, toolMs, inputWaitMs, ...(inputBy ? { inputBy } : {}), heldMs, harnessMs };
       }
       if (entry.gap || entry.toolCalls) out.set(String(r.request_id), entry);
