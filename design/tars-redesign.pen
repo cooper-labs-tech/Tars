@@ -932994,7 +932994,7 @@
         {
           "type": "frame",
           "id": "ac6I2",
-          "name": "state a change not yet taken by the back-office",
+          "name": "state a change being sent, not yet taken by the back-office",
           "width": 572,
           "fill": "$surface",
           "stroke": "$border",
@@ -933013,7 +933013,7 @@
               "id": "OtLSy",
               "name": "caption",
               "fill": "$text-muted",
-              "content": "A CHANGE NOT YET TAKEN BY THE BACK-OFFICE",
+              "content": "A CHANGE BEING SENT, NOT YET TAKEN BY THE BACK-OFFICE",
               "lineHeight": 1.4,
               "fontFamily": "$font-mono",
               "fontSize": 10,
@@ -933127,6 +933127,153 @@
                       "textGrowth": "fixed-width",
                       "width": 500,
                       "content": "Not yet sent to the back-office: Tars keeps trying.",
+                      "lineHeight": 1.4,
+                      "fontFamily": "$font-mono",
+                      "fontSize": 10.5,
+                      "fontWeight": "normal"
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "type": "frame",
+          "id": "F84aa",
+          "name": "state a change kept for the registration",
+          "width": 572,
+          "fill": "$surface",
+          "stroke": "$border",
+          "strokeWidth": 1,
+          "layout": "vertical",
+          "gap": 8,
+          "padding": [
+            10,
+            16,
+            12,
+            16
+          ],
+          "children": [
+            {
+              "type": "text",
+              "id": "fUIZ8",
+              "name": "caption",
+              "fill": "$text-muted",
+              "content": "A CHANGE KEPT FOR THE REGISTRATION: NO BACK-OFFICE YET",
+              "lineHeight": 1.4,
+              "fontFamily": "$font-mono",
+              "fontSize": 10,
+              "fontWeight": "normal"
+            },
+            {
+              "type": "frame",
+              "id": "Mglw5",
+              "name": "row Training",
+              "width": "fill_container",
+              "stroke": "$border",
+              "strokeWidth": {
+                "top": 1
+              },
+              "layout": "vertical",
+              "gap": 6,
+              "padding": [
+                11,
+                0,
+                0,
+                0
+              ],
+              "children": [
+                {
+                  "type": "frame",
+                  "id": "ABwKY",
+                  "name": "line",
+                  "width": "fill_container",
+                  "gap": 16,
+                  "justifyContent": "space_between",
+                  "alignItems": "center",
+                  "children": [
+                    {
+                      "type": "frame",
+                      "id": "k422m",
+                      "name": "l",
+                      "width": 430,
+                      "layout": "vertical",
+                      "gap": 2,
+                      "children": [
+                        {
+                          "type": "text",
+                          "id": "dv0Js",
+                          "name": "t",
+                          "fill": "$text-primary",
+                          "content": "May be used to train models",
+                          "lineHeight": 1.4,
+                          "fontFamily": "$font-ui",
+                          "fontSize": 12.5,
+                          "fontWeight": "normal"
+                        },
+                        {
+                          "type": "text",
+                          "id": "DCnxM",
+                          "name": "t",
+                          "fill": "$text-secondary",
+                          "textGrowth": "fixed-width",
+                          "width": 430,
+                          "content": "Each session you share carries this choice as it stood while the session ran. Turning it off also covers what was already sent. On by default.",
+                          "lineHeight": 1.4,
+                          "fontFamily": "$font-ui",
+                          "fontSize": 11,
+                          "fontWeight": "normal"
+                        }
+                      ]
+                    },
+                    {
+                      "type": "frame",
+                      "id": "ge4Sl",
+                      "name": "Toggle off",
+                      "width": 30,
+                      "height": 16,
+                      "fill": "$surface-raised",
+                      "stroke": "$border",
+                      "strokeWidth": 1,
+                      "layout": "none",
+                      "children": [
+                        {
+                          "type": "rectangle",
+                          "id": "dR8vs",
+                          "x": 2,
+                          "y": 1,
+                          "name": "knob",
+                          "fill": "$text-secondary",
+                          "width": 12,
+                          "height": 12
+                        }
+                      ]
+                    }
+                  ]
+                },
+                {
+                  "type": "frame",
+                  "id": "BTG2n",
+                  "name": "state",
+                  "gap": 6,
+                  "children": [
+                    {
+                      "type": "rectangle",
+                      "id": "s2C23A",
+                      "name": "d",
+                      "fill": "$text-muted",
+                      "width": 6,
+                      "height": 6
+                    },
+                    {
+                      "type": "text",
+                      "id": "I0BiLC",
+                      "name": "t",
+                      "fill": "$text-muted",
+                      "textGrowth": "fixed-width",
+                      "width": 500,
+                      "content": "Sent when Tars registers with your back-office.",
                       "lineHeight": 1.4,
                       "fontFamily": "$font-mono",
                       "fontSize": 10.5,
@@ -933433,13 +933580,160 @@
           ]
         },
         {
+          "type": "frame",
+          "id": "ktkJT",
+          "name": "state a read main could not answer",
+          "width": 572,
+          "fill": "$surface",
+          "stroke": "$border",
+          "strokeWidth": 1,
+          "layout": "vertical",
+          "gap": 8,
+          "padding": [
+            10,
+            16,
+            12,
+            16
+          ],
+          "children": [
+            {
+              "type": "text",
+              "id": "fPTAe",
+              "name": "caption",
+              "fill": "$text-muted",
+              "content": "A READ MAIN COULD NOT ANSWER: SAID UNTIL A READ HOLDS",
+              "lineHeight": 1.4,
+              "fontFamily": "$font-mono",
+              "fontSize": 10,
+              "fontWeight": "normal"
+            },
+            {
+              "type": "frame",
+              "id": "ah24p",
+              "name": "row Training",
+              "width": "fill_container",
+              "stroke": "$border",
+              "strokeWidth": {
+                "top": 1
+              },
+              "layout": "vertical",
+              "gap": 6,
+              "padding": [
+                11,
+                0,
+                0,
+                0
+              ],
+              "children": [
+                {
+                  "type": "frame",
+                  "id": "yIdKA",
+                  "name": "line",
+                  "width": "fill_container",
+                  "gap": 16,
+                  "justifyContent": "space_between",
+                  "alignItems": "center",
+                  "children": [
+                    {
+                      "type": "frame",
+                      "id": "mDi8n",
+                      "name": "l",
+                      "width": 430,
+                      "layout": "vertical",
+                      "gap": 2,
+                      "children": [
+                        {
+                          "type": "text",
+                          "id": "CAT1d",
+                          "name": "t",
+                          "fill": "$text-primary",
+                          "content": "May be used to train models",
+                          "lineHeight": 1.4,
+                          "fontFamily": "$font-ui",
+                          "fontSize": 12.5,
+                          "fontWeight": "normal"
+                        },
+                        {
+                          "type": "text",
+                          "id": "HOrGu",
+                          "name": "t",
+                          "fill": "$text-secondary",
+                          "textGrowth": "fixed-width",
+                          "width": 430,
+                          "content": "Each session you share carries this choice as it stood while the session ran. Turning it off also covers what was already sent. On by default.",
+                          "lineHeight": 1.4,
+                          "fontFamily": "$font-ui",
+                          "fontSize": 11,
+                          "fontWeight": "normal"
+                        }
+                      ]
+                    },
+                    {
+                      "type": "frame",
+                      "id": "t2UiW",
+                      "name": "Toggle off",
+                      "width": 30,
+                      "height": 16,
+                      "fill": "$surface-raised",
+                      "stroke": "$border",
+                      "strokeWidth": 1,
+                      "layout": "none",
+                      "children": [
+                        {
+                          "type": "rectangle",
+                          "id": "Pjke3",
+                          "x": 2,
+                          "y": 1,
+                          "name": "knob",
+                          "fill": "$text-secondary",
+                          "width": 12,
+                          "height": 12
+                        }
+                      ]
+                    }
+                  ]
+                },
+                {
+                  "type": "frame",
+                  "id": "J3OAoI",
+                  "name": "state",
+                  "gap": 6,
+                  "children": [
+                    {
+                      "type": "rectangle",
+                      "id": "iCDqq",
+                      "name": "d",
+                      "fill": "$status-error",
+                      "width": 6,
+                      "height": 6
+                    },
+                    {
+                      "type": "text",
+                      "id": "abtrM",
+                      "name": "t",
+                      "fill": "$status-error",
+                      "textGrowth": "fixed-width",
+                      "width": 500,
+                      "content": "reading the training switch failed: main did not answer. Tars reads it again.",
+                      "lineHeight": 1.4,
+                      "fontFamily": "$font-mono",
+                      "fontSize": 10.5,
+                      "fontWeight": "normal"
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        },
+        {
           "type": "text",
           "id": "tN1Uj",
           "name": "t",
           "fill": "$text-secondary",
           "textGrowth": "fixed-width",
           "width": 572,
-          "content": "Under sharing's consent, in the back-office card, the owner's only: no agent, token or API route reaches it. It sits there whether or not sharing is on: a session recorded now carries the switch as it stands while it runs, and turning it off covers what was already sent. A change goes to the back-office at the next pass; until it is taken, the line says so. An off that could not be written holds for the run, in main's words. An on that could not be saved is refused, and main's reason stays under the switch until the next change.",
+          "content": "Under sharing's consent, in the back-office card, the owner's only: no agent, token or API route reaches it. It sits there whether or not sharing is on: a session recorded now carries the switch as it stands while it runs, and turning it off covers what was already sent. A change goes to the back-office at the next pass, while Tars is registered at the address the settings name: until it is taken, the line says Tars keeps trying. With no address or no registration nothing is tried, and the value goes with the registration: the line says so. An off that could not be written holds for the run, in main's words. An on that could not be saved is refused, and main's reason stays under the switch until a change holds; a read main could not answer is said apart, until a read holds.",
           "lineHeight": 1.4,
           "fontFamily": "$font-ui",
           "fontSize": 12,
@@ -933727,7 +934021,7 @@
         {
           "type": "frame",
           "id": "zEnec",
-          "name": "state a change not yet taken by the back-office",
+          "name": "state a change being sent, not yet taken by the back-office",
           "width": 572,
           "fill": "$surface",
           "stroke": "$border",
@@ -933746,7 +934040,7 @@
               "id": "U5WX7P",
               "name": "caption",
               "fill": "$text-muted",
-              "content": "A CHANGE NOT YET TAKEN BY THE BACK-OFFICE",
+              "content": "A CHANGE BEING SENT, NOT YET TAKEN BY THE BACK-OFFICE",
               "lineHeight": 1.4,
               "fontFamily": "$font-mono",
               "fontSize": 10,
@@ -933860,6 +934154,153 @@
                       "textGrowth": "fixed-width",
                       "width": 500,
                       "content": "Not yet sent to the back-office: Tars keeps trying.",
+                      "lineHeight": 1.4,
+                      "fontFamily": "$font-mono",
+                      "fontSize": 10.5,
+                      "fontWeight": "normal"
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "type": "frame",
+          "id": "yanyf",
+          "name": "state a change kept for the registration",
+          "width": 572,
+          "fill": "$surface",
+          "stroke": "$border",
+          "strokeWidth": 1,
+          "layout": "vertical",
+          "gap": 8,
+          "padding": [
+            10,
+            16,
+            12,
+            16
+          ],
+          "children": [
+            {
+              "type": "text",
+              "id": "MzBpY",
+              "name": "caption",
+              "fill": "$text-muted",
+              "content": "A CHANGE KEPT FOR THE REGISTRATION: NO BACK-OFFICE YET",
+              "lineHeight": 1.4,
+              "fontFamily": "$font-mono",
+              "fontSize": 10,
+              "fontWeight": "normal"
+            },
+            {
+              "type": "frame",
+              "id": "QlEon",
+              "name": "row Training",
+              "width": "fill_container",
+              "stroke": "$border",
+              "strokeWidth": {
+                "top": 1
+              },
+              "layout": "vertical",
+              "gap": 6,
+              "padding": [
+                11,
+                0,
+                0,
+                0
+              ],
+              "children": [
+                {
+                  "type": "frame",
+                  "id": "gaNdD",
+                  "name": "line",
+                  "width": "fill_container",
+                  "gap": 16,
+                  "justifyContent": "space_between",
+                  "alignItems": "center",
+                  "children": [
+                    {
+                      "type": "frame",
+                      "id": "T7VXLS",
+                      "name": "l",
+                      "width": 430,
+                      "layout": "vertical",
+                      "gap": 2,
+                      "children": [
+                        {
+                          "type": "text",
+                          "id": "DDnYG",
+                          "name": "t",
+                          "fill": "$text-primary",
+                          "content": "May be used to train models",
+                          "lineHeight": 1.4,
+                          "fontFamily": "$font-ui",
+                          "fontSize": 12.5,
+                          "fontWeight": "normal"
+                        },
+                        {
+                          "type": "text",
+                          "id": "KqQPw",
+                          "name": "t",
+                          "fill": "$text-secondary",
+                          "textGrowth": "fixed-width",
+                          "width": 430,
+                          "content": "Each session you share carries this choice as it stood while the session ran. Turning it off also covers what was already sent. On by default.",
+                          "lineHeight": 1.4,
+                          "fontFamily": "$font-ui",
+                          "fontSize": 11,
+                          "fontWeight": "normal"
+                        }
+                      ]
+                    },
+                    {
+                      "type": "frame",
+                      "id": "YH1d3",
+                      "name": "Toggle off",
+                      "width": 30,
+                      "height": 16,
+                      "fill": "$surface-raised",
+                      "stroke": "$border",
+                      "strokeWidth": 1,
+                      "layout": "none",
+                      "children": [
+                        {
+                          "type": "rectangle",
+                          "id": "LqZNX",
+                          "x": 2,
+                          "y": 1,
+                          "name": "knob",
+                          "fill": "$text-secondary",
+                          "width": 12,
+                          "height": 12
+                        }
+                      ]
+                    }
+                  ]
+                },
+                {
+                  "type": "frame",
+                  "id": "u7Nso",
+                  "name": "state",
+                  "gap": 6,
+                  "children": [
+                    {
+                      "type": "rectangle",
+                      "id": "w9XdY",
+                      "name": "d",
+                      "fill": "$text-muted",
+                      "width": 6,
+                      "height": 6
+                    },
+                    {
+                      "type": "text",
+                      "id": "yGn4F",
+                      "name": "t",
+                      "fill": "$text-muted",
+                      "textGrowth": "fixed-width",
+                      "width": 500,
+                      "content": "Sent when Tars registers with your back-office.",
                       "lineHeight": 1.4,
                       "fontFamily": "$font-mono",
                       "fontSize": 10.5,
@@ -934166,13 +934607,160 @@
           ]
         },
         {
+          "type": "frame",
+          "id": "ttLbL",
+          "name": "state a read main could not answer",
+          "width": 572,
+          "fill": "$surface",
+          "stroke": "$border",
+          "strokeWidth": 1,
+          "layout": "vertical",
+          "gap": 8,
+          "padding": [
+            10,
+            16,
+            12,
+            16
+          ],
+          "children": [
+            {
+              "type": "text",
+              "id": "m6XXrA",
+              "name": "caption",
+              "fill": "$text-muted",
+              "content": "A READ MAIN COULD NOT ANSWER: SAID UNTIL A READ HOLDS",
+              "lineHeight": 1.4,
+              "fontFamily": "$font-mono",
+              "fontSize": 10,
+              "fontWeight": "normal"
+            },
+            {
+              "type": "frame",
+              "id": "uH9H9",
+              "name": "row Training",
+              "width": "fill_container",
+              "stroke": "$border",
+              "strokeWidth": {
+                "top": 1
+              },
+              "layout": "vertical",
+              "gap": 6,
+              "padding": [
+                11,
+                0,
+                0,
+                0
+              ],
+              "children": [
+                {
+                  "type": "frame",
+                  "id": "SelXD",
+                  "name": "line",
+                  "width": "fill_container",
+                  "gap": 16,
+                  "justifyContent": "space_between",
+                  "alignItems": "center",
+                  "children": [
+                    {
+                      "type": "frame",
+                      "id": "ettHF",
+                      "name": "l",
+                      "width": 430,
+                      "layout": "vertical",
+                      "gap": 2,
+                      "children": [
+                        {
+                          "type": "text",
+                          "id": "C8C5U",
+                          "name": "t",
+                          "fill": "$text-primary",
+                          "content": "May be used to train models",
+                          "lineHeight": 1.4,
+                          "fontFamily": "$font-ui",
+                          "fontSize": 12.5,
+                          "fontWeight": "normal"
+                        },
+                        {
+                          "type": "text",
+                          "id": "O0zI0",
+                          "name": "t",
+                          "fill": "$text-secondary",
+                          "textGrowth": "fixed-width",
+                          "width": 430,
+                          "content": "Each session you share carries this choice as it stood while the session ran. Turning it off also covers what was already sent. On by default.",
+                          "lineHeight": 1.4,
+                          "fontFamily": "$font-ui",
+                          "fontSize": 11,
+                          "fontWeight": "normal"
+                        }
+                      ]
+                    },
+                    {
+                      "type": "frame",
+                      "id": "wjYgY",
+                      "name": "Toggle off",
+                      "width": 30,
+                      "height": 16,
+                      "fill": "$surface-raised",
+                      "stroke": "$border",
+                      "strokeWidth": 1,
+                      "layout": "none",
+                      "children": [
+                        {
+                          "type": "rectangle",
+                          "id": "qZZFZ",
+                          "x": 2,
+                          "y": 1,
+                          "name": "knob",
+                          "fill": "$text-secondary",
+                          "width": 12,
+                          "height": 12
+                        }
+                      ]
+                    }
+                  ]
+                },
+                {
+                  "type": "frame",
+                  "id": "dMg74",
+                  "name": "state",
+                  "gap": 6,
+                  "children": [
+                    {
+                      "type": "rectangle",
+                      "id": "ZZ4fL",
+                      "name": "d",
+                      "fill": "$status-error",
+                      "width": 6,
+                      "height": 6
+                    },
+                    {
+                      "type": "text",
+                      "id": "d7NVZ",
+                      "name": "t",
+                      "fill": "$status-error",
+                      "textGrowth": "fixed-width",
+                      "width": 500,
+                      "content": "reading the training switch failed: main did not answer. Tars reads it again.",
+                      "lineHeight": 1.4,
+                      "fontFamily": "$font-mono",
+                      "fontSize": 10.5,
+                      "fontWeight": "normal"
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        },
+        {
           "type": "text",
           "id": "rL39a",
           "name": "t",
           "fill": "$text-secondary",
           "textGrowth": "fixed-width",
           "width": 572,
-          "content": "Under sharing's consent, in the back-office card, the owner's only: no agent, token or API route reaches it. It sits there whether or not sharing is on: a session recorded now carries the switch as it stands while it runs, and turning it off covers what was already sent. A change goes to the back-office at the next pass; until it is taken, the line says so. An off that could not be written holds for the run, in main's words. An on that could not be saved is refused, and main's reason stays under the switch until the next change.",
+          "content": "Under sharing's consent, in the back-office card, the owner's only: no agent, token or API route reaches it. It sits there whether or not sharing is on: a session recorded now carries the switch as it stands while it runs, and turning it off covers what was already sent. A change goes to the back-office at the next pass, while Tars is registered at the address the settings name: until it is taken, the line says Tars keeps trying. With no address or no registration nothing is tried, and the value goes with the registration: the line says so. An off that could not be written holds for the run, in main's words. An on that could not be saved is refused, and main's reason stays under the switch until a change holds; a read main could not answer is said apart, until a read holds.",
           "lineHeight": 1.4,
           "fontFamily": "$font-ui",
           "fontSize": 12,

@@ -113,16 +113,23 @@ export function UploadView() {
   /** An answer's `unsaved` (a setting that took from sharing, held and not written yet), until main has written it. */
   const [answerUnsaved, setAnswerUnsaved] = useUnsavedNote();
   /**
-   * The owner's training switch (`Traces · upload · training switch`): main's view of it, and main's refusal of a
-   * change or a read that failed, said under the switch until the next change.
+   * The owner's training switch (`Traces · upload · training switch`): main's view of it; main's refusal of a change,
+   * said under the switch until a change holds; and, apart from it, a read main could not answer, said until a read
+   * holds (the Audit's I-1 on #693).
    */
   const [training, setTraining] = useState<TrainingView | null>(null);
-  const [trainingError, setTrainingError] = useState<string | null>(null);
+  const [trainingRefusal, setTrainingRefusal] = useState<string | null>(null);
+  const [trainingReadError, setTrainingReadError] = useState<string | null>(null);
   const [trainingBusy, setTrainingBusy] = useState(false);
   const readTraining = useCallback(async () => {
     const api = tracesApi();
     if (!api) return;
-    try { setTraining(await api.training()); } catch (e) { setTrainingError(said('reading the training switch', e)); }
+    try {
+      setTraining(await api.training());
+      setTrainingReadError(null);
+    } catch (e) {
+      setTrainingReadError(said('reading the training switch', e));
+    }
   }, []);
   const toggleTraining = async () => {
     const api = tracesApi();
@@ -130,9 +137,9 @@ export function UploadView() {
     setTrainingBusy(true);
     try {
       const r = await api.setTraining(!training.training);
-      if (r.ok) { setTraining(r.state); setTrainingError(null); } else { setTrainingError(r.error); void readTraining(); }
+      if (r.ok) { setTraining(r.state); setTrainingRefusal(null); } else { setTrainingRefusal(r.error); void readTraining(); }
     } catch (e) {
-      setTrainingError(said('saving the training switch', e));
+      setTrainingRefusal(said('saving the training switch', e));
     } finally {
       setTrainingBusy(false);
     }
@@ -178,7 +185,7 @@ export function UploadView() {
     // training switch, whose change the back-office takes at an upload pass.
     const tick = setInterval(() => {
       void tracesApi()?.uploadState().then(setState).catch(() => undefined);
-      void tracesApi()?.training().then(setTraining).catch(() => undefined);
+      void readTraining();
     }, 10_000);
     return () => { off?.(); clearInterval(tick); };
   }, [read, readNotice, readTraining]);
@@ -438,9 +445,14 @@ export function UploadView() {
                 </div>
                 <Toggle label="May be used to train models" enabled={training?.training ?? false} disabled={!training || trainingBusy} onChange={() => { void toggleTraining(); }} />
               </div>
-              {trainingError ? <StateLine wrap word={trainingError} tone="error" />
+              {trainingRefusal ? <StateLine wrap word={trainingRefusal} tone="error" />
+                : trainingReadError ? <StateLine wrap word={`reading the training switch failed: ${trainingReadError}. Tars reads it again.`} tone="error" />
                 : training?.unsaved ? <StateLine wrap word={training.unsaved} tone="waiting" />
-                : training?.owed ? <StateLine word="Not yet sent to the back-office: Tars keeps trying." tone="waiting" />
+                // An owed value is tried only for an install registered at the address the settings name (trace-upload.ts
+                // trainingDue); with none, it goes with the registration, and nothing is tried meanwhile (the Audit's I-2).
+                : training?.owed ? (state?.registered
+                  ? <StateLine word="Not yet sent to the back-office: Tars keeps trying." tone="waiting" />
+                  : <StateLine word="Sent when Tars registers with your back-office." tone="idle" />)
                 : null}
             </Row>
           </Box>
