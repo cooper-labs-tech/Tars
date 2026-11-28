@@ -930472,13 +930472,223 @@
           ]
         },
         {
+          "type": "frame",
+          "id": "OzuEq",
+          "name": "state on, not sent: Tars is not sending it",
+          "width": "fill_container",
+          "fill": "$bg",
+          "stroke": "$border-strong",
+          "strokeWidth": 1,
+          "layout": "vertical",
+          "gap": 12,
+          "padding": [
+            14,
+            16
+          ],
+          "children": [
+            {
+              "type": "text",
+              "id": "n5qNNo",
+              "name": "caption",
+              "fill": "$text-muted",
+              "content": "ON, NOT SENT: TARS IS NOT SENDING IT",
+              "lineHeight": 1.4,
+              "fontFamily": "$font-mono",
+              "fontSize": 10,
+              "fontWeight": "normal"
+            },
+            {
+              "type": "frame",
+              "id": "Aj94h",
+              "name": "headers",
+              "width": "fill_container",
+              "gap": 12,
+              "alignItems": "center",
+              "children": [
+                {
+                  "type": "frame",
+                  "id": "SgG3Q",
+                  "name": "l",
+                  "width": 620,
+                  "layout": "vertical",
+                  "gap": 2,
+                  "children": [
+                    {
+                      "type": "text",
+                      "id": "WtfQj",
+                      "name": "t",
+                      "fill": "$text-primary",
+                      "content": "Send session headers",
+                      "lineHeight": 1.4,
+                      "fontFamily": "$font-ui",
+                      "fontSize": 12.5,
+                      "fontWeight": "normal"
+                    },
+                    {
+                      "type": "text",
+                      "id": "S8oQE",
+                      "name": "t",
+                      "fill": "$text-secondary",
+                      "textGrowth": "fixed-width",
+                      "width": 620,
+                      "content": "Adds X-Session-Id and X-Agent-Id to every request, for a server that groups requests into sessions. Off by default: nothing about your agents goes with a request unless you turn it on.",
+                      "lineHeight": 1.4,
+                      "fontFamily": "$font-ui",
+                      "fontSize": 11,
+                      "fontWeight": "normal"
+                    }
+                  ]
+                },
+                {
+                  "type": "frame",
+                  "id": "fseuU",
+                  "name": "sp",
+                  "width": "fill_container",
+                  "height": 1
+                },
+                {
+                  "type": "frame",
+                  "id": "T6Fc8m",
+                  "name": "Toggle on",
+                  "width": 30,
+                  "height": 16,
+                  "fill": "$accent",
+                  "stroke": "$accent",
+                  "strokeWidth": 1,
+                  "layout": "none",
+                  "children": [
+                    {
+                      "type": "rectangle",
+                      "id": "tlaw6",
+                      "x": 16,
+                      "y": 1,
+                      "name": "knob",
+                      "fill": "$bg",
+                      "width": 12,
+                      "height": 12
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "type": "frame",
+              "id": "VKY5D",
+              "name": "install id",
+              "width": "fill_container",
+              "gap": 12,
+              "alignItems": "center",
+              "children": [
+                {
+                  "type": "frame",
+                  "id": "rFnNj",
+                  "name": "l",
+                  "width": 620,
+                  "layout": "vertical",
+                  "gap": 2,
+                  "children": [
+                    {
+                      "type": "text",
+                      "id": "BnWNA",
+                      "name": "t",
+                      "fill": "$text-primary",
+                      "content": "Send install id",
+                      "lineHeight": 1.4,
+                      "fontFamily": "$font-ui",
+                      "fontSize": 12.5,
+                      "fontWeight": "normal"
+                    },
+                    {
+                      "type": "text",
+                      "id": "Q6tqVD",
+                      "name": "t",
+                      "fill": "$text-secondary",
+                      "textGrowth": "fixed-width",
+                      "width": 620,
+                      "content": "Adds X-Install-Id, this install's back-office id, to every request while you share traces and Tars is registered with your back-office, so deleting everything there can reach this endpoint's own copy. Needs the session headers. Never sent after a deletion.",
+                      "lineHeight": 1.4,
+                      "fontFamily": "$font-ui",
+                      "fontSize": 11,
+                      "fontWeight": "normal"
+                    },
+                    {
+                      "type": "frame",
+                      "id": "riOrv",
+                      "name": "state",
+                      "gap": 6,
+                      "padding": [
+                        4,
+                        0,
+                        0,
+                        0
+                      ],
+                      "alignItems": "center",
+                      "children": [
+                        {
+                          "type": "rectangle",
+                          "id": "jzQy4",
+                          "name": "square",
+                          "fill": "$status-waiting",
+                          "width": 6,
+                          "height": 6
+                        },
+                        {
+                          "type": "text",
+                          "id": "uTiTc",
+                          "name": "t",
+                          "fill": "$status-waiting",
+                          "content": "not sent now: Tars is not sending it, and its log says why",
+                          "lineHeight": 1.4,
+                          "fontFamily": "$font-mono",
+                          "fontSize": 10.5,
+                          "fontWeight": "normal"
+                        }
+                      ]
+                    }
+                  ]
+                },
+                {
+                  "type": "frame",
+                  "id": "y8sn0",
+                  "name": "sp",
+                  "width": "fill_container",
+                  "height": 1
+                },
+                {
+                  "type": "frame",
+                  "id": "B6bmV6",
+                  "name": "Toggle on",
+                  "width": 30,
+                  "height": 16,
+                  "fill": "$accent",
+                  "stroke": "$accent",
+                  "strokeWidth": 1,
+                  "layout": "none",
+                  "children": [
+                    {
+                      "type": "rectangle",
+                      "id": "UOIWJ",
+                      "x": 16,
+                      "y": 1,
+                      "name": "knob",
+                      "fill": "$bg",
+                      "width": 12,
+                      "height": 12
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        },
+        {
           "type": "text",
           "id": "qUVpI",
           "name": "t",
           "fill": "$text-secondary",
           "textGrowth": "fixed-width",
           "width": 1340,
-          "content": "Beside the session headers, in the endpoint's form, the owner's only: no agent turns it on. Off by default. Turning the session headers off turns it off, and while they are off it cannot be turned on. Its line reads the upload state Traces already shows: sent while you share traces (the consent the uploader acts on), Tars is registered with the back-office, and no deletion waits for its confirmation (then: \"not sent now: a deletion is not confirmed yet\"). After a deletion, or once the back-office no longer knows this Tars, it is not registered, and nothing is sent.",
+          "content": "Beside the session headers, in the endpoint's form, the owner's only: no agent turns it on. Off by default. Turning the session headers off turns it off, and while they are off it cannot be turned on. Its line follows main's own answer (the upload state's installIdSent): \"sent now\" only when main sends the id. When main does not, the line says the reason the window can tell: a deletion not confirmed yet, sharing off, or Tars not registered with the back-office; and when none of these is the reason (an id main will not send, or an install a deletion left behind), \"not sent now: Tars is not sending it, and its log says why\".",
           "lineHeight": 1.4,
           "fontFamily": "$font-ui",
           "fontSize": 12,
@@ -931540,13 +931750,223 @@
           ]
         },
         {
+          "type": "frame",
+          "id": "a5nUB1",
+          "name": "state on, not sent: Tars is not sending it",
+          "width": "fill_container",
+          "fill": "$bg",
+          "stroke": "$border-strong",
+          "strokeWidth": 1,
+          "layout": "vertical",
+          "gap": 12,
+          "padding": [
+            14,
+            16
+          ],
+          "children": [
+            {
+              "type": "text",
+              "id": "KvE46",
+              "name": "caption",
+              "fill": "$text-muted",
+              "content": "ON, NOT SENT: TARS IS NOT SENDING IT",
+              "lineHeight": 1.4,
+              "fontFamily": "$font-mono",
+              "fontSize": 10,
+              "fontWeight": "normal"
+            },
+            {
+              "type": "frame",
+              "id": "dyByz",
+              "name": "headers",
+              "width": "fill_container",
+              "gap": 12,
+              "alignItems": "center",
+              "children": [
+                {
+                  "type": "frame",
+                  "id": "VdH3J",
+                  "name": "l",
+                  "width": 620,
+                  "layout": "vertical",
+                  "gap": 2,
+                  "children": [
+                    {
+                      "type": "text",
+                      "id": "nIHBu",
+                      "name": "t",
+                      "fill": "$text-primary",
+                      "content": "Send session headers",
+                      "lineHeight": 1.4,
+                      "fontFamily": "$font-ui",
+                      "fontSize": 12.5,
+                      "fontWeight": "normal"
+                    },
+                    {
+                      "type": "text",
+                      "id": "n01nM",
+                      "name": "t",
+                      "fill": "$text-secondary",
+                      "textGrowth": "fixed-width",
+                      "width": 620,
+                      "content": "Adds X-Session-Id and X-Agent-Id to every request, for a server that groups requests into sessions. Off by default: nothing about your agents goes with a request unless you turn it on.",
+                      "lineHeight": 1.4,
+                      "fontFamily": "$font-ui",
+                      "fontSize": 11,
+                      "fontWeight": "normal"
+                    }
+                  ]
+                },
+                {
+                  "type": "frame",
+                  "id": "g6bbH",
+                  "name": "sp",
+                  "width": "fill_container",
+                  "height": 1
+                },
+                {
+                  "type": "frame",
+                  "id": "R890e1",
+                  "name": "Toggle on",
+                  "width": 30,
+                  "height": 16,
+                  "fill": "$accent",
+                  "stroke": "$accent",
+                  "strokeWidth": 1,
+                  "layout": "none",
+                  "children": [
+                    {
+                      "type": "rectangle",
+                      "id": "bKkmm",
+                      "x": 16,
+                      "y": 1,
+                      "name": "knob",
+                      "fill": "$bg",
+                      "width": 12,
+                      "height": 12
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "type": "frame",
+              "id": "hGQNK",
+              "name": "install id",
+              "width": "fill_container",
+              "gap": 12,
+              "alignItems": "center",
+              "children": [
+                {
+                  "type": "frame",
+                  "id": "nm6zZ",
+                  "name": "l",
+                  "width": 620,
+                  "layout": "vertical",
+                  "gap": 2,
+                  "children": [
+                    {
+                      "type": "text",
+                      "id": "cCAyg",
+                      "name": "t",
+                      "fill": "$text-primary",
+                      "content": "Send install id",
+                      "lineHeight": 1.4,
+                      "fontFamily": "$font-ui",
+                      "fontSize": 12.5,
+                      "fontWeight": "normal"
+                    },
+                    {
+                      "type": "text",
+                      "id": "A1ZJtL",
+                      "name": "t",
+                      "fill": "$text-secondary",
+                      "textGrowth": "fixed-width",
+                      "width": 620,
+                      "content": "Adds X-Install-Id, this install's back-office id, to every request while you share traces and Tars is registered with your back-office, so deleting everything there can reach this endpoint's own copy. Needs the session headers. Never sent after a deletion.",
+                      "lineHeight": 1.4,
+                      "fontFamily": "$font-ui",
+                      "fontSize": 11,
+                      "fontWeight": "normal"
+                    },
+                    {
+                      "type": "frame",
+                      "id": "n0tdWm",
+                      "name": "state",
+                      "gap": 6,
+                      "padding": [
+                        4,
+                        0,
+                        0,
+                        0
+                      ],
+                      "alignItems": "center",
+                      "children": [
+                        {
+                          "type": "rectangle",
+                          "id": "aFHyo",
+                          "name": "square",
+                          "fill": "$status-waiting",
+                          "width": 6,
+                          "height": 6
+                        },
+                        {
+                          "type": "text",
+                          "id": "Rdl8Z",
+                          "name": "t",
+                          "fill": "$status-waiting",
+                          "content": "not sent now: Tars is not sending it, and its log says why",
+                          "lineHeight": 1.4,
+                          "fontFamily": "$font-mono",
+                          "fontSize": 10.5,
+                          "fontWeight": "normal"
+                        }
+                      ]
+                    }
+                  ]
+                },
+                {
+                  "type": "frame",
+                  "id": "SWL9z",
+                  "name": "sp",
+                  "width": "fill_container",
+                  "height": 1
+                },
+                {
+                  "type": "frame",
+                  "id": "OezbP",
+                  "name": "Toggle on",
+                  "width": 30,
+                  "height": 16,
+                  "fill": "$accent",
+                  "stroke": "$accent",
+                  "strokeWidth": 1,
+                  "layout": "none",
+                  "children": [
+                    {
+                      "type": "rectangle",
+                      "id": "C1HAy",
+                      "x": 16,
+                      "y": 1,
+                      "name": "knob",
+                      "fill": "$bg",
+                      "width": 12,
+                      "height": 12
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        },
+        {
           "type": "text",
           "id": "O0p2vx",
           "name": "t",
           "fill": "$text-secondary",
           "textGrowth": "fixed-width",
           "width": 1340,
-          "content": "Beside the session headers, in the endpoint's form, the owner's only: no agent turns it on. Off by default. Turning the session headers off turns it off, and while they are off it cannot be turned on. Its line reads the upload state Traces already shows: sent while you share traces (the consent the uploader acts on), Tars is registered with the back-office, and no deletion waits for its confirmation (then: \"not sent now: a deletion is not confirmed yet\"). After a deletion, or once the back-office no longer knows this Tars, it is not registered, and nothing is sent.",
+          "content": "Beside the session headers, in the endpoint's form, the owner's only: no agent turns it on. Off by default. Turning the session headers off turns it off, and while they are off it cannot be turned on. Its line follows main's own answer (the upload state's installIdSent): \"sent now\" only when main sends the id. When main does not, the line says the reason the window can tell: a deletion not confirmed yet, sharing off, or Tars not registered with the back-office; and when none of these is the reason (an id main will not send, or an install a deletion left behind), \"not sent now: Tars is not sending it, and its log says why\".",
           "lineHeight": 1.4,
           "fontFamily": "$font-ui",
           "fontSize": 12,

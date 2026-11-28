@@ -40,15 +40,17 @@ const countOf = (m: Record<string, string>) => {
 };
 
 /**
- * Whether an endpoint's install id goes now (`Settings · Inference endpoints · send install id`), from the upload
- * state Traces shows: main tells it only while sharing is on (the consent the uploader acts on), the install is
- * registered with the back-office, and no deletion waits for its confirmation (trace-upload.ts currentInstallId).
+ * Whether an endpoint's install id goes now (`Settings · Inference endpoints · send install id`), as main answers it:
+ * "sent now" only when the upload state's `installIdSent` says so (trace-upload.ts currentInstallId). Otherwise the
+ * reason the window can tell (a deletion not confirmed, sharing off, not registered), else that Tars is not sending
+ * it (an id main will not send, an install a deletion left behind), and the app's log says why.
  */
 function installLineOf(u: UploadState): { word: string; tone: StatusTone } {
+  if (u.installIdSent) return { word: 'sent now: you share traces and Tars is registered with your back-office', tone: 'running' };
   if (u.deletionOwed) return { word: 'not sent now: a deletion is not confirmed yet', tone: 'waiting' };
   if (!u.consentAt) return { word: 'not sent now: sharing is off. It goes again once you share traces', tone: 'waiting' };
   if (!u.registered) return { word: 'not sent now: Tars is not registered with your back-office', tone: 'waiting' };
-  return { word: 'sent now: you share traces and Tars is registered with your back-office', tone: 'running' };
+  return { word: 'not sent now: Tars is not sending it, and its log says why', tone: 'waiting' };
 }
 
 /**
