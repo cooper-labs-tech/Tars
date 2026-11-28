@@ -6,6 +6,8 @@ ALTER TABLE sessions ADD COLUMN context_window_given int;
 ALTER TABLE sessions ADD COLUMN output_cap_given int;
 ALTER TABLE sessions ADD COLUMN auto_compaction text;
 ALTER TABLE sessions ADD COLUMN compactions jsonb;
+-- How many compactions the client left out of that list, past the newest it keeps.
+ALTER TABLE sessions ADD COLUMN compactions_omitted int;
 ALTER TABLE requests ADD COLUMN context_reset jsonb;
 ALTER TABLE requests ADD COLUMN gap jsonb;
 ALTER TABLE requests ADD COLUMN tool_calls jsonb;

@@ -237,6 +237,7 @@ missing blob, then `PUT` the batch, and send any `missingBlobs` it reports.
 | `outputCapGiven` | int 1 to 10,000,000 | no | The output cap Tars gave it. Kept when absent |
 | `autoCompaction` | `"on"` \| `"off"` | no | Whether the harness compacts its history on its own; absent when not measured. Kept when absent |
 | `compactions` | array ≤ 1,000 | no | One per compaction, by time: `{ "at": ms, "kind": "compact" \| "summarize" \| "truncate", "before"?: int ≥ 0, "after"?: int ≥ 0, "requestId"?: id, "source": "harness" \| "wire" }`, no other key. The list as a whole: sent with it, a session's list is replaced; sent without it, kept |
+| `compactionsOmitted` | int ≥ 1 | no | How many compactions the client left out of `compactions`, past the newest it keeps (Tars keeps 200). Kept when absent |
 | `rttMedianMs` | ms, a number from 0 to 10^10 | no | The median round trip of the session's requests, from the endpoint's Server-Timing. Kept when absent |
 | `clockOffsetMs` | ms, a number from -10^10 to 10^10 | no | The endpoint's clock against the client's, from the lowest round trip. Kept when absent |
 
@@ -382,7 +383,7 @@ The fields added after a client may have been built without them are always pres
 
 - every session, here and in § 6.1: `environment`, `events`, `start`, `lostDemand`, `lostDemandOmitted`,
   `maskingVersion`, `maskCounts`, `rttMedianMs`, `clockOffsetMs`, `consent`, `contextWindowGiven`, `outputCapGiven`,
-  `autoCompaction` and `compactions`, each as sent; and `installConsent`, the install's current training consent,
+  `autoCompaction`, `compactions` and `compactionsOmitted`, each as sent; and `installConsent`, the install's current training consent,
   `{ "training": bool, "at": ms }`, or `null` when it has never set one;
 - every request, here and in § 6.5: `liveSessions`, `cancel`, `rttMs`, `clockOffsetMs`, `queueMs`, `upstreamMs`, `contextReset`, `gap`, `toolCalls` and `toolCallsOmitted`;
 - every turn, here: `taskRef`, `interventions`, and its workspace (`startHead` to `survivalBasis`).
@@ -469,4 +470,4 @@ before the clients.
 | 27/11/2026 | `maskingVersion` and `maskCounts` on a session, `interventions` on a turn (read back the same way), migration `005_masking_and_interventions` |
 | 27/11/2026 | the timings (`rttMedianMs`, `clockOffsetMs` on a session; `rttMs`, `clockOffsetMs`, `queueMs`, `upstreamMs` on a request) and a turn's workspace, migration `006_timing_and_workspace` |
 | 27/11/2026 | the training consent: `consent` on registration and on a session, `PUT /v1/installs/me/consent`, `installConsent` on session reads, the feed `GET /v1/read/install-consent` (§ 6.6), migration `007_training_consent` |
-| 28/11/2026 | what the harness was given and its compactions on a session (`contextWindowGiven`, `outputCapGiven`, `autoCompaction`, `compactions`); `contextReset`, `gap`, `toolCalls` and `toolCallsOmitted` on a request, migration `008_context_and_tool_calls` |
+| 28/11/2026 | what the harness was given and its compactions on a session (`contextWindowGiven`, `outputCapGiven`, `autoCompaction`, `compactions`, `compactionsOmitted`); `contextReset`, `gap`, `toolCalls` and `toolCallsOmitted` on a request, migration `008_context_and_tool_calls` |

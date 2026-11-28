@@ -176,7 +176,7 @@ const SESSION_COLS: Col[] = [
   ['maskingVersion', 'masking_version', 'text'], ['maskCounts', 'mask_counts', 'jsonb'],
   ['rttMedianMs', 'rtt_median_ms', 'float8'], ['clockOffsetMs', 'clock_offset_ms', 'float8'], ['consent', 'consent', 'jsonb'],
   ['contextWindowGiven', 'context_window_given', 'int'], ['outputCapGiven', 'output_cap_given', 'int'], ['autoCompaction', 'auto_compaction', 'text'],
-  ['compactions', 'compactions', 'jsonb'],
+  ['compactions', 'compactions', 'jsonb'], ['compactionsOmitted', 'compactions_omitted', 'int'],
 ];
 // What a turn changed in the repository: the heads and trees, the counts, and the survival of its lines.
 const TURN_WORKSPACE: Col[] = [
@@ -230,7 +230,7 @@ function keepWhenAbsent(sql: string, table: string, columns: string[]): string {
 }
 const SQL = {
   sessions: keepWhenAbsent(upsertSql('sessions', 'sessionId', 'session_id', SESSION_COLS, { cols: ['changed_seq'], vals: [`nextval('change_seq')`] }).replace(
-    /DO UPDATE SET /, 'DO UPDATE SET received_at = now(), '), 'sessions', ['environment', 'events', 'start', 'lost_demand', 'lost_demand_omitted', 'masking_version', 'mask_counts', 'rtt_median_ms', 'clock_offset_ms', 'consent', 'context_window_given', 'output_cap_given', 'auto_compaction', 'compactions']),
+    /DO UPDATE SET /, 'DO UPDATE SET received_at = now(), '), 'sessions', ['environment', 'events', 'start', 'lost_demand', 'lost_demand_omitted', 'masking_version', 'mask_counts', 'rtt_median_ms', 'clock_offset_ms', 'consent', 'context_window_given', 'output_cap_given', 'auto_compaction', 'compactions', 'compactions_omitted']),
   turns: keepWhenAbsent(upsertSql('turns', 'turnId', 'turn_id', TURN_COLS), 'turns', ['task_ref', 'interventions', ...TURN_WORKSPACE.map(([, c]) => c)]),
   // A request sent again without its side mark keeps the one it had: only true or false replaces it.
   requests: keepWhenAbsent(upsertSql('requests', 'requestId', 'request_id', REQUEST_COLS), 'requests', ['side', 'live_sessions', 'cancel', 'rtt_ms', 'clock_offset_ms', 'queue_ms', 'upstream_ms', 'context_reset', 'gap', 'tool_calls', 'tool_calls_omitted']),

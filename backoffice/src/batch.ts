@@ -120,7 +120,7 @@ const SESSION: Shape = {
   rttMedianMs: MS, clockOffsetMs: SIGNED_MS,
   consent: { t: 'shape', shape: { training: r(bool) } },
   contextWindowGiven: range(1024, 10_000_000), outputCapGiven: range(1, 10_000_000), autoCompaction: enumOf('on', 'off'),
-  compactions: { t: 'list', shape: COMPACTION, max: 1000 },
+  compactions: { t: 'list', shape: COMPACTION, max: 1000 }, compactionsOmitted: range(1, Number.MAX_SAFE_INTEGER),
 };
 const TURN: Shape = {
   turnId: r(id), sessionId: r(id), index: r(int), startedAt: r(int), endedAt: int, gapBeforeMs: int, requestCount: r(int),
