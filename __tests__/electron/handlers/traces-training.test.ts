@@ -190,7 +190,7 @@ describe('the training switch', () => {
     expect(runs, 'with sharing off').toHaveBeenCalled();
   });
 
-  it('W7. the notice says it and where it stands; the preview shows the consent a session carries', () => {
+  it('W7. the notice says it and where it stands; the preview shows the consent a session carries', async () => {
     const notice = call('traces:uploadNotice') as { training?: boolean; leaves: string[] };
     expect(notice.training).toBe(true);
     expect(notice.leaves.join('\n')).toMatch(/train/i);
@@ -201,7 +201,7 @@ describe('the training switch', () => {
     const req = Buffer.from(JSON.stringify({ model: 'open-coder-1', messages: [{ role: 'user', content: 'hello' }] }));
     const resp = Buffer.from(JSON.stringify({ choices: [{ message: { role: 'assistant', content: 'done' }, finish_reason: 'stop' }], usage: { prompt_tokens: 1, completion_tokens: 1 } }));
     runtime.traceStore().ingest({ traceId: id, agentId: AGENT, surface: 'openai_chat', startedAt: Date.now(), endedAt: Date.now() + 5, status: 200, contentType: 'application/json', requestBody: req, responseBody: resp, attempts: 1, heldMs: 0 });
-    const preview = runtime.previewUpload(id) as { consent?: unknown; document: { batches: Array<{ body: { sessions?: Array<{ consent?: unknown }> } }> } };
+    const preview = (await runtime.previewUpload(id)) as { consent?: unknown; document: { batches: Array<{ body: { sessions?: Array<{ consent?: unknown }> } }> } };
     expect(preview.consent, 'what the window shows').toEqual({ training: false });
     expect(preview.document.batches[0].body.sessions?.[0].consent, 'what would be sent').toEqual({ training: false });
     runtime.closeEndpointSession(s.token);
@@ -271,7 +271,7 @@ describe('trainable is a private, positive fact: a session Tars opened while tra
   const everywhere = async (traceId: string) => {
     const { sessionDocument, traceExportLines } = await import('../../../electron/services/trace-export');
     const store = runtime.traceStore();
-    const p = runtime.previewUpload(traceId) as Preview;
+    const p = (await runtime.previewUpload(traceId)) as Preview;
     return {
       document: sessionDocument(store, traceId)?.trace.consent,
       changes: store.changes({}).sessions.find(s => s.traceId === traceId)?.consent,

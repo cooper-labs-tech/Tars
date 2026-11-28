@@ -161,6 +161,9 @@ function uploader(over: Partial<UploaderDeps> = {}) {
     scrubContext: () => ({ homeDirs: [os.homedir()], knownSecrets: [], envValues: [] }),
     client: { name: 'tars', version: '0.0.0-test', platform: process.platform },
     withdrawConsent: (d?: { owed: boolean; since?: number }) => { settings.consentAt = undefined; if (d) deletion = d; },
+    // The training switch (trace feature A5, its own tests in trace-training.test.ts): on, nothing owed.
+    training: () => ({ value: true, owed: false }),
+    trainingSent: () => {},
     now: () => clock,
     ...over,
   });
