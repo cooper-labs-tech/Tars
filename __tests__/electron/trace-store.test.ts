@@ -31,6 +31,10 @@ import { TraceStore, type WireRecord, type TraceMeta } from '../../electron/serv
  * Added before their code, the owner's decision of 26/11 (TTFT measures the model):
  * 17. A streamed request's ttft is its first byte, though the proxy said when the first chunk with content came; or
  *     a stream that never carried content gets a ttft; or one not streamed loses the time to its first byte.
+ * Added before their code with the load window's part 3 (C3):
+ * 18. A load session's tags (`load:<run>`, task, split, train_ok, diff stat, test), written once its test ended, are
+ *     lost when its terminal's exit writes the outcome after them, or wipe its starting context when they come after
+ *     it; or the session is not resent with them (its change number unmoved).
  */
 
 let dir: string;
@@ -277,5 +281,22 @@ describe('the trace store', () => {
     store.ingest(rec('t1', chatReq([user('once more')]), chatResp({ role: 'assistant', content: 'ok' }, 'stop'), t0 + 4000, 200, { firstByteAt: t0 + 4180 }));
     const ttft = store.session('t1')!.turns.flatMap(t => t.requests).map(r => r.ttftMs);
     expect(ttft).toEqual([650, undefined, 180]);
+  });
+
+  it('18: a load session\'s tags and its starting context are both kept, whichever comes first; the session is resent', () => {
+    const startContext = { sha256: 'a'.repeat(64), files: [] };
+    const tags = { tag: 'load:20261128-120000-a1b2', runId: '20261128-120000-a1b2', taskId: 'fix-retry', n: 1, split: 'train', trainOk: true, diffStat: { files: 1, insertions: 2, deletions: 0 }, test: { result: 'passed' } };
+    // The terminal exits first, then the test ends.
+    store.openTrace(meta('t1'));
+    store.endTrace('t1', clock + 10, { branch: 'load/x', load: { startContext } });
+    const before = store.seqOf('t1')!;
+    store.mergeLoadOutcome('t1', tags);
+    expect(store.session('t1')!.outcome).toMatchObject({ branch: 'load/x', load: { startContext, ...tags } });
+    expect(store.seqOf('t1')!).toBeGreaterThan(before);
+    // The test ends first, then the terminal exits.
+    store.openTrace(meta('t2'));
+    store.mergeLoadOutcome('t2', tags);
+    store.endTrace('t2', clock + 10, { branch: 'load/y', load: { startContext } });
+    expect(store.session('t2')!.outcome).toMatchObject({ branch: 'load/y', load: { startContext, ...tags } });
   });
 });

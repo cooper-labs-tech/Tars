@@ -5,6 +5,7 @@ import * as path from 'node:path';
 import { execFileSync } from 'node:child_process';
 import { createLoadEngine, type LoadEngineDeps, type LoadRunPlan } from '../../../electron/services/load-engine';
 import type { LoadTask } from '../../../electron/services/load-pool';
+import type { StepResult } from '../../../electron/services/load-steps';
 
 /**
  * The load window's engine (trace feature C3, part 2, 27/11): the approved run's arrivals at their time, each admitted
@@ -46,6 +47,21 @@ import type { LoadTask } from '../../../electron/services/load-pool';
  *  E12. (The Audit's Info at 51a8a21f8, written before its fix.) Cleanup follows a link planted in place of a
  *      worktree: `git worktree remove --force` on a path that is now a link to another worktree of the repository
  *      removes that one. A link is removed as a link, never handed to git.
+ * Part 3 (setup, test, tags, stops), written before the code:
+ *  E13. The setup: its lines run out of order, outside the worktree, after the session started, without the heavy-run
+ *      slot, or past their 10-minute cap; a line that fails or reaches its cap lets the task go on (a session starts),
+ *      runs the lines after it, keeps the slot, or leaves its worktree; the record does not say which line and why.
+ *  E14. `heavy_slot`: a task with setup lines whose slot is not free when it arrives waits for it (queued), or makes a
+ *      worktree first; a task without setup lines asks for the slot when it arrives.
+ *  E15. The test: it runs before the session ends, without the slot, or past the task's cap without its tree killed;
+ *      the time it waited for the slot is counted in the session's; a slot not free within the cap is a failure, or
+ *      stops the window (the next arrival does not start); passed, failed, at its cap, not run (none, heavy_slot, a
+ *      stop) are not told apart; the diff stat counts the setup's files, or what the test wrote.
+ *  E16. The trace: the session's trace is not tagged `load:<run>` with its task, arrival, split, train_ok, diff stat
+ *      and test result, or the tags are written before the test ended.
+ *  E17. The disk floor: under it the window goes on, or stops without its reason, or leaves a session, a setup or a
+ *      test running, or a worktree behind.
+ *  E18. The window's end by time stops a running session (it keeps its cap) or its test, or starts an arrival after it.
  */
 
 let dir: string;
@@ -95,6 +111,14 @@ interface Fakes {
   agents: Array<{ id: string; name: string; projectPath: string; provider: string; status: string; worktreePath?: string; endpointId?: string | null; model?: string | null }>;
   /** The project's grant, as the private file has it: where its load agents run. */
   grant: { endpointId: string | null; model: string | null } | undefined;
+  /** The heavy-run slot: free now or not, and how long a wait for it lasts (within its limit) when it is granted. */
+  slot: { free: boolean; waitMs?: number };
+  leases: { taken: number; released: number };
+  steps: Array<{ command: string; cwd: string; capMs: number }>;
+  /** How each step ends (a setup line or a test_cmd), and what it does in its folder. */
+  step: (o: { command: string; cwd: string; capMs: number; signal: AbortSignal }) => Promise<StepResult>;
+  disk: number | null;
+  tags: Array<{ traceId: string; load: Record<string, unknown> }>;
   launches: Array<{ agentId: string; prompt: string; resume: unknown; cwd?: string }>;
   stops: string[];
   log: Array<Record<string, unknown>>;
@@ -134,9 +158,24 @@ function deps(p: LoadRunPlan, over: Partial<LoadEngineDeps> = {}): LoadEngineDep
     statusOf: (agentId) => f.agents.find(a => a.id === agentId)?.status,
     onStatus: (fn) => { f.listeners.push(fn); return () => {}; },
     logArrival: (_runId, a) => { f.log.push({ ...a }); },
+    minuteMs: 60_000,
+    slot: {
+      takeNow: async () => (f.slot.free ? lease() : undefined),
+      takeWithin: async (_ask, ms, signal) => {
+        if (signal.aborted) return { waitedMs: 0 };
+        return f.slot.free ? { lease: lease(), waitedMs: f.slot.waitMs ?? 0 } : { waitedMs: ms };
+      },
+    },
+    runStep: async (o) => { f.steps.push({ command: o.command, cwd: o.cwd, capMs: o.capMs }); return f.step(o); },
+    freeDiskGb: () => f.disk,
+    diskFloorGb: () => 15,
+    traceOf: (agentId) => `tr-${agentId}`,
+    tagTrace: (traceId, load) => { f.tags.push({ traceId, load }); },
     ...over,
   };
 }
+const lease = () => { f.leases.taken++; let back = false; return { release: () => { if (!back) { back = true; f.leases.released++; } } }; };
+const ok = (exitCode = 0): StepResult => ({ exitCode, atCap: false, aborted: false, durationMs: 5 });
 const setStatus = (id: string, status: string) => { f.agents.find(a => a.id === id)!.status = status; for (const l of f.listeners) l(id); };
 const worktrees = () => git(project, 'worktree', 'list', '--porcelain').split('\n').filter(l => l.startsWith('worktree ')).map(l => l.slice(9)).filter(p => p !== fs.realpathSync(project) && p !== project);
 const branches = () => git(project, 'for-each-ref', '--format=%(refname:short)', 'refs/heads/load').split('\n').filter(Boolean);
@@ -160,6 +199,7 @@ beforeEach(() => {
       { id: 'a2', name: 'Load 2', projectPath: project, provider: 'qwen-code', status: 'idle', endpointId: 'ep-0a0b0c', model: 'open-coder-1' },
     ],
     grant: { endpointId: 'ep-0a0b0c', model: 'open-coder-1' },
+    slot: { free: true }, leases: { taken: 0, released: 0 }, steps: [], step: async () => ok(), disk: 200, tags: [],
     launches: [], stops: [], log: [], running: true, cap: { ok: true }, listeners: [],
   };
 });
@@ -421,5 +461,210 @@ describe('the log decides nothing', () => {
     setStatus('a1', 'waiting');
     await c.advance(T0 + 1010);
     expect(e.progress(RUN)!.arrivals.find(a => a.n === 1)).toMatchObject({ end: 'done' });
+  });
+});
+
+const WHERE = () => path.join(project, '.worktrees', 'load', RUN, 'fix-retry-1');
+const last = (n: number) => f.log.filter(x => x.n === n).at(-1) as Record<string, unknown> | undefined;
+/** The agent works and rests: its turn ends. What it wrote is in its worktree. */
+async function sessionEnds(agentId: string, at: number, wrote?: Record<string, string>) {
+  for (const [file, text] of Object.entries(wrote ?? {})) fs.writeFileSync(path.join(WHERE(), file), text);
+  setStatus(agentId, 'running');
+  setStatus(agentId, 'waiting');
+  await c.advance(at);
+}
+
+describe('the setup (part 3)', () => {
+  it('E13: its lines run in order, in the worktree, under one lease of the slot, before the session, within 10 minutes; its files are no change of the session', async () => {
+    const p = plan([task({ setup: ['npm ci', 'npm run build'] })], [{ n: 1, taskId: 'fix-retry', offsetMs: 0 }]);
+    let leasesAtLaunch = -1;
+    f.step = async (o) => { if (o.command === 'npm ci') fs.writeFileSync(path.join(o.cwd, 'setup-ran.txt'), 'x\n'); return ok(); };
+    const e = createLoadEngine(deps(p, { launch: async (agentId, prompt, resume) => {
+      leasesAtLaunch = f.leases.taken - f.leases.released;
+      f.launches.push({ agentId, prompt, resume, cwd: f.agents.find(a => a.id === agentId)!.worktreePath });
+      return { ok: true };
+    } }));
+    e.start(RUN);
+    await c.advance(T0);
+    expect(f.steps.map(s => s.command)).toEqual(['npm ci', 'npm run build']);
+    expect(f.steps.every(s => fs.realpathSync(s.cwd) === fs.realpathSync(WHERE()))).toBe(true);
+    expect(f.steps[0].capMs).toBeLessThanOrEqual(10 * 60_000);
+    expect(f.steps[1].capMs).toBeLessThanOrEqual(10 * 60_000);
+    expect(f.leases).toEqual({ taken: 1, released: 1 });
+    expect(leasesAtLaunch).toBe(0);
+    expect(f.launches).toHaveLength(1);
+    await sessionEnds('a1', T0 + 1000, { 'fix.txt': 'a\nb\n' });
+    await vi.waitFor(() => expect(last(1)).toMatchObject({ end: 'done', setup: { result: 'passed', lines: 2 }, diffStat: { files: 1, insertions: 2, deletions: 0 } }));
+  });
+
+  it('E13: a line that fails ends the task there: no session, the lines after it not run, the slot back, the worktree gone, the record says which line and why', async () => {
+    const p = plan([task({ setup: ['npm ci', 'npm run build', 'npm run seed'] })], [{ n: 1, taskId: 'fix-retry', offsetMs: 0 }]);
+    f.step = async (o) => ok(o.command === 'npm run build' ? 1 : 0);
+    const e = createLoadEngine(deps(p));
+    e.start(RUN);
+    await c.advance(T0);
+    await vi.waitFor(() => expect(last(1)).toMatchObject({ end: 'error', setup: { result: 'failed', line: 2, exitCode: 1, lines: 3 } }));
+    expect(String(last(1)!.endDetail)).toMatch(/setup line 2 .*exit/);
+    expect(f.steps.map(s => s.command)).toEqual(['npm ci', 'npm run build']);
+    expect(f.launches).toEqual([]);
+    expect(f.leases).toEqual({ taken: 1, released: 1 });
+    expect(worktrees()).toEqual([]);
+    expect(branches()).toEqual([]);
+  });
+
+  it('E13: a line at its cap ends the task the same way, at_cap', async () => {
+    const p = plan([task({ setup: ['npm ci'] })], [{ n: 1, taskId: 'fix-retry', offsetMs: 0 }]);
+    f.step = async () => ({ exitCode: null, atCap: true, aborted: false, durationMs: 600_000 });
+    const e = createLoadEngine(deps(p));
+    e.start(RUN);
+    await c.advance(T0);
+    await vi.waitFor(() => expect(last(1)).toMatchObject({ end: 'error', setup: { result: 'at_cap', line: 1 } }));
+    expect(String(last(1)!.endDetail)).toMatch(/10-minute cap/);
+    expect(f.launches).toEqual([]);
+    expect(f.leases).toEqual({ taken: 1, released: 1 });
+    expect(worktrees()).toEqual([]);
+  });
+
+  it('E14: with setup lines and the slot not free, blocked heavy_slot at once, never queued, no worktree; without setup lines, the slot is not asked for', async () => {
+    f.slot.free = false;
+    const p = plan([task({ setup: ['npm ci'] }), task({ task_id: 'plain', line: 2 })], [{ n: 1, taskId: 'fix-retry', offsetMs: 0 }, { n: 2, taskId: 'plain', offsetMs: 1000 }]);
+    const e = createLoadEngine(deps(p));
+    e.start(RUN);
+    await c.advance(T0);
+    expect(last(1)).toMatchObject({ blocked: 'heavy_slot' });
+    expect(worktrees()).toEqual([]);
+    expect(f.steps).toEqual([]);
+    // Freed later, it starts nothing: dropped, never queued.
+    f.slot.free = true;
+    await c.advance(T0 + 1000);
+    expect(f.steps).toEqual([]);
+    expect(f.launches.map(l => l.agentId)).toEqual(['a1']);
+    expect(last(2)).toMatchObject({ agentId: 'a1' });
+    expect(f.leases.taken).toBe(0);
+  });
+});
+
+describe('the test (part 3)', () => {
+  it('E15: after the session, under the slot, its wait apart from the session\'s time; passed; the diff taken before it', async () => {
+    const p = plan([task({ test_cmd: 'npm test' })], [{ n: 1, taskId: 'fix-retry', offsetMs: 0 }]);
+    f.slot.waitMs = 4000;
+    f.step = async (o) => { fs.writeFileSync(path.join(o.cwd, 'coverage.txt'), 'x\n'); return ok(0); };
+    const e = createLoadEngine(deps(p));
+    e.start(RUN);
+    await c.advance(T0);
+    expect(f.steps).toEqual([]);
+    await sessionEnds('a1', T0 + 30_000, { 'fix.txt': 'one\n' });
+    await vi.waitFor(() => expect(last(1)).toMatchObject({ end: 'done', test: { result: 'passed', exitCode: 0, slotWaitMs: 4000 }, diffStat: { files: 1, insertions: 1, deletions: 0 } }));
+    expect(f.steps).toEqual([{ command: 'npm test', cwd: expect.any(String), capMs: 10 * 60_000 }]);
+    expect(last(1)!.sessionMs).toBe(30_000);
+    expect(f.leases).toEqual({ taken: 1, released: 1 });
+  });
+
+  it('E15: failed, with its exit code; at its cap, failed at_cap', async () => {
+    const p = plan([task({ test_cmd: 'npm test' })], [{ n: 1, taskId: 'fix-retry', offsetMs: 0 }, { n: 2, taskId: 'fix-retry', offsetMs: 60_000 }], 1);
+    f.step = async () => ok(2);
+    const e = createLoadEngine(deps(p));
+    e.start(RUN);
+    await c.advance(T0);
+    await sessionEnds('a1', T0 + 1000);
+    await vi.waitFor(() => expect(last(1)).toMatchObject({ test: { result: 'failed', exitCode: 2 } }));
+    f.step = async () => ({ exitCode: null, atCap: true, aborted: false, durationMs: 600_000 });
+    await c.advance(T0 + 60_000);
+    await sessionEnds('a1', T0 + 61_000);
+    await vi.waitFor(() => expect(last(2)).toMatchObject({ test: { result: 'failed', atCap: true } }));
+  });
+
+  it('E15: the slot not free within the cap: not_run heavy_slot, no failure, and the window goes on', async () => {
+    const p = plan([task({ test_cmd: 'npm test' })], [{ n: 1, taskId: 'fix-retry', offsetMs: 0 }, { n: 2, taskId: 'fix-retry', offsetMs: 60_000 }], 1);
+    const e = createLoadEngine(deps(p));
+    e.start(RUN);
+    await c.advance(T0);
+    f.slot.free = false;
+    await sessionEnds('a1', T0 + 1000);
+    await vi.waitFor(() => expect(last(1)).toMatchObject({ end: 'done', test: { result: 'not_run', reason: 'heavy_slot', slotWaitMs: 10 * 60_000 } }));
+    expect(f.steps).toEqual([]);
+    expect(f.log.find(x => (x as { stop?: unknown }).stop)).toBeUndefined();
+    await c.advance(T0 + 60_000);
+    expect(f.launches).toHaveLength(2);
+  });
+
+  it('E15: no test_cmd: not_run none; a stop during the test: not_run stopped, the step ended', async () => {
+    const p = plan([task(), task({ task_id: 'tested', line: 2, test_cmd: 'npm test' })], [{ n: 1, taskId: 'fix-retry', offsetMs: 0 }, { n: 2, taskId: 'tested', offsetMs: 60_000 }], 1);
+    let aborted = false;
+    f.step = (o) => new Promise((resolve) => { o.signal.addEventListener('abort', () => { aborted = true; resolve({ exitCode: null, atCap: false, aborted: true, durationMs: 1 }); }); });
+    const e = createLoadEngine(deps(p));
+    e.start(RUN);
+    await c.advance(T0);
+    await sessionEnds('a1', T0 + 1000);
+    await vi.waitFor(() => expect(last(1)).toMatchObject({ test: { result: 'not_run', reason: 'none' } }));
+    await c.advance(T0 + 60_000);
+    await sessionEnds('a1', T0 + 61_000);
+    await vi.waitFor(() => expect(f.steps).toHaveLength(1));
+    f.running = false;
+    await e.stop(RUN);
+    await vi.waitFor(() => expect(last(2)).toMatchObject({ test: { result: 'not_run', reason: 'stopped' } }));
+    expect(aborted).toBe(true);
+    expect(f.leases.taken).toBe(f.leases.released);
+    expect(worktrees()).toEqual([]);
+  });
+});
+
+describe('the trace and the stops (part 3)', () => {
+  it('E16: the session\'s trace is tagged load:<run>, task, arrival, split, train_ok, diff stat and test, once the test ended', async () => {
+    const p = plan([task({ test_cmd: 'npm test', split: 'heldout', train_ok: false })], [{ n: 1, taskId: 'fix-retry', offsetMs: 0 }]);
+    let tagsWhenTested = -1;
+    f.step = async () => { tagsWhenTested = f.tags.length; return ok(0); };
+    const e = createLoadEngine(deps(p));
+    e.start(RUN);
+    await c.advance(T0);
+    expect(f.log.filter(x => x.n === 1).at(-1)).toMatchObject({ traceId: 'tr-a1' });
+    await sessionEnds('a1', T0 + 1000, { 'fix.txt': 'x\n' });
+    await vi.waitFor(() => expect(f.tags).toHaveLength(1));
+    expect(tagsWhenTested).toBe(0);
+    expect(f.tags[0]).toEqual({
+      traceId: 'tr-a1',
+      load: {
+        tag: `load:${RUN}`, runId: RUN, taskId: 'fix-retry', n: 1, split: 'heldout', trainOk: false,
+        diffStat: { files: 1, insertions: 1, deletions: 0 }, test: expect.objectContaining({ result: 'passed' }),
+      },
+    });
+  });
+
+  it('E17: under the disk floor the window stops, disk_floor with its reason; its session and a setup in flight stopped; nothing arrives after', async () => {
+    const p = plan([task(), task({ task_id: 'built', line: 2, setup: ['npm ci'] })], [{ n: 1, taskId: 'fix-retry', offsetMs: 0 }, { n: 2, taskId: 'built', offsetMs: 0 }, { n: 3, taskId: 'fix-retry', offsetMs: 5 * 60_000 }], 2);
+    let aborted = false;
+    f.step = (o) => new Promise((resolve) => { o.signal.addEventListener('abort', () => { aborted = true; resolve({ exitCode: null, atCap: false, aborted: true, durationMs: 1 }); }); });
+    const e = createLoadEngine(deps(p));
+    e.start(RUN);
+    await c.advance(T0);
+    expect(f.launches.map(l => l.agentId)).toEqual(['a1']);
+    expect(f.steps).toHaveLength(1);
+    f.disk = 14.2;
+    await c.advance(T0 + 60_000);
+    const stop = f.log.find(x => (x as { stop?: { reason: string } }).stop) as { stop: { reason: string; detail: string } } | undefined;
+    expect(stop?.stop).toMatchObject({ reason: 'disk_floor' });
+    expect(stop?.stop.detail).toMatch(/14\.2 GB free, under the 15 GB floor/);
+    await vi.waitFor(() => expect(last(1)).toMatchObject({ end: 'stopped' }));
+    await vi.waitFor(() => expect(last(2)).toMatchObject({ end: 'stopped', setup: { result: 'stopped' } }));
+    expect(aborted).toBe(true);
+    expect(f.stops).toContain('a1');
+    await c.advance(T0 + 5 * 60_000);
+    expect(f.launches).toHaveLength(1);
+    await vi.waitFor(() => expect(worktrees()).toEqual([]));
+    expect(f.leases.taken).toBe(f.leases.released);
+  });
+
+  it('E18: at the window\'s end by time a running session keeps its cap and its test; nothing arrives after', async () => {
+    const p = plan([task({ test_cmd: 'npm test' })], [{ n: 1, taskId: 'fix-retry', offsetMs: 0 }, { n: 2, taskId: 'fix-retry', offsetMs: 2 * 60_000 }], 2);
+    const e = createLoadEngine(deps(p));
+    e.start(RUN);
+    await c.advance(T0);
+    // The window ends: the owner did not stop it, its time did (load-window.ts sets window_end and calls no stop).
+    f.running = false;
+    await c.advance(T0 + 2 * 60_000);
+    expect(f.launches).toHaveLength(1);
+    expect(f.stops).toEqual([]);
+    await sessionEnds('a1', T0 + 3 * 60_000);
+    await vi.waitFor(() => expect(last(1)).toMatchObject({ end: 'done', test: { result: 'passed' } }));
   });
 });
