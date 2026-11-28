@@ -502,9 +502,10 @@ describe('whole numbers', () => {
     const said = { role: 'user', content: 'go' };
     request(traceId, t0, [said], { calls: ['a'] });
     request(traceId, t0 + 1010, [said, asks(['a']), ...answers(['a'])]);
-    noteToolCall('q', { callId: 'a', itemStartedAt: t0 + 100.4, itemEndedAt: t0 + 900.7 });
+    // It began before the previous reply ended (t0 + 10): its part inside the gap, 10 to 501.3, keeps a fraction.
+    noteToolCall('q', { callId: 'a', itemStartedAt: t0 + 5.3, itemEndedAt: t0 + 500.9 });
     const gap = lastRequest(traceId).gap!;
-    expect(gap.toolMs).toBe(800);
+    expect(gap.toolMs).toBe(491);
     for (const [k, v] of Object.entries(gap)) if (typeof v === 'number') expect(Number.isInteger(v), `${k}: ${v}`).toBe(true);
     for (const c of lastRequest(traceId).toolCalls!) expect(Number.isInteger(c.ms), `ms: ${c.ms}`).toBe(true);
   });
