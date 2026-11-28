@@ -62,9 +62,14 @@ import { assertThrowaway } from '../../setup/throwaway-dirs';
  * 12. (Added before its code, 27/11: Qwen Code 0.25.2 and opencode 1.19.6, measured, flag a cut output without its
  *     size.) A cut output is not flagged when the harness does not say how many bytes it cut: `truncated` is missing,
  *     or false; or a size is made up for it.
- * 13. (Added before its code, 28/11: the back office's wave 8 of #678 caps `toolCallId` at 128 characters.) A call
- *     whose id is longer leaves, and the back office refuses its whole batch; or its id is cut, and names another call;
- *     or it is left out and counted nowhere.
+ * 13. (Added before its code, 28/11: the back office's wave 8 of #678 caps `toolCallId` at 128 characters, and the
+ *     Audit of #688: it is the one string of a call, sent unscrubbed.) A call whose id is not letters, digits and
+ *     `_ . : -`, 1 to 128 of them, leaves: a long one has the back office refuse its whole batch, any other may carry
+ *     what a scrub would have masked. Or its id is cut, and names another call; or the call is left out and counted
+ *     nowhere.
+ * 14. (Added before its code, 28/11: the Audit of #688.) The tool calls' rows sit outside the store's cap: neither the
+ *     store's size (what the sweep weighs) nor the session's bytes count them, so a session of many calls grows the
+ *     store past its cap unseen; or the same call read again is counted twice.
  */
 
 assertThrowaway({ DATA_DIR, PRIVATE_DIR });
@@ -83,7 +88,6 @@ import { oneTaskQueue } from '../../../electron/core/one-task';
 import { sessionDocument } from '../../../electron/services/trace-export';
 import { GAP_TOLERANCE_MS } from '../../../electron/services/trace-store';
 import { codexToolPartOf, piToolLineOf, toolCallRecordOf, TOOL_CALLS_PER_REQUEST_MAX } from '../../../electron/services/tool-calls';
-import { TOOL_CALL_ID_CHARS_MAX } from '../../../electron/services/trace-upload';
 
 const EP = 'ep-c1test';
 let home: string;
@@ -431,25 +435,51 @@ describe('what leaves', () => {
     expect(sent.gap).toMatchObject({ toolMs: 100 });
   });
 
-  it(`13: a call whose id is longer than ${128} characters is left out of the upload whole and counted, never cut`, () => {
-    expect(TOOL_CALL_ID_CHARS_MAX).toBe(128);
+  it('13: a call whose id is not letters, digits and _ . : -, 1 to 128 of them, is left out of the upload whole and counted, never cut', () => {
     agent('q');
     const { traceId } = open('q');
     const t0 = Date.now() + 1000;
-    const long = `call_${'x'.repeat(124)}`;
     const edge = `call_${'y'.repeat(123)}`;
-    expect([long.length, edge.length]).toEqual([129, 128]);
+    const kept = [edge, 'toolu_01A.b:c-d'];
+    const refused = [`call_${'x'.repeat(124)}`, 'call id', 'call/../x', 'call_é', 'call_a\u0000b'];
+    expect([refused[0].length, edge.length]).toEqual([129, 128]);
+    const ids = [...kept, ...refused];
     const said = { role: 'user', content: 'go' };
-    request(traceId, t0, [said], { calls: [long, edge] });
-    request(traceId, t0 + 1010, [said, asks([long, edge]), ...answers([long, edge])]);
-    for (const id of [long, edge]) noteToolCall('q', { callId: id, itemStartedAt: t0 + 100, itemEndedAt: t0 + 200 });
+    request(traceId, t0, [said], { calls: ids });
+    request(traceId, t0 + 1010, [said, asks(ids), ...answers(ids)]);
+    for (const id of ids) noteToolCall('q', { callId: id, itemStartedAt: t0 + 100, itemEndedAt: t0 + 200 });
     const body = traceUploader().preview(traceId)!.document.batches[0].body as { requests: Array<Record<string, unknown>> };
     const sent = body.requests.at(-1)!;
-    const ids = (sent.toolCalls as Array<{ toolCallId: string }>).map(c => c.toolCallId);
-    expect(ids).toEqual([edge]);
-    expect(ids.some(id => id.startsWith('call_x')), 'the long id, cut').toBe(false);
-    expect(sent.toolCallsOmitted).toBe(1);
-    // Only what leaves is bounded: the session as recorded, and its export, keep the call.
-    expect(lastRequest(traceId).toolCalls!.map(c => c.toolCallId).sort()).toEqual([edge, long].sort());
+    const sentIds = (sent.toolCalls as Array<{ toolCallId: string }>).map(c => c.toolCallId);
+    // Exactly the ids it takes: a refused id, or a cut of one, would be one more.
+    expect(sentIds.sort()).toEqual([...kept].sort());
+    expect(sent.toolCallsOmitted).toBe(refused.length);
+    // Only what leaves is bounded: the session as recorded, and its export, keep every call.
+    expect(lastRequest(traceId).toolCalls!.map(c => c.toolCallId).sort()).toEqual([...ids].sort());
+  });
+});
+
+describe('the store\'s cap', () => {
+  it('14: the tool calls\' rows count in the store\'s size and the session\'s bytes, once each, and go with the session', () => {
+    agent('q');
+    const { traceId } = open('q');
+    const t0 = Date.now() + 1000;
+    const said = { role: 'user', content: 'go' };
+    request(traceId, t0, [said]);
+    const sessionBytes = () => traceStore().list({}).sessions.find(s => s.traceId === traceId)!.bytes;
+    const [storeBefore, sessionBefore] = [traceStore().stats().bytes, sessionBytes()];
+    for (let i = 0; i < 200; i++) noteToolCall('q', { callId: `call_${i}`, itemStartedAt: t0 + 100, itemEndedAt: t0 + 200, exit: 0, keptBytes: 10, sentBytes: 10 });
+    const grownStore = traceStore().stats().bytes - storeBefore;
+    const grownSession = sessionBytes() - sessionBefore;
+    // Each row holds about 100 bytes of facts: 200 of them weigh at least 200 x 60.
+    expect(grownStore, 'the store\'s size').toBeGreaterThanOrEqual(200 * 60);
+    expect(grownSession, 'the session\'s bytes').toBe(grownStore);
+    // Read again, the same calls weigh nothing more.
+    for (let i = 0; i < 200; i++) noteToolCall('q', { callId: `call_${i}`, itemStartedAt: t0 + 100, itemEndedAt: t0 + 200, exit: 0, keptBytes: 10, sentBytes: 10 });
+    expect(traceStore().stats().bytes - storeBefore).toBe(grownStore);
+    expect(sessionBytes() - sessionBefore).toBe(grownSession);
+    // The session deleted, its calls go with it.
+    traceStore().remove({ traceIds: [traceId] });
+    expect(traceStore().stats().bytes).toBeLessThan(storeBefore);
   });
 });
