@@ -31,6 +31,10 @@ import type { LoadTask } from '../../../electron/services/load-pool';
  *  E8. (Found by the E2E's first runs, written before its fix.) Two arrivals due at once (the agents' creation took
  *      longer than their gap) are both admitted past max_concurrent, or take one agent, the second's admission running
  *      while the first waits on git: an admitted arrival must hold its place and its agent before anything awaits.
+ *  E9. (The Audit's Infos on #685 at d43af8072, written before their code.) The log under ~/.tars, which any agent
+ *      can write, decides something or is what the card shows: an edited log admits an arrival past max_concurrent,
+ *      ends a session, or changes the progress. The engine holds the progress itself (its arrivals and the agents
+ *      that run them), kept privately for after a restart, where the session a restart cut reads `stopped`.
  */
 
 let dir: string;
@@ -270,14 +274,45 @@ describe('after a crash or a quit', () => {
     e.start(RUN);
     await c.advance(T0);
     expect(worktrees()).toHaveLength(1);
-    // Another worktree, which only a forged log would name.
+    // Another worktree, planted in a run.json as a forged log would name it: never removed.
     const other = path.join(project, '.worktrees', 'keep-me');
     git(project, 'worktree', 'add', '-q', '-b', 'keep-me', other, head);
+    fs.mkdirSync(path.join(dir, 'runs', RUN), { recursive: true });
+    fs.writeFileSync(path.join(dir, 'runs', RUN, 'run.json'), JSON.stringify({ runId: RUN, worktrees: [{ path: other, branch: 'keep-me', project }] }));
     // A new Tars, its engine starting over: nothing in memory.
     const after = createLoadEngine(deps(p));
     await after.recover([RUN]);
     expect(worktrees().map(w => fs.realpathSync(w))).toEqual([fs.realpathSync(other)]);
     expect(branches()).toEqual([]);
     expect(f.log.find(x => x.stop)).toMatchObject({ stop: { reason: 'error', detail: 'Tars restarted during the window' } });
+    // The progress, kept privately: the session the restart cut reads stopped.
+    expect(after.progress(RUN)?.arrivals).toMatchObject([{ n: 1, agentId: 'a1', end: 'stopped' }]);
+  });
+});
+
+describe('the log decides nothing', () => {
+  it('E9: an edited log admits nothing past max_concurrent, ends no session, and is not the progress the engine holds', async () => {
+    const logFile = path.join(dir, 'runs', RUN, 'run.json');
+    fs.mkdirSync(path.dirname(logFile), { recursive: true });
+    const written: Array<Record<string, unknown>> = [];
+    const p = plan([task({})], [{ n: 1, taskId: 'fix-retry', offsetMs: 0 }, { n: 2, taskId: 'fix-retry', offsetMs: 1000 }], 1);
+    const e = createLoadEngine(deps(p, { logArrival: (_r, a) => { written.push({ ...a }); fs.writeFileSync(logFile, JSON.stringify({ arrivals: written, agents: [] })); } }));
+    e.start(RUN);
+    await c.advance(T0);
+    // An agent edits the log: the open session ended, and some progress that never was.
+    fs.writeFileSync(logFile, JSON.stringify({
+      arrivals: [{ n: 1, taskId: 'fix-retry', plannedAt: T0, actualAt: T0, agentId: 'a1', end: 'done', endedAt: T0 }, { n: 9, taskId: 'fix-retry', plannedAt: T0, actualAt: T0, end: 'done' }],
+      agents: [],
+    }));
+    await c.advance(T0 + 1000);
+    expect(f.launches).toHaveLength(1);
+    const held = e.progress(RUN)!;
+    expect(held.arrivals.map(a => [a.n, a.agentId ?? null, a.blocked ?? null, a.end ?? null])).toEqual([[1, 'a1', null, null], [2, null, 'max_concurrent', null]]);
+    expect(held.agents).toEqual([{ agentId: 'a1', name: 'Load 1', project, harness: 'codex', created: false }]);
+    // The session ends only when it does.
+    setStatus('a1', 'running');
+    setStatus('a1', 'waiting');
+    await c.advance(T0 + 1010);
+    expect(e.progress(RUN)!.arrivals.find(a => a.n === 1)).toMatchObject({ end: 'done' });
   });
 });
