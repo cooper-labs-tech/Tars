@@ -62,6 +62,9 @@ import { assertThrowaway } from '../../setup/throwaway-dirs';
  * 12. (Added before its code, 27/11: Qwen Code 0.25.2 and opencode 1.19.6, measured, flag a cut output without its
  *     size.) A cut output is not flagged when the harness does not say how many bytes it cut: `truncated` is missing,
  *     or false; or a size is made up for it.
+ * 13. (Added before its code, 28/11: the back office's wave 8 of #678 caps `toolCallId` at 128 characters.) A call
+ *     whose id is longer leaves, and the back office refuses its whole batch; or its id is cut, and names another call;
+ *     or it is left out and counted nowhere.
  */
 
 assertThrowaway({ DATA_DIR, PRIVATE_DIR });
@@ -80,6 +83,7 @@ import { oneTaskQueue } from '../../../electron/core/one-task';
 import { sessionDocument } from '../../../electron/services/trace-export';
 import { GAP_TOLERANCE_MS } from '../../../electron/services/trace-store';
 import { codexToolPartOf, piToolLineOf, toolCallRecordOf, TOOL_CALLS_PER_REQUEST_MAX } from '../../../electron/services/tool-calls';
+import { TOOL_CALL_ID_CHARS_MAX } from '../../../electron/services/trace-upload';
 
 const EP = 'ep-c1test';
 let home: string;
@@ -425,5 +429,27 @@ describe('what leaves', () => {
     expect((sent.toolCalls as unknown[]).length).toBe(64);
     expect(sent.toolCallsOmitted).toBe(6);
     expect(sent.gap).toMatchObject({ toolMs: 100 });
+  });
+
+  it(`13: a call whose id is longer than ${128} characters is left out of the upload whole and counted, never cut`, () => {
+    expect(TOOL_CALL_ID_CHARS_MAX).toBe(128);
+    agent('q');
+    const { traceId } = open('q');
+    const t0 = Date.now() + 1000;
+    const long = `call_${'x'.repeat(124)}`;
+    const edge = `call_${'y'.repeat(123)}`;
+    expect([long.length, edge.length]).toEqual([129, 128]);
+    const said = { role: 'user', content: 'go' };
+    request(traceId, t0, [said], { calls: [long, edge] });
+    request(traceId, t0 + 1010, [said, asks([long, edge]), ...answers([long, edge])]);
+    for (const id of [long, edge]) noteToolCall('q', { callId: id, itemStartedAt: t0 + 100, itemEndedAt: t0 + 200 });
+    const body = traceUploader().preview(traceId)!.document.batches[0].body as { requests: Array<Record<string, unknown>> };
+    const sent = body.requests.at(-1)!;
+    const ids = (sent.toolCalls as Array<{ toolCallId: string }>).map(c => c.toolCallId);
+    expect(ids).toEqual([edge]);
+    expect(ids.some(id => id.startsWith('call_x')), 'the long id, cut').toBe(false);
+    expect(sent.toolCallsOmitted).toBe(1);
+    // Only what leaves is bounded: the session as recorded, and its export, keep the call.
+    expect(lastRequest(traceId).toolCalls!.map(c => c.toolCallId).sort()).toEqual([edge, long].sort());
   });
 });
