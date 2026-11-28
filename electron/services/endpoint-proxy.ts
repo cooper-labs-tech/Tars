@@ -2,6 +2,7 @@ import * as http from 'http';
 import * as https from 'https';
 import { firstContentEnd, surfaceOf, type Surface } from './trace-wire';
 import type { WireRecord } from './trace-store';
+import { requestTiming, type RequestTiming } from './server-timing';
 
 /**
  * The endpoint proxy (native traces): one loopback server between every harness on an inference
@@ -30,7 +31,11 @@ import type { WireRecord } from './trace-store';
  *   recorder that fails changes nothing for the harness. With it go the time of the first byte and the time of the
  *   first token: when the chunk holding the first stream event with text, reasoning or a tool call came (a chunk
  *   with only a role, or empty, is not one), found on the copy once the response has ended, never on the relay's
- *   path. A response that is not streamed has its first byte as its first token.
+ *   path. A response that is not streamed has its first byte as its first token. With them go the number of traced
+ *   sessions live on this computer when the request came, and the harness's own session id when it sends one (codex's
+ *   `session-id`). No other header is recorded: codex's installation id header goes on to the endpoint as it came,
+ *   and nowhere else. And the endpoint's Server-Timing, read with the times this proxy sent the answered attempt (its
+ *   request written out whole) and got its headers: the round trip and the clocks' offset (server-timing.ts).
  *
  * It speaks the three protocols the endpoints serve, chat completions, Responses and Anthropic Messages (with
  * count_tokens), plus `GET /v1/models`. Nothing else is forwarded.
@@ -64,6 +69,8 @@ export interface ProxyDeps {
   sessionOf(token: string): ProxySession | undefined;
   targetOf(endpointId: string): ProxyTarget | { refused: { status: number; type: string; message: string } };
   record?(rec: WireRecord): void;
+  /** The traced sessions live on this computer now (traces-runtime.ts): counted when a request comes in. */
+  liveSessions?(): number;
   onHold?(e: HoldEvent): void;
   sleep?(ms: number, signal: AbortSignal): Promise<void>;
   now?(): number;
@@ -130,6 +137,15 @@ const defaultSleep = (ms: number, signal: AbortSignal): Promise<void> => new Pro
   signal.addEventListener('abort', () => { clearTimeout(timer); resolve(); }, { once: true });
 });
 
+/** The longest session id the back-office takes: a longer one is not kept, never cut (a cut id is another session's). */
+export const MAX_SESSION_ID_CHARS = 128;
+
+/** A harness's session id as a header gave it: one token of printable characters, MAX_SESSION_ID_CHARS at most; else none. */
+function sessionIdOf(value: string | string[] | undefined): string | undefined {
+  const v = (Array.isArray(value) ? value[0] : value)?.trim();
+  return v && v.length <= MAX_SESSION_ID_CHARS && /^[\x21-\x7e]+$/.test(v) ? v : undefined;
+}
+
 function presentedToken(headers: http.IncomingHttpHeaders): { token: string; form: 'bearer' | 'x-api-key' } | null {
   const auth = headers.authorization;
   if (typeof auth === 'string' && auth.startsWith('Bearer ') && auth.length > 7) return { token: auth.slice(7).trim(), form: 'bearer' };
@@ -147,12 +163,19 @@ function sendError(res: http.ServerResponse, surface: Surface | null, status: nu
   res.end(JSON.stringify(body));
 }
 
-interface UpstreamReply { res: http.IncomingMessage }
+/** The endpoint's answer, with when the request was written out whole (t1) and when the answer's headers came (t4). */
+interface UpstreamReply { res: http.IncomingMessage; sentAt: number; headersAt: number }
 
-function sendUpstream(url: URL, method: string, headers: http.OutgoingHttpHeaders, body: Buffer, signal: AbortSignal): Promise<UpstreamReply> {
+function sendUpstream(url: URL, method: string, headers: http.OutgoingHttpHeaders, body: Buffer, signal: AbortSignal, now: () => number): Promise<UpstreamReply> {
   return new Promise((resolve, reject) => {
     const lib = url.protocol === 'https:' ? https : http;
-    const req = lib.request(url, { method, headers, signal }, res => resolve({ res }));
+    let sentAt: number | undefined;
+    const req = lib.request(url, { method, headers, signal }, (res) => {
+      const headersAt = now();
+      resolve({ res, sentAt: sentAt ?? headersAt, headersAt });
+    });
+    // Written out whole, past any connection set-up: the round trip then holds the network and nothing of ours.
+    req.on('finish', () => { sentAt = now(); });
     req.on('error', reject);
     req.end(body.length ? body : undefined);
   });
@@ -208,6 +231,10 @@ export function createEndpointProxy(deps: ProxyDeps): http.Server {
       return;
     }
     const body = Buffer.concat(chunks);
+    // For the record: how many traced sessions were live when this request came, and the harness's own session id
+    // (codex 0.170's session-id header, measured 26/11). Every header still goes on as the harness sent it.
+    const liveSessions = session.traced ? deps.liveSessions?.() : undefined;
+    const nativeSessionId = sessionIdOf(req.headers['session-id']);
 
     const target = deps.targetOf(session.endpointId);
     if ('refused' in target) {
@@ -245,6 +272,7 @@ export function createEndpointProxy(deps: ProxyDeps): http.Server {
     let attempts = 0;
     let held = false;
     let heldMs = 0;
+    let timing: RequestTiming | undefined;
     const clearHold = () => {
       if (held) deps.onHold?.({ agentId: session.agentId, endpointId: session.endpointId, cleared: true });
       held = false;
@@ -255,7 +283,7 @@ export function createEndpointProxy(deps: ProxyDeps): http.Server {
       let reply: UpstreamReply | undefined;
       let failure: NodeJS.ErrnoException | undefined;
       try {
-        reply = await sendUpstream(upstreamUrl, req.method!, headers, body, controller.signal);
+        reply = await sendUpstream(upstreamUrl, req.method!, headers, body, controller.signal, now);
       } catch (err) {
         failure = err as NodeJS.ErrnoException;
       }
@@ -293,6 +321,8 @@ export function createEndpointProxy(deps: ProxyDeps): http.Server {
       }
 
       const upstream = reply.res;
+      // The answer that reaches the harness: its round trip and the clocks' offset, from this attempt's own t1 and t4.
+      timing = requestTiming(upstream.headers['server-timing'], reply.sentAt, reply.headersAt);
       const outHeaders: http.OutgoingHttpHeaders = {};
       for (const [name, value] of Object.entries(upstream.headers)) {
         if (value !== undefined && !DROP_RESPONSE.has(name.toLowerCase())) outHeaders[name] = value;
@@ -332,7 +362,7 @@ export function createEndpointProxy(deps: ProxyDeps): http.Server {
       const rec: WireRecord = {
         traceId: session!.traceId, agentId: session!.agentId, surface, startedAt, firstByteAt, endedAt: now(),
         status: upstream?.statusCode ?? 502, contentType: upstream?.headers['content-type'], requestBody: body, responseBody,
-        upstreamRequestId, attempts, heldMs, error,
+        upstreamRequestId, attempts, heldMs, error, liveSessions, nativeSessionId, timing: upstream ? timing : undefined,
       };
       setImmediate(() => {
         try {

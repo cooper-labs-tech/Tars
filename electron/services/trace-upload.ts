@@ -7,6 +7,8 @@ import { canonicalJson } from './trace-wire';
 import { sessionDocument } from './trace-export';
 import { partsOf, type TraceStore } from './trace-store';
 import { scrubValue, SCRUB_VERSION, type ScrubContext } from './trace-scrub';
+import { MAX_VERSION_CHARS } from './harness-version';
+import { MAX_SESSION_ID_CHARS } from './endpoint-proxy';
 
 /**
  * Uploading opted-in traces to a back-office (the trace back-office's HTTP API v1: register, blobs, batches,
@@ -27,7 +29,9 @@ import { scrubValue, SCRUB_VERSION, type ScrubContext } from './trace-scrub';
  *   the install it was sent to and at the address the user set. With sharing off too: a delete carries no content,
  *   only the id of a session the back-office already holds. Never while a whole deletion is owed or under way.
  * - **Never** a session whose project or agent is not opted in at the time of sending, a person's name as a turn's
- *   author detail, an endpoint's address or key, or anything outside the traced sessions.
+ *   author detail, an endpoint's address or key, or anything outside the traced sessions. Nor the computer's name, the
+ *   user's, a serial number or an address: a session's environment holds none (session-environment.ts), and a
+ *   harness's installation id is never stored (trace-wire.ts withoutInstallIds).
  */
 
 export interface UploaderDeps {
@@ -453,14 +457,21 @@ export class TraceUploader {
     }
     const scrub = (v: unknown) => scrubValue(v, ctx, counts);
     const opt = <T>(v: T | null | undefined): T | undefined => (v === null ? undefined : v);
+    // A string over what the back-office takes is left out, never cut (a cut version or session id is another one):
+    // the whole batch would be refused for it. A store written before the limits were read may hold one.
+    const within = (v: unknown, max: number): string | undefined => (typeof v === 'string' && v.length <= max ? v : undefined);
 
     const session = {
       sessionId: traceId, agentId: opt(t.agent_id as string), projectKey: key(projectPath),
-      harness: String(t.client), harnessVersion: opt(t.client_version as string), endpointKey: key(String(t.endpoint_id)),
+      harness: String(t.client), harnessVersion: within(t.client_version, MAX_VERSION_CHARS), endpointKey: key(String(t.endpoint_id)),
       model: String(t.model), startedAt: Number(t.started_at), endedAt: opt(t.ended_at as number),
       finalStatus: String(t.final_status), turnCount: Number(t.turn_count), requestCount: Number(t.request_count),
       tokensIn: Number(t.tokens_in), tokensCached: Number(t.tokens_cached), tokensOut: Number(t.tokens_out),
       mixed: t.mixed === true, unknownTurns: Number(t.unknown_turns ?? 0), outcome: t.outcome ? scrub(t.outcome) : undefined,
+      // The harness's own session id, the machine and the system, the power events: each its own line in the notice.
+      nativeSessionId: within(t.native_session_id, MAX_SESSION_ID_CHARS), environment: opt(t.environment as Record<string, unknown>),
+      events: Array.isArray(t.events) ? t.events : [],
+      rttMedianMs: opt(t.rtt_median_ms as number), clockOffsetMs: opt(t.clock_offset_ms as number),
     };
     const turns = doc.turns.map(x => ({
       turnId: String(x.turn_id), sessionId: traceId, index: Number(x.turn_index), startedAt: Number(x.started_at), endedAt: opt(x.ended_at as number),
@@ -493,6 +504,8 @@ export class TraceUploader {
         totalMs: opt(r.total_ms as number), tokensIn: Number(r.tokens_in), tokensCached: Number(r.tokens_cached), tokensOut: Number(r.tokens_out),
         status: Number(r.status), error: r.error ? String(scrub(String(r.error))).slice(0, 2000) : undefined,
         finishReason: opt(r.finish_reason as string), reqBytes: Number(r.req_bytes), respBytes: Number(r.resp_bytes), messages,
+        liveSessions: opt(r.live_sessions as number), rttMs: opt(r.rtt_ms as number), clockOffsetMs: opt(r.clock_offset_ms as number),
+        queueMs: opt(r.queue_ms as number), upstreamMs: opt(r.upstream_ms as number),
       };
     });
     const messages = [...remote.values()].filter(m => m.role !== 'tools').map(m => ({

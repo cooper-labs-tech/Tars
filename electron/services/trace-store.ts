@@ -6,6 +6,8 @@ import { randomBytes } from 'crypto';
 import {
   hashOf, instructionText, isStreamed, opensTurn, parseRequest, parseResponse, type Surface,
 } from './trace-wire';
+import type { SessionEnvironment } from './session-environment';
+import { sessionTiming, type RequestTiming } from './server-timing';
 
 /**
  * The trace store (native traces): one SQLite file, `~/.tars/traces/traces.db`.
@@ -72,6 +74,18 @@ export interface WireRecord {
   attempts: number;
   heldMs: number;
   error?: string;
+  /** The traced sessions live on this computer when the request was sent (traces-runtime.ts), this one included. */
+  liveSessions?: number;
+  /** The harness's own id for its session, when it sends one (codex's session-id header). */
+  nativeSessionId?: string;
+  /** The round trip, the clocks' offset, the endpoint's queue and upstream times, from its Server-Timing. */
+  timing?: RequestTiming;
+}
+
+/** Something that happened to the computer during a session (Electron's powerMonitor, traces-runtime.ts). */
+export interface TraceEvent {
+  at: number;
+  kind: 'sleep' | 'wake' | 'battery' | 'ac';
 }
 
 export interface TypedInput {
@@ -128,6 +142,10 @@ export interface TraceSessionSummary {
   startedAt: number; endedAt?: number; finalStatus: 'done' | 'failed' | 'abandoned' | 'open';
   turnCount: number; requestCount: number; tokensIn: number; tokensCached: number; tokensOut: number;
   bytes: number; mixed: boolean; unknownTurns: number;
+  /** The harness's own session id, the machine and the system at the start, and the power events (session-environment.ts). */
+  nativeSessionId?: string; environment?: SessionEnvironment; events?: TraceEvent[];
+  /** From its requests' Server-Timing (server-timing.ts sessionTiming), in a session read whole (session()). */
+  rttMedianMs?: number; clockOffsetMs?: number;
 }
 
 export interface TraceRequestView {
@@ -135,6 +153,7 @@ export interface TraceRequestView {
   startedAt: number; ttftMs?: number; totalMs?: number; status: number; finishReason?: string; error?: string;
   tokensIn?: number; tokensCached?: number; tokensOut?: number; reqBytes: number; respBytes: number;
   newMessages: number; attempts: number; heldMs: number; bodiesDropped: boolean;
+  liveSessions?: number; rttMs?: number; clockOffsetMs?: number; queueMs?: number; upstreamMs?: number;
 }
 
 export interface TraceTurnView {
@@ -206,6 +225,21 @@ CREATE TABLE IF NOT EXISTS tombstones (
  */
 export const TOMBSTONE_DAYS = 365;
 
+/**
+ * Columns added after the first schema, put on a store an older Tars wrote as on a new one (SQLite adds a column
+ * without touching the rows): each session's environment and power events (JSON), each request's live count.
+ */
+const ADDED_COLUMNS: Array<[table: string, column: string, type: string]> = [
+  ['traces', 'environment_json', 'TEXT'],
+  ['traces', 'events_json', 'TEXT'],
+  ['requests', 'live_sessions', 'INTEGER'],
+  // From the endpoint's Server-Timing (server-timing.ts): null when it sent none, or one that could not be read.
+  ['requests', 'rtt_ms', 'REAL'],
+  ['requests', 'clock_offset_ms', 'REAL'],
+  ['requests', 'queue_ms', 'REAL'],
+  ['requests', 'upstream_ms', 'REAL'],
+];
+
 /** Per request, what the cap counts on top of its blobs: the rows themselves. */
 const ROW_BYTES = 512;
 /** How long a typed input may wait for the request that carries it. */
@@ -242,7 +276,15 @@ function summaryOf(r: Row): TraceSessionSummary {
     turnCount: num(r.turn_count), requestCount: num(r.request_count),
     tokensIn: num(r.tokens_in), tokensCached: num(r.tokens_cached), tokensOut: num(r.tokens_out),
     bytes: num(r.bytes), mixed: r.mixed === 1, unknownTurns: num(r.unknown_turns),
+    nativeSessionId: optStr(r.native_session_id), environment: jsonOf<SessionEnvironment>(r.environment_json),
+    events: jsonOf<TraceEvent[]>(r.events_json) ?? [],
   };
+}
+
+/** A JSON column read back; undefined when it is empty or unreadable. */
+function jsonOf<T>(v: unknown): T | undefined {
+  if (typeof v !== 'string' || !v) return undefined;
+  try { return JSON.parse(v) as T; } catch { return undefined; }
 }
 
 function encodeCursor(n: number, kind = 's'): string {
@@ -318,6 +360,10 @@ export class TraceStore {
     this.db.pragma('journal_mode = WAL');
     this.db.pragma('foreign_keys = OFF');
     this.db.exec(SCHEMA);
+    for (const [table, column, type] of ADDED_COLUMNS) {
+      const has = (this.db.prepare(`PRAGMA table_info(${table})`).all() as Array<{ name: string }>).some(c => c.name === column);
+      if (!has) this.db.exec(`ALTER TABLE ${table} ADD COLUMN ${column} ${type}`);
+    }
   }
 
   close(): void {
@@ -341,6 +387,35 @@ export class TraceStore {
       endpoint_id, endpoint_name, endpoint_base_url, model, started_at, updated_seq)
       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`).run(m.traceId, m.projectPath, m.agentId, m.agentName ?? null, m.harness,
       m.harnessVersion ?? null, m.endpointId, m.endpointName ?? null, m.endpointBaseUrl ?? null, m.model, m.startedAt, this.nextSeq());
+  }
+
+  /** The harness's exact version, read after the start (harness-version.ts): a change, so it is sent again. */
+  setHarnessVersion(traceId: string, version: string): void {
+    this.setIfChanged(traceId, 'harness_version', version);
+  }
+
+  /** The machine and the system at the session's start (session-environment.ts): a change, so it is sent again. */
+  setEnvironment(traceId: string, environment: SessionEnvironment): void {
+    this.setIfChanged(traceId, 'environment_json', JSON.stringify(environment));
+  }
+
+  /** A session's column set, with a new change sequence, only when its value changes. */
+  private setIfChanged(traceId: string, column: 'harness_version' | 'environment_json', value: string): void {
+    this.db.transaction(() => {
+      const row = this.db.prepare(`SELECT ${column} AS v FROM traces WHERE trace_id = ?`).get(traceId) as Row | undefined;
+      if (!row || row.v === value) return;
+      this.db.prepare(`UPDATE traces SET ${column} = ?, updated_seq = ? WHERE trace_id = ?`).run(value, this.nextSeq(), traceId);
+    })();
+  }
+
+  /** A power event, on a session still open: a change, so it is sent again. An ended session takes none. */
+  addEvent(traceId: string, event: TraceEvent): void {
+    this.db.transaction(() => {
+      const row = this.db.prepare('SELECT events_json FROM traces WHERE trace_id = ? AND ended_at IS NULL').get(traceId) as Row | undefined;
+      if (!row) return;
+      const events = [...(jsonOf<TraceEvent[]>(row.events_json) ?? []), { at: event.at, kind: event.kind }];
+      this.db.prepare('UPDATE traces SET events_json = ?, updated_seq = ? WHERE trace_id = ?').run(JSON.stringify(events), this.nextSeq(), traceId);
+    })();
   }
 
   hasTrace(traceId: string): boolean {
@@ -588,13 +663,19 @@ export class TraceStore {
         : rec.firstByteAt !== undefined ? rec.firstByteAt - rec.startedAt : null;
     this.db.prepare(`INSERT INTO requests (request_id, upstream_request_id, trace_id, turn_id, seq, side, surface, model_requested,
       model_served, params_json, system_hash, tools_hash, started_at, ttft_ms, total_ms, tokens_in, tokens_cached, tokens_out, status, error,
-      finish_reason, streamed, req_bytes, resp_bytes, new_messages, attempts, held_ms, bodies_dropped)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`).run(
+      finish_reason, streamed, req_bytes, resp_bytes, new_messages, attempts, held_ms, bodies_dropped, live_sessions,
+      rtt_ms, clock_offset_ms, queue_ms, upstream_ms)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`).run(
       requestId, rec.upstreamRequestId ?? null, rec.traceId, turnId ?? null, seqRow.n, side ? 1 : 0, rec.surface, req?.model ?? null,
       resp.modelServed ?? null, req ? JSON.stringify(req.params) : null, systemHash ?? null, toolsHash ?? null, rec.startedAt,
       ttft, total, resp.usage.input, resp.usage.cached, resp.usage.output,
       rec.status, rec.error ?? resp.error ?? null, resp.finishReason ?? null, req?.stream ? 1 : 0, rec.requestBody.length, rec.responseBody.length,
-      newMessages, rec.attempts, rec.heldMs, dropped ? 1 : 0);
+      newMessages, rec.attempts, rec.heldMs, dropped ? 1 : 0, typeof rec.liveSessions === 'number' ? rec.liveSessions : null,
+      rec.timing?.rttMs ?? null, rec.timing?.clockOffsetMs ?? null, rec.timing?.queueMs ?? null, rec.timing?.upstreamMs ?? null);
+    // The harness's own session id: the first it sent stays (a resumed session keeps the id it began with).
+    if (rec.nativeSessionId) {
+      this.db.prepare('UPDATE traces SET native_session_id = ? WHERE trace_id = ? AND native_session_id IS NULL').run(rec.nativeSessionId, rec.traceId);
+    }
 
     if (turnId) {
       const failed = !!(rec.error || resp.error);
@@ -670,10 +751,12 @@ export class TraceStore {
       startedAt: num(r.started_at), ttftMs: optNum(r.ttft_ms), totalMs: optNum(r.total_ms), status: num(r.status),
       finishReason: optStr(r.finish_reason), error: optStr(r.error), tokensIn: optNum(r.tokens_in), tokensCached: optNum(r.tokens_cached),
       tokensOut: optNum(r.tokens_out), reqBytes: num(r.req_bytes), respBytes: num(r.resp_bytes), newMessages: num(r.new_messages),
-      attempts: num(r.attempts), heldMs: num(r.held_ms), bodiesDropped: r.bodies_dropped === 1,
+      attempts: num(r.attempts), heldMs: num(r.held_ms), bodiesDropped: r.bodies_dropped === 1, liveSessions: optNum(r.live_sessions),
+      rttMs: optNum(r.rtt_ms), clockOffsetMs: optNum(r.clock_offset_ms), queueMs: optNum(r.queue_ms), upstreamMs: optNum(r.upstream_ms),
     });
+    const timing = sessionTiming(requests.map(r => ({ rttMs: optNum(r.rtt_ms) ?? null, clockOffsetMs: optNum(r.clock_offset_ms) ?? null })));
     return {
-      session: summaryOf(trace),
+      session: { ...summaryOf(trace), rttMedianMs: timing.rttMedianMs ?? undefined, clockOffsetMs: timing.clockOffsetMs ?? undefined },
       outcome: trace.outcome_json ? JSON.parse(String(trace.outcome_json)) : undefined,
       turns: turns.map(t => ({
         turnId: String(t.turn_id), index: num(t.turn_index), startedAt: num(t.started_at), endedAt: optNum(t.ended_at),

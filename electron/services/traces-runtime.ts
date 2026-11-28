@@ -11,8 +11,13 @@ import { updateSharedJsonSync } from '../utils/shared-file';
 import { startEndpointProxy, stopEndpointProxy, type HoldEvent, type ProxySession } from './endpoint-proxy';
 import { endpointLaunchFor, piModelsWithEndpoint, type EndpointLaunch } from './endpoint-harness';
 import { ENDPOINT_HARNESSES, endpointTarget, ensureDropFolder, transportOf } from './inference-endpoints';
-import { TraceStore } from './trace-store';
+import { TraceStore, type TraceEvent } from './trace-store';
 import { defaultTracePairs, traceDecision } from './trace-gate';
+import { machineFacts, nodeEnvironmentIo, sessionEnvironment, type MachineFacts } from './session-environment';
+import { harnessVersions } from './harness-version';
+import { probeVersion } from '../core/version-probe';
+import { buildFullPath } from '../utils/path-builder';
+import { cliPathDirs } from '../utils/cli-path-dirs';
 import { projectEnvValues, type ScrubContext } from './trace-scrub';
 import { TraceUploader } from './trace-upload';
 import { SECRET_FIELDS, keysKeptAfter, withKeptKeys } from './settings-secrets';
@@ -28,6 +33,10 @@ import { SECRET_FIELDS, keysKeptAfter, withKeptKeys } from './settings-secrets';
  * - **Authorship.** What Tars types into an agent's terminal (core/pty-manager.ts writeProgrammaticInput), and from
  *   whom, is noted in the store for a traced agent: an agent's words, a channel's, the user's, Tars's own. An agent
  *   that is not an open harness on an endpoint is a closed model: its words make the session `mixed`.
+ * - **A session's environment.** A traced session keeps the harness's exact version (read from the binary Tars
+ *   launched, harness-version.ts), the machine and the system it ran on with Tars's version, the locale and the time
+ *   zone (session-environment.ts), the sleeps, wakes and changes of power during it, and on each request the traced
+ *   sessions live on this computer when it was sent.
  * - **The reader token** (`~/.tars-private/traces-reader-token`, 0600) opens `GET /api/traces/*` and nothing else,
  *   like a Hermes gateway's secret opens its own route (services/hermes-gateways.ts).
  */
@@ -46,8 +55,25 @@ export interface TracesDeps {
   getAgent(id: string): AgentStatus | undefined;
   /** Tells the window: 'traces:changed', 'endpoints:waiting', 'endpoints:changed'. */
   emit(channel: string, payload?: unknown): void;
-  /** Tars's version, sent when the install registers with a back-office. */
+  /** Tars's version, sent when the install registers with a back-office, and kept with each traced session. */
   clientVersion?: string;
+  /**
+   * The binary an agent's terminal starts (its own CLI path, else its provider's): the harness whose exact version a
+   * traced session keeps (harness-version.ts). From main.ts, since the providers import this module.
+   */
+  launchedBinary?(agent: AgentStatus): string;
+  /** Electron's powerMonitor: sleep, wake, battery and mains power, stamped on every traced session open then. */
+  power?: PowerSource;
+  /** The system's own version (Electron's process.getSystemVersion: macOS 15.7.2, not Darwin's 24.6.0). */
+  systemVersion?(): string;
+  /** The system's language and region (Electron's app.getSystemLocale). */
+  locale?(): string;
+}
+
+export interface PowerSource {
+  on(event: string, listener: () => void): unknown;
+  removeListener(event: string, listener: () => void): unknown;
+  isOnBatteryPower(): boolean;
 }
 
 let deps: TracesDeps | null = null;
@@ -443,6 +469,7 @@ export function configureTraces(d: TracesDeps): void {
 
 export function startTracesRuntime(d: TracesDeps): void {
   configureTraces(d);
+  watchPower(d.power);
   sweepTimer = setInterval(sweepTraces, 3600_000);
   sweepTimer.unref?.();
   sweepTraces();
@@ -466,6 +493,7 @@ function ensureProxy(): void {
   startEndpointProxy(ENDPOINT_PROXY_PORT, {
     sessionOf: (token) => sessions.get(token),
     targetOf: (endpointId) => endpointTarget(d.getSettings(), endpointId),
+    liveSessions: liveTracedSessions,
     record: (rec) => {
       if (traceStore().ingest(rec)) {
         changed();
@@ -483,6 +511,8 @@ function ensureProxy(): void {
 export function stopTracesRuntime(): void {
   proxyStarted = false;
   stopEndpointProxy();
+  unwatchPower?.();
+  unwatchPower = null;
   if (sweepTimer) clearInterval(sweepTimer);
   sweepTimer = null;
   if (uploadTimer) clearInterval(uploadTimer);
@@ -574,6 +604,7 @@ export function openEndpointSession(agentId: string): { env: Record<string, stri
         endpointId: agent.endpointId, endpointName: endpoint?.name, endpointBaseUrl: endpoint?.approvedBaseUrl, model: agent.model, startedAt: live.startedAt,
       });
       changed();
+      describeSession(traceId, agent, live.startedAt);
     } catch (err) {
       console.error(`[traces] session not opened: ${(err as Error).message}`);
       live.traced = false;
@@ -582,6 +613,84 @@ export function openEndpointSession(agentId: string): { env: Record<string, stri
   const env: Record<string, string> = {};
   for (const name of launch.tokenVars) env[name] = token;
   return { env, token };
+}
+
+/** The machine's facts, read once per run (session-environment.ts). */
+let machine: Promise<MachineFacts> | null = null;
+let versionReader: ReturnType<typeof harnessVersions> | null = null;
+
+function harnessVersionReader(): ReturnType<typeof harnessVersions> {
+  versionReader ??= harnessVersions({
+    probe: probeVersion,
+    // The PATH the agents' terminals get, the configured CLI folders first.
+    path: () => buildFullPath(cliPathDirs(deps?.getSettings().cliPaths as Record<string, unknown> | undefined)),
+  });
+  return versionReader;
+}
+
+/**
+ * A traced session just opened: what is its own read now (Tars's version, the locale, the time zone, the power), the
+ * machine's facts and the harness's exact version as soon as they are read, each kept with it as a change.
+ */
+function describeSession(traceId: string, agent: AgentStatus, startedAt: number): void {
+  const d = deps;
+  if (!d) return;
+  const intl = Intl.DateTimeFormat().resolvedOptions();
+  const read = <T>(f: (() => T) | undefined): T | undefined => { try { return f?.(); } catch { return undefined; } };
+  const own = {
+    at: startedAt, tarsArch: process.arch, tarsVersion: d.clientVersion,
+    locale: read(() => d.locale?.()) || intl.locale, timeZone: intl.timeZone, onBattery: read(() => d.power?.isOnBatteryPower()),
+  };
+  machine ??= machineFacts(nodeEnvironmentIo(d.systemVersion));
+  void machine.then((m) => {
+    traceStore().setEnvironment(traceId, sessionEnvironment(m, own));
+    changed();
+  }).catch(err => console.error(`[traces] the environment of ${traceId} was not kept: ${(err as Error).message}`));
+  const binary = read(() => d.launchedBinary?.(agent));
+  if (!binary) return;
+  void harnessVersionReader().of(binary).then((version) => {
+    if (!version) return;
+    traceStore().setHarnessVersion(traceId, version);
+    changed();
+  }).catch(err => console.error(`[traces] the harness version of ${traceId} was not kept: ${(err as Error).message}`));
+}
+
+/** The traced sessions open now, on this computer: what each request records it was sent among. */
+function liveTracedSessions(): number {
+  let n = 0;
+  for (const s of sessions.values()) if (s.traced) n++;
+  return n;
+}
+
+/** Electron's power events, and the kind each is kept as. */
+const POWER_EVENTS: Array<[event: string, kind: TraceEvent['kind']]> = [
+  ['suspend', 'sleep'], ['resume', 'wake'], ['on-battery', 'battery'], ['on-ac', 'ac'],
+];
+let unwatchPower: (() => void) | null = null;
+
+/** A power event, stamped on every traced session open now: a session cut by sleep is not a session abandoned. */
+export function notePowerEvent(kind: TraceEvent['kind'], at = Date.now()): void {
+  let stamped = 0;
+  for (const s of sessions.values()) {
+    if (!s.traced) continue;
+    try {
+      traceStore().addEvent(s.traceId, { at, kind });
+      stamped++;
+    } catch (err) {
+      console.error(`[traces] the ${kind} event was not kept on ${s.traceId}: ${(err as Error).message}`);
+    }
+  }
+  if (stamped) changed();
+}
+
+function watchPower(power: PowerSource | undefined): void {
+  if (!power || unwatchPower) return;
+  const offs = POWER_EVENTS.map(([event, kind]) => {
+    const listener = () => notePowerEvent(kind);
+    power.on(event, listener);
+    return () => { power.removeListener(event, listener); };
+  });
+  unwatchPower = () => { for (const off of offs) off(); };
 }
 
 /** At the terminal's exit: the token opens nothing any more, and its trace is ended. */

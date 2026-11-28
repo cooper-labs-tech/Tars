@@ -11,6 +11,14 @@ import type { TraceFilter, TraceStore } from './trace-store';
  * A request's `ttft_ms` is the model's first token: for a stream, the first chunk with text, reasoning or a tool call
  * (a chunk with only a role, or empty, is not one; null when the stream carried no content); for a response that is
  * not streamed, the first byte. `side` marks a side request (a title or memory call), which `request_count` leaves out.
+ *
+ * A session also says the harness's own session id, the machine and the system it ran on (`environment`,
+ * session-environment.ts) and what happened to the computer during it (`events`: sleep, wake, battery, ac); each request
+ * says how many traced sessions were live on this computer when it was sent (`live_sessions`). Null where not known.
+ * From the endpoint's Server-Timing (server-timing.ts), each request says its round trip, the offset of the endpoint's
+ * clock from ours and the endpoint's queue and upstream times (`rtt_ms`, `clock_offset_ms`, `queue_ms`,
+ * `upstream_ms`), and the session the median round trip and the offset at its shortest one (`rtt_median_ms`,
+ * `clock_offset_ms`); null when the endpoint sent none.
  */
 
 export interface SessionDocument {
@@ -33,6 +41,8 @@ export function sessionDocument(store: TraceStore, traceId: string, seen: Set<st
       endpoint_name: x.endpointName ?? null, model: x.model, started_at: x.startedAt, ended_at: x.endedAt ?? null,
       turn_count: x.turnCount, request_count: x.requestCount, tokens_in: x.tokensIn, tokens_cached: x.tokensCached,
       tokens_out: x.tokensOut, final_status: x.finalStatus, mixed: x.mixed, unknown_turns: x.unknownTurns, outcome: s.outcome ?? null,
+      native_session_id: x.nativeSessionId ?? null, environment: x.environment ?? null, events: x.events ?? [],
+      rtt_median_ms: x.rttMedianMs ?? null, clock_offset_ms: x.clockOffsetMs ?? null,
     },
     turns: [], requests: [], request_messages: [], messages: [],
   };
@@ -64,6 +74,8 @@ export function sessionDocument(store: TraceStore, traceId: string, seen: Set<st
         tokens_in: r.tokensIn ?? 0, tokens_cached: r.tokensCached ?? 0, tokens_out: r.tokensOut ?? 0, status: r.status,
         error: r.error ?? null, finish_reason: r.finishReason ?? null, attempts: r.attempts, held_ms: r.heldMs,
         req_bytes: r.reqBytes, resp_bytes: r.respBytes, bodies_dropped: r.bodiesDropped, system_hash: systemHash, tools_hash: toolsHash,
+        live_sessions: r.liveSessions ?? null, rtt_ms: r.rttMs ?? null, clock_offset_ms: r.clockOffsetMs ?? null,
+        queue_ms: r.queueMs ?? null, upstream_ms: r.upstreamMs ?? null,
       });
       if (!m) continue;
       const inputHashes = m.input.map(v => v.hash);

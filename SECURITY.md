@@ -1165,7 +1165,17 @@ else.
 - `~/.tars` is in every agent's `--add-dir`, so any agent can read every traced session, as it can already read every
   transcript under `~/.claude` and `~/.codex`.
 - Nothing is masked on this machine. Masking secrets and pseudonymising is the reader's job, on its side.
-- The endpoint's key never enters a trace: the proxy records the request body, never its headers.
+- The endpoint's key never enters a trace: the proxy records the request body, never its headers (it reads one, codex's
+  `session-id`, for the session's own id).
+- A harness's installation id, a stable id of the computer, is never stored: codex 0.170 sends it in its body
+  (`client_metadata`, under its own name and inside its turn metadata) and in its `x-codex-turn-metadata` header,
+  which go on to the endpoint as codex sent them; the store takes it out of the request first (`trace-wire.ts`
+  withoutInstallIds), and the export and the upload are read from the store.
+- A session's environment (`services/session-environment.ts`) is read from the system's files and a few commands, never
+  a serial number or a hardware uuid, the computer's name, the user's or an address. A harness's version, when its
+  package does not say it, is asked in a throwaway folder, which is its working folder, its home and its npm prefix,
+  removed after the probe. On Windows, the machine's model is read by `%SystemRoot%\System32\reg.exe`, never `reg`
+  by its bare name, which Windows looks for in the working folder first.
 - What is kept is bounded: off by default for every project and every agent, a size cap and a retention set in
   Settings, and a delete in the back-office.
 - A deleted session leaves a tombstone: its id, why it went (user, retention, cap) and when, nothing of its content.
@@ -1197,6 +1207,8 @@ would be sent.
 - Projects and endpoints go as HMAC keys of a secret that never leaves the install, never their paths or addresses.
 - Neither the agent's name nor the endpoint's goes: both are free labels that may name a person or a host (L1).
 - A turn's author goes by kind (user, orchestrator, agent), never a name.
+- A session's environment goes as exact values (the owner's decision of 27/11): the machine's model, chip, cores and
+  memory, the system, Tars's version, the locale and the time zone, each on its own line of the notice.
 - The install's token and that secret are in `~/.tars-private/traces-install.json` (0600).
 - Only sessions whose project and agent are opted in at the moment of sending go.
 - One action in the window asks the back-office to delete everything the install sent, then forgets the install and
