@@ -7,7 +7,7 @@ import { LoadingPanel } from '@/components/ui';
 
 const loading = () => <LoadingPanel what="Opening the page" />;
 
-export type MorePageId = 'agents' | 'review' | 'logs' | 'vault' | 'extensions' | 'usage' | 'traces' | 'resources' | 'brain' | 'settings' | 'whats-new';
+export type MorePageId = 'agents' | 'review' | 'logs' | 'vault' | 'extensions' | 'usage' | 'traces' | 'load-window' | 'resources' | 'brain' | 'settings' | 'whats-new';
 
 export interface MorePage {
   id: MorePageId;
@@ -15,6 +15,10 @@ export interface MorePage {
   icon: ComponentType<{ className?: string }>;
   /** The page itself, the one its own route shows, loaded when its card first opens. */
   Page: ComponentType;
+  /** What the card's head carries beside esc (the Load window's Window | Projects switch). */
+  HeadExtra?: ComponentType;
+  /** The page lays out the card's body itself, its own scrolling and its own foot (the Load window's Approve). */
+  bare?: boolean;
 }
 
 /**
@@ -29,6 +33,11 @@ export const MORE_PAGES: MorePage[] = [
   { id: 'extensions', label: 'Extensions', icon: Puzzle, Page: dynamic(() => import('@/app/skills/page'), { ssr: false, loading }) },
   { id: 'usage', label: 'Usage', icon: BarChart2, Page: dynamic(() => import('@/app/usage/page'), { ssr: false, loading }) },
   { id: 'traces', label: 'Traces', icon: Waypoints, Page: dynamic(() => import('@/app/traces/page'), { ssr: false, loading }) },
+  {
+    id: 'load-window', label: 'Load window', icon: Gauge, bare: true,
+    Page: dynamic(() => import('@/components/LoadWindow'), { ssr: false, loading }),
+    HeadExtra: dynamic(() => import('@/components/LoadWindow').then(m => m.LoadViewSwitch), { ssr: false }),
+  },
   { id: 'resources', label: 'Resources', icon: Gauge, Page: dynamic(() => import('@/app/resources/page'), { ssr: false, loading }) },
   { id: 'brain', label: 'Brain', icon: Brain, Page: dynamic(() => import('@/app/memory/page'), { ssr: false, loading }) },
   { id: 'settings', label: 'Settings', icon: Settings, Page: dynamic(() => import('@/app/settings/page'), { ssr: false, loading }) },

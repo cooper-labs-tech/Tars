@@ -7,6 +7,7 @@ import NewSidebar from './NewSidebar';
 import { PageCard } from './PageCard';
 import { MORE_PAGES, type MorePageId } from './more-pages';
 import { DataFolderNotice } from '@/components/DataFolderNotice';
+import { useStore } from '@/store';
 
 /**
  * The new shell (plan 2.0.0), while Settings, Preferences, "New interface" is
@@ -22,6 +23,13 @@ export default function NewShell({ children }: { children: ReactNode }) {
   useEffect(() => {
     setOpen(null);
   }, [pathname]);
+
+  // A page of More asked for from a page (a project's Load agents card opens the Load window at Projects).
+  const moreRequest = useStore(s => s.moreRequest);
+  useEffect(() => {
+    const asked = MORE_PAGES.find(p => p.id === moreRequest?.page);
+    if (asked) setOpen(asked.id);
+  }, [moreRequest]);
 
   const page = open ? MORE_PAGES.find(p => p.id === open) : undefined;
 
