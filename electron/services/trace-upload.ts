@@ -422,6 +422,7 @@ export class TraceUploader {
       tokensIn: Number(t.tokens_in), tokensCached: Number(t.tokens_cached), tokensOut: Number(t.tokens_out),
       mixed: t.mixed === true, unknownTurns: Number(t.unknown_turns ?? 0), outcome: t.outcome ? scrub(t.outcome) : undefined,
       // #678's per session field, and nothing else in it: false once the switch was off while the session ran.
+      // The store's one rule decided it (trace-store.ts summaryOf): the stamp and the private list of trainable sessions.
       consent: { training: (t.consent as { training?: unknown } | undefined)?.training === true },
     };
     const turns = doc.turns.map(x => ({
