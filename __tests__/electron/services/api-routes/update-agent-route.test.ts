@@ -49,6 +49,15 @@ import { EventEmitter } from 'events';
  * 12c. The same folder is taken by the window's agent:update, which calls
  *     core/agent-update.ts without the route's check (the Audit's L4 on #480).
  *
+ * A load window's agents (load: true; the Audit's M1 and Infos on #691 at 51a8a21f8, written before the code)
+ * L1. A load agent's settings change over the API: its endpoint cleared (its CLI would then run on the owner's own
+ *     account) or moved, its model, provider or permission mode. They follow the owner's grant: refused (load_agent,
+ *     403) for its project's orchestrator and for Tars's pass, nothing written.
+ * L2. Something types into a running load session: a message, a dispatch or a run-task to a load agent. Refused
+ *     (load_agent, 403), nothing typed: it would change the session the trace measures.
+ * L3. A load agent's start reads its team or its project: bootstrap for a load agent (a CLI that reads its session
+ *     start's context would reopen a memory channel). Refused (403).
+ *
  * When it applies (a running turn is never cut)
  * 13. A change of provider or CLI path while a CLI runs, or starts, in the
  *     agent's terminal ends that terminal and whatever it was doing: it must be
@@ -202,6 +211,22 @@ async function update(id: string, body: Record<string, unknown>, caller: Caller 
   return { answer, status: status ?? 200 };
 }
 
+/** Any of the agent's routes (`/api/agents/:id/<what>`), as `caller` (the lead by default), and its answer. */
+async function agentRoute(method: 'GET' | 'POST', id: string, what: string, body: Record<string, unknown> = {}, caller: Caller = { callerAgentId: 'lead' }) {
+  const app = makeRouteApp();
+  registerAgentRoutes(app, ctx);
+  const route = app.routes.find(r => r.method === method && String(r.pattern).includes(`\\/${what}$`));
+  expect(route, `${method} /api/agents/:id/${what} is registered`).toBeDefined();
+  const sendJson = vi.fn();
+  const req = {
+    method, pathname: `/api/agents/${id}/${what}`, url: new URL(`http://localhost/api/agents/${id}/${what}`),
+    body, raw: { headers: {} } as never, res: {} as never, params: { id }, ...caller,
+  } as RouteRequest;
+  await route!.handler(req, sendJson, ctx);
+  const [answer, status] = (sendJson.mock.calls[0] ?? [undefined, undefined]) as [Record<string, unknown>, number | undefined];
+  return { answer, status: status ?? 200 };
+}
+
 /** POST /api/agents, what create_agent calls, as `caller` (the lead by default), and its answer. */
 async function create(body: Record<string, unknown>, caller: Caller = { callerAgentId: 'lead' }) {
   const app = makeRouteApp();
@@ -313,6 +338,53 @@ describe('who may change an agent', () => {
       expect(answer.code).toBe('orchestrator_settings');
     }
     expect(agents.get('runner')!.model).toBeUndefined();
+  });
+});
+
+describe('a load window\'s agent', () => {
+  const load = () => {
+    agents.set('load1', agent({ id: 'load1', name: 'Load 1', role: 'worker', provider: 'codex', model: 'open-coder-1', endpointId: 'ep-0a0b0c', load: true } as Partial<AgentStatus>));
+    return recordOf('load1');
+  };
+
+  it('L1. refuses its endpoint cleared or moved, its model, provider or permission mode, for its orchestrator and Tars\'s pass; nothing written', async () => {
+    const before = load();
+    for (const [body, caller] of [
+      [{ endpointId: null }, { callerAgentId: 'lead' }],
+      [{ endpointId: 'ep-ffffff' }, { callerAgentId: 'lead' }],
+      [{ model: 'gpt-5' }, { callerAgentId: 'lead' }],
+      [{ provider: 'claude' }, { internal: true }],
+      [{ permissionMode: 'normal' }, { internal: true }],
+    ] as Array<[Record<string, unknown>, Caller]>) {
+      const r = await update('load1', body, caller);
+      expect(r.status, JSON.stringify(body)).toBe(403);
+      expect(r.answer.code, JSON.stringify(body)).toBe('load_agent');
+    }
+    expect(recordOf('load1')).toEqual(before);
+    expect(saveAgents).not.toHaveBeenCalled();
+    // Another worker of the project still changes as before.
+    expect((await update('w2', { model: 'opus' })).status).toBe(200);
+  });
+
+  it('L2. refuses a message, a dispatch or a run-task to it; nothing typed', async () => {
+    load();
+    for (const [what, body] of [['message', { message: 'look at this' }], ['dispatch', { message: 'look at this' }], ['run-task', { task: 'do this too' }]] as const) {
+      const r = await agentRoute('POST', 'load1', what, body);
+      expect(r.status, what).toBe(403);
+      expect(r.answer.code, what).toBe('load_agent');
+    }
+    // Nothing started in its terminal, nothing held for it.
+    expect(agents.get('load1')!.status).toBe('idle');
+    expect(agents.get('load1')!.currentTask).toBeUndefined();
+  });
+
+  it('L3. refuses its bootstrap: neither its team nor its project reaches a load session', async () => {
+    load();
+    const r = await agentRoute('GET', 'load1', 'bootstrap', {}, { callerAgentId: 'load1' });
+    expect(r.status).toBe(403);
+    expect(r.answer.code).toBe('load_agent');
+    // A worker's bootstrap as before.
+    expect((await agentRoute('GET', 'w1', 'bootstrap', {}, { callerAgentId: 'w1' })).status).toBe(200);
   });
 });
 
