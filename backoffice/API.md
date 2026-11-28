@@ -380,7 +380,10 @@ Every request read back, here and in § 6.5, carries `side`, always present:
 The fields added after a client may have been built without them are always present when read, with `null` for
 "the uploading Tars did not send it":
 
-- every session, here and in § 6.1: `environment`, `events`, `start`, `lostDemand`, `maskingVersion`, `maskCounts`, `rttMedianMs` and `clockOffsetMs`, each as sent;
+- every session, here and in § 6.1: `environment`, `events`, `start`, `lostDemand`, `lostDemandOmitted`,
+  `maskingVersion`, `maskCounts`, `rttMedianMs`, `clockOffsetMs`, `consent`, `contextWindowGiven`, `outputCapGiven`,
+  `autoCompaction` and `compactions`, each as sent; and `installConsent`, the install's current training consent,
+  `{ "training": bool, "at": ms }`, or `null` when it has never set one;
 - every request, here and in § 6.5: `liveSessions`, `cancel`, `rttMs`, `clockOffsetMs`, `queueMs`, `upstreamMs`, `contextReset`, `gap`, `toolCalls` and `toolCallsOmitted`;
 - every turn, here: `taskRef`, `interventions`, and its workspace (`startHead` to `survivalBasis`).
 
