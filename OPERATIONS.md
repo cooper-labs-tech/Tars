@@ -1313,8 +1313,8 @@ curl -s -H "Authorization: Bearer $(cat ~/.tars-private/traces-reader-token)" \
   (`session_end`, then `merged` or `deleted` once its branch is), null when unknown. A session whose survival is
   measured again on the default branch comes back in `/api/traces/sessions` from the cursor. A session's outcome
   holds `gates` once a gate records a verdict on a head its turns made: an agent that gates calls `record_verdict`
-  (gate, pr, head, verdict, and the test counts), and Tars adds CI's from `gh pr checks` when the pull request has
-  checks.
+  (gate `qa` or `audit`, pr, head, verdict, and the test counts), and Tars adds CI's from `gh pr checks` when the pull
+  request has checks. A verdict on the recorder's own work is refused (403).
 - No other credential opens these routes.
 
 **Measure a harness again** after an update, against a stand-in endpoint on loopback:

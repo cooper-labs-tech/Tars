@@ -116,7 +116,7 @@ export interface TraceOutcome {
    * counted in gatesOmitted.
    */
   gates?: Array<{
-    kind: string; verdict: string; at?: number; pr?: number; head?: string; turns?: Array<[number, number]>; by?: string;
+    kind: string; verdict: string; at?: number; pr?: number; head?: string; turns?: Array<[number, number]>; by?: string; byName?: string; byRole?: string;
     testCommand?: string; passed?: number; failed?: number; skipped?: number; report?: string;
   }>;
   gatesOmitted?: number;
@@ -229,8 +229,8 @@ CREATE TABLE IF NOT EXISTS workspace_renames (
 );
 CREATE TABLE IF NOT EXISTS verdicts (
   id INTEGER PRIMARY KEY AUTOINCREMENT, project_path TEXT NOT NULL, gate TEXT NOT NULL, pr INTEGER NOT NULL, head TEXT NOT NULL,
-  verdict TEXT NOT NULL, at INTEGER NOT NULL, by_agent TEXT NOT NULL, test_command TEXT, passed INTEGER, failed INTEGER,
-  skipped INTEGER, report TEXT, UNIQUE (project_path, gate, pr, head)
+  verdict TEXT NOT NULL, at INTEGER NOT NULL, by_agent TEXT NOT NULL, by_name TEXT, by_role TEXT, branch TEXT,
+  test_command TEXT, passed INTEGER, failed INTEGER, skipped INTEGER, report TEXT, UNIQUE (project_path, gate, pr, head)
 );
 CREATE TABLE IF NOT EXISTS verdict_links (
   verdict_id INTEGER NOT NULL, trace_id TEXT NOT NULL, turn_started_at INTEGER NOT NULL, PRIMARY KEY (verdict_id, trace_id, turn_started_at)
@@ -437,8 +437,13 @@ export class TraceStore {
   endTrace(traceId: string, endedAt: number, outcome?: TraceOutcome): void {
     const last = this.db.prepare('SELECT final_status FROM turns WHERE trace_id = ? ORDER BY turn_index DESC LIMIT 1').get(traceId) as { final_status?: string } | undefined;
     const status = last?.final_status === 'done' ? 'done' : last?.final_status === 'failed' ? 'failed' : last ? 'abandoned' : 'abandoned';
-    this.db.prepare(`UPDATE traces SET ended_at = ?, final_status = ?, outcome_json = COALESCE(?, outcome_json), updated_seq = ? WHERE trace_id = ?`)
-      .run(endedAt, status, outcome === undefined ? null : JSON.stringify(outcome), this.nextSeq(), traceId);
+    this.db.transaction(() => {
+      this.db.prepare(`UPDATE traces SET ended_at = ?, final_status = ?, outcome_json = COALESCE(?, outcome_json), updated_seq = ? WHERE trace_id = ?`)
+        .run(endedAt, status, outcome === undefined ? null : JSON.stringify(outcome), this.nextSeq(), traceId);
+      // The end writes a whole outcome: the gates already linked to the session's turns go back into it, budgeted
+      // against what the end wrote (the Audit's M1 at a3047a696).
+      this.refreshGates(traceId);
+    })();
   }
 
   /** The sessions with something not yet uploaded (new, or grown since), oldest change first. */
@@ -645,29 +650,51 @@ export class TraceStore {
    * The turns of a project's sessions that ended on a known head, with their session's branch: what a gate's verdict
    * may link to (gate-verdicts.ts).
    */
-  verdictCandidates(projectPath: string): Array<{ traceId: string; startedAt: number; turnIndex: number; endHead: string; branch: string | null }> {
-    return (this.db.prepare(`SELECT w.trace_id, w.started_at, t.turn_index, w.end_head, json_extract(tr.outcome_json, '$.branch') AS branch
+  verdictCandidates(projectPath: string): Array<{ traceId: string; agentId: string; startedAt: number; turnIndex: number; startHead: string | null; endHead: string; branch: string | null }> {
+    return (this.db.prepare(`SELECT w.trace_id, tr.agent_id, w.started_at, t.turn_index, w.start_head, w.end_head, json_extract(tr.outcome_json, '$.branch') AS branch
       FROM workspace_turns w JOIN turns t ON t.trace_id = w.trace_id AND t.started_at = w.started_at
       JOIN traces tr ON tr.trace_id = w.trace_id
       WHERE tr.project_path = ? AND w.end_head IS NOT NULL ORDER BY w.trace_id, t.turn_index`).all(projectPath) as Row[])
-      .map(r => ({ traceId: String(r.trace_id), startedAt: num(r.started_at), turnIndex: num(r.turn_index), endHead: String(r.end_head), branch: optStr(r.branch) ?? null }));
+      .map(r => ({
+        traceId: String(r.trace_id), agentId: String(r.agent_id), startedAt: num(r.started_at), turnIndex: num(r.turn_index),
+        startHead: optStr(r.start_head) ?? null, endHead: String(r.end_head), branch: optStr(r.branch) ?? null,
+      }));
+  }
+
+  /** A project's verdicts: what a session's end links again (gate-verdicts.ts relinkSession). */
+  projectVerdicts(projectPath: string): Array<{ id: number; head: string; branch: string | null }> {
+    return (this.db.prepare('SELECT id, head, branch FROM verdicts WHERE project_path = ? ORDER BY id').all(projectPath) as Row[])
+      .map(r => ({ id: num(r.id), head: String(r.head), branch: optStr(r.branch) ?? null }));
+  }
+
+  /** Turns of one session added to a verdict's links (none taken away); how many were new. */
+  addVerdictLinks(verdictId: number, traceId: string, startedAts: number[]): number {
+    const add = this.db.prepare('INSERT OR IGNORE INTO verdict_links (verdict_id, trace_id, turn_started_at) VALUES (?, ?, ?)');
+    let added = 0;
+    for (const at of startedAts) added += add.run(verdictId, traceId, at).changes;
+    return added;
   }
 
   /**
    * A gate's verdict on a pull request's head, one per project, gate, pull request and head: the latest stands. Not
    * changed when the same verdict, counts and recorder come again (its first moment kept).
    */
-  putVerdict(v: { projectPath: string; gate: string; pr: number; head: string; verdict: string; at: number; by: string; testCommand?: string; passed?: number; failed?: number; skipped?: number; report?: string }): { id: number; changed: boolean } {
+  putVerdict(v: {
+    projectPath: string; gate: string; pr: number; head: string; verdict: string; at: number; by: string; byName?: string; byRole?: string;
+    branch?: string; testCommand?: string; passed?: number; failed?: number; skipped?: number; report?: string;
+  }): { id: number; changed: boolean } {
     const cur = this.db.prepare('SELECT * FROM verdicts WHERE project_path = ? AND gate = ? AND pr = ? AND head = ?').get(v.projectPath, v.gate, v.pr, v.head) as Row | undefined;
     const nul = <T>(x: T | undefined) => (x === undefined ? null : x);
-    const same = !!cur && cur.verdict === v.verdict && cur.by_agent === v.by && cur.test_command === nul(v.testCommand)
+    const same = !!cur && cur.verdict === v.verdict && cur.by_agent === v.by && cur.by_name === nul(v.byName) && cur.by_role === nul(v.byRole)
+      && cur.branch === nul(v.branch) && cur.test_command === nul(v.testCommand)
       && cur.passed === nul(v.passed) && cur.failed === nul(v.failed) && cur.skipped === nul(v.skipped) && cur.report === nul(v.report);
     if (cur && same) return { id: num(cur.id), changed: false };
-    this.db.prepare(`INSERT INTO verdicts (project_path, gate, pr, head, verdict, at, by_agent, test_command, passed, failed, skipped, report)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    this.db.prepare(`INSERT INTO verdicts (project_path, gate, pr, head, verdict, at, by_agent, by_name, by_role, branch, test_command, passed, failed, skipped, report)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       ON CONFLICT(project_path, gate, pr, head) DO UPDATE SET verdict = excluded.verdict, at = excluded.at, by_agent = excluded.by_agent,
+        by_name = excluded.by_name, by_role = excluded.by_role, branch = excluded.branch,
         test_command = excluded.test_command, passed = excluded.passed, failed = excluded.failed, skipped = excluded.skipped, report = excluded.report`)
-      .run(v.projectPath, v.gate, v.pr, v.head, v.verdict, v.at, v.by, nul(v.testCommand), nul(v.passed), nul(v.failed), nul(v.skipped), nul(v.report));
+      .run(v.projectPath, v.gate, v.pr, v.head, v.verdict, v.at, v.by, nul(v.byName), nul(v.byRole), nul(v.branch), nul(v.testCommand), nul(v.passed), nul(v.failed), nul(v.skipped), nul(v.report));
     const row = this.db.prepare('SELECT id FROM verdicts WHERE project_path = ? AND gate = ? AND pr = ? AND head = ?').get(v.projectPath, v.gate, v.pr, v.head) as { id: number };
     return { id: row.id, changed: true };
   }
@@ -712,6 +739,7 @@ export class TraceStore {
     const all = verdicts.map(v => ({
       kind: String(v.gate), verdict: String(v.verdict), at: num(v.at), pr: num(v.pr), head: String(v.head),
       turns: ranges((turnsOf.all(v.id, traceId) as Row[]).map(r => num(r.turn_index))), by: String(v.by_agent),
+      ...(optStr(v.by_name) ? { byName: String(v.by_name) } : {}), ...(optStr(v.by_role) ? { byRole: String(v.by_role) } : {}),
       ...(optStr(v.test_command) ? { testCommand: String(v.test_command) } : {}),
       ...(typeof v.passed === 'number' ? { passed: v.passed } : {}), ...(typeof v.failed === 'number' ? { failed: v.failed } : {}),
       ...(typeof v.skipped === 'number' ? { skipped: v.skipped } : {}), ...(optStr(v.report) ? { report: String(v.report) } : {}),

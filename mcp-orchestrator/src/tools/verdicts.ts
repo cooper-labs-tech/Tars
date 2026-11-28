@@ -12,9 +12,9 @@ export function registerVerdictTools(server: McpServer): void {
   registerTools(server, [
     tool({
       name: "record_verdict",
-      description: "Record a gate's verdict on a pull request's head, as data: gate (qa, audit or ci), the pull request's number, the judged head's full commit hash, merge or no_merge, and the test counts when you ran tests. Recorded in your own name, for your project; the latest verdict for a gate, pull request and head stands. Tars links it to the traced turns that made that head and puts it in their sessions' outcome.",
+      description: "Record a gate's verdict on a pull request's head, as data: gate (qa or audit), the pull request's number, the judged head's full commit hash, merge or no_merge, and the test counts when you ran tests. Recorded in your own name and role, for your project; the latest verdict for a gate, pull request and head stands. Refused on your own work (your traced turns made that head or a commit before it). Tars links it to the traced turns that made that head and puts it in their sessions' outcome; CI's verdict Tars reads itself from the pull request's checks.",
       schema: {
-        gate: z.enum(["qa", "audit", "ci"]).describe("Which gate judged."),
+        gate: z.enum(["qa", "audit"]).describe("Which gate judged."),
         pr: z.number().int().min(1).describe("The pull request's number."),
         head: z.string().regex(/^([0-9a-fA-F]{40}|[0-9a-fA-F]{64})$/).describe("The full hash of the commit judged (the pull request's head at the time)."),
         verdict: z.enum(["merge", "no_merge"]).describe("MERGE or NO-MERGE."),
@@ -30,9 +30,9 @@ export function registerVerdictTools(server: McpServer): void {
         const r = (await apiRequest("/api/verdicts", "POST", {
           gate: args.gate, pr: args.pr, head: args.head, verdict: args.verdict, branch: args.branch, testCommand: args.test_command,
           passed: args.passed, failed: args.failed, skipped: args.skipped, report: args.report,
-        })) as { changed: boolean; linked: Array<{ traceId: string; turnIndex: number }> };
+        })) as { changed: boolean; linked: Array<{ traceId: string; turnIndex: number }>; incomplete?: boolean };
         const sessions = new Set(r.linked.map(l => l.traceId)).size;
-        return text(`Recorded ${args.gate} ${args.verdict} on #${args.pr} at ${args.head.slice(0, 9)}${r.changed ? "" : " (the same verdict was already recorded)"}: linked to ${r.linked.length} traced turn(s) in ${sessions} session(s).`);
+        return text(`Recorded ${args.gate} ${args.verdict} on #${args.pr} at ${args.head.slice(0, 9)}${r.changed ? "" : " (the same verdict was already recorded)"}: linked to ${r.linked.length} traced turn(s) in ${sessions} session(s)${r.incomplete ? "; some earlier commits on the branch were not checked in time" : ""}.`);
       },
     }),
   ]);

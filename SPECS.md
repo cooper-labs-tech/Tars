@@ -288,15 +288,25 @@ from the window, or from an agent's drop file (`~/.tars/endpoint-keys/<name>.key
   reads touch the checkout (safeGit, `--no-optional-locks`: no index refresh, no lock, no object written), each
   bounded; what failed or timed out is null, never 0. The file versions kept to count survival stay in the store,
   local, counted against the cap and deleted with the session;
-- the gates' verdicts (`gate-verdicts.ts`): QA's, the Audit's or CI's merge or no_merge on a pull request's head,
-  recorded by the agent that gates through the MCP tool `record_verdict` (`POST /api/verdicts`, its own token, in its
-  own name, for its own project; the latest per gate, pull request and head stands), and CI's by Tars from
-  `gh pr checks` (all passed: merge; one failed: no_merge; running or none: nothing). Each is linked to the turns of
-  the project whose end head is the judged head, and to those on the pull request's branch whose end head is an
-  ancestor of it (`merge-base --is-ancestor`; the branch from the verdict, else `gh pr view`, bounded; without it, the
-  exact head alone), and carried in those sessions' outcome as `gates`, the change sequence moved on a change. The
-  turns a gate covers are inclusive ranges of turn indexes; the newest gates are kept while the outcome stays within
-  12 KiB (the back office takes 16 KiB), and the others are counted in `gatesOmitted`.
+- the gates' verdicts (`gate-verdicts.ts`): QA's, the Audit's or CI's merge or no_merge on a pull request's head.
+  - **Who records:** `qa` and `audit` by the agent that gates, through the MCP tool `record_verdict`
+    (`POST /api/verdicts`), with its own token, in its own name, for its own project, with its name and role from the
+    fleet. `ci` by Tars alone, from `gh pr checks` (all passed: merge; one failed: no_merge; running or none: nothing);
+    an agent's `ci` is refused. A qa or audit verdict on the recorder's own work is refused: one of its own traced
+    turns moved its checkout to the judged head, or to a linked ancestor. The latest per gate, pull request and head
+    stands.
+  - **Linked turns:** the project's turns whose end head is the judged head, in any session, turns that only sat on
+    it included, on purpose: the verdict is on the state they ended in, and a reader tells the turns that moved the
+    head by their start head. Also the turns on the pull request's branch whose end head is an ancestor of it
+    (`merge-base --is-ancestor`; the branch from the verdict, else `gh pr view`; without either, the exact head
+    alone). A session's branch is its outcome's once it ended, else the one its folder is on while it runs. At a
+    session's end its gates are kept, and the project's verdicts are linked again for it, its branch now known.
+  - **Bounds:** every end head is checked as a hash before git sees it, and the whole call stays within 15 s
+    (`incomplete` when ancestors were left unchecked).
+  - **In the outcome** as `gates` (with `by`, `byName`, `byRole`), the change sequence moved on a change. The turns
+    are inclusive ranges of turn indexes. The newest gates are kept while the whole outcome stays within 12 KiB (the
+    back office takes 16 KiB), the others counted in `gatesOmitted`. What the session's end writes into the outcome
+    comes first and the gates take what is left, so a session whose tasks fill 12 KiB carries no gate.
 
 Retention and a size cap come from Settings. The back-office reads it through `window.electronAPI.traces`. An external
 reader reads it through `GET /api/traces/*`, with its own token, as the reader's trace format tables.

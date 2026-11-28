@@ -110,12 +110,15 @@ const PASS_PAGES = 200;
 const PASS_SESSIONS = 2000;
 const sha256 = (b: Buffer): string => createHash('sha256').update(b).digest('hex');
 
-/** The outcome as it goes up: a gate's report path (a file on this computer) stays here. */
+/**
+ * The outcome as it goes up: a gate's report path (a file on this computer) stays here, and so does its recorder's
+ * name, as every agent's name does (its id and role go).
+ */
 function withoutReports(outcome: unknown): unknown {
   if (!outcome || typeof outcome !== 'object') return outcome;
   const o = outcome as { gates?: unknown };
   if (!Array.isArray(o.gates)) return outcome;
-  return { ...o, gates: o.gates.map((g) => { if (!g || typeof g !== 'object') return g; const { report: _r, ...rest } = g as Record<string, unknown>; return rest; }) };
+  return { ...o, gates: o.gates.map((g) => { if (!g || typeof g !== 'object') return g; const { report: _r, byName: _n, ...rest } = g as Record<string, unknown>; return rest; }) };
 }
 
 /**
