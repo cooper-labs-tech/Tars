@@ -25,12 +25,98 @@ import { tarsInstanceId } from '../core/agent-tokens';
 // ============== Helper Functions ==============
 
 /**
+ * The CLI homes the registration reaches besides HOME: the folders it writes into (codex, opencode, gemini, grok, pi),
+ * and claude's own, which the `claude mcp` it runs inherits (execCliSync hands it no env of its own on macOS and Linux).
+ * Each must lie inside the sandbox, and none inside the account's home, for the seam below. A provider whose home a
+ * variable moves, and which the registration writes into, adds that variable here.
+ */
+const CLI_HOME_VARS = [
+  'CODEX_HOME', 'XDG_CONFIG_HOME', 'GEMINI_CLI_HOME', 'GROK_HOME', 'PI_CODING_AGENT_DIR',
+  'CLAUDE_CONFIG_DIR', 'CLAUDE_SECURESTORAGE_CONFIG_DIR',
+] as const;
+
+/**
+ * A path as the system reaches it, for the seam below to compare folders and not spellings: each part taken in turn,
+ * every link followed (one leading nowhere yet as well: a CLI would make the folder at its end), '..' climbing from
+ * where a link led, the case the disk keeps for what exists, and what does not exist yet appended as written. Throws on
+ * a loop of links.
+ */
+function reachedPath(p: string): string {
+  const absolute = path.isAbsolute(p) ? p : `${process.cwd()}${path.sep}${p}`;
+  const partsOf = (from: string) => from.slice(path.parse(from).root.length).split(/[\\/]+/).filter(Boolean);
+  const todo = partsOf(absolute);
+  let at = fs.realpathSync.native(path.parse(absolute).root);
+  for (let links = 0; todo.length;) {
+    const part = todo.shift() as string;
+    if (part === '.') continue;
+    if (part === '..') { at = path.dirname(at); continue; }
+    const next = path.join(at, part);
+    let entry: fs.Stats | null = null;
+    try { entry = fs.lstatSync(next); } catch { /* not there yet */ }
+    if (entry?.isSymbolicLink()) {
+      if (++links > 40) throw new Error(`a loop of links at ${next}`);
+      const target = fs.readlinkSync(next);
+      if (path.isAbsolute(target)) at = fs.realpathSync.native(path.parse(target).root);
+      todo.unshift(...partsOf(target));
+      continue;
+    }
+    at = entry ? fs.realpathSync.native(next) : next;
+  }
+  return at;
+}
+
+/**
+ * An E2E spec's own built bundles (DOROTHY_E2E_MCP_BUNDLES), for the start-up registration to register as a packaged
+ * Tars registers the app's: read under DOROTHY_E2E only, never by a packaged build, and only as an absolute folder that
+ * holds the orchestrator's bundle. Null as well while HOME is the account's own home, inside it or above it (HOME=/Users,
+ * or /, holds it), or while a CLI home the registration reaches (CLI_HOME_VARS) lies inside the account's home or
+ * outside HOME, each path compared as the system reaches it (reachedPath: a link is the folder it leads to): a dev
+ * run would write the tree's paths into the real home's CLI configs, the #201 incident. Without it a dev or E2E Tars
+ * finds no bundle under process.resourcesPath (Electron's own folder) and registers nothing, by design.
+ */
+export function e2eMcpBundlesDir(
+  env: NodeJS.ProcessEnv,
+  packaged: boolean,
+  homes: { home: string; account: string } = { home: os.homedir(), account: os.userInfo().homedir },
+): string | null {
+  if (packaged || env.DOROTHY_E2E !== '1' || !env.DOROTHY_E2E_MCP_BUNDLES) return null;
+  const dir = env.DOROTHY_E2E_MCP_BUNDLES;
+  const refuse = (why: string): null => { console.warn(`[mcp] DOROTHY_E2E_MCP_BUNDLES ignored: ${why}`); return null; };
+  // Folders, not spellings: each path as the system reaches it (links followed, the disk's case), null on a loop.
+  const reached = (p: string): string | null => { try { return reachedPath(p); } catch { return null; } };
+  const inside = (parent: string, child: string) => {
+    const rel = path.relative(parent, child);
+    return rel === '' || (!rel.startsWith('..') && !path.isAbsolute(rel));
+  };
+  if (!path.isAbsolute(dir)) return refuse('not an absolute folder');
+  if (!fs.existsSync(path.join(dir, 'mcp-orchestrator', 'dist', 'bundle.js'))) return refuse(`no mcp-orchestrator/dist/bundle.js under ${dir}`);
+  const home = reached(homes.home);
+  const account = reached(homes.account);
+  if (home === null || account === null) return refuse('HOME, or the account\'s own home, leads into a loop of links');
+  if (inside(account, home)) return refuse('HOME is the account\'s own home, not a sandbox');
+  if (inside(home, account)) return refuse('HOME holds the account\'s own home, not a sandbox');
+  for (const name of CLI_HOME_VARS) {
+    if (!env[name]) continue;
+    const value = reached(env[name] as string);
+    if (value === null) return refuse(`${name} leads into a loop of links`);
+    if (inside(account, value)) return refuse(`${name} lies inside the account's own home`);
+    if (!inside(home, value)) return refuse(`${name} lies outside the sandbox's HOME`);
+  }
+  return dir;
+}
+
+/** Where the bundles are read from: the app's resources, or the tree main.ts set from e2eMcpBundlesDir at start. */
+let testBundlesDir: string | null = null;
+export function useTestMcpBundles(dir: string | null): void { testBundlesDir = dir; }
+function bundlesDir(): string { return testBundlesDir ?? process.resourcesPath; }
+
+/**
  * Get the path to the bundled MCP orchestrator
  * Always uses the packaged app path - MCP servers are bundled in extraResources
  */
 export function getMcpOrchestratorPath(): string {
   // Always use the packaged app path - works for all users
-  return path.join(process.resourcesPath, 'mcp-orchestrator', 'dist', 'bundle.js');
+  return path.join(bundlesDir(), 'mcp-orchestrator', 'dist', 'bundle.js');
 }
 
 /**
@@ -41,7 +127,7 @@ export function getMcpOrchestratorPath(): string {
  */
 export function getMcpTelegramPath(): string {
   // Always use the packaged app path - works for all users
-  return path.join(process.resourcesPath, 'mcp-telegram', 'dist', 'bundle.js');
+  return path.join(bundlesDir(), 'mcp-telegram', 'dist', 'bundle.js');
 }
 
 /**
@@ -50,7 +136,7 @@ export function getMcpTelegramPath(): string {
  */
 export function getMcpKanbanPath(): string {
   // Always use the packaged app path - works for all users
-  return path.join(process.resourcesPath, 'mcp-kanban', 'dist', 'bundle.js');
+  return path.join(bundlesDir(), 'mcp-kanban', 'dist', 'bundle.js');
 }
 
 /**
@@ -58,7 +144,7 @@ export function getMcpKanbanPath(): string {
  * Always uses the packaged app path - MCP servers are bundled in extraResources
  */
 export function getMcpVaultPath(): string {
-  return path.join(process.resourcesPath, 'mcp-vault', 'dist', 'bundle.js');
+  return path.join(bundlesDir(), 'mcp-vault', 'dist', 'bundle.js');
 }
 
 /**
@@ -66,7 +152,7 @@ export function getMcpVaultPath(): string {
  * Always uses the packaged app path - MCP servers are bundled in extraResources
  */
 export function getMcpSocialDataPath(): string {
-  return path.join(process.resourcesPath, 'mcp-socialdata', 'dist', 'bundle.js');
+  return path.join(bundlesDir(), 'mcp-socialdata', 'dist', 'bundle.js');
 }
 
 /**
@@ -74,7 +160,7 @@ export function getMcpSocialDataPath(): string {
  * Always uses the packaged app path - MCP servers are bundled in extraResources
  */
 export function getMcpXPath(): string {
-  return path.join(process.resourcesPath, 'mcp-x', 'dist', 'bundle.js');
+  return path.join(bundlesDir(), 'mcp-x', 'dist', 'bundle.js');
 }
 
 /**
@@ -82,7 +168,7 @@ export function getMcpXPath(): string {
  * This is the one that makes memory provider-agnostic: every CLI gets it.
  */
 export function getMcpMemoryPath(): string {
-  return path.join(process.resourcesPath, 'mcp-memory', 'dist', 'bundle.js');
+  return path.join(bundlesDir(), 'mcp-memory', 'dist', 'bundle.js');
 }
 
 /**
