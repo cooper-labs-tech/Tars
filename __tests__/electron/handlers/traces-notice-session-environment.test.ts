@@ -87,6 +87,7 @@ const OTHER_LINES: Record<string, RegExp> = {
   'session.autoCompaction': /whether the harness compacts its history on its own/,
   'session.compactions': /when the harness compacted or cut its history, and the prompt's length before and after/,
   'request.contextReset': /which requests came after the history was rewritten, and how many tokens it dropped/,
+  'session.compactionsOmitted': /how many of a session's compactions were left out past its newest 200/,
 };
 
 describe('the upload notice', () => {
