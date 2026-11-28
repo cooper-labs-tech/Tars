@@ -740,7 +740,10 @@ function readCompactionsOf(live: LiveSession, folder: string | undefined, endedA
       harness: live.harness, codexHome: codexHome(), qwenHome: path.join(os.homedir(), '.qwen'), cwd: folder,
       nativeSessionId, startedAt: live.startedAt, endedAt,
     }).then((events) => {
-      traceStore().applyHarnessCompactions(live.traceId, events);
+      // The runtime stopped meanwhile (Tars quitting): nothing is written, and the store the stop closed stays closed
+      // (traceStore() would open it again). As noteToolCall checks.
+      if (!deps || !store) return;
+      store.applyHarnessCompactions(live.traceId, events);
       changed();
     }).catch(failed);
   } catch (err) {
