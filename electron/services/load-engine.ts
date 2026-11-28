@@ -3,7 +3,7 @@ import * as path from 'path';
 import { writeSecretFileSync } from '../utils/secret-file';
 import { resolveWorktreePath } from '../utils/worktree-path';
 import { LOAD_HARNESSES, type LoadHarness, type LoadTask } from './load-pool';
-import type { LoadArrival, LoadBlockReason } from './load-run-record';
+import type { LoadArrival, LoadBlockReason, LoadRunAgent } from './load-run-record';
 import { loadBranchOf } from './load-session';
 
 /**
@@ -49,7 +49,7 @@ export interface LoadEngineDeps {
   endRun(runId: string, stop: { reason: 'error'; at: number; detail: string }): void;
   /** The harnesses the project's grant runs. */
   grantHarnesses(project: string): string[];
-  loadAgents(): Array<{ id: string; projectPath: string; provider: string; status: string }>;
+  loadAgents(): Array<{ id: string; name: string; projectPath: string; provider: string; status: string }>;
   /** The busy cap's seam (#593's capVerdict): ok, or why not. */
   busyCap(project: string): { ok: boolean; reason?: string };
   /** git in a folder, through safe-git: its output, or a throw. */
@@ -84,17 +84,51 @@ export function createLoadEngine(deps: LoadEngineDeps) {
   const timers = new Map<string, unknown[]>();
   const open = new Map<string, Session>();
 
-  function readState(): Made[] {
+  /** The private state: the worktrees made (what cleanup reads), and each run's progress (what the card shows). */
+  interface State { worktrees: Made[]; progress: Record<string, LoadArrival[]> }
+  function readFile(): State {
     try {
-      const raw = JSON.parse(fs.readFileSync(deps.stateFile, 'utf8')) as { worktrees?: unknown };
-      return Array.isArray(raw?.worktrees) ? raw.worktrees.filter((w): w is Made => !!w && typeof (w as Made).path === 'string' && typeof (w as Made).project === 'string' && typeof (w as Made).branch === 'string') : [];
+      const raw = JSON.parse(fs.readFileSync(deps.stateFile, 'utf8')) as { worktrees?: unknown; progress?: unknown };
+      return {
+        worktrees: Array.isArray(raw?.worktrees) ? raw.worktrees.filter((w): w is Made => !!w && typeof (w as Made).path === 'string' && typeof (w as Made).project === 'string' && typeof (w as Made).branch === 'string') : [],
+        progress: raw?.progress && typeof raw.progress === 'object' ? raw.progress as Record<string, LoadArrival[]> : {},
+      };
     } catch {
-      return [];
+      return { worktrees: [], progress: {} };
     }
   }
-  function writeState(worktrees: Made[]): void {
+  function writeFile(state: State): void {
     fs.mkdirSync(path.dirname(deps.stateFile), { recursive: true, mode: 0o700 });
-    writeSecretFileSync(deps.stateFile, `${JSON.stringify({ version: 1, worktrees }, null, 2)}\n`);
+    writeSecretFileSync(deps.stateFile, `${JSON.stringify({ version: 1, ...state }, null, 2)}\n`);
+  }
+  const readState = (): Made[] => readFile().worktrees;
+  const writeState = (worktrees: Made[]): void => writeFile({ ...readFile(), worktrees });
+
+  /**
+   * The progress the engine holds, run by run: its arrivals as they went. Kept with the private state too, for the
+   * card after a restart; the run's log under ~/.tars gets a copy, and is read for nothing (the Audit's Infos on #685).
+   */
+  const progressOf = new Map<string, Map<number, LoadArrival>>();
+  function note(runId: string, arrival: LoadArrival): void {
+    const held = progressOf.get(runId) ?? new Map((readFile().progress[runId] ?? []).map(a => [a.n, a] as const));
+    held.set(arrival.n, arrival);
+    progressOf.set(runId, held);
+    const state = readFile();
+    writeFile({ ...state, progress: { ...state.progress, [runId]: [...held.values()].sort((x, y) => x.n - y.n) } });
+    deps.logArrival(runId, arrival);
+  }
+
+  /** A run's progress as the engine holds it: its arrivals, and the load agents that ran them. */
+  function progress(runId: string): { arrivals: LoadArrival[]; agents: LoadRunAgent[] } | undefined {
+    const arrivals = progressOf.has(runId) ? [...progressOf.get(runId)!.values()].sort((x, y) => x.n - y.n) : readFile().progress[runId];
+    if (!arrivals) return undefined;
+    const fleet = deps.loadAgents();
+    const agents = [...new Set(arrivals.map(a => a.agentId).filter((id): id is string => !!id))].map((agentId) => {
+      const a = fleet.find(x => x.id === agentId);
+      const first = arrivals.find(x => x.agentId === agentId)!;
+      return { agentId, name: a?.name ?? agentId, project: a?.projectPath ?? '', harness: (first.harness ?? a?.provider) as LoadHarness, created: false };
+    });
+    return { arrivals, agents };
   }
 
   async function removeWorktree(m: Made): Promise<void> {
@@ -115,7 +149,7 @@ export function createLoadEngine(deps: LoadEngineDeps) {
     open.delete(s.made.agentId);
     deps.clearTimer(s.capTimer);
     s.arrival = { ...s.arrival, end: how, endedAt: deps.now() };
-    deps.logArrival(s.runId, s.arrival);
+    note(s.runId, s.arrival);
     await deps.stopSession(s.made.agentId).catch(err => console.error(`[load] the session of ${s.made.agentId} did not stop: ${(err as Error).message}`));
     deps.release(s.made.agentId);
     await removeWorktree(s.made);
@@ -142,7 +176,7 @@ export function createLoadEngine(deps: LoadEngineDeps) {
     const arrival: LoadArrival = { n: planned.n, taskId: planned.taskId, plannedAt: planned.plannedAt, actualAt: now };
     const block = (reason: LoadBlockReason, detail?: string) => {
       console.log(`[load] arrival ${planned.n} of ${runId} blocked: ${reason}${detail ? ` (${detail})` : ''}`);
-      deps.logArrival(runId, { ...arrival, blocked: reason, ...(detail ? { blockedDetail: detail } : {}) });
+      note(runId, { ...arrival, blocked: reason, ...(detail ? { blockedDetail: detail } : {}) });
     };
     if ([...open.values()].filter(s => s.runId === runId).length >= plan.window.max_concurrent) { block('max_concurrent'); return; }
     const cap = deps.busyCap(task.project);
@@ -156,7 +190,7 @@ export function createLoadEngine(deps: LoadEngineDeps) {
     const started: LoadArrival = { ...arrival, agentId: agent.id, harness: agent.provider as LoadHarness };
     const fail = (detail: string) => {
       console.error(`[load] arrival ${planned.n} of ${runId} did not start: ${detail}`);
-      deps.logArrival(runId, { ...started, end: 'error', endedAt: deps.now() });
+      note(runId, { ...started, end: 'error', endedAt: deps.now() });
     };
     const branch = loadBranchOf(runId, task.task_id, planned.n);
     const where = fs.existsSync(task.project) ? resolveWorktreePath(task.project, branch) : undefined;
@@ -177,7 +211,7 @@ export function createLoadEngine(deps: LoadEngineDeps) {
       return;
     }
     console.log(`[load] arrival ${planned.n} of ${runId} starts: ${agent.id} in ${where}`);
-    deps.logArrival(runId, started);
+    note(runId, started);
     deps.prepare(agent.id, where);
     const launched = await deps.launch(agent.id, `${loadPreamble(path.basename(task.project))}\n\n${task.prompt}`, null)
       .catch(err => ({ ok: false, error: (err as Error).message }));
@@ -216,13 +250,16 @@ export function createLoadEngine(deps: LoadEngineDeps) {
    */
   async function recover(runningRunIds: string[]): Promise<void> {
     for (const m of readState()) {
+      // The session the restart cut: stopped, in the progress the card shows.
+      const was = (readFile().progress[m.runId] ?? []).find(a => a.n === m.n);
+      if (was && !was.end) note(m.runId, { ...was, end: 'stopped', endedAt: deps.now() });
       deps.release(m.agentId);
       await removeWorktree(m);
     }
     for (const runId of runningRunIds) deps.endRun(runId, { reason: 'error', at: deps.now(), detail: 'Tars restarted during the window' });
   }
 
-  return { start, stop, recover };
+  return { start, stop, recover, progress };
 }
 
 export type LoadEngine = ReturnType<typeof createLoadEngine>;

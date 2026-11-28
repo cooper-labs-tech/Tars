@@ -103,6 +103,8 @@ export function registerLoadHandlers(deps: LoadHandlerDeps): { window: LoadWindo
     now: deps.now ?? Date.now,
     emit: tell,
     startRun: (run, planned) => { startEngine(run.runId, planned).catch(err => console.error(`[load] ${run.runId} not started: ${(err as Error).message}`)); },
+    // The card's live progress: the engine's own, never the log (the Audit's Infos on #685).
+    progress: runId => engine.progress(runId),
     stopRun: (runId) => { void engine.stop(runId); },
   };
   const window = createLoadWindow(windowDeps);
@@ -122,7 +124,7 @@ export function registerLoadHandlers(deps: LoadHandlerDeps): { window: LoadWindo
     endRun: (runId, stopped) => window.endRun(runId, stopped),
     grantHarnesses: project => readGrants(dirs.grants).find(g => g.path === project)?.harnesses ?? [],
     loadAgents: () => [...deps.agents.values()].filter(a => a.load === true)
-      .map(a => ({ id: a.id, projectPath: a.projectPath, provider: String(a.provider ?? ''), status: a.status })),
+      .map(a => ({ id: a.id, name: a.name ?? a.id, projectPath: a.projectPath, provider: String(a.provider ?? ''), status: a.status })),
     // The busy cap's seam, shaped like #593's capVerdict (core/project-cap.ts): every arrival allowed until it lands.
     busyCap: () => ({ ok: true }),
     git: (cwd, args) => safeGit(cwd, args, { timeout: 60_000 }).then(r => r.stdout),
