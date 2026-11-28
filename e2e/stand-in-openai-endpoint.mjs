@@ -42,10 +42,9 @@ export function shellToolOf(tools) {
   return tools.find((t) => SHELL_NAMES.test(t.name)) || tools.find((t) => /shell|bash|exec|command/i.test(t.name));
 }
 
-/** Arguments for that tool that print the marker, built from its schema. */
-export function shellArgsFor(tool, marker) {
+/** Arguments for that tool that print the marker, built from its schema; or that run `line`, when given. */
+export function shellArgsFor(tool, marker, line = `echo ${marker}`) {
   const props = asObj(tool.parameters.properties);
-  const line = `echo ${marker}`;
   const args = {};
   if (asObj(props.command).type === 'array') args.command = ['sh', '-c', line];
   else if (props.cmd) args.cmd = line;
@@ -95,8 +94,25 @@ export function responsesToolResult(input) {
   return results.length ? results.map((m) => textOf(m.output)).join('\n') : null;
 }
 
-/** What the model "decides": a call to the shell tool, or the final text. */
+/**
+ * What the model "decides": a call to the shell tool, or the final text. A task that says `TOOLS <s>:<n>,...` (trace
+ * feature C1) is asked, in one answer, for one call per pair, run together: `sleep <s>; exit <n>`; once their results
+ * are back, it answers `TOOLS-DONE`.
+ */
 export function decide(body, toolResult, marker) {
+  const said = textOf(asObj(asArr(body.messages ?? body.input).map(asObj).filter((m) => m.role === 'user' && !isReminderOnly(m)).pop()).content);
+  const tools = /\bTOOLS ((?:[0-9.]+:\d+,?)+)/.exec(said);
+  if (tools) {
+    if (toolResult !== null) return { text: 'TOOLS-DONE' };
+    const tool = shellToolOf(toolsOf(body));
+    if (!tool) return { text: 'PROBE-NO-SHELL-TOOL' };
+    return {
+      calls: tools[1].split(',').filter(Boolean).map((pair) => {
+        const [s, n] = pair.split(':');
+        return { id: `call_${randomBytes(6).toString('hex')}`, name: tool.name, arguments: JSON.stringify(shellArgsFor(tool, marker, `sleep ${s}; exit ${n}`)) };
+      }),
+    };
+  }
   if (toolResult !== null) {
     const m = /TARS-PROBE-[0-9a-f]{8}/.exec(toolResult);
     return { text: m ? `PROBE-OK ${m[0]}` : 'PROBE-NO-RESULT' };
@@ -136,10 +152,11 @@ async function answerChat(body, res, marker, chunkDelayMs = 0, emptyFirstChunk =
     return { lastChunkAt: Date.now(), requestId: `standin-${id}` };
   }
   const d = decide(body, chatToolResult(body.messages), marker);
-  const finish = d.call ? 'tool_calls' : 'stop';
+  const calls = d.calls ?? (d.call ? [d.call] : []);
+  const finish = calls.length ? 'tool_calls' : 'stop';
   if (!body.stream) {
-    const message = d.call
-      ? { role: 'assistant', content: null, tool_calls: [{ id: d.call.id, type: 'function', function: { name: d.call.name, arguments: d.call.arguments } }] }
+    const message = calls.length
+      ? { role: 'assistant', content: null, tool_calls: calls.map((c) => ({ id: c.id, type: 'function', function: { name: c.name, arguments: c.arguments } })) }
       : { role: 'assistant', content: d.text };
     res.writeHead(200, { 'Content-Type': 'application/json', 'X-Request-Id': `standin-${id}` });
     res.end(JSON.stringify({ id, object: 'chat.completion', created: Math.floor(Date.now() / 1000), model: MODEL_ID, choices: [{ index: 0, message, finish_reason: finish }], usage: USAGE }));
@@ -156,12 +173,14 @@ async function answerChat(body, res, marker, chunkDelayMs = 0, emptyFirstChunk =
   // A model takes its time between tokens: with a delay, a relay that buffers shows (the first chunk would reach the
   // client only once the last is sent).
   if (chunkDelayMs && !emptyFirstChunk) await pause(chunkDelayMs);
-  if (d.call) {
-    sse(res, { ...base, choices: [{ index: 0, delta: { tool_calls: [{ index: 0, id: d.call.id, type: 'function', function: { name: d.call.name, arguments: '' } }] }, finish_reason: null }] });
-    const half = Math.floor(d.call.arguments.length / 2);
-    for (const piece of [d.call.arguments.slice(0, half), d.call.arguments.slice(half)]) {
-      sse(res, { ...base, choices: [{ index: 0, delta: { tool_calls: [{ index: 0, function: { arguments: piece } }] }, finish_reason: null }] });
-    }
+  if (calls.length) {
+    calls.forEach((call, index) => {
+      sse(res, { ...base, choices: [{ index: 0, delta: { tool_calls: [{ index, id: call.id, type: 'function', function: { name: call.name, arguments: '' } }] }, finish_reason: null }] });
+      const half = Math.floor(call.arguments.length / 2);
+      for (const piece of [call.arguments.slice(0, half), call.arguments.slice(half)]) {
+        sse(res, { ...base, choices: [{ index: 0, delta: { tool_calls: [{ index, function: { arguments: piece } }] }, finish_reason: null }] });
+      }
+    });
   } else {
     for (const word of d.text.split(/(?= )/)) sse(res, { ...base, choices: [{ index: 0, delta: { content: word }, finish_reason: null }] });
   }
@@ -173,11 +192,12 @@ async function answerChat(body, res, marker, chunkDelayMs = 0, emptyFirstChunk =
 
 function answerResponses(body, res, marker) {
   const d = decide(body, responsesToolResult(body.input), marker);
+  const calls = d.calls ?? (d.call ? [d.call] : []);
   const id = `resp_${randomBytes(6).toString('hex')}`;
-  const item = d.call
-    ? { type: 'function_call', id: `fc_${randomBytes(6).toString('hex')}`, call_id: d.call.id, name: d.call.name, arguments: d.call.arguments, status: 'completed' }
-    : { type: 'message', id: `msg_${randomBytes(6).toString('hex')}`, role: 'assistant', status: 'completed', content: [{ type: 'output_text', text: d.text, annotations: [] }] };
-  const response = { id, object: 'response', created_at: Math.floor(Date.now() / 1000), model: MODEL_ID, status: 'completed', output: [item], usage: RESP_USAGE };
+  const output = calls.length
+    ? calls.map((c) => ({ type: 'function_call', id: `fc_${randomBytes(6).toString('hex')}`, call_id: c.id, name: c.name, arguments: c.arguments, status: 'completed' }))
+    : [{ type: 'message', id: `msg_${randomBytes(6).toString('hex')}`, role: 'assistant', status: 'completed', content: [{ type: 'output_text', text: d.text, annotations: [] }] }];
+  const response = { id, object: 'response', created_at: Math.floor(Date.now() / 1000), model: MODEL_ID, status: 'completed', output, usage: RESP_USAGE };
   if (!body.stream) {
     res.writeHead(200, { 'Content-Type': 'application/json', 'X-Request-Id': `standin-${id}` });
     res.end(JSON.stringify(response));
@@ -185,13 +205,15 @@ function answerResponses(body, res, marker) {
   }
   res.writeHead(200, { 'Content-Type': 'text/event-stream', 'Cache-Control': 'no-cache', 'X-Request-Id': `standin-${id}` });
   sse(res, { type: 'response.created', response: { ...response, status: 'in_progress', output: [] } }, 'response.created');
-  sse(res, { type: 'response.output_item.added', output_index: 0, item: { ...item, status: 'in_progress' } }, 'response.output_item.added');
-  if (d.call) {
-    sse(res, { type: 'response.function_call_arguments.delta', output_index: 0, item_id: item.id, delta: d.call.arguments }, 'response.function_call_arguments.delta');
-  } else {
-    sse(res, { type: 'response.output_text.delta', output_index: 0, item_id: item.id, content_index: 0, delta: d.text }, 'response.output_text.delta');
-  }
-  sse(res, { type: 'response.output_item.done', output_index: 0, item }, 'response.output_item.done');
+  output.forEach((item, at) => {
+    sse(res, { type: 'response.output_item.added', output_index: at, item: { ...item, status: 'in_progress' } }, 'response.output_item.added');
+    if (item.type === 'function_call') {
+      sse(res, { type: 'response.function_call_arguments.delta', output_index: at, item_id: item.id, delta: item.arguments }, 'response.function_call_arguments.delta');
+    } else {
+      sse(res, { type: 'response.output_text.delta', output_index: at, item_id: item.id, content_index: 0, delta: d.text }, 'response.output_text.delta');
+    }
+    sse(res, { type: 'response.output_item.done', output_index: at, item }, 'response.output_item.done');
+  });
   sse(res, { type: 'response.completed', response }, 'response.completed');
   res.end();
 }

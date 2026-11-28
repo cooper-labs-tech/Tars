@@ -25,14 +25,16 @@
 //   FAKE_CODEX_SIGN_IN=1 it reads its login as codex does by default, from its home's auth.json, and a home with none
 //   shows 0.163's sign-in screen, waits for a key and writes no session (measured on 0.163); without, it is signed in.
 // - `--version` answers `codex-cli 0.163.0`, and logs the HOME, CODEX_HOME, npm prefix and working folder it was given;
-// - on an inference endpoint (Tars's `-c model_providers.<id>...`), a turn is a model's over Responses, in the shape
-//   codex 0.170 sends (endpointTurn below).
+// - on an inference endpoint (the provider Tars names with `-c model_provider=...` and `-c model_providers.<id>...`), a
+//   turn is a model's through Tars's proxy, over Responses in the request codex 0.170 sends, and each command the
+//   model asks for goes into the rollout in codex 0.170's lines (endpointTurn, below).
 // Every launch and turn is logged to FAKE_CODEX_LOG, one JSON line each, with whether the agent's token was in its
 // environment, never the token.
 import fs from 'node:fs';
 import path from 'node:path';
 import { randomUUID } from 'node:crypto';
 import { spawn } from 'node:child_process';
+import { runFakeCommand } from './fake-command.mjs';
 
 const LOG = process.env.FAKE_CODEX_LOG;
 const log = (entry) => { if (LOG) fs.appendFileSync(LOG, JSON.stringify({ t: new Date().toISOString(), pid: process.pid, ...entry }) + '\n'); };
@@ -241,11 +243,9 @@ function callTars(tool, args) {
 }
 
 /**
- * On an inference endpoint (Tars's `-c model_providers.<id>.base_url=...`, `env_key=...` and `model_provider=...`), a
- * turn is a model's, over Responses, in the shape codex 0.170 sends (the capture of 26/11, ids made here): the
- * session-id, thread-id and x-codex-turn-metadata headers, and client_metadata in the body, both carrying the
- * installation id codex keeps in its home (`installation_id`, made on first use). A shell call the endpoint asks for
- * is answered as its words say (an echo prints its argument) and sent back; at most four requests a turn.
+ * On an inference endpoint: the provider Tars names on the command line, as codex takes it (`-c model_provider=...`,
+ * `-c model_providers.<id>.base_url=...`, its token in the variable `env_key` names). The installation id codex keeps
+ * in its home (`installation_id`, made on first use) goes with every request (endpointTurn, below).
  */
 const configValue = (key) => opts.configs.find(c => c.startsWith(`${key}=`))?.slice(key.length + 1).replace(/^"|"$/g, '') ?? null;
 const providerId = configValue('model_provider');
@@ -259,40 +259,6 @@ function installationId() {
   fs.mkdirSync(home, { recursive: true });
   fs.writeFileSync(file, id);
   return id;
-}
-async function endpointTurn(text) {
-  const key = (endpoint.keyVar && process.env[endpoint.keyVar]) || '';
-  const install = installationId();
-  const turnId = randomUUID();
-  const turnMetadata = JSON.stringify({ installation_id: install, session_id: sessionId, thread_id: sessionId, turn_id: turnId, window_id: `${sessionId}:0`, request_kind: 'turn', model: opts.model, reasoning_effort: effort ?? 'medium' });
-  const tools = [{ type: 'function', name: 'exec_command', description: 'Runs a command', strict: false, parameters: { type: 'object', properties: { cmd: { type: 'string' } }, required: ['cmd'] } }];
-  const input = [{ type: 'message', role: 'user', content: [{ type: 'input_text', text }] }];
-  for (let step = 0; step < 4; step++) {
-    const res = await fetch(`${endpoint.baseUrl.replace(/\/+$/, '')}/responses`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json', Authorization: `Bearer ${key}`, originator: 'codex_exec', 'user-agent': 'codex_exec/0.163.0 (stand-in)',
-        'session-id': sessionId, 'thread-id': sessionId, 'x-codex-window-id': `${sessionId}:0`, 'x-codex-turn-metadata': turnMetadata,
-      },
-      body: JSON.stringify({
-        model: opts.model, stream: false, instructions: 'You are Codex, a stand-in.', input, tools, tool_choice: 'auto', parallel_tool_calls: false,
-        reasoning: { effort: effort ?? 'medium' }, store: false, include: [], prompt_cache_key: sessionId,
-        client_metadata: { 'x-codex-installation-id': install, thread_id: sessionId, turn_id: turnId, 'x-codex-turn-metadata': turnMetadata, 'x-codex-window-id': `${sessionId}:0`, session_id: sessionId },
-      }),
-    });
-    const body = await res.json().catch(() => ({}));
-    log({ model: true, status: res.status, keyHead: key.slice(0, 4), session: sessionId });
-    if (!res.ok) return `the endpoint answered ${res.status}`;
-    const items = Array.isArray(body.output) ? body.output : [];
-    const call = items.find(i => i.type === 'function_call');
-    if (!call) return items.flatMap(i => i.content ?? []).map(c => c.text ?? '').join('') || 'no answer';
-    let cmd = '';
-    try { cmd = String(JSON.parse(call.arguments).cmd ?? ''); } catch { /* nothing */ }
-    const echoed = /^echo (.+)$/.exec(cmd.trim());
-    input.push({ type: 'function_call', call_id: call.call_id, name: call.name, arguments: call.arguments });
-    input.push({ type: 'function_call_output', call_id: call.call_id, output: echoed ? `${echoed[1]}\n` : `ran ${cmd}` });
-  }
-  return 'no answer in four requests';
 }
 
 async function turn(text) {
@@ -328,7 +294,7 @@ async function turn(text) {
     return;
   }
   if (endpoint) {
-    const answer = await endpointTurn(text);
+    const answer = await endpointTurn(text, turnId);
     out(`\n• ${answer}\n\n› `);
     write('event_msg', { type: 'task_complete', turn_id: turnId, last_agent_message: answer });
     return;
@@ -355,6 +321,84 @@ async function turn(text) {
   }
   out(`\n• ${answer}\n\n› `);
   write('event_msg', { type: 'task_complete', turn_id: turnId, last_agent_message: answer });
+}
+
+/**
+ * On an inference endpoint (trace feature C1): the provider Tars names on the command line, as codex takes it
+ * (`-c model_provider="<id>"`, `-c model_providers.<id>.base_url="..."`, its token in the variable `env_key` names).
+ */
+/**
+ * A turn on the endpoint: the model's, through the Responses API, with codex 0.170's exec_command tool, in the request
+ * codex 0.170 sends (the capture of 26/11, ids made here): the session-id, thread-id and x-codex-turn-metadata headers,
+ * and client_metadata in the body, both carrying the installation id codex keeps in its home. It asks for a stream, as
+ * codex does, and reads a stream or a whole answer, whichever the endpoint sends. The commands one answer asks for run
+ * together, as codex's do, each read by e2e/fake-command.mjs (no shell), and go into the rollout as codex 0.170 writes
+ * them (measured on 27/11, electron/services/tool-calls.ts): each call's `function_call` item; each command's end, as
+ * it ends, an `item_completed` CommandExecution (`started_at_ms`, `completed_at_ms`, `exit_code`, `status`,
+ * `aggregated_output`); then, once the answer's last command has ended, each call's `function_call_output` ("Wall
+ * time", "Process exited with code", "Original token count", "Output:"). Nothing is asked before a command runs.
+ */
+async function endpointTurn(text, turnId) {
+  const key = (endpoint.keyVar && process.env[endpoint.keyVar]) || '';
+  const install = installationId();
+  const turnMetadata = JSON.stringify({ installation_id: install, session_id: sessionId, thread_id: sessionId, turn_id: turnId, window_id: `${sessionId}:0`, request_kind: 'turn', model: opts.model, reasoning_effort: effort ?? 'medium' });
+  const tools = [{ type: 'function', name: 'exec_command', description: 'Runs a command in a PTY, returning output or a session ID for ongoing interaction.', strict: false, parameters: { type: 'object', properties: { cmd: { type: 'string', description: 'Shell command to execute.' }, yield_time_ms: { type: 'number' } }, required: ['cmd'], additionalProperties: false } }];
+  const input = [{ type: 'message', role: 'user', content: [{ type: 'input_text', text }] }];
+  for (let step = 0; step < 6; step++) {
+    const res = await fetch(`${endpoint.baseUrl.replace(/\/+$/, '')}/responses`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json', Authorization: `Bearer ${key}`, originator: 'codex_exec', 'user-agent': 'codex_exec/0.163.0 (stand-in)',
+        'session-id': sessionId, 'thread-id': sessionId, 'x-codex-window-id': `${sessionId}:0`, 'x-codex-turn-metadata': turnMetadata,
+      },
+      body: JSON.stringify({
+        model: opts.model, stream: true, instructions: 'You are Codex, a stand-in.', input, tools, tool_choice: 'auto', parallel_tool_calls: false,
+        reasoning: { effort: effort ?? 'medium' }, store: false, include: [], prompt_cache_key: sessionId,
+        client_metadata: { 'x-codex-installation-id': install, thread_id: sessionId, turn_id: turnId, 'x-codex-turn-metadata': turnMetadata, 'x-codex-window-id': `${sessionId}:0`, session_id: sessionId },
+      }),
+    });
+    const raw = await res.text();
+    log({ model: true, status: res.status, step, keyHead: key.slice(0, 4), session: sessionId });
+    if (!res.ok) return `the endpoint answered ${res.status}`;
+    const items = [];
+    if ((res.headers.get('content-type') ?? '').includes('text/event-stream')) {
+      for (const block of raw.split('\n\n')) {
+        const data = block.split('\n').filter(l => l.startsWith('data:')).map(l => l.slice(5).trim()).join('');
+        if (!data) continue;
+        let event;
+        try { event = JSON.parse(data); } catch { continue; }
+        if (event.type === 'response.output_item.done') items.push(event.item);
+      }
+    } else {
+      try { const whole = JSON.parse(raw); if (Array.isArray(whole.output)) items.push(...whole.output); } catch { /* no answer */ }
+    }
+    const calls = items.filter(i => i.type === 'function_call');
+    if (!calls.length) return items.filter(i => i.type === 'message').flatMap(m => m.content ?? []).map(c => c.text ?? '').join('') || 'no answer';
+    for (const c of calls) { write('response_item', c); input.push(c); }
+    const ran = await Promise.all(calls.map(async (c) => {
+      let cmd = '';
+      try { cmd = JSON.parse(c.arguments).cmd ?? ''; } catch { /* no command */ }
+      const started = Date.now();
+      const r = await runFakeCommand(cmd);
+      const completed = Date.now();
+      write('event_msg', {
+        type: 'item_completed', thread_id: sessionId, turn_id: turnId, started_at_ms: started, completed_at_ms: completed,
+        item: {
+          type: 'CommandExecution', id: c.call_id, process_id: String(process.pid), command: ['/bin/sh', '-lc', cmd], cwd: process.cwd(), parsed_cmd: [],
+          source: 'unified_exec_startup', status: r.code === 0 ? 'completed' : 'failed', aggregated_output: r.out, exit_code: r.code,
+          duration: { secs: Math.floor((completed - started) / 1000), nanos: ((completed - started) % 1000) * 1e6 },
+        },
+      });
+      log({ command: true, callId: c.call_id, ms: completed - started, exit: r.code });
+      return { c, r, ms: completed - started };
+    }));
+    for (const { c, r, ms } of ran) {
+      const output = { type: 'function_call_output', call_id: c.call_id, output: `Chunk ID: ${randomUUID().slice(0, 6)}\nWall time: ${(ms / 1000).toFixed(4)} seconds\nProcess exited with code ${r.code}\nOriginal token count: ${Math.ceil(r.out.length / 4)}\nOutput:\n${r.out}` };
+      write('response_item', { ...output, id: `fco_${randomUUID()}` });
+      input.push(output);
+    }
+  }
+  return 'too many steps';
 }
 
 let busy = Promise.resolve();

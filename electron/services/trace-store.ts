@@ -4,10 +4,11 @@ import * as path from 'path';
 import * as zlib from 'zlib';
 import { randomBytes } from 'crypto';
 import {
-  hashOf, instructionText, isStreamed, opensTurn, parseRequest, parseResponse, type Surface,
+  hashOf, instructionText, isStreamed, newToolResultIds, opensTurn, parseRequest, parseResponse, type Surface,
 } from './trace-wire';
 import type { SessionEnvironment } from './session-environment';
 import { sessionTiming, type RequestTiming } from './server-timing';
+import { mergeToolCall, toolCallAt, toolCallRecordOf, toolCallSpan, type ToolCallPart, type ToolCallRecord } from './tool-calls';
 
 /**
  * The trace store (native traces): one SQLite file, `~/.tars/traces/traces.db`.
@@ -346,6 +347,57 @@ export interface TraceRequestView {
   tokensIn?: number; tokensCached?: number; tokensOut?: number; reqBytes: number; respBytes: number;
   newMessages: number; attempts: number; heldMs: number; bodiesDropped: boolean;
   liveSessions?: number; rttMs?: number; clockOffsetMs?: number; queueMs?: number; upstreamMs?: number; cancel?: RequestCancel;
+  /** How the time since the previous reply divides (trace feature C1); none for a session's first request. */
+  gap?: RequestGap;
+  /** The tool calls whose results this request carries, as the harness's log says them (trace feature C1). */
+  toolCalls?: ToolCallRecord[];
+}
+
+/**
+ * The gap before a main request that reached the endpoint (trace feature C1), from the previous such request's end to
+ * when this one left for the endpoint, in ms: its tools' run (the union of its calls, cut to the gap), the wait for the
+ * typed words that opened its turn and their author (#680's), the proxy's hold, and the rest, the harness's own work.
+ * A part the log or the typing record does not say is null, never 0, and the rest is then null too. The rest is the gap
+ * less the other three: they add up to it exactly when all are known; parts over it by more than GAP_TOLERANCE_MS
+ * leave the rest null (they disagree with the gap), and within it, 0.
+ */
+export interface RequestGap {
+  ms: number;
+  toolMs: number | null;
+  inputWaitMs: number | null;
+  inputBy?: TurnAuthor;
+  heldMs: number;
+  harnessMs: number | null;
+}
+
+/** How far the measured parts of a gap may go over it (clocks read in ms, lines written a few ms after the event). */
+export const GAP_TOLERANCE_MS = 25;
+
+/** Each tool call of a session, its parts merged, as the harness's log says them (trace feature C1). */
+const TOOL_CALLS_SCHEMA = `
+CREATE TABLE IF NOT EXISTS tool_calls (
+  trace_id TEXT NOT NULL, tool_call_id TEXT NOT NULL, part_json TEXT NOT NULL, PRIMARY KEY (trace_id, tool_call_id)
+);
+`;
+
+/** A call belongs to a session when it happened within it, give or take this. */
+const TOOL_CALL_SLACK_MS = 1000;
+
+/** What a tool call's row weighs in the store's size and its session's bytes: its id and its facts, in bytes. */
+function toolCallRowBytes(callId: string, partJson: string): number {
+  return Buffer.byteLength(callId) + Buffer.byteLength(partJson);
+}
+
+/** The time a set of intervals covers, each counted once where they overlap (calls run at once). */
+function unionMs(spans: Array<[number, number]>): number {
+  let total = 0;
+  let reach = -Infinity;
+  for (const [a, b] of spans.filter(([a, b]) => b > a).sort((x, y) => x[0] - y[0])) {
+    if (b <= reach) continue;
+    total += b - Math.max(a, reach);
+    reach = b;
+  }
+  return total;
 }
 
 export interface TraceTurnView {
@@ -440,6 +492,8 @@ const ADDED_COLUMNS: ReadonlyArray<readonly [table: string, column: string, type
   ['typed_inputs', 'task_ref', 'TEXT'], ['turns', 'task_ref', 'TEXT'],
   // Trace feature B3: a session's interventions, and when the words that opened a turn were typed.
   ['traces', 'interventions_json', 'TEXT'], ['turns', 'instructed_at', 'INTEGER'],
+  // Trace feature C1: the ids of the tool calls whose results a request newly carries.
+  ['requests', 'tool_result_ids', 'TEXT'],
 ];
 
 /** Per request, what the cap counts on top of its blobs: the rows themselves. */
@@ -575,6 +629,7 @@ export class TraceStore {
       const has = (this.db.prepare(`PRAGMA table_info(${table})`).all() as Array<{ name: string }>).some(c => c.name === column);
       if (!has) this.db.exec(`ALTER TABLE ${table} ADD COLUMN ${column} ${type}`);
     }
+    this.db.exec(TOOL_CALLS_SCHEMA);
   }
 
   close(): void {
@@ -905,6 +960,39 @@ export class TraceStore {
     return { author: 'unknown', closed: false };
   }
 
+  /**
+   * The session of an agent a tool call happened in: the newest whose span holds the call's time, a little slack
+   * either side. A line read late, after its request or after the session ended, still finds it; a line of another
+   * session (an earlier terminal's, a log that is not this one's) does not.
+   */
+  traceForToolCall(agentId: string, part: ToolCallPart): string | undefined {
+    const at = toolCallAt(part);
+    if (at === undefined) return undefined;
+    const row = this.db.prepare(`SELECT trace_id FROM traces WHERE agent_id = ? AND started_at <= ? AND (ended_at IS NULL OR ended_at >= ?)
+      ORDER BY started_at DESC LIMIT 1`).get(agentId, at + TOOL_CALL_SLACK_MS, at - TOOL_CALL_SLACK_MS) as Row | undefined;
+    return row ? String(row.trace_id) : undefined;
+  }
+
+  /**
+   * One line's word on a tool call, merged with what the session already holds of it: a fact said first is kept, a
+   * later line only adds. The session's change sequence moves when something was added, so the upload takes it again;
+   * the same line read twice changes nothing.
+   */
+  addToolCall(traceId: string, part: ToolCallPart): boolean {
+    const row = this.db.prepare('SELECT part_json FROM tool_calls WHERE trace_id = ? AND tool_call_id = ?').get(traceId, part.callId) as Row | undefined;
+    const before = row ? String(row.part_json) : undefined;
+    const next = mergeToolCall(before ? JSON.parse(before) as ToolCallPart : undefined, part);
+    // Keys in one order, so the same facts always read as the same text.
+    const merged = JSON.stringify(next, Object.keys(next).sort());
+    if (merged === before) return false;
+    this.db.prepare(`INSERT INTO tool_calls (trace_id, tool_call_id, part_json) VALUES (?, ?, ?)
+      ON CONFLICT(trace_id, tool_call_id) DO UPDATE SET part_json = excluded.part_json`).run(traceId, part.callId, merged);
+    // The row weighs in the session's bytes as it weighs in the store's size (stats): what it adds, once.
+    const grew = toolCallRowBytes(part.callId, merged) - (before === undefined ? 0 : toolCallRowBytes(part.callId, before));
+    this.db.prepare('UPDATE traces SET bytes = bytes + ?, updated_seq = ? WHERE trace_id = ?').run(grew, this.nextSeq(), traceId);
+    return true;
+  }
+
   /** One request and its response, into the store. Never throws. */
   ingest(rec: WireRecord): string | undefined {
     try {
@@ -1008,6 +1096,10 @@ export class TraceStore {
     if (rec.nativeSessionId) {
       this.db.prepare('UPDATE traces SET native_session_id = ? WHERE trace_id = ? AND native_session_id IS NULL').run(rec.nativeSessionId, rec.traceId);
     }
+    // The calls whose results it newly carries: what its gap's tool time is read from (trace feature C1). Apart from the
+    // insert above, which other work adds columns to.
+    const resultIds = req ? newToolResultIds(rec.surface, req.input) : [];
+    if (resultIds.length) this.db.prepare('UPDATE requests SET tool_result_ids = ? WHERE request_id = ?').run(JSON.stringify(resultIds), requestId);
 
     if (turnId) {
       const failed = !!(rec.error || resp.error) || rec.cancel?.by === 'proxy' || rec.cancel?.by === 'endpoint';
@@ -1085,6 +1177,7 @@ export class TraceStore {
       : undefined;
     const turns = this.db.prepare('SELECT * FROM turns WHERE trace_id = ? ORDER BY turn_index').all(traceId) as Row[];
     const requests = this.db.prepare('SELECT * FROM requests WHERE trace_id = ? ORDER BY started_at, side, seq').all(traceId) as Row[];
+    const gaps = this.requestGaps(traceId, turns, requests);
     const view = (r: Row): TraceRequestView => ({
       requestId: String(r.request_id), upstreamRequestId: optStr(r.upstream_request_id), seq: num(r.seq), surface: String(r.surface), side: r.side === 1,
       startedAt: num(r.started_at), ttftMs: optNum(r.ttft_ms), totalMs: optNum(r.total_ms), status: num(r.status),
@@ -1093,6 +1186,7 @@ export class TraceStore {
       attempts: num(r.attempts), heldMs: num(r.held_ms), bodiesDropped: r.bodies_dropped === 1, liveSessions: optNum(r.live_sessions),
       rttMs: optNum(r.rtt_ms), clockOffsetMs: optNum(r.clock_offset_ms), queueMs: optNum(r.queue_ms), upstreamMs: optNum(r.upstream_ms),
       ...(r.cancel_json ? { cancel: JSON.parse(String(r.cancel_json)) as RequestCancel } : {}),
+      ...gaps.get(String(r.request_id)),
     });
     const timing = sessionTiming(requests.map(r => ({ rttMs: optNum(r.rtt_ms) ?? null, clockOffsetMs: optNum(r.clock_offset_ms) ?? null })));
     const interventions = this.turnInterventions(traceId, trace, turns);
@@ -1110,6 +1204,51 @@ export class TraceStore {
         ...(interventions[i] ? { interventions: interventions[i] } : {}),
       })),
     };
+  }
+
+  /**
+   * Each main request's gap and tool calls (trace feature C1), read from what the session holds, so a log line read late
+   * fills them in. The previous reply is the previous main request that reached the endpoint: a side request and a
+   * request given up while held (it never reached it, by the one rule every count reads, givenUpWhileHeld) are no
+   * reply, and have no gap.
+   */
+  private requestGaps(traceId: string, turns: Row[], requests: Row[]): Map<string, Pick<TraceRequestView, 'gap' | 'toolCalls'>> {
+    const out = new Map<string, Pick<TraceRequestView, 'gap' | 'toolCalls'>>();
+    const parts = new Map((this.db.prepare('SELECT tool_call_id, part_json FROM tool_calls WHERE trace_id = ?').all(traceId) as Row[])
+      .map(r => [String(r.tool_call_id), JSON.parse(String(r.part_json)) as ToolCallPart]));
+    const turnOf = new Map(turns.map(t => [String(t.turn_id), t]));
+    let prevEnd: number | undefined;
+    for (const r of requests) {
+      if (r.side === 1) continue;
+      const cancel = r.cancel_json ? JSON.parse(String(r.cancel_json)) as RequestCancel : undefined;
+      if (givenUpWhileHeld({ cancel, status: optNum(r.status), attempts: optNum(r.attempts), heldMs: optNum(r.held_ms) })) continue;
+      const startedAt = num(r.started_at);
+      const ids = r.tool_result_ids ? JSON.parse(String(r.tool_result_ids)) as string[] : [];
+      const known = ids.filter(id => parts.has(id));
+      const entry: Pick<TraceRequestView, 'gap' | 'toolCalls'> = known.length ? { toolCalls: known.map(id => toolCallRecordOf(parts.get(id)!)) } : {};
+      if (prevEnd !== undefined) {
+        const from = prevEnd;
+        const client = Math.max(0, startedAt - from);
+        // Its tools' run: the union of its calls, each cut to the gap; unknown while any of them is.
+        const spans = ids.map(id => (parts.has(id) ? toolCallSpan(parts.get(id)!) : undefined));
+        const toolMs = spans.every(s => s !== undefined)
+          ? unionMs(spans.map(s => [Math.max(from, s!.start), Math.min(startedAt, s!.start + s!.ms)]))
+          : null;
+        // The wait for typed words: only before the request that opens a turn, until they were typed.
+        const turn = r.turn_id ? turnOf.get(String(r.turn_id)) : undefined;
+        const opens = !!turn && num(r.seq) === 0;
+        const typedAt = opens ? optNum(turn!.instructed_at) : undefined;
+        const inputWaitMs = !opens ? 0 : typedAt === undefined ? null : Math.min(client, Math.max(0, typedAt - from));
+        const inputBy: TurnAuthor | undefined = opens && typedAt !== undefined ? (isOneOf(TURN_AUTHORS, turn!.author) ? turn!.author : 'unknown') : undefined;
+        let harnessMs = toolMs === null || inputWaitMs === null ? null : client - toolMs - inputWaitMs;
+        if (harnessMs !== null && harnessMs < 0) harnessMs = harnessMs >= -GAP_TOLERANCE_MS ? 0 : null;
+        const heldMs = num(r.held_ms);
+        entry.gap = { ms: client + heldMs, toolMs, inputWaitMs, ...(inputBy ? { inputBy } : {}), heldMs, harnessMs };
+      }
+      if (entry.gap || entry.toolCalls) out.set(String(r.request_id), entry);
+      prevEnd = startedAt + num(r.total_ms);
+    }
+    return out;
   }
 
   /**
@@ -1177,15 +1316,17 @@ export class TraceStore {
   }
 
   /**
-   * The store's size (its blobs, and a fixed cost per request for the rows), counts, and per project the sessions and
+   * The store's size (its blobs, a fixed cost per request for the rows, and the tool calls' rows by what they hold), counts, and per project the sessions and
    * the bytes they wrote first. A blob shared by two projects counts for the one that wrote it.
    */
   stats(): { bytes: number; sessions: number; requests: number; blobs: number; oldest?: number; bodiesDropped: boolean; byProject: Array<{ projectPath: string; sessions: number; bytes: number }> } {
     const b = this.db.prepare('SELECT COUNT(*) AS n, COALESCE(SUM(stored), 0) AS s FROM blobs').get() as { n: number; s: number };
     const t = this.db.prepare('SELECT COUNT(*) AS n, MIN(started_at) AS oldest FROM traces').get() as { n: number; oldest: number | null };
     const r = this.db.prepare('SELECT COUNT(*) AS n FROM requests').get() as { n: number };
+    // The tool calls' rows, by what they hold (trace feature C1): as toolCallRowBytes counts them for their session.
+    const c = this.db.prepare('SELECT COALESCE(SUM(length(CAST(tool_call_id AS BLOB)) + length(CAST(part_json AS BLOB))), 0) AS s FROM tool_calls').get() as { s: number };
     const byProject = this.db.prepare('SELECT project_path AS projectPath, COUNT(*) AS sessions, COALESCE(SUM(bytes), 0) AS bytes FROM traces GROUP BY project_path ORDER BY project_path').all() as Array<{ projectPath: string; sessions: number; bytes: number }>;
-    return { bytes: b.s + r.n * ROW_BYTES, sessions: t.n, requests: r.n, blobs: b.n, oldest: t.oldest ?? undefined, bodiesDropped: this.bodiesDropped, byProject };
+    return { bytes: b.s + r.n * ROW_BYTES + c.s, sessions: t.n, requests: r.n, blobs: b.n, oldest: t.oldest ?? undefined, bodiesDropped: this.bodiesDropped, byProject };
   }
 
   private dropOrphanBlobs(): void {
@@ -1206,6 +1347,7 @@ export class TraceStore {
       this.db.prepare('DELETE FROM requests WHERE trace_id = ?').run(traceId);
       this.db.prepare('DELETE FROM typed_inputs WHERE used_by IN (SELECT turn_id FROM turns WHERE trace_id = ?)').run(traceId);
       this.db.prepare('DELETE FROM turns WHERE trace_id = ?').run(traceId);
+      this.db.prepare('DELETE FROM tool_calls WHERE trace_id = ?').run(traceId);
       this.db.prepare('DELETE FROM uploads WHERE trace_id = ?').run(traceId);
       const gone = this.db.prepare('DELETE FROM traces WHERE trace_id = ?').run(traceId).changes;
       if (gone) {

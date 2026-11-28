@@ -79,7 +79,7 @@ import { readFleetResources } from './services/fleet-resources-runtime';
 // Services
 import { startApiServer } from './services/api-server';
 import { startOpenAIBridgeServer, stopOpenAIBridgeServer } from './services/openai-bridge';
-import { noteCliInterrupt, startTracesRuntime, stopTracesRuntime } from './services/traces-runtime';
+import { noteCliInterrupt, noteToolCall, startTracesRuntime, stopTracesRuntime } from './services/traces-runtime';
 import {
   initSlackBot,
   getSlackApp,
@@ -884,6 +884,8 @@ app.whenReady().then(async () => {
     post: postAsTerminal('pi-sessions'),
     // A turn pi's log says was interrupted: its traced session ties it to the request it cut (trace feature B3).
     interrupted: (agentId, sessionId) => { if (turnInterrupted(agentId, sessionId)) noteCliInterrupt(agentId); },
+    // Each tool call pi logs, for the traced session's gaps (trace feature C1).
+    toolCall: noteToolCall,
   });
   startCodexSessionWatch({
     post: postAsTerminal('codex-sessions'),
@@ -893,6 +895,8 @@ app.whenReady().then(async () => {
     },
     // codex's turn_aborted, the same (trace feature B3).
     interrupted: (agentId, sessionId) => { if (turnInterrupted(agentId, sessionId)) noteCliInterrupt(agentId); },
+    // Each command codex logs, and what it sent back of it (trace feature C1).
+    toolCall: noteToolCall,
     resumableSessionOf: (agentId) => agents.get(agentId)?.resumableSessionId,
     codexRunning: (agentId) => {
       const agent = agents.get(agentId);

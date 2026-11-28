@@ -84,6 +84,8 @@ export function sessionDocument(store: TraceStore, traceId: string, seen: Set<st
         live_sessions: r.liveSessions ?? null, rtt_ms: r.rttMs ?? null, clock_offset_ms: r.clockOffsetMs ?? null,
         queue_ms: r.queueMs ?? null, upstream_ms: r.upstreamMs ?? null,
         cancel: r.cancel ?? null,
+        // How the time since the previous reply divides, and the tool calls this request carries (trace feature C1).
+        gap: r.gap ?? null, tool_calls: r.toolCalls ?? null,
       });
       if (!m) continue;
       const inputHashes = m.input.map(v => v.hash);

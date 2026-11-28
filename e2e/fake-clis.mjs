@@ -32,6 +32,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import crypto from 'node:crypto';
 import { spawn, spawnSync } from 'node:child_process';
+import { runFakeCommand } from './fake-command.mjs';
 
 // The specs run from the repository's root, as the others do (path.resolve('hooks')); Playwright loads this file
 // through its CommonJS transform, where import.meta does not exist.
@@ -240,7 +241,9 @@ export async function run() {
       const a = argv[i];
       if (a === '-p' || a === '--print' || a === '--single') { opts.oneShot = true; continue; }
       if (a === '--permission-mode') { opts.bypass = ['bypassPermissions', 'bypass', 'yolo', 'auto'].includes(argv[++i]); continue; }
-      if (a === '--model' || a === '-m' || a === '--provider' || a === '--effort') { i++; continue; }
+      if (a === '--model' || a === '-m') { opts.model = argv[++i]; continue; }
+      if (a === '--provider') { opts.provider = argv[++i]; continue; }
+      if (a === '--effort') { i++; continue; }
       if (a.startsWith('-')) continue;
       opts.prompt = opts.prompt ? `${opts.prompt} ${a}` : a;
     }
@@ -464,6 +467,7 @@ export async function run() {
     }
     const directive = /\b(DELEGATE|SEND|ECHO|APPROVE) (\S+)(?: (.+))?$/ms.exec(text);
     if (kind === 'qwen-code' && process.env.OPENAI_BASE_URL) answer = await modelTurn(text);
+    else if (kind === 'pi' && piEndpoint()) answer = await piModelTurn(text);
     else if (!directive) answer = 'ok';
     else if (directive[1] === 'ECHO') answer = `echo ${directive[2]}`;
     else if (directive[1] === 'APPROVE') answer = (opts.bypass || await ask(directive[2])) ? `ran echo ${directive[2]}` : `did not run echo ${directive[2]}`;
@@ -480,6 +484,72 @@ export async function run() {
     if (kind === 'gemini') hook('AfterAgent', { prompt: text, prompt_response: answer, stop_hook_active: false });
     else hook('Stop', { stop_hook_active: false, last_assistant_message: answer, permission_mode: permissionMode });
     if (kind !== 'claude') hook('Notification', { notification_type: 'idle_prompt', message: 'waiting for your input' });
+  }
+
+  // pi on an inference endpoint (trace feature C1): the provider Tars names (`--provider`), from pi's models.json in its
+  // agent folder, as pi 1.5.2 reads it, its key the variable `apiKey` names (`$NAME`).
+  function piEndpoint() {
+    if (!opts.provider) return null;
+    const agentDir = process.env.PI_CODING_AGENT_DIR || path.join(HOME, '.pi', 'agent');
+    const p = readJson(path.join(agentDir, 'models.json'))?.providers?.[opts.provider];
+    if (!p?.baseUrl) return null;
+    const key = typeof p.apiKey === 'string' && p.apiKey.startsWith('$') ? process.env[p.apiKey.slice(1)] ?? '' : p.apiKey ?? '';
+    return { base: String(p.baseUrl).replace(/\/+$/, ''), key };
+  }
+
+  // A pi turn on the endpoint, through chat completions with pi's bash tool. The calls one answer asks for run together,
+  // as pi runs them by default, each read by e2e/fake-command.mjs (no shell), and go into the session file as pi 1.3.0
+  // and 1.5.2 write them (read in their code, electron/services/tool-calls.ts): the assistant line asking for them
+  // (`toolCall` blocks, stopReason `toolUse`) once its answer has ended, then, once the last call has ended, each
+  // `toolResult` line with its `durationMs`, `isError`, and for a code other than 0, "Command exited with code N".
+  async function piModelTurn(text) {
+    const ep = piEndpoint();
+    const tools = [{ type: 'function', function: { name: 'bash', description: 'Execute a bash command in the current working directory.', parameters: { type: 'object', properties: { command: { type: 'string' }, timeout: { type: 'number' } }, required: ['command'] } } }];
+    const messages = [{ role: 'system', content: 'You are a stand-in of pi.' }, { role: 'user', content: text }];
+    const line = (message) => {
+      n += 1;
+      fs.appendFileSync(transcript, JSON.stringify({ type: 'message', id: `e${n}`, parentId: null, timestamp: new Date().toISOString(), message: { ...message, timestamp: Date.now() } }) + '\n');
+    };
+    for (let step = 0; step < 6; step++) {
+      const res = await fetch(`${ep.base}/chat/completions`, { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${ep.key}` }, body: JSON.stringify({ model: opts.model, messages, tools, stream: true, stream_options: { include_usage: true } }) });
+      const raw = await res.text();
+      log({ model: true, status: res.status, step, keyHead: ep.key.slice(0, 4) });
+      if (!res.ok) return `the endpoint answered ${res.status}`;
+      let content = '';
+      const calls = new Map();
+      for (const block of raw.split('\n\n')) {
+        const data = block.split('\n').filter((l) => l.startsWith('data:')).map((l) => l.slice(5).trim()).join('');
+        if (!data || data === '[DONE]') continue;
+        let chunk;
+        try { chunk = JSON.parse(data); } catch { continue; }
+        for (const c of chunk.choices ?? []) {
+          content += c.delta?.content ?? '';
+          for (const tc of c.delta?.tool_calls ?? []) {
+            const call = calls.get(tc.index) ?? { id: '', name: '', arguments: '' };
+            if (tc.id) call.id = tc.id;
+            if (tc.function?.name) call.name += tc.function.name;
+            call.arguments += tc.function?.arguments ?? '';
+            calls.set(tc.index, call);
+          }
+        }
+      }
+      if (!calls.size) return content || 'no answer';
+      const list = [...calls.values()].map((c) => { let command = ''; try { command = JSON.parse(c.arguments).command ?? ''; } catch { /* none */ } return { ...c, command }; });
+      line({ role: 'assistant', content: list.map((c) => ({ type: 'toolCall', id: c.id, name: c.name, arguments: { command: c.command } })), stopReason: 'toolUse' });
+      messages.push({ role: 'assistant', content: null, tool_calls: list.map((c) => ({ id: c.id, type: 'function', function: { name: c.name, arguments: c.arguments } })) });
+      const ran = await Promise.all(list.map(async (c) => {
+        const started = Date.now();
+        const r = await runFakeCommand(c.command);
+        log({ command: true, callId: c.id, ms: Date.now() - started, exit: r.code });
+        return { c, r, durationMs: Date.now() - started };
+      }));
+      for (const { c, r, durationMs } of ran) {
+        const said = r.code === 0 ? r.out || '(no output)' : `${r.out}\n\nCommand exited with code ${r.code}`;
+        line({ role: 'toolResult', toolCallId: c.id, toolName: 'bash', content: [{ type: 'text', text: said }], isError: r.code !== 0, durationMs });
+        messages.push({ role: 'tool', tool_call_id: c.id, content: said });
+      }
+    }
+    return 'too many steps';
   }
 
   // On an inference endpoint (Tars's endpoint proxy, OPENAI_BASE_URL and OPENAI_API_KEY in its environment, as
