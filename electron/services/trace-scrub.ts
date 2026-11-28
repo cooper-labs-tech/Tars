@@ -255,11 +255,18 @@ function homeFinders(ctx: ScrubContext): Finder[] {
  * An e-mail address, its @ written plainly or as %40 (an API URL's query, a mailto:), the commonest encoding (the
  * Audit on #679 at 7197cae43). The local part takes a % but never a %40, so `a%40b.example@host` is the address
  * a@b.example followed by @host.
+ * Where that reads nothing, the rule before it, whose local part takes any % before a plain @: an encoded user part
+ * whose right side has no dot (`https://ada%40corp@host/`) and `a%40b@host.tld` are masked whole, an internal mail
+ * domain being a person's address too (the Audit's I-7 at cec320051, the owner's decision).
  */
-const EMAIL = /(?<![\p{L}\p{N}._%+\-])((?:[\p{L}\p{N}._+\-]|%(?!40))+)(?:@|%40)((?:[\p{L}\p{N}](?:[\p{L}\p{N}\-]{0,61}[\p{L}\p{N}])?\.)+\p{L}{2,})(?![\p{L}\p{N}\-])/gu;
+const EMAIL_DOMAIN = '((?:[\\p{L}\\p{N}](?:[\\p{L}\\p{N}\\-]{0,61}[\\p{L}\\p{N}])?\\.)+\\p{L}{2,})';
+const EMAIL = new RegExp(
+  `(?<![\\p{L}\\p{N}._%+\\-])(?:((?:[\\p{L}\\p{N}._+\\-]|%(?!40))+)(?:@|%40)${EMAIL_DOMAIN}|([\\p{L}\\p{N}._%+\\-]+)@${EMAIL_DOMAIN})(?![\\p{L}\\p{N}\\-])`,
+  'gu',
+);
 const emailFinder: Finder = part => spansOf(EMAIL, part, (m) => {
   // git@host:org/repo is a remote over ssh, no person's address.
-  if (m[1] === 'git' && part[m.index! + m[0].length] === ':') return null;
+  if ((m[1] ?? m[3]) === 'git' && part[m.index! + m[0].length] === ':') return null;
   // One key for the address however its @ is written, so it takes one number.
   return { key: m[0].replace('%40', '@').normalize('NFC').toLowerCase() };
 }, 'email', 'EMAIL');
