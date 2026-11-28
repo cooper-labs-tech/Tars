@@ -14,8 +14,9 @@ import { DEV_URL, apiPort } from './ports.mjs';
  * Q is a qwen-code agent (the stand-in of e2e/fake-clis.mjs) on an inference endpoint, traced, on a branch of its own:
  * its first turn commits c1, its second commits c2, its third changes nothing (its head stays c2). The endpoint is the
  * stand-in of trace-turn-workspace.spec.ts. G is a claude agent of the same project, the stand-in gate: its turn's
- * text `VERDICT <json>` makes it call Tars's MCP tool record_verdict, as a gating agent does. It records QA's MERGE on
- * c1, then the Audit's NO-MERGE on c2 with the branch.
+ * text `VERDICT <json>` makes it call Tars's MCP tool record_verdict, as a gating agent does. While Q still runs, it
+ * records QA's MERGE on c2 with the branch; then Q's session ends; then G records the Audit's NO-MERGE on c1, and
+ * tries a ci of its own.
  *
  * How it can fail, written before it ran (27/11):
  * 1. The tool is missing from Tars's MCP server, or the call is refused for an agent recording in its own name.
@@ -27,6 +28,10 @@ import { DEV_URL, apiPort } from './ports.mjs';
  * 5. The shared token records a verdict (it names no agent).
  * 6. The upload preview carries the gate's report path, or misses the gate.
  * 7. An uncaught error in the page.
+ * Added after the Audit's NO-MERGE at a3047a696 (28/11), the flow changed so that G records while Q still runs:
+ * 8. QA's MERGE on c2, recorded while Q runs, misses c1's turn (Q's branch is only in the outcome its end writes), or
+ *    is wiped when Q's session ends, or the last turn (which ended on c2 too) does not join it at the end.
+ * 9. An agent's ci is taken; the recorder's role is not kept, or its name goes up with the upload.
  * The artefact: values.json (the session's outcome after each verdict, the feed, the refused call, the preview's
  * gates), the stand-in CLIs' log, a screenshot per step, the app's log.
  */
@@ -38,7 +43,7 @@ const MODEL = 'stand-in-coder';
 const files = (job: Record<string, unknown>) => `FILES:${Buffer.from(JSON.stringify(job)).toString('base64url')}`;
 const verdict = (v: Record<string, unknown>) => `VERDICT ${Buffer.from(JSON.stringify(v)).toString('base64url')}`;
 type Gate = Record<string, unknown>;
-type Doc = { trace: { outcome: { gates?: Gate[] } | null }; turns: Array<{ turn_index: number; workspace: Record<string, unknown> | null }> };
+type Doc = { trace: { ended_at: number | null; outcome: ({ gates?: Gate[] } & Record<string, unknown>) | null }; turns: Array<{ turn_index: number; workspace: Record<string, unknown> | null }> };
 
 test('a gate records its verdict through the tool, and the session shows it on the turns that made the head', async () => {
   test.setTimeout(240_000);
@@ -155,53 +160,65 @@ test('a gate records its verdict through the tool, and the session shows it on t
     const c2 = git('rev-parse', 'HEAD');
     await api('agent', 'sendInput', { id: Q, input: 'turn three, no change\r' });
     await until(() => answers().length, n => n >= 3, 60_000, 'the third turn');
-    await api('agent', 'stop', Q);
+    // Q keeps running: its last turn's end comes with its session's end.
     const sessions = await until(() => read('/api/traces/sessions'), s => (s.sessions as unknown[] ?? []).length > 0, 20_000, 'the session');
     const traceId = String((sessions.sessions as Array<{ traceId: string }>)[0].traceId);
     const doc = () => read(`/api/traces/sessions/${traceId}`) as Promise<unknown> as Promise<Doc>;
-    const made = await until(doc, d => (d.turns ?? []).length === 3 && d.turns.every(t => !!t.workspace?.end_head), 30_000, 'the turns\' heads');
-    expect(made.turns.map(t => t.workspace?.end_head), 'the heads the turns ended on').toEqual([c1, c2, c2]);
+    const running = await until(doc, d => (d.turns ?? []).length === 3 && d.turns.slice(0, 2).every(t => !!t.workspace?.end_head), 30_000, 'the first two turns\' heads');
+    expect(running.turns.map(t => t.workspace?.end_head ?? null), 'the heads while Q runs').toEqual([c1, c2, null]);
     const cursor = String((await read('/api/traces/sessions')).nextCursor);
     keep({ c1, c2, traceId });
     await stepShot(page, '01-three-turns');
 
-    // 1 to 3. QA's MERGE on c1, recorded by G through the tool.
-    await api('agent', 'start', { id: G, prompt: verdict({ gate: 'qa', pr: 7, head: c1, verdict: 'merge', test_command: 'npm test', passed: 12, failed: 0, report }) });
+    // 1 to 3. While Q runs: QA's MERGE on c2, with the branch, recorded by G through the tool.
+    await api('agent', 'start', { id: G, prompt: verdict({ gate: 'qa', pr: 7, head: c2, verdict: 'merge', branch: 'feat/x', test_command: 'npm test', passed: 12, failed: 0, report }) });
     const qaAnswer = (await until(() => answers('record_verdict'), a => a.length >= 1, 90_000, 'the gate\'s first call'))[0];
     keep({ qaAnswer });
-    expect(qaAnswer, 'the tool\'s answer').toMatch(/^record_verdict recorded: .*linked to 1 traced turn/);
+    expect(qaAnswer, 'the tool\'s answer').toMatch(/^record_verdict recorded: .*linked to 2 traced turn/);
     const afterQa = await until(doc, d => (d.trace.outcome?.gates ?? []).length === 1, 20_000, 'the gate in the outcome');
     keep({ gatesAfterQa: afterQa.trace.outcome?.gates });
-    expect(afterQa.trace.outcome?.gates?.[0], 'QA\'s gate, on the first turn only').toEqual({
-      kind: 'qa', verdict: 'merge', at: expect.any(Number), pr: 7, head: c1, turns: [[0, 0]], by: G, testCommand: 'npm test', passed: 12, failed: 0, report,
+    expect(afterQa.trace.outcome?.gates?.[0], 'QA\'s gate while Q runs: c2\'s turn, and c1\'s on the branch').toEqual({
+      kind: 'qa', verdict: 'merge', at: expect.any(Number), pr: 7, head: c2, turns: [[0, 1]], by: G, byName: 'G', byRole: 'worker',
+      testCommand: 'npm test', passed: 12, failed: 0, report,
     });
     const feed = await read(`/api/traces/sessions?cursor=${encodeURIComponent(cursor)}`);
     keep({ feedAfterQa: feed });
     expect((feed.sessions as Array<{ traceId: string }>).map(s => s.traceId), 'the session is new to a reader again').toContain(traceId);
 
-    // 4. The Audit's NO-MERGE on c2, with the branch: every turn.
-    await api('agent', 'sendInput', { id: G, input: `${verdict({ gate: 'audit', pr: 7, head: c2, verdict: 'no_merge', branch: 'feat/x' })}\r` });
+    // 4. Q's session ends: the gate stays, and the last turn, which ended on c2 too, joins it.
+    await api('agent', 'stop', Q);
+    const afterEnd = await until(doc, d => !!d.trace.ended_at && JSON.stringify(d.trace.outcome?.gates?.[0]?.turns) === '[[0,2]]', 30_000, 'the gate after the session\'s end');
+    keep({ gatesAfterEnd: afterEnd.trace.outcome?.gates, outcomeAfterEnd: afterEnd.trace.outcome });
+    expect(afterEnd.trace.outcome, 'the end\'s own outcome kept beside the gate').toMatchObject({ branch: 'feat/x', head: c2 });
+
+    // 5. The Audit's NO-MERGE on c1, no branch: the first turn only.
+    await api('agent', 'sendInput', { id: G, input: `${verdict({ gate: 'audit', pr: 7, head: c1, verdict: 'no_merge' })}\r` });
     await until(() => answers('record_verdict'), a => a.length >= 2, 90_000, 'the gate\'s second call');
     const afterAudit = await until(doc, d => (d.trace.outcome?.gates ?? []).length === 2, 20_000, 'the second gate');
     const gates = afterAudit.trace.outcome?.gates ?? [];
     keep({ auditAnswer: answers('record_verdict')[1], gatesAfterAudit: gates });
-    expect(gates.find(g => g.kind === 'audit'), 'the Audit\'s gate').toMatchObject({ verdict: 'no_merge', head: c2, turns: [[0, 2]], by: G });
-    expect(gates.find(g => g.kind === 'qa'), 'QA\'s gate unchanged').toMatchObject({ verdict: 'merge', turns: [[0, 0]] });
+    expect(gates.find(g => g.kind === 'audit'), 'the Audit\'s gate, on the first turn only').toMatchObject({ verdict: 'no_merge', head: c1, turns: [[0, 0]], by: G });
+    expect(gates.find(g => g.kind === 'qa'), 'QA\'s gate unchanged').toMatchObject({ verdict: 'merge', turns: [[0, 2]] });
     await stepShot(page, '02-gates-recorded');
 
-    // 5. The shared token names no agent: refused.
+    // 6. ci is Tars's alone: the tool offers none. The shared token names no agent: refused.
+    await api('agent', 'sendInput', { id: G, input: `${verdict({ gate: 'ci', pr: 7, head: c2, verdict: 'no_merge' })}\r` });
+    const ciAnswer = (await until(() => answers('record_verdict'), a => a.length >= 3, 90_000, 'the gate\'s ci call'))[2];
+    keep({ ciAnswer });
+    expect(ciAnswer, 'an agent\'s ci').toMatch(/^record_verdict refused/);
     const shared = fs.readFileSync(path.join(home, '.tars-private', 'api-token'), 'utf8').trim();
     const refused = await fetch(`http://127.0.0.1:${port}/api/verdicts`, { method: 'POST', headers: { Authorization: `Bearer ${shared}`, 'Content-Type': 'application/json' }, body: JSON.stringify({ gate: 'qa', pr: 7, head: c2, verdict: 'merge' }) });
     keep({ sharedTokenStatus: refused.status });
     expect(refused.status, 'the shared token').toBe(403);
-    expect(((await doc()).trace.outcome?.gates ?? []).length, 'nothing recorded by it').toBe(2);
+    expect(((await doc()).trace.outcome?.gates ?? []).length, 'nothing recorded by either').toBe(2);
 
-    // 6. The upload preview: the gates, never the report's path.
+    // 7. The upload preview: the gates and the recorder's role, never the report's path or the recorder's name.
     const preview = await api<{ document: { batches: Array<{ body: { sessions?: Array<{ outcome?: { gates?: Gate[] } }> } }> } }>('traces', 'preview', traceId);
     // Each batch carries the session's row; the first one is read.
     const upGates = preview.document.batches[0]?.body.sessions?.[0]?.outcome?.gates ?? [];
     keep({ previewGates: upGates });
-    expect(upGates.map(g => `${g.kind}:${g.verdict}:${JSON.stringify(g.turns)}`).sort(), 'the gates in the upload').toEqual(['audit:no_merge:[[0,2]]', 'qa:merge:[[0,0]]']);
+    expect(upGates.map(g => `${g.kind}:${g.verdict}:${JSON.stringify(g.turns)}:${g.byRole}`).sort(), 'the gates in the upload').toEqual(['audit:no_merge:[[0,0]]:worker', 'qa:merge:[[0,2]]:worker']);
+    expect(upGates.some(g => 'byName' in g), 'the recorder\'s name in the upload').toBe(false);
     expect(JSON.stringify(preview.document), 'the report\'s path in the upload').not.toContain('qa-7.md');
 
     await page.goto(`${DEV_URL}/traces`, { waitUntil: 'domcontentloaded' });
