@@ -40,6 +40,11 @@ export interface InteractiveCommandParams {
    *  cannot do implementation work itself and must delegate. See BUG 5. */
   orchestratorMode?: boolean;
   /**
+   * A load window's session (agent.load, trace feature C3): the CLI's own memory and Tars's MCP servers switched off,
+   * nothing of ~/.tars handed (services/load-session.ts, the no-memory rule).
+   */
+  load?: boolean;
+  /**
    * A session to pick up where it left off, already checked against the
    * transcript on disk (see utils/resume-session.ts). Only the providers that
    * run a binary with a verified resume flag act on it; the rest ignore it and

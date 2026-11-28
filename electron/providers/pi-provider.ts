@@ -6,6 +6,7 @@ import type { AppSettings } from '../types';
 import { keyEnvFor } from '../services/cli-keys';
 import { DATA_DIR } from '../constants';
 import { piSessionDir } from '../services/pi-sessions';
+import { PI_LOAD_ARGS } from '../services/load-session';
 import type {
   CLIProvider,
   InteractiveCommandParams,
@@ -67,6 +68,8 @@ export class PiProvider implements CLIProvider {
 
     // On an inference endpoint: Tars's provider in pi's models.json, on the endpoint proxy (services/endpoint-harness.ts).
     for (const arg of endpointLaunchForAgent(params.agentId, 'pi')?.args ?? []) command += ` '${arg.replace(/'/g, "'\\''")}'`;
+    // A load session: no MCP at all, so none of Tars's servers (services/load-session.ts).
+    if (params.load) for (const arg of PI_LOAD_ARGS) command += ` '${arg}'`;
 
     // For interactive PTY sessions, launch the TUI (no subcommand).
     if (params.model && params.model !== 'default') {

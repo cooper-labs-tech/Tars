@@ -212,7 +212,15 @@ export function createLoadEngine(deps: LoadEngineDeps) {
     }
     console.log(`[load] arrival ${planned.n} of ${runId} starts: ${agent.id} in ${where}`);
     note(runId, started);
-    deps.prepare(agent.id, where);
+    // Its worktree set and its TMPDIR emptied (load-handlers.ts): a session started without either would start on
+    // what an earlier one left, so none starts.
+    try {
+      deps.prepare(agent.id, where);
+    } catch (err) {
+      console.error(`[load] arrival ${planned.n} of ${runId}: ${agent.id} not prepared: ${(err as Error).message}`);
+      await end(s, 'error');
+      return;
+    }
     const launched = await deps.launch(agent.id, `${loadPreamble(path.basename(task.project))}\n\n${task.prompt}`, null)
       .catch(err => ({ ok: false, error: (err as Error).message }));
     if (!launched.ok) {

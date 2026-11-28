@@ -37,6 +37,15 @@ const TARS_BUNDLE_DIRS: Readonly<Record<string, string>> = {
 };
 
 /**
+ * Every MCP server Tars registers into a CLI's config: its seven bundles (Telegram's too, which 2.0.5 retired and an
+ * older install may have left) and Tasmania, when it is on (mcp-orchestrator.ts). A load session gets none of them
+ * (load-session.ts): each is a channel to other sessions.
+ */
+export function tarsMcpServerNames(): string[] {
+  return [...Object.keys(TARS_BUNDLE_DIRS), 'tasmania'];
+}
+
+/**
  * Whether an entry of Claude Code's user scope is Tars's own: one of the seven, whose command runs that server's
  * Tars bundle, as an install of Tars (or of Dorothy before it) registered it there until 2.0.5. Only such an entry is
  * taken out of `~/.claude.json`: a server of the owner's that shares a name Tars registers (`google-workspace`,

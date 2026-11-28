@@ -20,6 +20,7 @@ import type {
 } from './cli-provider';
 import { servedPathMatches, shellQuote } from './cli-provider';
 import { qwenRoleArgs } from '../services/mcp-roles';
+import { qwenLoadArgs } from '../services/load-session';
 
 /**
  * Qwen Code (2.0.4): the CLI `qwen`, a Gemini CLI fork, as a CLI of Tars's
@@ -49,7 +50,7 @@ export class QwenCodeProvider implements CLIProvider {
     // Its settings file of Tars's, again for this launch: the effort it runs
     // on now, and the hooks and MCP servers as they are now. The terminal's
     // environment names the file (getPtyEnvVars).
-    if (params.agentId) writeQwenAgentSettings(params.agentId, { effort: params.effort });
+    if (params.agentId) writeQwenAgentSettings(params.agentId, { effort: params.effort, load: params.load });
     let command = shellQuote(params.binaryPath);
     if (params.model) {
       if (!QWEN_MODEL_ID.test(params.model)) throw new Error('Invalid model name');
@@ -60,8 +61,9 @@ export class QwenCodeProvider implements CLIProvider {
     command += ` --approval-mode ${qwenApprovalMode(params.permissionMode)}`;
     // An orchestrator delegates: its tools that write and its sub-agents are not there.
     if (params.orchestratorMode) command += ` --exclude-tools ${QWEN_ORCHESTRATOR_EXCLUDED.join(' ')}`;
-    // A worker's Qwen Code starts without the orchestrator's own servers, Telegram and X (services/mcp-roles.ts).
-    const role = qwenRoleArgs(params.orchestratorMode === true);
+    // A worker's Qwen Code starts without the orchestrator's own servers, Telegram and X (services/mcp-roles.ts); a load
+    // session without any Tars server and without its memory tools (services/load-session.ts).
+    const role = params.load ? qwenLoadArgs() : qwenRoleArgs(params.orchestratorMode === true);
     for (let i = 0; i < role.length; i += 2) command += ` ${role[i]} ${shellQuote(role[i + 1])}`;
     // The conversation to continue, already checked against its transcript (resume-session.ts).
     if (params.resumeSessionId && /^[0-9a-fA-F-]{36}$/.test(params.resumeSessionId)) {
@@ -74,7 +76,8 @@ export class QwenCodeProvider implements CLIProvider {
     for (const vp of params.obsidianVaultPaths ?? []) {
       if (handedSecondaryFolder(vp) && fs.existsSync(vp)) command += ` --include-directories ${shellQuote(vp)}`;
     }
-    command += ` --include-directories ${shellQuote(DATA_DIR)}`;
+    // ~/.tars, where every agent's observations are: never for a load session (services/load-session.ts).
+    if (!params.load) command += ` --include-directories ${shellQuote(DATA_DIR)}`;
 
     // No task, no prompt: a launch without one opens at its prompt.
     let finalPrompt = params.prompt?.trim() ? params.prompt : '';

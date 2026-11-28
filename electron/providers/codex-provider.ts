@@ -18,6 +18,7 @@ import type {
 } from './cli-provider';
 import { readAppSettingsFromDisk, shellQuote } from './cli-provider';
 import { codexRoleArgs } from '../services/mcp-roles';
+import { codexLoadArgs } from '../services/load-session';
 import { CODEX_SESSION_ID, codexAccepts, codexEffortArgs, codexHome, codexPermissionArgs, readCodexFlags, readCodexModels } from './codex-cli';
 
 /**
@@ -111,7 +112,8 @@ export class CodexProvider implements CLIProvider {
 
     // A worker's codex starts without the orchestrator's own servers, Telegram and X (services/mcp-roles.ts):
     // `-c mcp_servers.<name>.enabled=false`, this run only (measured on 0.163, `codex mcp list` says disabled).
-    const role = codexRoleArgs(params.orchestratorMode === true);
+    // A load session: its memories and every Tars server its config defines, off instead (services/load-session.ts).
+    const role = params.load ? codexLoadArgs(path.join(this.configDir, 'config.toml')) : codexRoleArgs(params.orchestratorMode === true);
     for (let i = 0; i < role.length; i += 2) command += ` ${role[i]} ${shellQuote(role[i + 1])}`;
 
     // Secondary project, never ~/.tars-private (utils/handed-folder.ts)

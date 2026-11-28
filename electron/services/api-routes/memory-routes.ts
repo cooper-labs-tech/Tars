@@ -2,6 +2,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 import { DATA_DIR } from '../../constants';
 import { RouteApp, RouteContext } from './types';
+import { agents } from '../../core/agent-manager';
 import {
   assembleDigest,
   searchMemory,
@@ -186,6 +187,12 @@ export function registerMemoryRoutes(app: RouteApp, ctx: RouteContext): void {
 
     if (!projectPath || !content) {
       sendJson({ success: false, error: 'project_path and content are required' }, 400);
+      return;
+    }
+    // A load agent's tool uses are kept from the observations every session of its project reads (the load window's
+    // no-memory rule, services/load-session.ts): neither the caller nor the agent named may be one.
+    if ([req.callerAgentId, agentId].some(id => !!id && agents.get(id)?.load === true)) {
+      sendJson({ success: false, error: 'a load agent\'s session records no observation' }, 403);
       return;
     }
 

@@ -11,7 +11,8 @@ import { updateSharedJsonSync } from '../utils/shared-file';
 import { startEndpointProxy, stopEndpointProxy, type HoldEvent, type ProxySession } from './endpoint-proxy';
 import { endpointLaunchFor, piModelsWithEndpoint, type EndpointLaunch } from './endpoint-harness';
 import { ENDPOINT_HARNESSES, endpointTarget, ensureDropFolder, transportOf } from './inference-endpoints';
-import { TraceStore } from './trace-store';
+import { TraceStore, type TraceOutcome } from './trace-store';
+import type { LoadStartContext } from './load-session';
 import { defaultTracePairs, traceDecision } from './trace-gate';
 import { projectEnvValues, type ScrubContext } from './trace-scrub';
 import { TraceUploader } from './trace-upload';
@@ -299,7 +300,7 @@ export function clearPreRegistered(id: string): void {
 }
 const agentOf = (id: string): AgentStatus | undefined => deps?.getAgent(id) ?? preRegistered.get(id);
 
-interface LiveSession extends ProxySession { harness: string; model: string; startedAt: number }
+interface LiveSession extends ProxySession { harness: string; model: string; startedAt: number; load?: TraceOutcome['load'] }
 const sessions = new Map<string, LiveSession>();
 const waits = new Map<string, Extract<HoldEvent, { since: number }>>();
 
@@ -597,7 +598,7 @@ export function closeEndpointSession(token: string | undefined): void {
   void gitOutcome(folder).then((git) => {
     try {
       const counts = traceStore().requestCounts(live.traceId);
-      traceStore().endTrace(live.traceId, endedAt, { ...git, heldRequests: counts.held, requestErrors: counts.errors });
+      traceStore().endTrace(live.traceId, endedAt, { ...git, heldRequests: counts.held, requestErrors: counts.errors, ...(live.load ? { load: live.load } : {}) });
       changed();
     } catch (err) {
       console.error(`[traces] session not ended: ${(err as Error).message}`);
@@ -616,6 +617,15 @@ function gitOutcome(folder: string | undefined): Promise<{ branch?: string; head
   return Promise.all([git(['rev-parse', '--abbrev-ref', 'HEAD']), git(['rev-parse', 'HEAD'])]).then(([branch, head]) => ({
     ...(branch ? { branch } : {}), ...(head ? { head } : {}),
   }));
+}
+
+/**
+ * What a load session started from (load-session.ts startContextOf), kept with its trace and written into the trace's
+ * outcome when its terminal exits. Only a load agent's, only a traced session's.
+ */
+export function noteLoadStartContext(agentId: string, startContext: LoadStartContext): void {
+  if (agentOf(agentId)?.load !== true) return;
+  for (const s of sessions.values()) if (s.agentId === agentId && s.traced) s.load = { startContext };
 }
 
 /** The trace an agent's current terminal records, if any. */

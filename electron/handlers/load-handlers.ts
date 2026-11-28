@@ -14,6 +14,7 @@ import { updateRun } from '../services/load-run-record';
 import { safeGit } from '../utils/safe-git';
 import { buildFullPath } from '../utils/path-builder';
 import { traceSettingsOf } from '../services/traces-runtime';
+import { emptyAgentTmp } from '../services/agent-tmp';
 import { createLoadWindow, type LoadWindow, type LoadWindowDeps } from '../services/load-window';
 import { checkGrant, readGrants, writeGrant, LOAD_GRANTS_FILE } from '../services/load-grants';
 
@@ -128,7 +129,15 @@ export function registerLoadHandlers(deps: LoadHandlerDeps): { window: LoadWindo
     // The busy cap's seam, shaped like #593's capVerdict (core/project-cap.ts): every arrival allowed until it lands.
     busyCap: () => ({ ok: true }),
     git: (cwd, args) => safeGit(cwd, args, { timeout: 60_000 }).then(r => r.stdout),
-    prepare: (agentId, worktreePath) => { const a = deps.agents.get(agentId); if (a) { a.worktreePath = worktreePath; save(); } },
+    // Its worktree, and an emptied TMPDIR: nothing an earlier session left there (services/load-session.ts). A TMPDIR
+    // that cannot be emptied throws, and the engine starts no session (load-engine.ts).
+    prepare: (agentId, worktreePath) => {
+      const a = deps.agents.get(agentId);
+      if (!a) throw new Error('the load agent is gone');
+      a.worktreePath = worktreePath;
+      save();
+      emptyAgentTmp(agentId);
+    },
     release: (agentId) => { const a = deps.agents.get(agentId); if (a && a.worktreePath) { delete a.worktreePath; save(); } },
     launch: async (agentId, prompt) => {
       const r = await launchAgent(agentId, prompt, { resumeSessionId: null });
