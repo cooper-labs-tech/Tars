@@ -1,7 +1,7 @@
 import { test, expect, _electron as electron, type ElectronApplication, type Page } from '@playwright/test';
 import * as fs from 'fs';
 import * as path from 'path';
-import { execFileSync } from 'child_process';
+import { execFileSync, spawn } from 'child_process';
 import { launchSandboxed, recordValues } from './fixture.mjs';
 import { DEV_URL, apiPort } from './ports.mjs';
 import { writeFakeClis } from './fake-clis.mjs';
@@ -79,6 +79,8 @@ process.exit(1);
   const values: Row = {};
   const keep = (more: Row) => { Object.assign(values, more); recordValues(values); };
   let app: ElectronApplication | undefined;
+  // The slot holds a lease by a process, never one of Tars's own: the spec's is a sleep of its own, killed at the end.
+  const holder = spawn('sleep', ['600'], { stdio: 'ignore' });
   try {
     app = await launchSandboxed(electron, home, {
       env: {
@@ -99,12 +101,13 @@ process.exit(1);
     const load = <T>(name: string, ...args: unknown[]) => api<T>('load', name, ...args);
     const record = (runId: string) => JSON.parse(fs.readFileSync(path.join(dir, 'load-runs', runId, 'run.json'), 'utf8')) as Row & { arrivals: Row[] };
     const arrival = (runId: string) => record(runId).arrivals.find(a => a.n === 1);
-    const slot = (what: 'take' | 'give', id?: string) => app!.evaluate(async ({}, { dist, project, what, id }) => {
+    const slot =(what: 'take' | 'give', id?: string) => app!.evaluate(async ({}, { dist, project, what, id, pid }) => {
       const s = process.mainModule!.require(`${dist}/services/heavy-slot-runtime.js`);
       if (what === 'give') return s.giveSlotBack(id, 'e2e-holder');
-      const v = await s.askSlot({ agentId: 'e2e-holder', agentName: 'E2E holder', projectPath: project, pid: process.pid, priority: 'normal', label: 'the spec holds the slot', orchestrator: false });
-      return { id: v.id, state: v.state };
-    }, { dist, project, what, id }) as Promise<{ id: string; state: string } | boolean>;
+      const v = await s.askSlot({ agentId: 'e2e-holder', agentName: 'E2E holder', projectPath: project, pid, terminalPid: pid, priority: 'normal', label: 'the spec holds the slot', orchestrator: false });
+      for (let i = 0; i < 40 && s.slotTicketOf(v.id, 'e2e-holder')?.state !== 'granted'; i++) await new Promise(r => setTimeout(r, 250));
+      return { id: v.id, state: s.slotTicketOf(v.id, 'e2e-holder')?.state ?? v.state };
+    }, { dist, project, what, id, pid: holder.pid }) as Promise<{ id: string; state: string } | boolean>;
 
     const granted = await load<Row & { project?: Row }>('grant', { path: project, enabled: true, allowedByName: false, endpointId: EP, model: MODEL_ID, harnesses: ['qwen-code'] });
     expect(granted.project?.state, JSON.stringify(granted)).toBe('allowed');
@@ -192,6 +195,7 @@ process.exit(1);
     }
     if (fs.existsSync(fakeLog)) fs.copyFileSync(fakeLog, test.info().outputPath('fake-cli.jsonl'));
   } finally {
+    holder.kill();
     await app?.close();
     await standin.close();
   }
