@@ -341,8 +341,9 @@ consent, opted-in sessions are uploaded:
   request is never counted as a step of its turn. A back-office refuses fields it does not know (422
   `invalid_batch`), so it takes `side` before Tars sends it: the back-office is updated first. A batch it refuses
   stays unsent and is tried again on the backoff, never sent without the mark;
-- a session's `start` and `lostDemand`, a request's `cancel`, `gap` and `toolCalls` (at most 64 per request, the
-  rest counted in `toolCallsOmitted`) and a turn's `interventions`, each with its line in the notice. The back-office
+- a session's `start` and `lostDemand`, a request's `cancel`, `gap` and `toolCalls` (at most 64 per request, and
+  never a call whose id is longer than the back-office's 128 characters, left out whole rather than cut; the rest
+  counted in `toolCallsOmitted`) and a turn's `interventions`, each with its line in the notice. The back-office
   takes them before a Tars that sends them, as it took `side`;
 - resumed after a restart, with backoff.
 
