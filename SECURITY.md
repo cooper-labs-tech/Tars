@@ -1255,7 +1255,16 @@ would be sent.
   file its user can on purpose (`~/.tars`, `~/.claude`, a global `AGENTS.md`). The hash of its starting context in
   its trace (the prompt and the instruction files its CLI loads at every start) shows such a file changed between two
   sessions; it stops nothing. The worktrees Tars removes are only those its private state
-  (`~/.tars-private/load-run-state.json`) names, never one a record or a name pattern points at.
+  (`~/.tars-private/load-run-state.json`) names, never one a record or a name pattern points at, and never through a
+  link: a link a session put in its worktree's place is removed as a link, and a path that reaches elsewhere through a
+  link above it is not handed to git, which would follow it.
+- **Where a load task runs is the grant's, not the fleet's.** The fleet record (`~/.tars/agents.json`) is every agent's
+  to read and write, and a load agent with no endpoint would run its CLI on the owner's own account. The engine admits
+  an arrival only onto a load agent on the private grant's endpoint and model, and reads both again at launch. Over the
+  API, a load agent's settings cannot be changed (`update_agent`), nothing is typed into its session (`message`,
+  `dispatch`, `run-task`), and its start gets neither its team (`bootstrap`) nor its project's memory
+  (`/api/memory/context`): 403 `load_agent`. The window's own edit stays the owner's; a load agent it moves off the
+  grant is never picked.
 - **The main window's top frame.** The handlers check the sender's frame as well as its web contents. A subframe
   shares the window's web contents.
 - **What was shown is what is approved.** Approve carries the pool's sha256 and the proposal's id. A pool or a

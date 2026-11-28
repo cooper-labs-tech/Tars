@@ -38,6 +38,14 @@ import type { LoadTask } from '../../../electron/services/load-pool';
  *  E10. (The no-memory rule, written before its code.) The agent's preparation for the session (its worktree set, its
  *      TMPDIR emptied: load-handlers.ts) fails, and the session starts anyway on what an earlier one left, or the
  *      arrival stays open for ever, its place held and its worktree kept.
+ *  E11. (The Audit's M1 at 51a8a21f8, written before its fix.) A load agent runs where its fleet record says, never
+ *      checked against the grant: one whose endpoint was cleared (its CLI then runs on the owner's own account) or
+ *      set to another endpoint or model is picked; or one that matched when admitted is launched after its record
+ *      moved. Only an agent on the grant's endpoint and model, read from the private grant at admission and again at
+ *      launch, runs a task; otherwise the arrival is blocked `no_harness`, or ends in error before any session.
+ *  E12. (The Audit's Info at 51a8a21f8, written before its fix.) Cleanup follows a link planted in place of a
+ *      worktree: `git worktree remove --force` on a path that is now a link to another worktree of the repository
+ *      removes that one. A link is removed as a link, never handed to git.
  */
 
 let dir: string;
@@ -84,7 +92,9 @@ const task = (over: Partial<LoadTask>): LoadTask => ({
 } as LoadTask);
 
 interface Fakes {
-  agents: Array<{ id: string; name: string; projectPath: string; provider: string; status: string; worktreePath?: string }>;
+  agents: Array<{ id: string; name: string; projectPath: string; provider: string; status: string; worktreePath?: string; endpointId?: string | null; model?: string | null }>;
+  /** The project's grant, as the private file has it: where its load agents run. */
+  grant: { endpointId: string | null; model: string | null } | undefined;
   launches: Array<{ agentId: string; prompt: string; resume: unknown; cwd?: string }>;
   stops: string[];
   log: Array<Record<string, unknown>>;
@@ -109,6 +119,7 @@ function deps(p: LoadRunPlan, over: Partial<LoadEngineDeps> = {}): LoadEngineDep
     isRunning: () => f.running,
     endRun: (_runId, stop) => { f.running = false; f.log.push({ stop }); },
     grantHarnesses: () => ['codex', 'qwen-code'],
+    grantTarget: () => f.grant,
     loadAgents: () => f.agents,
     busyCap: () => f.cap,
     git: async (cwd, args) => git(cwd, ...args),
@@ -145,9 +156,10 @@ beforeEach(() => {
   c = clock(T0);
   f = {
     agents: [
-      { id: 'a1', name: 'Load 1', projectPath: project, provider: 'codex', status: 'idle' },
-      { id: 'a2', name: 'Load 2', projectPath: project, provider: 'qwen-code', status: 'idle' },
+      { id: 'a1', name: 'Load 1', projectPath: project, provider: 'codex', status: 'idle', endpointId: 'ep-0a0b0c', model: 'open-coder-1' },
+      { id: 'a2', name: 'Load 2', projectPath: project, provider: 'qwen-code', status: 'idle', endpointId: 'ep-0a0b0c', model: 'open-coder-1' },
     ],
+    grant: { endpointId: 'ep-0a0b0c', model: 'open-coder-1' },
     launches: [], stops: [], log: [], running: true, cap: { ok: true }, listeners: [],
   };
 });
@@ -286,6 +298,79 @@ describe('a session', () => {
     fails = false;
     await c.advance(T0 + 60_000);
     await vi.waitFor(() => expect(f.launches).toHaveLength(1));
+  });
+
+  it('E11: a load agent off the grant\'s endpoint or model is never picked; with none on it, no_harness', async () => {
+    const p = plan([task()], [{ n: 1, taskId: 'fix-retry', offsetMs: 0 }]);
+    // Its endpoint cleared (update_agent with endpointId null, or agents.json edited): its CLI would run on the owner's account.
+    f.agents[0].endpointId = null;
+    // Moved to another model of the endpoint.
+    f.agents[1].model = 'another-model';
+    const e = createLoadEngine(deps(p));
+    e.start(RUN);
+    await c.advance(T0);
+    expect(f.launches).toEqual([]);
+    expect(f.log.find(x => x.n === 1)).toMatchObject({ blocked: 'no_harness' });
+    expect(worktrees()).toEqual([]);
+  });
+
+  it('E11: the one on the grant\'s endpoint and model runs the task; none runs without a grant', async () => {
+    f.agents[0].endpointId = 'ep-ffffff';
+    const p = plan([task()], [{ n: 1, taskId: 'fix-retry', offsetMs: 0 }, { n: 2, taskId: 'fix-retry', offsetMs: 60_000 }]);
+    const e = createLoadEngine(deps(p));
+    e.start(RUN);
+    await c.advance(T0);
+    expect(f.launches.map(l => l.agentId)).toEqual(['a2']);
+    setStatus('a2', 'running');
+    setStatus('a2', 'idle');
+    await c.advance(T0 + 1000);
+    // The grant withdrawn: no agent runs where the owner allowed nothing.
+    f.grant = undefined;
+    await c.advance(T0 + 60_000);
+    expect(f.launches.map(l => l.agentId)).toEqual(['a2']);
+    expect(f.log.filter(x => x.n === 2).at(-1)).toMatchObject({ blocked: 'no_harness' });
+  });
+
+  it('E11: an agent whose record moves after its admission is never launched; the arrival ends in error and is cleaned', async () => {
+    const p = plan([task()], [{ n: 1, taskId: 'fix-retry', offsetMs: 0 }]);
+    const e = createLoadEngine(deps(p, {
+      git: async (cwd, args) => {
+        const out = git(cwd, ...args);
+        // While git makes the worktree, the record moves (agents.json, or the window's own edit).
+        if (args[0] === 'worktree' && args[1] === 'add') { f.agents[0].endpointId = null; f.agents[1].endpointId = null; }
+        return out;
+      },
+    }));
+    e.start(RUN);
+    await c.advance(T0);
+    expect(f.launches).toEqual([]);
+    await vi.waitFor(() => expect(f.log.filter(x => x.n === 1).at(-1)).toMatchObject({ end: 'error' }));
+    expect(worktrees()).toEqual([]);
+    expect(branches()).toEqual([]);
+  });
+
+  it('E12: a link planted in place of the worktree is removed as a link; the worktree it points at stays', async () => {
+    const p = plan([task()], [{ n: 1, taskId: 'fix-retry', offsetMs: 0 }]);
+    const e = createLoadEngine(deps(p));
+    e.start(RUN);
+    await c.advance(T0);
+    const where = path.join(project, '.worktrees', 'load', RUN, 'fix-retry-1');
+    expect(fs.existsSync(where)).toBe(true);
+    // Another worktree of the repository, the owner's.
+    const keep = path.join(dir, 'keep');
+    git(project, 'worktree', 'add', '-q', '-b', 'keep-branch', keep);
+    fs.writeFileSync(path.join(keep, 'work.txt'), 'the owner\'s work\n');
+    // The session moves its worktree away and puts a link to that one in its place.
+    fs.renameSync(where, `${where}-moved`);
+    fs.symlinkSync(keep, where);
+    setStatus('a1', 'running');
+    setStatus('a1', 'idle');
+    await c.advance(T0 + 1000);
+    await vi.waitFor(() => expect(f.log.filter(x => x.n === 1).at(-1)).toMatchObject({ end: 'done' }));
+    expect(fs.readFileSync(path.join(keep, 'work.txt'), 'utf8')).toBe('the owner\'s work\n');
+    expect(worktrees().map(w => fs.realpathSync(w))).toContain(fs.realpathSync(keep));
+    expect(fs.existsSync(where)).toBe(false);
+    expect(branches()).toEqual([]);
   });
 });
 

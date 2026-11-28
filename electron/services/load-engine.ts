@@ -49,7 +49,9 @@ export interface LoadEngineDeps {
   endRun(runId: string, stop: { reason: 'error'; at: number; detail: string }): void;
   /** The harnesses the project's grant runs. */
   grantHarnesses(project: string): string[];
-  loadAgents(): Array<{ id: string; name: string; projectPath: string; provider: string; status: string }>;
+  /** Where the project's grant runs its load agents, from the private grant: its endpoint and model, or none. */
+  grantTarget(project: string): { endpointId: string | null; model: string | null } | undefined;
+  loadAgents(): Array<{ id: string; name: string; projectPath: string; provider: string; status: string; endpointId?: string | null; model?: string | null }>;
   /** The busy cap's seam (#593's capVerdict): ok, or why not. */
   busyCap(project: string): { ok: boolean; reason?: string };
   /** git in a folder, through safe-git: its output, or a throw. */
@@ -133,10 +135,22 @@ export function createLoadEngine(deps: LoadEngineDeps) {
 
   async function removeWorktree(m: Made): Promise<void> {
     try {
-      // Tars made it, at a path the guard gave and the private state kept: a session's changes go with it.
-      if (fs.existsSync(m.path)) await deps.git(m.project, ['worktree', 'remove', '--force', m.path]);
-      await deps.git(m.project, ['branch', '-D', m.branch]).catch(() => '');
+      // Tars made it, at a path the guard gave and the private state kept: a session's changes go with it. Never
+      // through a link (the Audit's Info on #691): git resolves the path it is given, so a link a session put in the
+      // worktree's place, or above it, would have git remove the worktree it points at. A link in its place goes as a
+      // link; a path that reaches anywhere else than where Tars made it is not handed to git.
+      let st: fs.Stats | undefined;
+      try { st = fs.lstatSync(m.path); } catch { /* gone */ }
+      if (st?.isSymbolicLink()) {
+        fs.unlinkSync(m.path);
+      } else if (st?.isDirectory()) {
+        const madeAt = path.join(fs.realpathSync(m.project), path.relative(m.project, m.path));
+        if (fs.realpathSync(m.path) === madeAt) await deps.git(m.project, ['worktree', 'remove', '--force', m.path]);
+        else console.error(`[load] ${m.path} now reaches ${fs.realpathSync(m.path)} through a link: not removed`);
+      }
+      // The registration of a worktree whose folder is gone goes first, so its branch is no longer checked out.
       await deps.git(m.project, ['worktree', 'prune']).catch(() => '');
+      await deps.git(m.project, ['branch', '-D', m.branch]).catch(() => '');
       writeState(readState().filter(w => w.path !== m.path));
     } catch (err) {
       // Kept in the private state: the next start removes it.
@@ -163,6 +177,19 @@ export function createLoadEngine(deps: LoadEngineDeps) {
     if (s.sawRunning && status && RESTING.has(status)) void end(s, status === 'error' ? 'error' : 'done');
   });
 
+  /**
+   * Whether a load agent runs where the owner allowed it: a harness the task and the grant accept, on the grant's own
+   * endpoint and model. The fleet record is not trusted alone (the Audit's M1 on #691): agents.json is every agent's to
+   * read and write, and an agent with no endpoint runs its CLI on the owner's own account.
+   */
+  function onGrant(task: LoadTask, a: ReturnType<LoadEngineDeps['loadAgents']>[number]): boolean {
+    const granted = deps.grantHarnesses(task.project);
+    const target = deps.grantTarget(task.project);
+    if (!target?.endpointId || !target.model) return false;
+    const accepted = (task.harnesses ?? [...LOAD_HARNESSES]).filter(h => granted.includes(h));
+    return accepted.includes(a.provider as typeof accepted[number]) && a.endpointId === target.endpointId && a.model === target.model;
+  }
+
   async function arrive(runId: string, planned: LoadRunPlan['planned'][number]): Promise<void> {
     const plan = deps.plan(runId);
     if (!plan || !deps.isRunning(runId)) {
@@ -181,10 +208,7 @@ export function createLoadEngine(deps: LoadEngineDeps) {
     if ([...open.values()].filter(s => s.runId === runId).length >= plan.window.max_concurrent) { block('max_concurrent'); return; }
     const cap = deps.busyCap(task.project);
     if (!cap.ok) { block('busy_cap', cap.reason); return; }
-    const granted = deps.grantHarnesses(task.project);
-    const accepted = (task.harnesses ?? [...LOAD_HARNESSES]).filter(h => granted.includes(h));
-    const agent = deps.loadAgents().find(a => a.projectPath === task.project && accepted.includes(a.provider as typeof accepted[number])
-      && !open.has(a.id) && deps.statusOf(a.id) !== 'running');
+    const agent = deps.loadAgents().find(a => a.projectPath === task.project && onGrant(task, a) && !open.has(a.id) && deps.statusOf(a.id) !== 'running');
     if (!agent) { block('no_harness'); return; }
 
     const started: LoadArrival = { ...arrival, agentId: agent.id, harness: agent.provider as LoadHarness };
@@ -218,6 +242,13 @@ export function createLoadEngine(deps: LoadEngineDeps) {
       deps.prepare(agent.id, where);
     } catch (err) {
       console.error(`[load] arrival ${planned.n} of ${runId}: ${agent.id} not prepared: ${(err as Error).message}`);
+      await end(s, 'error');
+      return;
+    }
+    // The grant and the record read again at launch: a record moved since the admission runs nothing.
+    const now_ = deps.loadAgents().find(a => a.id === agent.id);
+    if (!now_ || !onGrant(task, now_)) {
+      console.error(`[load] arrival ${planned.n} of ${runId}: ${agent.id} is no longer on its grant's endpoint and model`);
       await end(s, 'error');
       return;
     }

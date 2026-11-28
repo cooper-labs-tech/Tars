@@ -63,6 +63,12 @@ export function registerMemoryRoutes(app: RouteApp, ctx: RouteContext): void {
   // The block injected at session start: project memory, recent activity,
   // Hermes' own memory files, and a pointer to the connected backends.
   app.get('/api/memory/context', async (req, sendJson) => {
+    // A load agent's session starts from its task alone (the load window's no-memory rule; the Audit's Info on #691):
+    // a CLI that read its session start's context would otherwise get its project's memory.
+    if (req.callerAgentId && agents.get(req.callerAgentId)?.load === true) {
+      sendJson({ error: 'a load agent\'s session gets no context' }, 403);
+      return;
+    }
     const projectPath = req.url.searchParams.get('project_path') || '';
     if (!projectPath) {
       sendJson({ context: '' });

@@ -637,6 +637,17 @@ function visibleAgent(req: RouteRequest): AgentStatus | undefined {
   return agent && (!caller || agent.projectPath === caller) ? agent : undefined;
 }
 
+/**
+ * A load window's agent (load: true) is the owner's grant's, not the fleet's (the Audit's M1 and Infos on #691): its
+ * settings follow the grant, nothing types into its session (the trace measures it), and its start reads neither its
+ * team nor its project. Refused with 403 `load_agent`; true when it was.
+ */
+function refusedForLoadAgent(agent: AgentStatus, sendJson: SendJson, what: string): boolean {
+  if (agent.load !== true) return false;
+  sendJson({ error: `${agent.name || agent.id} is a load window's agent: ${what}`, code: 'load_agent' }, 403);
+  return true;
+}
+
 // callerId and callerProject live in ./utils: the bus routes ask the same two
 // questions, and one answer to each is one thing to change.
 
@@ -2297,6 +2308,7 @@ export function registerAgentRoutes(app_: RouteApp, ctx: RouteContext): void {
       sendJson({ error: 'Agent not found' }, 404);
       return;
     }
+    if (refusedForLoadAgent(agent, sendJson, 'its session starts from its task alone')) return;
 
     // The orchestration rules go with the orchestrator's powers (core/agent-role.ts).
     const isOrchestrator = hasOrchestratorPowers(agent);
@@ -2557,6 +2569,7 @@ export function registerAgentRoutes(app_: RouteApp, ctx: RouteContext): void {
       sendJson({ error: 'Agent not found' }, 404);
       return;
     }
+    if (refusedForLoadAgent(agent, sendJson, 'its endpoint, model, harness and mode follow the owner\'s grant')) return;
     if (!mayUpdate(req, agent, sendJson)) return;
     // After a start this agent is already in, or before the next: never in the middle of one.
     await withAgentLock(agent.id, async () => {
@@ -2675,6 +2688,7 @@ export function registerAgentRoutes(app_: RouteApp, ctx: RouteContext): void {
     const target = messageTarget(req, sendJsonToCaller);
     if (!target) return;
     const { agent, reply: sendJson } = target;
+    if (refusedForLoadAgent(agent, sendJson, 'nothing is typed into its session')) return;
     if (!assertMayDriveAgent(req, agent, sendJson)) return;
 
     const { message: asSent, model, permissionMode, mode: asked, reason, intent } = req.body as {
@@ -2788,6 +2802,7 @@ export function registerAgentRoutes(app_: RouteApp, ctx: RouteContext): void {
       sendJson({ error: 'Agent not found' }, 404);
       return;
     }
+    if (refusedForLoadAgent(agent, sendJson, 'nothing is typed into its session')) return;
     if (!assertMayDriveAgent(req, agent, sendJson)) return;
     if (!mayHandWork(req, agent, sendJson)) return;
 
@@ -2993,6 +3008,7 @@ export function registerAgentRoutes(app_: RouteApp, ctx: RouteContext): void {
     const target = messageTarget(req, sendJsonToCaller);
     if (!target) return;
     const { agent, reply: sendJson } = target;
+    if (refusedForLoadAgent(agent, sendJson, 'nothing is typed into its session')) return;
     if (!assertMayDriveAgent(req, agent, sendJson)) return;
 
     const { message: asSent, mode } = req.body as { message: string; mode?: unknown };

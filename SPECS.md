@@ -389,8 +389,10 @@ creation of an agent (`core/agent-create.ts`, which the window's form calls too 
 load agent): Load N, on the grant's endpoint and model, `load: true`, traced, unattended. Then each planned arrival
 comes at its time:
 - one that cannot start is recorded blocked and dropped, never queued: `max_concurrent`, `busy_cap` (a seam that
-  allows every arrival until the busy cap lands), `no_harness` (no load agent of its project free and running a
-  harness the task and the grant accept). An admitted one holds its place and its agent at once;
+  allows every arrival until the busy cap lands), `no_harness` (no load agent of its project free, running a
+  harness the task and the grant accept, on the grant's endpoint and model: the private grant decides, read again at
+  launch, never the fleet record alone). An admitted one holds its place and its agent at once. Over the API a load
+  agent cannot be changed, typed into or handed its team or its project's memory (403 `load_agent`);
 - an admitted one gets a worktree at the task's base_commit, on `load/<run>/<task>-<n>` under the project's
   `.worktrees`, named in `~/.tars-private/load-run-state.json` before git makes it, and a fresh session of its load
   agent there, on a preamble (no push, no pull request, no deploy, no migration, no production) and the task's prompt.
