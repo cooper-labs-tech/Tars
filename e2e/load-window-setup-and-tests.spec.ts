@@ -60,7 +60,7 @@ process.exit(1);
 
   const fakes = writeFakeClis(home, ['qwen-code']);
   const fakeLog = path.join(home, 'fake-cli.jsonl');
-  const standin = await startStandIn({ log: test.info().outputPath('endpoint-requests.jsonl'), command: 'echo done > agent-change.txt' });
+  const standin = await startStandIn({ log: test.info().outputPath('endpoint-requests.jsonl'), command: "printf 'done\\n' > agent-change.txt" });
   const EP = 'ep-0e2e2b';
   fs.writeFileSync(path.join(dir, 'agents.json'), '[]');
   fs.writeFileSync(path.join(dir, 'projects.json'), JSON.stringify([project]));
