@@ -110,6 +110,13 @@
 // X5. A malformed one is taken (a window under 1,024, a compaction kind outside its three, a gap's author outside
 //     #680's list, a 65th tool call); the batch must be refused whole.
 // X6. Migration 008's down loses anything else, its up reads them null.
+//
+// An id in the path that is no valid percent-encoding (the Audit's Info on #674, 28/11): the ways it can fail,
+// written before the code.
+// U1. A malformed escape (`%E0%A4%A`) in an id, with a valid token, answers 500 (the router decoded it and the throw
+//     reached the catch-all) instead of 400 `bad_id`: on the per-session delete, the batches, or a reader's session.
+// U2. Without a token, it answers anything but 401: decoded, or checked, before the token is.
+// U3. A well-formed escaped id no longer works.
 import { describe, it, before, after } from 'node:test';
 import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
@@ -453,6 +460,31 @@ describe('trace back-office, end to end', () => {
     assert.ok(blob.buf.equals(msgs.answer), 'the blob comes back byte for byte');
     const res = await fetch(`${srv.base}/v1/read/blobs/${h.result}`, { headers: { authorization: `Bearer ${reader.token}`, 'accept-encoding': 'zstd' } });
     assert.equal(note('read.blob.zstd', res.headers.get('content-encoding')), 'zstd');
+  });
+
+  it('answers a malformed escape in an id 400 bad_id with a token, 401 without, and still takes a well-formed one', async () => {
+    const BAD = '%E0%A4%A';
+    const routes: Array<{ name: string; method: string; path: string; token: string; body?: unknown }> = [
+      { name: 'sessionDelete', method: 'DELETE', path: `/v1/sessions/${BAD}`, token: installA.token },
+      { name: 'batch', method: 'PUT', path: `/v1/batches/${BAD}`, token: installA.token, body: { schema: 1 } },
+      { name: 'readSession', method: 'GET', path: `/v1/read/sessions/${installA.id}/${BAD}`, token: reader.token },
+    ];
+    for (const r of routes) {
+      const withToken = await call(r.method, r.path, { token: r.token, body: r.body });
+      const without = await call(r.method, r.path, { body: r.body });
+      note(`badEscape.${r.name}`, { withToken: [withToken.status, withToken.json?.error], without: without.status });
+      assert.deepEqual([withToken.status, withToken.json?.error], [400, 'bad_id'], `${r.name} with its token`);
+      assert.equal(without.status, 401, `${r.name} without a token`);
+    }
+    // A well-formed escape (%2D is "-") still reaches its id.
+    const read = await call('GET', `/v1/read/sessions/${installA.id}/sess%2D1`, { token: reader.token });
+    const batch = await call('PUT', '/v1/batches/batch%2Descaped', { token: installA.token, body: { schema: 1 } });
+    const del = await call('DELETE', '/v1/sessions/no%2Dsuch%2Dsession', { token: installA.token });
+    note('wellFormedEscape', { read: read.status, batch: batch.status, del: [del.status, del.json] });
+    assert.equal(read.status, 200);
+    assert.equal(read.json.session.sessionId, 'sess-1');
+    assert.equal(batch.status, 200, String(batch.buf));
+    assert.equal(del.status, 200, String(del.buf));
   });
 
   it('takes a session\'s environment and power events and a request\'s live count, reads them back, and refuses them malformed', async () => {
