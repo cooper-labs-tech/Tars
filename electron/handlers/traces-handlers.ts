@@ -305,6 +305,7 @@ export function registerTracesHandlers(deps: TracesHandlerDeps): void {
     leaves: [
       'the sessions of the projects and agents you opted in, in full: system prompts, tool definitions, your messages and the agents\', tool calls and their results, thinking the model returned',
       'the sessions\' timing, token counts, the harness and its version, the model and the endpoint\'s name',
+      'how many secrets, e-mail addresses, IP addresses, names, home folders and phone numbers were masked in each session, and the version of the masking',
       'who wrote each turn (you, an orchestrator, an agent, a channel) and how the session ended (branch, commit)',
       'the harness\'s own id for the session, a random id the harness makes',
       // Each traced session's environment (session-environment.ts), exact values: a line for each field.
@@ -349,8 +350,13 @@ export function registerTracesHandlers(deps: TracesHandlerDeps): void {
       'your computer\'s name, your user name, its serial number and its IP addresses: Tars never reads them', 'a harness\'s installation id (codex sends one): never kept'],
     scrubbing: {
       version: SCRUB_VERSION,
-      catches: ['every secret Tars holds (settings keys, endpoint keys, its own tokens)', 'the values of the project\'s .env files', 'keys by shape (OpenAI, Anthropic, GitHub, Slack, AWS, Google, Stripe, npm, Hugging Face, JWT, private keys)', 'secrets after a telling name (password=, api_key:, "token":)', 'passwords in URLs, Bearer and Basic credentials', 'your home folder, as ~'],
-      cannot: ['a secret with no known shape and no telling name that Tars does not hold', 'a secret split in two, encoded, or in an image', 'personal data: names, e-mail addresses, IP addresses', 'what the endpoint itself already received'],
+      catches: ['every secret Tars holds (settings keys, endpoint keys, its own tokens)', 'the values of the project\'s .env files', 'keys by shape (OpenAI, Anthropic, GitHub, Slack, AWS, Google, Stripe, npm, Hugging Face, JWT, private keys)', 'secrets after a telling name (password=, api_key:, "token":)', 'passwords in URLs, Bearer and Basic credentials',
+        'home folders, yours and anyone else\'s, with the name in them', 'e-mail addresses, their @ written plainly or as %40', 'IP addresses (not 127.0.0.1, 0.0.0.0 or ::1)', 'phone numbers written as people write them (+33 6 12 34 56 78, (555) 201-4567, 06 12 34 56 78)',
+        'the names Tars knows: the authors and committers of the project\'s git history, written whole (First Last, or Last, First), and your own name as git and your system have it, whole or by its parts',
+        'each as a placeholder numbered within its session (<SECRET_1>, <EMAIL_2>, <HOME_1>...): the same value, the same number, and numbers start again in each session'],
+      cannot: ['a secret with no known shape and no telling name that Tars does not hold', 'a secret or personal data cut in two, in an image, or encoded (base64, hex, or URL-encoded otherwise than an e-mail\'s %40)', 'a name Tars does not know: someone outside the project\'s git history and you',
+        'another person\'s first or last name written alone, or a one-word name that is not yours: only their whole names are masked',
+        'a phone number written some other way', 'what the endpoint itself already received'],
     },
   }));
   ipcMain.handle('traces:preview', (_e, traceId: unknown) => previewUpload(String(traceId)));

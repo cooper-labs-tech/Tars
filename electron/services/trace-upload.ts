@@ -6,7 +6,7 @@ import { describeSecretFileError, writeSecretFileSync } from '../utils/secret-fi
 import { canonicalJson } from './trace-wire';
 import { sessionDocument } from './trace-export';
 import { partsOf, type TraceStore } from './trace-store';
-import { scrubValue, SCRUB_VERSION, type ScrubContext } from './trace-scrub';
+import { maskCountsOf, maskSessionFrom, maskSessionRows, scrubValue, SCRUB_VERSION, type ScrubContext } from './trace-scrub';
 import { MAX_VERSION_CHARS } from './harness-version';
 import { MAX_SESSION_ID_CHARS } from './endpoint-proxy';
 import { TOOL_CALLS_PER_REQUEST_MAX, type ToolCallRecord } from './tool-calls';
@@ -87,6 +87,12 @@ export interface UploaderDeps {
    */
   eligible(session: { projectPath: string; agentId: string; harness: string; model: string; endpointId: string }): boolean;
   scrubContext(projectPath: string): ScrubContext;
+  /**
+   * What the scrubber needs read before a project's session is built (the names of its git history and the
+   * account's, trace-person-names.ts), awaited before each session is sent and before a preview: scrubContext then
+   * reads it at once. Never rejects.
+   */
+  prepareScrub?(projectPath: string): Promise<unknown>;
   client: { name: string; version: string; platform: string };
   /**
    * Takes the user's consent back. Called once everything sent was deleted: without it, the next pass would register
@@ -415,6 +421,10 @@ export class TraceUploader {
             if (sent >= PASS_SESSIONS) break;
             if (!this.sendable(q, this.deps.settings().since)) continue;
             if (!this.mayGoOn(url)) return { sent, failed: 0 };
+            // The names of its project read first, so the scrubber has them when the session is built; the consent
+            // read again after that wait, as before any other (the Audit's L3 at 38ccde8cb).
+            await this.deps.prepareScrub?.(q.projectPath);
+            if (!this.mayGoOn(url)) return { sent, failed: 0 };
             await this.sendSession(install, q.traceId, q.seq);
             this.deps.store.markUploaded(q.traceId, q.seq, this.now());
             sent++;
@@ -474,13 +484,17 @@ export class TraceUploader {
     const projectPath = String(t.project_path ?? '');
     const ctx = this.deps.scrubContext(projectPath);
     const counts: Record<string, number> = {};
+    // One numbering for the whole session: a value has the same number in its blobs, its rows and every batch, and in
+    // every build of the session, kept in the local store (the Audit's M2 at 38ccde8cb): a session that grew, or whose
+    // project's names changed, keeps the numbers its values had.
+    const mask = maskSessionFrom(this.deps.store.maskNumbers(traceId));
     const key = (v: string) => createHmac('sha256', secret).update(v).digest('hex');
 
     // Every message, system prompt and tool set as its scrubbed blob.
     const blobs = new Map<string, Buffer>();
     const remote = new Map<string, { hash: string; role: string; size: number; toolCallCount: number; hasThinking: boolean }>();
     for (const m of doc.messages) {
-      const bytes = Buffer.from(canonicalJson(scrubValue(m.content, ctx, counts)));
+      const bytes = Buffer.from(canonicalJson(scrubValue(m.content, ctx, counts, mask)));
       const hash = sha256(bytes);
       blobs.set(hash, bytes);
       const items = Array.isArray(m.content) && m.role !== 'tools' ? m.content : [m.content];
@@ -490,7 +504,7 @@ export class TraceUploader {
         toolCallCount: parts.filter(p => p.kind === 'tool_call').length, hasThinking: parts.some(p => p.kind === 'thinking'),
       });
     }
-    const scrub = (v: unknown) => scrubValue(v, ctx, counts);
+    const scrub = (v: unknown) => scrubValue(v, ctx, counts, mask);
     const opt = <T>(v: T | null | undefined): T | undefined => (v === null ? undefined : v);
     // A string over what the back-office takes is left out, never cut (a cut version or session id is another one):
     // the whole batch would be refused for it. A store written before the limits were read may hold one.
@@ -561,6 +575,9 @@ export class TraceUploader {
     const messages = [...remote.values()].filter(m => m.role !== 'tools').map(m => ({
       hash: m.hash, role: m.role, createdAt: Number(t.started_at), size: m.size, toolCallCount: m.toolCallCount, hasThinking: m.hasThinking,
     }));
+    // Every string of the session is scrubbed by now: what was masked in it, by type, and the rules' version, with
+    // the session row of every batch (trace feature B3, the trace reader's maskingVersion and maskCounts).
+    const sessionRow = { ...session, maskingVersion: SCRUB_VERSION, maskCounts: maskCountsOf(counts) };
 
     // One batch per session state, or several when it is over the limit: each request names its whole history, so
     // a long session's metadata grows with the square of its requests. Each part carries the session row (an
@@ -569,7 +586,7 @@ export class TraceUploader {
       const turnIds = new Set(part.map(q => q.turnId));
       const hashes = new Set(part.flatMap(q => [...q.messages.map(m => m.hash), ...(q.toolsHash ? [q.toolsHash] : [])]));
       return Buffer.from(JSON.stringify({
-        schema: 1, sessions: [session],
+        schema: 1, sessions: [sessionRow],
         turns: withAllTurns ? turns : turns.filter(x => turnIds.has(x.turnId)),
         requests: part, messages: messages.filter(m => hashes.has(m.hash)),
       }));
@@ -589,8 +606,9 @@ export class TraceUploader {
     const named = new Set(requests.map(q => q.turnId));
     const alone = turns.filter(x => !named.has(x.turnId));
     if (parts.length > 1 && alone.length) {
-      batches.push({ id: `${traceId}.${seq}.turns`, body: Buffer.from(JSON.stringify({ schema: 1, sessions: [session], turns: alone, requests: [], messages: [] })) });
+      batches.push({ id: `${traceId}.${seq}.turns`, body: Buffer.from(JSON.stringify({ schema: 1, sessions: [sessionRow], turns: alone, requests: [], messages: [] })) });
     }
+    this.deps.store.keepMaskNumbers(traceId, maskSessionRows(mask));
     return { blobs, batches, counts };
   }
 
@@ -620,6 +638,14 @@ export class TraceUploader {
       counts: payload.counts,
       scrubVersion: SCRUB_VERSION,
     };
+  }
+
+  /** The preview once the session's project has what the scrubber reads (its names), as an upload prepares it. */
+  async previewPrepared(traceId: string): Promise<ReturnType<TraceUploader['preview']>> {
+    const projectPath = this.deps.store.projectOf(traceId);
+    if (projectPath === undefined) return null;
+    await this.deps.prepareScrub?.(projectPath);
+    return this.preview(traceId);
   }
 
   private async sendSession(install: Install, traceId: string, seq: number): Promise<void> {

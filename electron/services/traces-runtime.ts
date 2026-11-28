@@ -27,6 +27,7 @@ import { probeVersion } from '../core/version-probe';
 import { buildFullPath } from '../utils/path-builder';
 import { cliPathDirs } from '../utils/cli-path-dirs';
 import { projectEnvValues, type ScrubContext } from './trace-scrub';
+import { cachedPersonNames, preparePersonNames } from './trace-person-names';
 import { TraceUploader } from './trace-upload';
 import type { ToolCallPart } from './tool-calls';
 import { ENDED_GRACE_MS, HarnessToolLogs, type FollowedSession } from './harness-tool-logs';
@@ -378,7 +379,8 @@ export function traceSettingsOf(settings: Partial<AppSettings> | undefined): Tra
 
 /**
  * What the scrubber masks for a project's sessions (trace-scrub.ts): every secret Tars holds (the settings' keys,
- * the endpoints' keys, its API and reader tokens), the project's .env values, and the home folder in each spelling.
+ * the endpoints' keys, its API and reader tokens), the project's .env values, the home folder in each spelling, and
+ * the names Tars knows for the project (trace-person-names.ts), as last read: an upload and a preview read them first.
  */
 export function scrubContextFor(projectPath: string | undefined): ScrubContext {
   const settings = deps?.getSettings() ?? ({} as AppSettings);
@@ -392,19 +394,23 @@ export function scrubContextFor(projectPath: string | undefined): ScrubContext {
     try { known.push(fs.readFileSync(file, 'utf8').trim()); } catch { /* none */ }
   }
   const home = os.homedir();
+  const names = projectPath ? cachedPersonNames(projectPath) : { own: [], others: [] };
   return {
     homeDirs: [...new Set([home, home.replace(/\\/g, '/')])],
     knownSecrets: [...new Set(known.filter(k => k.length >= 8))],
     envValues: projectPath ? projectEnvValues(projectPath) : [],
+    personNames: names.others,
+    ownNames: names.own,
   };
 }
 
 /**
  * One session exactly as its upload would send it now: the batches and blobs the uploader builds for it, through the
- * same function, and what was masked, by kind. The window shows this document as the one Tars would send.
+ * same function, its project's names read first as an upload reads them, and what was masked, by kind. The window
+ * shows this document as the one Tars would send.
  */
-export function previewUpload(traceId: string): ReturnType<TraceUploader['preview']> {
-  return traceUploader().preview(traceId);
+export function previewUpload(traceId: string): Promise<ReturnType<TraceUploader['preview']>> {
+  return traceUploader().previewPrepared(traceId);
 }
 
 export function traceStore(): TraceStore {
@@ -448,6 +454,7 @@ export function traceUploader(): TraceUploader {
         }).traced;
       },
       scrubContext: (projectPath) => scrubContextFor(projectPath),
+      prepareScrub: (projectPath) => preparePersonNames(projectPath),
       client: { name: 'tars', version: deps?.clientVersion ?? 'unknown', platform: process.platform },
       // After "delete everything sent": no upload again until the user consents again, a restart included.
       withdrawConsent: (deletion) => { withdrawUploadConsent(deletion); },

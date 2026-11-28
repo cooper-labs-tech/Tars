@@ -275,7 +275,7 @@ test('the traces window: an endpoint added with its key never shown back, plain 
     expect.soft(doc, 'the sandbox home').not.toContain(home);
     expect.soft(doc, "the endpoint's name").not.toContain(ENDPOINT);
     expect.soft(doc, "the endpoint's address").not.toContain(standin.baseUrl);
-    expect.soft(doc, 'what was masked').toContain('<REDACTED:');
+    expect.soft(doc, 'what was masked').toMatch(/<(SECRET|HOME)_\d+>/);
     expect.soft(masked, 'the masked line').not.toMatch(/^masked: nothing/);
     await page.getByRole('dialog').filter({ has: previewed }).getByRole('button', { name: 'Close', exact: true }).last().click();
     await expect(previewed).toHaveCount(0);
