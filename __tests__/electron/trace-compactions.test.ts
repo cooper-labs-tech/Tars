@@ -350,6 +350,10 @@ describe('the Audit of #687', () => {
     expect(s.compactions).toHaveLength(200);
     expect(s.compactions![199]).toMatchObject({ at: T0 + 301_000, source: 'wire' });
     expect(s.compactionsOmitted).toBe(51);
+    // The log read again (C8's "read twice, counted once", with the cap): what was left out is not counted twice.
+    store.applyHarnessCompactions('t1', events);
+    expect(store.session('t1')!.session.compactionsOmitted).toBe(51);
+    expect(store.session('t1')!.session.compactions).toHaveLength(200);
     const trace = [...traceExportLines(store, {})].map(l => JSON.parse(l)).find(l => l.table === 'traces');
     expect(trace).toMatchObject({ compactions_omitted: 51 });
     expect(trace.compactions).toHaveLength(200);
