@@ -1,5 +1,5 @@
 import { app, ipcMain, type BrowserWindow, type IpcMainInvokeEvent } from 'electron';
-import { execFile } from 'child_process';
+import { execFile, spawn } from 'child_process';
 import * as os from 'os';
 import * as path from 'path';
 import { DATA_DIR, privatePath } from '../constants';
@@ -72,38 +72,63 @@ function loadMinuteMs(): number {
 }
 
 /**
- * The heavy-run slot for the load window (services/heavy-slot-runtime.ts), its leases held by Tars's own process and
- * given back by the engine: a setup's now or never, a test's within its cap (asked every second, given back at the
- * cap or a stop). A slot that is not running grants nothing.
+ * A lease's own process: the heavy-run slot holds a lease by a process, never one of Tars's own (its rule, for the
+ * agents' runs), so each of the load window's leases gets a shell of its own that waits on its standard input. It
+ * ends when the lease is given back, and by itself when Tars is gone (its input closes).
+ */
+function leaseHolder(): { pid: number; end(): void } | undefined {
+  const child = process.platform === 'win32'
+    ? spawn(process.env.ComSpec || 'cmd.exe', ['/d', '/c', 'set /p x='], { stdio: ['pipe', 'ignore', 'ignore'], windowsHide: true })
+    : spawn('/bin/sh', ['-c', 'read -r _'], { stdio: ['pipe', 'ignore', 'ignore'] });
+  child.on('error', () => { /* no holder: the slot is not asked */ });
+  if (!child.pid) return undefined;
+  return {
+    pid: child.pid,
+    end: () => {
+      try { child.stdin?.end(); } catch { /* gone */ }
+      const t = setTimeout(() => { if (child.exitCode === null) child.kill(); }, 1000);
+      t.unref?.();
+    },
+  };
+}
+
+/**
+ * The heavy-run slot for the load window (services/heavy-slot-runtime.ts), each lease held by a process of its own
+ * (leaseHolder) and given back by the engine: a setup's now or never (the slot's next pass, two seconds at most), a
+ * test's within its cap (asked every second, given back at the cap or a stop). A slot that is not running grants
+ * nothing.
  */
 function loadSlot(): LoadEngineDeps['slot'] {
-  const askOf = (a: LoadSlotAsk): SlotAsk => ({ agentId: a.agentId, agentName: a.agentName, projectPath: a.projectPath, pid: process.pid, priority: 'normal', label: a.label, orchestrator: false });
-  const lease = (id: string, agentId: string): LoadLease => {
+  const askOf = (a: LoadSlotAsk, pid: number): SlotAsk => ({
+    agentId: a.agentId, agentName: a.agentName, projectPath: a.projectPath, pid, terminalPid: pid, priority: 'normal', label: a.label, orchestrator: false,
+  });
+  const lease = (id: string, agentId: string, holder: { end(): void }): LoadLease => {
     let back = false;
-    return { release: () => { if (!back) { back = true; giveSlotBack(id, agentId); } } };
+    return { release: () => { if (!back) { back = true; giveSlotBack(id, agentId); holder.end(); } } };
   };
+  /** Asks, then reads its ticket until granted, `until` passes, or the signal: a lease, or nothing and the ask given back. */
+  async function take(a: LoadSlotAsk, until: number, signal?: AbortSignal): Promise<LoadLease | undefined> {
+    const holder = leaseHolder();
+    if (!holder) return undefined;
+    let id: string;
+    try { id = (await askSlot(askOf(a, holder.pid))).id; } catch { holder.end(); return undefined; }
+    for (;;) {
+      const t = slotTicketOf(id, a.agentId);
+      if (t?.state === 'granted') return lease(id, a.agentId, holder);
+      if (!t || signal?.aborted || Date.now() >= until) { giveSlotBack(id, a.agentId); holder.end(); return undefined; }
+      await new Promise<void>((resolve) => {
+        const timer = setTimeout(done, Math.max(0, Math.min(250, until - Date.now())));
+        function done() { clearTimeout(timer); signal?.removeEventListener('abort', done); resolve(); }
+        signal?.addEventListener('abort', done, { once: true });
+      });
+    }
+  }
   return {
-    takeNow: async (a) => {
-      const v = await askSlot(askOf(a));
-      if (v.state === 'granted') return lease(v.id, a.agentId);
-      giveSlotBack(v.id, a.agentId);
-      return undefined;
-    },
+    takeNow: a => take(a, Date.now() + 2000),
     takeWithin: async (a, ms, signal) => {
       const started = Date.now();
-      let id: string;
-      try { id = (await askSlot(askOf(a))).id; } catch { return { waitedMs: 0 }; }
-      for (;;) {
-        const t = slotTicketOf(id, a.agentId);
-        const waited = Date.now() - started;
-        if (t?.state === 'granted') return { lease: lease(id, a.agentId), waitedMs: waited };
-        if (!t || signal.aborted || waited >= ms) { giveSlotBack(id, a.agentId); return { waitedMs: waited }; }
-        await new Promise<void>((resolve) => {
-          const timer = setTimeout(done, Math.min(1000, ms - waited));
-          function done() { clearTimeout(timer); signal.removeEventListener('abort', done); resolve(); }
-          signal.addEventListener('abort', done, { once: true });
-        });
-      }
+      const got = await take(a, started + ms, signal);
+      return { ...(got ? { lease: got } : {}), waitedMs: Date.now() - started };
     },
   };
 }
