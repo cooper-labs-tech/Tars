@@ -23,8 +23,11 @@ const asObj = (v: unknown): Json => (v && typeof v === 'object' && !Array.isArra
 const asArr = (v: unknown): unknown[] => (Array.isArray(v) ? v : []);
 const asStr = (v: unknown): string => (typeof v === 'string' ? v : '');
 const asNum = (v: unknown): number => (typeof v === 'number' && Number.isFinite(v) ? v : 0);
-/** A token count as the back-office takes it, a whole number (the Audit of #678, I-1): an endpoint's fraction is rounded. */
-const tokenCount = (v: unknown): number => Math.round(asNum(v));
+/**
+ * A token count as the back-office takes it, a whole number of 0 or more: an endpoint's fraction is rounded (the Audit
+ * of #678, I-1), and a negative count from a broken endpoint is 0 (the Audit of #687 at e534063f4).
+ */
+const tokenCount = (v: unknown): number => Math.max(0, Math.round(asNum(v)));
 
 /** The traced surface a request path is, or null for anything else (models, count_tokens, unknown routes). */
 export function surfaceOf(pathname: string): Surface | null {
