@@ -54,9 +54,16 @@ export const BLOCK_WORDS: Record<LoadBlockReason, string> = {
 };
 export const BLOCK_ORDER: LoadBlockReason[] = ['max_concurrent', 'busy_cap', 'heavy_slot', 'no_harness'];
 
-/** A folder under the user's home, written from ~ as the frames write it (macOS, Linux and Windows homes). */
-export const homeShort = (dir: string) => dir.replace(/^(\/Users\/[^/]+|\/home\/[^/]+|[A-Za-z]:\\Users\\[^\\]+)(?=[/\\]|$)/, '~');
-export const splitWord =(s: LoadSplit) => (s === 'heldout' ? 'held-out' : s);
+/**
+ * A pool's folder as the frames write it, `~/.tars/load-pools/<pool>`. Main keeps every pool under its own data folder
+ * (load-handlers.ts, DATA_DIR/load-pools), so what comes before `.tars/load-pools` is Tars's own home and nobody
+ * else's (the Audit's Info on #695); any other path is shown whole.
+ */
+export const poolDirOf = (dir: string) => {
+  const m = /^(.+)([\\/])\.tars\2load-pools\2([^\\/]+)$/.exec(dir);
+  return m ? ['~', '.tars', 'load-pools', m[3]].join(m[2]) : dir;
+};
+export const splitWord = (s: LoadSplit) => (s === 'heldout' ? 'held-out' : s);
 export const nameOf = (projectPath: string) => projectPath.split(/[\\/]/).filter(Boolean).pop() ?? projectPath;
 export const short = (sha: string) => sha.slice(0, 7);
 export const pad = (n: number) => String(n).padStart(2, '0');

@@ -4,13 +4,38 @@ import { useState } from 'react';
 import { Server } from 'lucide-react';
 import { Button, Input, Select, StatusSquare } from '@/components/ui';
 import { clockOf } from '@/lib/traces-format';
-import type { LoadProposal, LoadWindowParams } from '@/types/electron';
-import { BLOCKED_LINE, Box, Chip, MEMORY_LINE, homeShort, nameOf, pad, short, splitWord } from './bits';
+import type { LoadProjectState, LoadProposal, LoadWindowParams } from '@/types/electron';
+import { BLOCKED_LINE, Box, Chip, MEMORY_LINE, nameOf, pad, poolDirOf, short, splitWord } from './bits';
 
 type Editable = 'rate_per_hour' | 'seed' | 'window_min' | 'max_concurrent' | 'initial_sessions';
 const FIELDS: Array<[Editable, string, string?]> = [
   ['rate_per_hour', 'Rate per hour'], ['seed', 'Seed'], ['window_min', 'Length', 'min'], ['max_concurrent', 'Max concurrent'], ['initial_sessions', 'Initial sessions'],
 ];
+
+/** Why a project's tasks are refused, after "refused", as the frames word it ("with its repository", gUwVy). */
+const REFUSED_WHY: Record<LoadProjectState, string> = {
+  private: 'with its repository', unknown: 'with its repository', traces_off: 'with its traces off', off: 'with its switch off',
+  no_endpoint: 'with no endpoint yet', no_harness: 'with no harness yet', no_repo: 'as it is not a git work tree',
+  unknown_project: 'as it is not one of your projects', allowed: '', allowed_by_name: '',
+};
+
+/**
+ * What can run and what is left out, composed from the case as the frames word it (the Audit's N1 on #695): the
+ * refused lines ("27 of 30 tasks can run: 3 lines are refused and left out. The rest can be approved.", JmxYG), then
+ * each project refused whole ("30 of 39 tasks can run: ledger-core's 5 are refused with its repository, orbit-docs's
+ * 4 with its traces off.", gUwVy). Null when nothing is left out.
+ */
+function summaryOf(p: LoadProposal): string | null {
+  const lines = p.refused.filter(r => r.file === 'tasks.jsonl' && r.line > 0).length;
+  const parts: string[] = [];
+  if (lines) parts.push(`${lines} line${lines === 1 ? ' is' : 's are'} refused and left out`);
+  p.projects.filter(x => x.visibility === 'refused').forEach((x, i) => {
+    const why = REFUSED_WHY[x.state] || 'refused';
+    parts.push(i === 0 ? `${x.name}'s ${x.tasks} ${x.tasks === 1 ? 'is' : 'are'} refused ${why}` : `${x.name}'s ${x.tasks} ${why}`);
+  });
+  if (!parts.length) return null;
+  return `${p.runnable} of ${p.total} tasks can run: ${parts.join(', ')}.${lines ? ' The rest can be approved.' : ''}`;
+}
 
 /** A project of the pool refused whole: its chip, as the frames word it. */
 const refusedChip = (state: string) => (state === 'traces_off' ? 'traces off' : state === 'private' ? 'private, not allowed' : state.replace(/_/g, ' '));
@@ -39,6 +64,7 @@ export function Approval({ proposal, changedSince, staleShown, busy, error, onAp
   const about = Math.round((values.rate_per_hour * values.window_min) / 60);
   const refusedProjects = proposal.projects.filter(p => p.visibility === 'refused');
   const refusedSome = refusedProjects.length > 0 || proposal.refused.length > 0;
+  const summary = summaryOf(proposal);
   const projectName = (p: string) => proposal.projects.find(x => x.path === p)?.name ?? nameOf(p);
 
   return (
@@ -46,7 +72,7 @@ export function Approval({ proposal, changedSince, staleShown, busy, error, onAp
       <div className="flex-1 min-h-0 overflow-y-auto px-[26px] pt-[18px] pb-[18px]">
         <div className="flex gap-4 items-start">
           <div className="flex-1 min-w-0 flex flex-col gap-3">
-            <p className="text-[12.5px] text-text-secondary">Proposed by Tars from the pool {homeShort(proposal.dir)}, written at {clockOf(proposal.writtenAt)}.</p>
+            <p className="text-[12.5px] text-text-secondary">Proposed by Tars from the pool {poolDirOf(proposal.dir)}, written at {clockOf(proposal.writtenAt)}.</p>
             {staleShown && (
               <p data-load-stale className="flex items-center gap-1.5 font-mono text-[10.5px] text-status-waiting">
                 <StatusSquare tone="waiting" />The pool changed after this card showed it: here it is as it is now. Nothing was approved.
@@ -67,11 +93,7 @@ export function Approval({ proposal, changedSince, staleShown, busy, error, onAp
                 <div className="flex flex-wrap gap-2">
                   <Chip>train {proposal.counts.train}</Chip><Chip>held-out {proposal.counts.heldout}</Chip><Chip>eval {proposal.counts.eval}</Chip><Chip>tasks {proposal.counts.tasks}</Chip>
                 </div>
-                {refusedSome && (
-                  <p className="text-[12px] text-status-waiting">
-                    {proposal.runnable} of {proposal.total} tasks can run: the rest are refused and left out, below. The tasks that can run can be approved.
-                  </p>
-                )}
+                {summary && <p data-load-summary className="text-[12px] text-status-waiting">{summary}</p>}
               </div>
             </Box>
 
