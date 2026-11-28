@@ -26,6 +26,7 @@ import { usableHermesConnection } from '../services/hermes-config';
 import {
   fetchHermesModelOptions,
   uploadHermesAttachment,
+  reachingHermes,
   MAX_ATTACHMENT_BYTES,
 } from '../services/hermes-client';
 import {
@@ -212,9 +213,12 @@ export function registerOverseerHandlers(): void {
   ipcMain.handle('overseer:setSettings', async (_event, patch: Partial<OverseerSettings>) => {
     const settings = setOverseerSettings(patch ?? {});
     // Choosing a model has to reach the gateway, not just this file: the
-    // overseer runs on whatever the gateway's main slot is set to.
+    // overseer runs on whatever the gateway's main slot is set to. A gateway
+    // that gives no answer is a refusal here, as in every overseer channel
+    // that calls it (reachingHermes): it was a throw through IPC.
     if ((patch?.provider || patch?.model) && settings.provider && settings.model) {
-      const applied = await applyOverseerModel(settings.provider, settings.model);
+      const { provider, model } = settings;
+      const applied = await reachingHermes(() => applyOverseerModel(provider, model));
       if (!applied.success) return { success: false, settings, error: applied.error };
     }
     return { success: true, settings };
@@ -232,8 +236,7 @@ export function registerOverseerHandlers(): void {
   ipcMain.handle('overseer:effort', async () => {
     const conn = usableHermesConnection();
     if (!conn) return { success: false, error: 'Hermes is not configured. Set it up in Settings.' };
-    const effort = await getReasoningEffort(conn);
-    return { success: true, effort, options: [...REASONING_EFFORTS] };
+    return reachingHermes(async () => ({ success: true as const, effort: await getReasoningEffort(conn), options: [...REASONING_EFFORTS] }));
   });
 
   ipcMain.handle('overseer:setEffort', async (_event, effort: string) => {
@@ -242,7 +245,7 @@ export function registerOverseerHandlers(): void {
     if (typeof effort !== 'string' || !effort.trim()) {
       return { success: false, error: 'No effort given.' };
     }
-    return setReasoningEffort(conn, effort.trim());
+    return reachingHermes(() => setReasoningEffort(conn, effort.trim()));
   });
 
   /**
@@ -253,6 +256,6 @@ export function registerOverseerHandlers(): void {
   ipcMain.handle('overseer:modelOptions', async () => {
     const conn = usableHermesConnection();
     if (!conn) return { success: false, error: 'Hermes is not configured. Set it up in Settings.' };
-    return fetchHermesModelOptions(conn);
+    return reachingHermes(() => fetchHermesModelOptions(conn));
   });
 }

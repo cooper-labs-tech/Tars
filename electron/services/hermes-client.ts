@@ -212,15 +212,104 @@ export function hasHermesSession(baseUrl: string): boolean {
   return false;
 }
 
+/**
+ * The errors hermesRequest rejected with because the gateway gave no answer
+ * (nothing listening, no answer in time, an answer that is not HTTP, a
+ * connection cut, a URL it cannot call), with the gateway each one concerns,
+ * and the wait for its own timeout or its deadline. Their messages are left as
+ * they are: the Kanban board (describeHermesFailure), the agents' kanban
+ * (kanban-board.ts) and the probe read the transport's own words.
+ */
+type Unanswered = { baseUrl: string; waitedMs?: number; deadlineMs?: number };
+const unanswered = new WeakMap<object, Unanswered>();
+
+function noAnswer(err: unknown, baseUrl: string, wait: Omit<Unanswered, 'baseUrl'> = {}): unknown {
+  if (err && typeof err === 'object') unanswered.set(err, { baseUrl, ...wait });
+  return err;
+}
+
+/** What the probe and the sign-in answer for a value that is not such an address: the save's refusal, less its "nothing was saved". */
+const NOT_AN_ADDRESS_TARS_CALLS = 'Tars calls a gateway only at an http:// or https:// address.';
+
+/** A gateway's address as Tars calls it, an http: or https: URL; null for anything else, which Tars never calls. */
+export function gatewayUrl(value: string): URL | null {
+  try {
+    const url = new URL(value.trim());
+    return url.protocol === 'http:' || url.protocol === 'https:' ? url : null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * What the window shows for a call the gateway gave no answer to: the gateway's
+ * address, never its user name, password or query, and the reason. Undefined
+ * for any other error, which is not the network's and is not dressed as such.
+ */
+export function noAnswerSentence(err: unknown): string | undefined {
+  const seen = err && typeof err === 'object' ? unanswered.get(err) : undefined;
+  if (!seen) return undefined;
+  // Quoted only as an http(s) URL, the two schemes hermesRequest calls. Anything
+  // else may be a token pasted in the wrong field, and one shaped name:secret
+  // parses as a URL (scheme "name:", path "secret"): quoted, it printed the
+  // secret (the Audit's L1 on #663).
+  const url = gatewayUrl(seen.baseUrl);
+  if (!url) return 'Tars could not reach Hermes: the gateway URL saved in Settings, Hermes is not one it can call.';
+  const where = `${url.protocol}//${url.host}${url.pathname.replace(/\/+$/, '')}`;
+  const { message, code } = err as { message?: unknown; code?: unknown };
+  const said = typeof message === 'string' ? message : String(err);
+  const reason = seen.waitedMs !== undefined
+    ? `no answer within ${Math.round(seen.waitedMs / 1000)} s`
+    : seen.deadlineMs !== undefined
+      ? `its answer did not end within ${Math.round(seen.deadlineMs / 1000)} s`
+    : typeof code === 'string' && code.startsWith('HPE_')
+      ? `its answer is not HTTP (${said})`
+      : said;
+  return `Tars could not reach Hermes at ${where}: ${reason.replace(/\s+/g, ' ').trim().slice(0, 200)}`;
+}
+
+/**
+ * A call to the gateway for a window that reads `{ success: false, error }`: a
+ * call that got no answer is that refusal, never a throw through IPC, which
+ * Electron hands the page as "Error invoking remote method ..." (Schedules,
+ * 27/11). Any other failure still throws.
+ */
+export async function reachingHermes<T>(call: () => Promise<T>): Promise<T | { success: false; error: string }> {
+  try {
+    return await call();
+  } catch (err) {
+    const error = noAnswerSentence(err);
+    if (error === undefined) throw err;
+    return { success: false, error };
+  }
+}
+
+/**
+ * One request to the gateway.
+ *
+ * `timeoutMs` is an idle timeout: it fires when the socket says nothing for that
+ * long. A gateway that trickles its answer, a byte within each wait, held a call
+ * for good, so the whole request also has a deadline (the Audit's I-2 on #660):
+ * three times the idle timeout, 30 s at least, unless the caller names one. The
+ * calls of the pages, the overseer, the relay, the probe and the sign-in wait
+ * 10 s idle, so 30 s whole; the reasoning effort's write 20 s, so 60 s; an
+ * upload 120 s, so 6 minutes. The overseer's turn is many short requests, each
+ * with its own deadline, inside the turn's own bound (its 60 s poll and the live
+ * conversation's 180 s, over a WebSocket, not here).
+ */
 export function hermesRequest(
   baseUrl: string,
   pathname: string,
-  options: { method?: string; body?: unknown; token?: string; timeoutMs?: number } = {},
+  options: { method?: string; body?: unknown; token?: string; timeoutMs?: number; deadlineMs?: number } = {},
 ): Promise<HermesResponse> {
   const { method = 'GET', body, token, timeoutMs = 10000 } = options;
-  return new Promise((resolve, reject) => {
+  const deadlineMs = options.deadlineMs ?? Math.max(30_000, 3 * timeoutMs);
+  return new Promise((settle, fail) => {
+    const deadline: { timer?: NodeJS.Timeout } = {};
+    const resolve = (answer: HermesResponse) => { clearTimeout(deadline.timer); settle(answer); };
+    const reject = (err: unknown) => { clearTimeout(deadline.timer); fail(err); };
     let target: URL;
-    try { target = new URL(baseUrl + pathname); } catch { reject(new Error('Invalid gateway URL')); return; }
+    try { target = new URL(baseUrl + pathname); } catch { reject(noAnswer(new Error('Invalid gateway URL'), baseUrl)); return; }
 
     const payload = body === undefined ? undefined : JSON.stringify(body);
     const headers: Record<string, string> = { Accept: 'application/json' };
@@ -233,19 +322,37 @@ export function hermesRequest(
     if (cookie) headers['Cookie'] = cookie;
 
     const mod = target.protocol === 'https:' ? https : http;
-    const req = mod.request(target, { method, headers, timeout: timeoutMs }, res => {
-      let raw = '';
-      res.on('data', c => { raw += c; });
-      res.on('end', () => {
-        const setCookies = (res.headers['set-cookie'] as string[] | undefined) ?? [];
-        if (setCookies.length) storeCookies(baseUrl, setCookies);
-        let parsed: unknown = raw;
-        try { parsed = JSON.parse(raw); } catch { /* keep raw */ }
-        resolve({ status: res.statusCode ?? 0, body: parsed, setCookies });
+    let req: http.ClientRequest;
+    try {
+      req = mod.request(target, { method, headers, timeout: timeoutMs }, res => {
+        // An answer cut off once it has begun: the request's error never comes, and
+        // its timeout cannot fire on a socket that is gone, so it never settled and an
+        // overseer turn awaiting it held every later one "busy" (the Audit's M1 on #660).
+        const cut = () => reject(noAnswer(new Error('its answer was cut off before the end'), baseUrl));
+        res.on('error', cut);
+        res.on('close', () => { if (!res.complete) cut(); });
+        let raw = '';
+        res.on('data', c => { raw += c; });
+        res.on('end', () => {
+          const setCookies = (res.headers['set-cookie'] as string[] | undefined) ?? [];
+          if (setCookies.length) storeCookies(baseUrl, setCookies);
+          let parsed: unknown = raw;
+          try { parsed = JSON.parse(raw); } catch { /* keep raw */ }
+          resolve({ status: res.statusCode ?? 0, body: parsed, setCookies });
+        });
       });
-    });
-    req.on('error', reject);
-    req.on('timeout', () => { req.destroy(); reject(new Error('timeout')); });
+    } catch (err) {
+      // A request Node will not make (a scheme it cannot call, a header it will not send): no answer either.
+      reject(noAnswer(err, baseUrl));
+      return;
+    }
+    req.on('error', err => reject(noAnswer(err, baseUrl)));
+    req.on('timeout', () => { req.destroy(); reject(noAnswer(new Error('timeout'), baseUrl, { waitedMs: timeoutMs })); });
+    // In words, as the sentence says it: the agents' kanban quotes this message, and the board reads it (I-b on #660).
+    deadline.timer = setTimeout(() => {
+      reject(noAnswer(new Error(`its answer did not end within ${Math.round(deadlineMs / 1000)} s`), baseUrl, { deadlineMs }));
+      req.destroy();
+    }, deadlineMs);
     if (payload) req.write(payload);
     req.end();
   });
@@ -263,6 +370,36 @@ function gatewayCall(
 /** A call the gateway refused, flagged when signing in is what would fix it. */
 function refused(status: number, error: string) {
   return { success: false as const, error, needsSignIn: status === 401 || status === 403 };
+}
+
+/**
+ * A 2xx answer whose body is not the JSON a reader needs: a proxy's sign-in
+ * page, a web server on the gateway's port. hermesRequest keeps such a body as
+ * its raw text, and the readers of the pages took it for an answer with nothing
+ * in it, a success with no rows (#660). `what` is what Tars was reading.
+ */
+function unexpectedAnswer(what: string) {
+  return { success: false as const, error: `Tars could not read ${what} Hermes sent: its answer is not what Tars expected.` };
+}
+
+/** A body a list or a record can be read from: JSON's object or array, never raw text or null. */
+function readable(body: unknown): body is object {
+  return typeof body === 'object' && body !== null;
+}
+
+/**
+ * Whether every entry of a list the gateway answered is a record named by
+ * `key`: a non-empty string, or for an id a number too. A null among them
+ * threw a TypeError through IPC, in the readers below or in the page; a
+ * number, or a record without the key, was dropped without a word (#660).
+ * Either is an answer that is not what Tars expected.
+ */
+function rowsNamedBy(list: unknown[], key: string, id = false): boolean {
+  return list.every(entry => {
+    if (typeof entry !== 'object' || entry === null || Array.isArray(entry)) return false;
+    const name = (entry as Record<string, unknown>)[key];
+    return (typeof name === 'string' && name !== '') || (id && typeof name === 'number' && Number.isFinite(name));
+  });
 }
 
 /** A read the gateway refused: the sign-in prompt when that is the reason,
@@ -316,6 +453,11 @@ export async function probeHermes(conn: HermesConnection): Promise<HermesStatus 
   if (!baseUrl) {
     return { baseUrl: '', reachable: false, authRequired: false, authFlows: [], authProviders: [], signedIn: false, error: 'No gateway URL for this mode.' };
   }
+  // Not an address Tars calls: said in the save's words, not called, and the value not handed back, where
+  // Settings printed it beside Node's "Protocol "user:" not supported" (the Audit's I-1 on #660).
+  if (!gatewayUrl(baseUrl)) {
+    return { baseUrl: '', reachable: false, authRequired: false, authFlows: [], authProviders: [], signedIn: false, error: NOT_AN_ADDRESS_TARS_CALLS };
+  }
   try {
     const { status, body } = await hermesRequest(baseUrl, '/api/status', { token: sessionToken(conn) });
     const info = (body && typeof body === 'object' ? body : {}) as Record<string, unknown>;
@@ -357,6 +499,7 @@ export async function signInHermes(
 ): Promise<{ success: boolean; error?: string }> {
   const baseUrl = resolveHermesBaseUrl(conn);
   if (!baseUrl) return { success: false, error: 'No gateway URL for this mode.' };
+  if (!gatewayUrl(baseUrl)) return { success: false, error: NOT_AN_ADDRESS_TARS_CALLS };
   try {
     const provider = credentials.provider || 'basic';
     const { status, body } = await hermesRequest(baseUrl, '/auth/password-login', {
@@ -410,12 +553,20 @@ export async function fetchHermesBoard(conn: HermesConnection, board?: string, t
   const query = params.size ? `?${params.toString()}` : '';
   const { status, body } = await gatewayCall(conn, `${KANBAN}/board${query}`);
   if (status !== 200) return refused(status, errorDetail(status, body));
+  if (!readable(body)) return unexpectedAnswer('the board');
+  // Its columns and their tasks go to the page as they are: a row it cannot read is refused here.
+  const columns = (body as { columns?: unknown }).columns;
+  if (Array.isArray(columns) && (!rowsNamedBy(columns, 'name')
+    || columns.some(c => { const tasks = (c as { tasks?: unknown }).tasks; return Array.isArray(tasks) && !rowsNamedBy(tasks, 'id', true); }))) {
+    return unexpectedAnswer('the board');
+  }
   return { success: true as const, board: body };
 }
 
 export async function getHermesTask(conn: HermesConnection, taskId: string) {
   const { status, body } = await gatewayCall(conn, `${KANBAN}/tasks/${encodeURIComponent(taskId)}`);
   if (status !== 200) return refused(status, errorDetail(status, body));
+  if (!readable(body)) return unexpectedAnswer('the task');
   return { success: true as const, detail: body };
 }
 
@@ -447,6 +598,11 @@ export async function addHermesTaskComment(conn: HermesConnection, taskId: strin
 export async function fetchHermesCrons(conn: HermesConnection) {
   const { status, body } = await gatewayCall(conn, '/api/cron/jobs?profile=all');
   if (status !== 200) return refused(status, errorDetail(status, body));
+  if (!readable(body)) return unexpectedAnswer('the schedules');
+  // Its jobs go to the page as they are, found as Schedules finds them (asJobs): a row it cannot read is refused here.
+  const jobs = Array.isArray(body) ? body
+    : ['jobs', 'items', 'results'].map(k => (body as Record<string, unknown>)[k]).find(Array.isArray) as unknown[] | undefined;
+  if (jobs && !rowsNamedBy(jobs, 'id', true)) return unexpectedAnswer('the schedules');
   return { success: true as const, jobs: body };
 }
 
@@ -533,9 +689,11 @@ export async function fetchHermesModelOptions(
 > {
   const { status, body } = await gatewayCall(conn, '/api/model/options');
   if (status >= 300) return failedRead(status, 'Sign in to Hermes to list its models');
+  if (!readable(body)) return unexpectedAnswer('the models');
 
   const b = (body ?? {}) as Record<string, unknown>;
   const raw = Array.isArray(b.providers) ? b.providers : [];
+  if (!rowsNamedBy(raw, 'slug')) return unexpectedAnswer('the models');
   return {
     success: true,
     provider: typeof b.provider === 'string' ? b.provider : '',
@@ -894,9 +1052,11 @@ export async function fetchHermesMcpServers(
 ): Promise<{ success: true; servers: HermesMcpServer[] } | { success: false; error: string; needsSignIn?: boolean }> {
   const { status, body } = await gatewayCall(conn, '/api/mcp/servers');
   if (status >= 300) return failedRead(status, 'Sign in to Hermes to list its MCP servers');
+  if (!readable(body)) return unexpectedAnswer('the MCP servers');
 
   const raw = (body as { servers?: unknown[] } | null)?.servers;
   if (!Array.isArray(raw)) return { success: true, servers: [] };
+  if (!rowsNamedBy(raw, 'name')) return unexpectedAnswer('the MCP servers');
 
   const servers = raw.map(entry => {
     const s = entry as Record<string, unknown>;
@@ -937,9 +1097,11 @@ export async function fetchHermesMemoryProviders(
 > {
   const { status, body } = await gatewayCall(conn, '/api/memory');
   if (status >= 300) return failedRead(status, 'Sign in to Hermes to read its memory settings');
+  if (!readable(body)) return unexpectedAnswer('the memory providers');
 
   const b = (body ?? {}) as Record<string, unknown>;
   const raw = Array.isArray(b.providers) ? b.providers : [];
+  if (!rowsNamedBy(raw, 'name')) return unexpectedAnswer('the memory providers');
   const builtin = (b.builtin_files ?? {}) as Record<string, unknown>;
 
   return {
@@ -994,6 +1156,7 @@ export async function searchHermesSessions(
   const q = `?q=${encodeURIComponent(query)}&limit=${Math.min(Math.max(limit, 1), 100)}`;
   const { status, body } = await gatewayCall(conn, `/api/sessions/search${q}`);
   if (status >= 300) return failedRead(status, 'Sign in to Hermes to search its history');
+  if (!readable(body)) return unexpectedAnswer('the search results');
 
   const payload = body as Record<string, unknown> | null;
   const raw = Array.isArray(payload)
@@ -1043,5 +1206,6 @@ export async function fetchHermesSessionParent(
 export async function fetchHermesMemoryState(conn: HermesConnection) {
   const { status, body } = await gatewayCall(conn, '/api/memory');
   if (status >= 300) return failedRead(status, 'Sign in to Hermes');
+  if (!readable(body)) return unexpectedAnswer('the memory settings');
   return { success: true as const, state: body as Record<string, unknown> };
 }

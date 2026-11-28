@@ -2591,7 +2591,6 @@ export interface ElectronAPI {
       tailscale: { installed: boolean; running: boolean; dnsName?: string; ip?: string; serveConfigured: boolean };
       serveCommand: string;
     }>;
-    testWebhook: (params: { agentName?: string; agentId?: string; projectPath?: string }) => Promise<{ success: boolean; status?: number; response?: unknown; error?: string }>;
     /**
      * The Hermes gateways Tars takes work from (services/hermes-gateways.ts):
      * each posts to its own route (`path`) with its own secret, and reaches the
@@ -2702,7 +2701,8 @@ export interface ElectronAPI {
   // Updates
   updates?: {
     check: () => Promise<{ devMode?: boolean; error?: boolean; fallback?: boolean; currentVersion?: string } | null>;
-    download: () => Promise<unknown>;
+    /** A failed download (the network, GitHub refusing the asset, no check yet) answers why, never a throw. */
+    download: () => Promise<{ success: true } | { success: false; error: string }>;
     quitAndInstall: () => Promise<{ started: boolean; error?: string }>;
     openExternal: (url: string) => Promise<{ success: boolean }>;
     onUpdateAvailable: (callback: (info: {

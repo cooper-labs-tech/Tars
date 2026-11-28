@@ -110,6 +110,11 @@ function streamChatCompletion(endpoint, model, messages) {
     };
 
     const req = transport.request(options, (res) => {
+      // An answer cut off once it has begun: neither the request's error nor 'end' comes, and the runner
+      // ended without a word in the middle of a session (the Audit's I-3 on #660).
+      const cut = () => reject(new Error('the endpoint cut its answer off before the end'));
+      res.on('error', cut);
+      res.on('close', () => { if (!res.complete) cut(); });
       if (res.statusCode !== 200) {
         let errBody = '';
         res.on('data', (chunk) => { errBody += chunk; });
@@ -164,8 +169,6 @@ function streamChatCompletion(endpoint, model, messages) {
         }
         resolve(fullContent);
       });
-
-      res.on('error', reject);
     });
 
     req.on('error', reject);
@@ -201,6 +204,9 @@ function chatCompletion(endpoint, model, messages) {
     };
 
     const req = transport.request(options, (res) => {
+      const cut = () => reject(new Error('the endpoint cut its answer off before the end'));
+      res.on('error', cut);
+      res.on('close', () => { if (!res.complete) cut(); });
       let data = '';
       res.on('data', (chunk) => { data += chunk; });
       res.on('end', () => {

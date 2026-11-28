@@ -59,11 +59,14 @@ function oauthHeader(method: string, url: string, creds: XCredentials): string {
 function call(options: https.RequestOptions, body?: string): Promise<{ status: number; data: string }> {
   return new Promise((resolve, reject) => {
     const req = https.request(options, (res) => {
+      // An answer cut off once it has begun, in words: Node's own was "aborted" (the Audit's I-3 on #660).
+      const cut = () => reject(new Error('its answer was cut off before the end'));
+      res.on('error', cut);
+      res.on('close', () => { if (!res.complete) cut(); });
       let data = '';
       res.setEncoding?.('utf8');
       res.on('data', (chunk) => { data += chunk; });
       res.on('end', () => resolve({ status: res.statusCode ?? 0, data }));
-      res.on('error', reject);
     });
     req.on('error', reject);
     // In the words every MCP server here has for a silent host (mcp-shared's noAnswerWithin).

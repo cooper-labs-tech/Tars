@@ -3,6 +3,7 @@ import * as path from 'path';
 import { DATA_DIR, privatePath } from '../constants';
 import { defaultHermesConnection, type HermesConnection } from '../types/hermes';
 import { describeSecretFileError, ensureSecretFileMode, writeSecretFileSync } from '../utils/secret-file';
+import { withoutHome } from '../utils/without-home';
 import { moveOutOfAgentReach } from './settings-secrets';
 
 /**
@@ -90,12 +91,14 @@ export function writeHermesConnection(conn: HermesConnection): void {
  * Hermes: a broken file sent a sandbox's kanban to his board (the Backend's gate
  * of #171). Here the file must read, parse to an object and name the address its
  * mode needs. Null when there is no file; otherwise the reason, which never quotes
- * the file: it holds the gateway's token.
+ * the file: it holds the gateway's token. Nor its path: the reason reaches the
+ * window (Schedules, Kanban, Brain), and the path's home names the account (the
+ * Audit's I-2 on #658). Its name stays, which says which file.
  */
 export function configuredHermesConnection(): { conn: HermesConnection } | { unusable: string } | null {
   moved();
   if (!fs.existsSync(HERMES_CONNECTION_FILE)) return null;
-  const unusable = (why: string) => ({ unusable: `${HERMES_CONNECTION_FILE} ${why}: save the connection again in Settings, Hermes.` });
+  const unusable = (why: string) => ({ unusable: `The Hermes connection file (${path.basename(HERMES_CONNECTION_FILE)}) ${why}: save the connection again in Settings, Hermes.` });
   let parsed: unknown;
   try {
     ensureSecretFileMode(HERMES_CONNECTION_FILE);
@@ -104,7 +107,16 @@ export function configuredHermesConnection(): { conn: HermesConnection } | { unu
     return unusable(`cannot be read (${describeSecretFileError(err)})`);
   }
   if (!parsed || typeof parsed !== 'object') return unusable('holds no connection');
-  const file = withoutToken(parsed as Partial<HermesConnection>);
+  let file: Partial<HermesConnection>;
+  try {
+    file = withoutToken(parsed as Partial<HermesConnection>);
+  } catch (err) {
+    // A token a Tars before 1.9.2 left in the file, whose move into hermes-token
+    // cannot be written: it threw Node's file error, the home's path in it,
+    // through every gateway, overseer and memory channel (#660). Said in words,
+    // the home said ~; a write error quotes paths, never what was written.
+    return unusable(`holds a token Tars could not move out of it (${withoutHome(err instanceof Error ? err.message : String(err))})`);
+  }
   const conn: HermesConnection = { ...defaultHermesConnection(), ...file, token: readToken() };
   switch (file.mode) {
     case 'local': {
@@ -136,7 +148,7 @@ let lastUnusable: string | null = null;
 export function usableHermesConnection(): HermesConnection | null {
   const configured = configuredHermesConnection();
   if (configured && 'unusable' in configured) {
-    if (configured.unusable !== lastUnusable) console.warn(`[hermes] ${configured.unusable}`);
+    if (configured.unusable !== lastUnusable) console.warn(`[hermes] ${configured.unusable} (${HERMES_CONNECTION_FILE})`);
     lastUnusable = configured.unusable;
     return null;
   }

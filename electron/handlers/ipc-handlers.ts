@@ -2049,6 +2049,11 @@ function registerAppSettingsHandlers(deps: IpcHandlerDependencies): void {
   }
 
 
+  // How long the X and SocialData tests wait for an answer: without a limit, a
+  // host that took the connection and said nothing kept Settings' Test button
+  // spinning (#660), where Discord's, Ollama's and Hermes's give up and say so.
+  const INTEGRATION_TEST_WAIT_MS = 10_000;
+
   // Test X API credentials (OAuth 1.0a)
   ipcMain.handle('xapi:test', async () => {
     const appSettings = getAppSettings();
@@ -2092,7 +2097,12 @@ function registerAppSettingsHandlers(deps: IpcHandlerDependencies): void {
           path: '/2/users/me',
           method: 'GET',
           headers: { 'Authorization': authHeader, 'Accept': 'application/json' },
+          timeout: INTEGRATION_TEST_WAIT_MS,
         }, (res: import('http').IncomingMessage) => {
+          // Cut off once it has begun: neither the request's error nor its timeout comes (#660).
+          const cut = () => resolve({ success: false, error: 'X\'s answer was cut off before the end.' });
+          res.on('error', cut);
+          res.on('close', () => { if (!res.complete) cut(); });
           let data = '';
           res.on('data', (chunk: string) => { data += chunk; });
           res.on('end', () => {
@@ -2109,6 +2119,10 @@ function registerAppSettingsHandlers(deps: IpcHandlerDependencies): void {
           });
         });
         req.on('error', (err: Error) => resolve({ success: false, error: err.message }));
+        req.on('timeout', () => {
+          resolve({ success: false, error: `X did not answer within ${INTEGRATION_TEST_WAIT_MS / 1000} s.` });
+          req.destroy();
+        });
         req.end();
       });
       return result;
@@ -2136,7 +2150,12 @@ function registerAppSettingsHandlers(deps: IpcHandlerDependencies): void {
             'Authorization': `Bearer ${appSettings.socialDataApiKey}`,
             'Accept': 'application/json',
           },
+          timeout: INTEGRATION_TEST_WAIT_MS,
         }, (res: import('http').IncomingMessage) => {
+          // Cut off once it has begun: neither the request's error nor its timeout comes (#660).
+          const cut = () => resolve({ success: false, error: 'SocialData\'s answer was cut off before the end.' });
+          res.on('error', cut);
+          res.on('close', () => { if (!res.complete) cut(); });
           let data = '';
           res.on('data', (chunk: string) => { data += chunk; });
           res.on('end', () => {
@@ -2155,6 +2174,10 @@ function registerAppSettingsHandlers(deps: IpcHandlerDependencies): void {
           });
         });
         req.on('error', (err: Error) => resolve({ success: false, error: err.message }));
+        req.on('timeout', () => {
+          resolve({ success: false, error: `SocialData did not answer within ${INTEGRATION_TEST_WAIT_MS / 1000} s.` });
+          req.destroy();
+        });
         req.end();
       });
       return result;

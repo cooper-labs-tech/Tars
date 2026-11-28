@@ -2,6 +2,7 @@ import { autoUpdater, UpdateInfo } from 'electron-updater';
 import { BrowserWindow, app } from 'electron';
 import { GITHUB_REPO } from '../constants';
 import { installerAssetFor, offersUpdate } from '../platform';
+import { withoutHome } from '../utils/without-home';
 
 // Don't download until user clicks "Download"
 autoUpdater.autoDownload = false;
@@ -143,8 +144,31 @@ export async function checkForUpdates() {
   }
 }
 
-export function downloadUpdate() {
-  return autoUpdater.downloadUpdate();
+/**
+ * Download the update the last check found (app:downloadUpdate).
+ *
+ * A download that fails (the network, GitHub refusing the asset, no check
+ * yet) is a refusal with its reason, never a throw: the window calls this
+ * without awaiting it, so a rejection was an unhandled error on its console
+ * and the banner stayed on "Downloading". Only the first line of the updater's
+ * message: electron-updater's HttpError carries the request and the response's
+ * headers on the lines after it. A disk error quotes the updater's cache, under
+ * the owner's home: said `~`.
+ *
+ * The window is told on app:update-error, whose listeners had no sender: the
+ * banner goes back to "available" and Settings, System shows the sentence (the
+ * Audit's L3 on #660).
+ */
+export async function downloadUpdate(): Promise<{ success: true } | { success: false; error: string }> {
+  try {
+    await autoUpdater.downloadUpdate();
+    return { success: true };
+  } catch (err) {
+    const first = withoutHome((err instanceof Error ? err.message : String(err)).split('\n')[0].trim()).slice(0, 200);
+    const error = `Tars could not download the update: ${first}`;
+    _getMainWindow?.()?.webContents.send('app:update-error', error);
+    return { success: false, error };
+  }
 }
 
 /**

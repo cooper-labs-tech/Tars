@@ -5,14 +5,13 @@ import * as fs from 'fs';
 import * as path from 'path';
 import { hermesDesktopConfigPath, tailscaleCandidates } from '../platform';
 import * as os from 'os';
-import * as http from 'http';
-import * as https from 'https';
 import { API_PORT } from '../constants';
 import { configuredHermesConnection, readHermesConnection, writeHermesConnection } from '../services/hermes-config';
 import { resetLiveSession } from '../services/overseer';
 import { relayStatus } from '../services/hermes-relay';
 import { hermesSessionWatch } from '../services/hermes-session-watch';
 import { describeSecretFileError } from '../utils/secret-file';
+import { withoutHome } from '../utils/without-home';
 // The webhook's own secret, not the master token, which over the tailnet would
 // hand out every route. Kept in the private directory: see that module.
 import { provisionWebhookSecret } from '../services/hermes-webhook-secret';
@@ -38,8 +37,13 @@ function refusing<T extends object>(call: () => T): ({ success: true } & T) | { 
   try {
     return { success: true, ...call() };
   } catch (err) {
-    return { success: false, error: err instanceof Error ? err.message : String(err) };
+    return { success: false, error: reasonOf(err) };
   }
+}
+
+/** Why a call failed, for the window: a file error's path with the owner's home said ~ (the Audit's I-2 on #658). */
+function reasonOf(err: unknown): string {
+  return withoutHome(err instanceof Error ? err.message : String(err));
 }
 import {
   fetchHermesCrons,
@@ -58,10 +62,11 @@ import {
   fetchHermesMcpServers,
   fetchHermesMemoryProviders,
   setHermesMemoryProvider,
+  reachingHermes,
+  gatewayUrl,
 } from '../services/hermes-client';
 import {
   HermesConnection,
-  defaultHermesConnection,
   resolveHermesBaseUrl,
   HERMES_DEFAULT_PORT,
 } from '../types/hermes';
@@ -103,12 +108,20 @@ function keepToken(incoming: HermesConnection, kept: string | undefined): Hermes
  * port for a file that is missing or broken (configuredHermesConnection), which
  * on JeanBrasse's machine is the SSH tunnel to his Hermes. The Settings form still
  * shows the default, to be saved (hermes:connection:get).
+ *
+ * A gateway that gives no answer is a refusal with its reason (reachingHermes),
+ * as one not configured or unusable is: it was a throw through IPC, which the Schedules page showed
+ * as Electron's "Error invoking remote method 'hermes:crons:list'" (27/11).
+ * `'rejects'` keeps the throw, for the one page that reads it.
  */
-async function viaGateway<T>(call: (conn: HermesConnection) => Promise<T>): Promise<T | { success: false; error: string }> {
+async function viaGateway<T>(
+  call: (conn: HermesConnection) => Promise<T>,
+  unanswered: 'refused' | 'rejects' = 'refused',
+): Promise<T | { success: false; error: string }> {
   const configured = configuredHermesConnection();
   if (!configured) return { success: false, error: 'Hermes is not configured. Set it up in Settings.' };
   if ('unusable' in configured) return { success: false, error: configured.unusable };
-  return call(configured.conn);
+  return unanswered === 'rejects' ? call(configured.conn) : reachingHermes(() => call(configured.conn));
 }
 
 /**
@@ -219,38 +232,12 @@ function importDesktopConfig(): DesktopImport | null {
   }
 }
 
-/** GET a Hermes endpoint, following the gateway's own auth conventions. */
-function hermesGet(baseUrl: string, pathname: string, token?: string, timeoutMs = 6000): Promise<{ status: number; body: unknown }> {
-  return new Promise((resolve, reject) => {
-    let target: URL;
-    try { target = new URL(baseUrl + pathname); } catch { reject(new Error('Invalid gateway URL')); return; }
-    const mod = target.protocol === 'https:' ? https : http;
-    const req = mod.request(target, {
-      method: 'GET',
-      timeout: timeoutMs,
-      headers: token ? { 'X-Hermes-Session-Token': token } : undefined,
-    }, res => {
-      let raw = '';
-      res.on('data', c => { raw += c; });
-      res.on('end', () => {
-        let body: unknown = raw;
-        try { body = JSON.parse(raw); } catch { /* keep raw */ }
-        resolve({ status: res.statusCode ?? 0, body });
-      });
-    });
-    req.on('error', reject);
-    req.on('timeout', () => { req.destroy(); reject(new Error('timeout')); });
-    req.end();
-  });
-}
-
 /**
  * Hermes integration handlers: everything the Settings → Hermes section
  * needs to wire a remote (VPS) Hermes instance to this Tars:
  * - connection info: the incoming-webhook URL/token to paste into Hermes
  *   cron jobs, plus Tailscale state (DNS name, serve status) so the user
  *   knows exactly how the VPS reaches this machine
- * - a local dry-run test of the webhook (auth + agent resolution, no dispatch)
  * - a reachability check of the Hermes gateway URL itself
  */
 
@@ -305,37 +292,6 @@ async function detectTailscale(): Promise<TailscaleInfo> {
   return { installed: false, running: false, serveConfigured: false };
 }
 
-/** POST JSON to the local API and resolve with {status, body}. */
-function postLocal(pathname: string, token: string, payload: unknown): Promise<{ status: number; body: unknown }> {
-  return new Promise((resolve, reject) => {
-    const data = JSON.stringify(payload);
-    const req = http.request({
-      host: '127.0.0.1',
-      port: API_PORT,
-      path: pathname,
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Content-Length': Buffer.byteLength(data),
-        'Authorization': `Bearer ${token}`,
-      },
-      timeout: 5000,
-    }, res => {
-      let raw = '';
-      res.on('data', c => { raw += c; });
-      res.on('end', () => {
-        let body: unknown = raw;
-        try { body = JSON.parse(raw); } catch { /* keep raw */ }
-        resolve({ status: res.statusCode ?? 0, body });
-      });
-    });
-    req.on('error', reject);
-    req.on('timeout', () => { req.destroy(); reject(new Error('timeout')); });
-    req.write(data);
-    req.end();
-  });
-}
-
 export function registerHermesHandlers(): void {
   ipcMain.handle('hermes:getConnectionInfo', async () => {
     const [tailscale, token] = await Promise.all([detectTailscale(), Promise.resolve(provisionWebhookSecret())]);
@@ -367,7 +323,13 @@ export function registerHermesHandlers(): void {
       showGatewaySecret(gateway.label, gatewaySecret(gateway.id));
       return { gateway: gatewayView(gateway), set: true as const };
     }));
-  ipcMain.handle('hermes:gateways:remove', async (_event, params: { id: string }) => ({ success: removeGateway(params?.id) }));
+  ipcMain.handle('hermes:gateways:remove', async (_event, params: { id: string }) => {
+    try {
+      return { success: removeGateway(params?.id) };
+    } catch (err) {
+      return { success: false, error: reasonOf(err) };
+    }
+  });
   ipcMain.handle('hermes:gateways:copySecret', async (_event, params: { id: string }) => refusing(() => ({ copied: copySecret(gatewaySecret(params?.id)) })));
   ipcMain.handle('hermes:gateways:rotate', async (_event, params: { id: string }) =>
     refusing(() => {
@@ -410,20 +372,37 @@ export function registerHermesHandlers(): void {
   // did, and one refusal kept the Chat on the slower cron path until Tars
   // restarted.
   ipcMain.handle('hermes:connection:save', async (_event, connection: HermesConnection) => {
+    // A gateway's URL is an http(s) address, the only kind Tars calls: anything
+    // else (a token pasted in the wrong field, user:secret, ftp://) is refused,
+    // never echoed (the Audit's L1 on #663). An empty one is the form's own,
+    // which the connection then says names no gateway URL.
+    const url = typeof connection?.url === 'string' ? connection.url.trim() : '';
+    if ((connection?.mode === 'remote' || connection?.mode === 'cloud') && url && !gatewayUrl(url)) {
+      return { success: false, error: 'Tars calls a gateway only at an http:// or https:// address: nothing was saved.' };
+    }
     try {
       // Read only for the token the form was shown as the mask.
       writeConnection(keepToken(connection, readConnection().token));
       resetLiveSession();
       return { success: true };
     } catch (err) {
-      return { success: false, error: err instanceof Error ? err.message : String(err) };
+      return { success: false, error: reasonOf(err) };
     }
   });
 
   ipcMain.handle('hermes:connection:import', async () => {
     const imported = importDesktopConfig();
     if (!imported) return { success: false, error: 'No Hermes Desktop configuration found on this machine.' };
-    writeConnection(imported.conn);
+    // Desktop's URL is held to the save's rule: an http(s) address or nothing written (the Audit's I-2 on #660).
+    const url = typeof imported.conn.url === 'string' ? imported.conn.url.trim() : '';
+    if ((imported.conn.mode === 'remote' || imported.conn.mode === 'cloud') && url && !gatewayUrl(url)) {
+      return { success: false, error: 'Tars calls a gateway only at an http:// or https:// address: nothing was saved.' };
+    }
+    try {
+      writeConnection(imported.conn);
+    } catch (err) {
+      return { success: false, error: reasonOf(err) };
+    }
     resetLiveSession();
     return {
       success: true,
@@ -488,8 +467,11 @@ export function registerHermesHandlers(): void {
     viaGateway(conn => deleteHermesCron(conn, params.jobId, params.profile)));
 
   // ── Kanban (the board lives in Hermes; Tars is a client) ──
+  // The board alone still rejects when the gateway gives no answer: HermesBoard
+  // reads the rejection, the transport's own words, and says which gateway went
+  // silent and how (describeHermesFailure).
   ipcMain.handle('hermes:kanban:board', async (_event, params: { board?: string } = {}) => {
-    return viaGateway(conn => fetchHermesBoard(conn, params?.board));
+    return viaGateway(conn => fetchHermesBoard(conn, params?.board), 'rejects');
   });
 
   ipcMain.handle('hermes:kanban:createTask', async (_event, task: Record<string, unknown>) => {

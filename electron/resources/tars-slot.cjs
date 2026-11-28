@@ -45,6 +45,11 @@ function call(method, path, body) {
       },
       timeout: 15_000,
     }, (res) => {
+      // An answer cut off once it has begun: neither the request's error nor its timeout comes, and the command
+      // ended without a word, with 0 (the Audit's I-3 on #660).
+      const cut = () => reject(new Error('its answer was cut off before the end'));
+      res.on('error', cut);
+      res.on('close', () => { if (!res.complete) cut(); });
       let text = '';
       res.on('data', (chunk) => { text += chunk; });
       res.on('end', () => {

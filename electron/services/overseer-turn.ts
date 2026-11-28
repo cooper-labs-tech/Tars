@@ -13,6 +13,7 @@ import {
   hermesCronAction,
   fetchHermesCronRuns,
   fetchHermesSessionMessages,
+  noAnswerSentence,
 } from './hermes-client';
 import { HermesConnection, resolveHermesBaseUrl } from '../types/hermes';
 import { keepHermesSession, keptHermesSession, loadState, rememberHermesSessions, saveState, type OverseerAttachment, type OverseerMessage, type OverseerState } from './overseer-store';
@@ -269,6 +270,13 @@ export async function askOverseer(
     }
 
     return finishTurn(state, assistantMsg.content, opts);
+  } catch (err) {
+    // A gateway that answered the probe and then gave no answer, mid-turn: the
+    // reason a gateway that does not answer already has, never a throw through
+    // IPC. Any other failure still throws.
+    const error = noAnswerSentence(err);
+    if (error === undefined) throw err;
+    return { ok: false, reason: 'gateway_unreachable', error };
   } finally {
     turnInFlight = false;
   }
