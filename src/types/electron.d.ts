@@ -2957,9 +2957,20 @@ export interface ElectronAPI {
     /** One session as it would be uploaded: scrubbed, with what was masked by kind. */
     /** One session exactly as it would be uploaded: the batches (id and body) and the blobs (hash and content) the
      *  upload sends, built by the same function, with what was masked, by kind. */
-    preview: (traceId: string) => Promise<{ document: { batches: Array<{ batchId: string; body: unknown }>; blobs: Record<string, unknown> }; counts: Record<string, number>; scrubVersion: string } | null>;
+    preview: (traceId: string) => Promise<{ consent: { training: boolean }; document: { batches: Array<{ batchId: string; body: unknown }>; blobs: Record<string, unknown> }; counts: Record<string, number>; scrubVersion: string } | null>;
     /** The user has read the notice: uploads may start (refused while no address is set, or a deletion is owed). */
     giveUploadConsent: () => Promise<{ ok: true; at: string } | { ok: false; error: string }>;
+    /**
+     * The owner's switch "May be used to train models" (trace feature A5): on until the owner turns it off. `owed`:
+     * a change the back-office has not taken yet. `unsaved`: an off that holds for this run and is not saved yet.
+     */
+    training: () => Promise<TrainingView>;
+    /**
+     * Sets the switch, from the window only. Off applies at once: every session running now, and any opened from now,
+     * carries training false for good; the install's value goes to the back-office and covers what was sent. On is
+     * refused (ok:false) when it cannot be saved. `unsaved` as above.
+     */
+    setTraining: (training: boolean) => Promise<{ ok: true; unsaved?: string; state: TrainingView } | { ok: false; error: string }>;
     /** The uploader's state. */
     uploadState: () => Promise<UploadState>;
     /** Asks the back-office to delete everything this install sent, then forgets the install and what was sent. */
@@ -3215,7 +3226,16 @@ export type LoadApproveAnswer =
   | { ok: false; reason: 'stale'; state: LoadWindowState }
   | { ok: false; error: string };
 
+/** The owner's training switch, as the window shows it. */
+export interface TrainingView {
+  training: boolean;
+  owed: boolean;
+  unsaved?: string;
+}
+
 export interface UploadNotice {
+  /** Where the training switch stands now; `leaves` has its line. */
+  training: boolean;
   /** After a deletion: only sessions started after this moment are sent; say it with the consent. */
   onlyAfter?: string;
   leaves: string[];
@@ -3332,6 +3352,8 @@ export interface TraceSessionSummary {
   mixed: boolean;
   /** Turns whose author Tars could not attribute. */
   unknownTurns: number;
+  /** Whether the session may be used to train models: false once the switch was off at any moment while it ran. */
+  consent: { training: boolean };
 }
 
 /** What Tars knows of how a session ended: what is not known is absent. */

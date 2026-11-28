@@ -435,7 +435,21 @@ consent, opted-in sessions are uploaded:
   unscrubbed, and the back-office caps it at 128; any other is left out whole, never cut; the rest counted in
   `toolCallsOmitted`) and a turn's `interventions`, each with its line in the notice. The back-office takes them
   before a Tars that sends them, as it took `side`;
+- each session with `consent: { training }` (trace feature A5): the owner's switch "May be used to train models" as
+  it stood while the session ran, false once it was off at any moment, false for a session recorded before it existed.
+  True only for a session on the private list of those Tars opened while training was on
+  (`~/.tars-private/traces-training-allowed.json`), whatever the store's stamp says: one rule (`trace-store.ts`
+  summaryOf) for the export's `traces` row, the read API's session document and change list, the upload and the
+  preview. The back-office is #678's, which takes the field first;
 - resumed after a restart, with backoff.
+
+**Training consent** (trace feature A5). The switch is on by default (`TRAINING_DEFAULT`), set by the window's
+`traces:setTraining` alone, and kept in `~/.tars-private/traces-training.json`. The install's value goes to the
+back-office with the registration (`consent: { training }`) and on every change (`PUT /v1/installs/me/consent`,
+`{ training }`, the install token), first in a pass (before the per-session deletes owed), with sharing off too. A
+change not taken stays owed across a restart. Off applies at once to every session running and is written after; on
+is written first. The upload notice says where it stands, in a line of its own, and the preview shows the consent a
+session would carry.
 
 `deleteEverywhere` asks the back-office to delete all of it. A session sent and then deleted here, by the user or by
 retention, is owed a `DELETE /v1/sessions/{sessionId}`: sent first in each pass, retried as every other call, with the

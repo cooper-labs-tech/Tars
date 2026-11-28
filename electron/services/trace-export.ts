@@ -50,6 +50,8 @@ export function sessionDocument(store: TraceStore, traceId: string, seen: Set<st
       start: s.start ?? null, lost_demand: s.lostDemand ?? [], lost_demand_omitted: s.lostDemandOmitted ?? 0,
       context_window_given: x.contextWindowGiven ?? null, output_cap_given: x.outputCapGiven ?? null,
       auto_compaction: x.autoCompaction ?? null, compactions: x.compactions ?? [], compactions_omitted: x.compactionsOmitted ?? 0,
+      // Whether the session may be used to train models (trace feature A5): false once the switch was off while it ran.
+      consent: { training: x.consent.training },
     },
     turns: [], requests: [], request_messages: [], messages: [],
   };

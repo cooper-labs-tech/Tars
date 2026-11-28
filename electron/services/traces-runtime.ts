@@ -180,6 +180,259 @@ export function uploadConsentAt(): string | undefined {
   return consentStands(settings) ? traceSettingsOf(settings).uploadConsentAt : undefined;
 }
 
+/**
+ * The training switch's default, "May be used to train models", when the owner never chose: on (the owner's ruling
+ * of 11/11). The one place it is set (trace feature A5).
+ */
+export const TRAINING_DEFAULT = true;
+
+/**
+ * The owner's training switch, in a file of its own in the private folder (0600), beside the consent's: no agent is
+ * handed it, and no save of the settings (the window's generic one, or an agent writing app-settings.json) reaches
+ * it. Only the window's `traces:setTraining` writes it. `owed`: a change the back-office has not taken yet, which a
+ * restart finds and sends. No file: nothing chosen, the default. A file that cannot be read as one: off (fails closed).
+ */
+export const TRACES_TRAINING_FILE = privatePath('traces-training.json');
+
+/**
+ * The sessions that may be used to train models, in the private folder (`{ ids }`, 0600): those Tars opened while
+ * training was on, each taken off when the switch goes off while it runs. Trainable is a positive, private fact (the
+ * Audit's M1 on #690, the orchestrator's ruling): a session is trainable only when it is on this list and its stamp
+ * says yes (trace-store.ts summaryOf), so an agent, which is handed the store under ~/.tars, can neither turn a "no"
+ * back into a yes nor copy a session under a new id. Read once per run, then held in memory, which is the truth for
+ * the run; a change is written at once, and again every minute until a write holds. A list that cannot be read is set
+ * aside and a new one started: none of the sessions before it is trainable, and the window is told. Pruned on the
+ * sweep, with the sessions it names.
+ */
+export const TRACES_TRAINING_ALLOWED_FILE = privatePath('traces-training-allowed.json');
+
+let allowed: Set<string> | undefined;
+let allowedDirty = false;
+let allowedRetry: NodeJS.Timeout | null = null;
+let allowedNote: string | undefined;
+let unreadableNote: string | undefined;
+/** Sessions running at an off that the store could not mark: said to the window (they left the list all the same). */
+let markNote: string | undefined;
+
+function loadAllowed(): Set<string> {
+  if (allowed) return allowed;
+  let raw: string;
+  try {
+    raw = fs.readFileSync(TRACES_TRAINING_ALLOWED_FILE, 'utf8');
+  } catch (err) {
+    if ((err as NodeJS.ErrnoException).code === 'ENOENT') return (allowed = new Set());
+    return restartAllowed(describeSecretFileError(err));
+  }
+  try {
+    const j = JSON.parse(raw) as { ids?: unknown };
+    if (Array.isArray(j.ids) && j.ids.every(x => typeof x === 'string')) return (allowed = new Set(j.ids as string[]));
+  } catch { /* below */ }
+  return restartAllowed('it is not a list of ids');
+}
+
+/** An unreadable list set aside, and a new one started: no session from before counts as trainable. */
+function restartAllowed(reason: string): Set<string> {
+  const aside = `${TRACES_TRAINING_ALLOWED_FILE}.unreadable-${Date.now()}`;
+  let where = `set aside as ${path.basename(aside)}`;
+  try {
+    fs.renameSync(TRACES_TRAINING_ALLOWED_FILE, aside);
+  } catch (err) {
+    where = `left where it is (it could not be moved: ${describeSecretFileError(err)})`;
+  }
+  unreadableNote = `The list of sessions that may be used to train models could not be read (${reason}): it was ${where}, a new one was started, and no session recorded before now counts as trainable.`;
+  console.error(`[traces] ${unreadableNote}`);
+  allowed = new Set();
+  allowedDirty = true;
+  persistAllowed();
+  return allowed;
+}
+
+/** Whether a session is on the private list of trainable sessions: the store's rule beside its stamp. */
+export function sessionTrainable(traceId: string): boolean {
+  return loadAllowed().has(traceId);
+}
+
+function persistAllowed(): boolean {
+  if (!allowedDirty || !allowed) return true;
+  try {
+    fs.mkdirSync(path.dirname(TRACES_TRAINING_ALLOWED_FILE), { recursive: true, mode: 0o700 });
+    writeSecretFileSync(TRACES_TRAINING_ALLOWED_FILE, `${JSON.stringify({ ids: [...allowed] })}\n`);
+    allowedDirty = false;
+    allowedNote = undefined;
+    if (allowedRetry) { clearTimeout(allowedRetry); allowedRetry = null; }
+    return true;
+  } catch (err) {
+    allowedNote = `The list of sessions that may be used to train models holds for this run, but Tars could not save it (${describeSecretFileError(err)}): it tries again every minute.`;
+    console.error(`[traces] ${allowedNote}`);
+    if (!allowedRetry) {
+      allowedRetry = setTimeout(() => { allowedRetry = null; persistAllowed(); }, 60_000);
+      allowedRetry.unref?.();
+    }
+    return false;
+  }
+}
+
+function allowSession(traceId: string): void {
+  const a = loadAllowed();
+  if (a.has(traceId)) return;
+  a.add(traceId);
+  allowedDirty = true;
+  persistAllowed();
+}
+
+function disallowSessions(ids: string[]): void {
+  const a = loadAllowed();
+  let changed = false;
+  for (const id of ids) if (a.delete(id)) changed = true;
+  if (!changed) return;
+  allowedDirty = true;
+  persistAllowed();
+}
+
+/** The list keeps only the sessions the store still holds. */
+function pruneAllowed(): void {
+  const a = loadAllowed();
+  if (a.size === 0) return;
+  const gone = [...a].filter(id => !traceStore().hasTrace(id));
+  if (gone.length) disallowSessions(gone);
+}
+
+/** An off the disk did not take yet: it holds in memory (a revoke applies at once), and is written again every minute. */
+let heldTraining: { value: boolean; owed: boolean } | undefined;
+let trainingRetry: NodeJS.Timeout | null = null;
+let trainingUnsaved: string | undefined;
+let trainingSoon: NodeJS.Timeout | null = null;
+
+/** The switch as it stands, and whether its value is owed to the back-office. */
+export function readTraining(): { value: boolean; owed: boolean } {
+  if (heldTraining) return { ...heldTraining };
+  let raw: string;
+  try {
+    raw = fs.readFileSync(TRACES_TRAINING_FILE, 'utf8');
+  } catch (err) {
+    return (err as NodeJS.ErrnoException).code === 'ENOENT' ? { value: TRAINING_DEFAULT, owed: false } : { value: false, owed: false };
+  }
+  try {
+    const t = JSON.parse(raw) as { training?: unknown; owed?: unknown };
+    if (typeof t.training === 'boolean') return { value: t.training, owed: t.owed === true };
+  } catch { /* below */ }
+  return { value: false, owed: false };
+}
+
+function writeTraining(t: { value: boolean; owed: boolean }): void {
+  fs.mkdirSync(path.dirname(TRACES_TRAINING_FILE), { recursive: true, mode: 0o700 });
+  writeSecretFileSync(TRACES_TRAINING_FILE, `${JSON.stringify({ training: t.value, owed: t.owed, at: new Date().toISOString() })}\n`);
+}
+
+/** A held off written, or tried again in a minute; the window told while it does not hold. True once written. */
+function persistHeldTraining(): boolean {
+  if (!heldTraining) return true;
+  try {
+    writeTraining(heldTraining);
+    heldTraining = undefined;
+    trainingUnsaved = undefined;
+    if (trainingRetry) { clearTimeout(trainingRetry); trainingRetry = null; }
+    deps?.emit('traces:changed');
+    return true;
+  } catch (err) {
+    trainingUnsaved = `Training is off for this run, but Tars could not save it (${describeSecretFileError(err)}): it tries again every minute, and a restart before it holds would read the switch as it was.`;
+    console.error(`[traces] ${trainingUnsaved}`);
+    if (!trainingRetry) {
+      trainingRetry = setTimeout(() => { trainingRetry = null; persistHeldTraining(); }, 60_000);
+      trainingRetry.unref?.();
+    }
+    return false;
+  }
+}
+
+/** A pass soon after a change, sharing on or off: the back-office learns it in seconds, not at the 5-minute pass. */
+function trainingPassSoon(): void {
+  if (trainingSoon) clearTimeout(trainingSoon);
+  trainingSoon = setTimeout(() => { trainingSoon = null; trainingPass(); }, 2_000);
+  trainingSoon.unref?.();
+}
+
+/** That pass: one running already (busy) is waited out, and this one runs 2 s after, not at the 5-minute pass. */
+function trainingPass(): void {
+  const t = traceSettingsOf(deps?.getSettings());
+  if (!t.uploadUrl || (!uploadConsentAt() && !readTraining().owed)) return;
+  traceUploader().runOnce()
+    .then((r) => {
+      if (r.skipped === 'busy') trainingPassSoon();
+      else if (r.sent || r.failed) deps?.emit('traces:changed');
+    })
+    .catch((err) => { console.error(`[traces] an upload pass failed: ${describeSecretFileError(err)}`); });
+}
+
+/**
+ * The owner's switch set, from the window only. Off is a revoke: it applies at once (every session running now is
+ * false for good, and so is any opened from now), then is written, held in memory until a write holds. On is a grant:
+ * written first, and nothing changes when it cannot be. Either way the new value is owed to the back-office.
+ */
+export function setTraining(value: boolean): { ok: true; unsaved?: string } | { ok: false; error: string } {
+  const now = readTraining();
+  if (now.value === value) return { ok: true, ...trainingNotes() };
+  const next = { value, owed: true };
+  if (!value) {
+    heldTraining = next;
+    const running = [...sessions.values()].filter(s => s.traced).map(s => s.traceId);
+    // Off the private list of trainable sessions first, which no agent reaches, then stamped no in the store.
+    disallowSessions(running);
+    markNote = undefined;
+    try {
+      if (running.length) traceStore().denyTraining(running);
+    } catch (err) {
+      markNote = `The sessions running now could not be marked off in the trace store (${describeSecretFileError(err)}): their "no" is kept in the private folder, so none leaves as trainable.`;
+      console.error(`[traces] ${markNote}`);
+    }
+    persistHeldTraining();
+  } else {
+    try {
+      writeTraining(next);
+    } catch (err) {
+      return { ok: false, error: `Tars could not save the switch (${describeSecretFileError(err)}): training stays off.` };
+    }
+    heldTraining = undefined;
+    trainingUnsaved = undefined;
+    if (trainingRetry) { clearTimeout(trainingRetry); trainingRetry = null; }
+  }
+  deps?.emit('traces:changed');
+  trainingPassSoon();
+  return { ok: true, ...trainingNotes() };
+}
+
+/** The back-office took this value: owed no more, if it still stands. A write that fails leaves it owed (resent). */
+function trainingSent(value: boolean): void {
+  const now = readTraining();
+  if (!now.owed || now.value !== value) return;
+  if (heldTraining) {
+    heldTraining = { value, owed: false };
+    // Written, persistHeldTraining tells the window; held still, the owed mark changed all the same: told here.
+    if (!persistHeldTraining()) deps?.emit('traces:changed');
+    return;
+  }
+  try {
+    writeTraining({ value, owed: false });
+  } catch (err) {
+    console.error(`[traces] the back-office took the training value, and the file still says it is owed (${describeSecretFileError(err)}): it is sent again, which is harmless`);
+    return;
+  }
+  // The window drops its "not yet sent" line now, not at its next read (the held path is told by persistHeldTraining).
+  deps?.emit('traces:changed');
+}
+
+/** What the window is told is not saved or not marked, in one `unsaved`, or nothing. */
+function trainingNotes(): { unsaved?: string } {
+  const notes = [trainingUnsaved, allowedNote, unreadableNote, markNote].filter(Boolean).join(' ');
+  return notes ? { unsaved: notes } : {};
+}
+
+/** What the window shows of the switch. */
+export function trainingView(): { training: boolean; owed: boolean; unsaved?: string } {
+  const t = readTraining();
+  return { training: t.value, owed: t.owed, ...trainingNotes() };
+}
+
 let unsaved: string | undefined;
 let persistRetry: NodeJS.Timeout | null = null;
 const PERSIST_RETRY_MS = 60_000;
@@ -418,7 +671,8 @@ export function previewUpload(traceId: string): Promise<ReturnType<TraceUploader
 }
 
 export function traceStore(): TraceStore {
-  if (!store) store = new TraceStore(TRACES_DB_FILE);
+  // The store reads a session as trainable only when the private list names it too (sessionTrainable).
+  if (!store) store = new TraceStore(TRACES_DB_FILE, { trainable: sessionTrainable });
   return store;
 }
 
@@ -511,6 +765,8 @@ export function traceUploader(): TraceUploader {
       client: { name: 'tars', version: deps?.clientVersion ?? 'unknown', platform: process.platform },
       // After "delete everything sent": no upload again until the user consents again, a restart included.
       withdrawConsent: (deletion) => { withdrawUploadConsent(deletion); },
+      training: readTraining,
+      trainingSent,
     });
   }
   return uploader;
@@ -518,7 +774,8 @@ export function traceUploader(): TraceUploader {
 
 function uploadPass(): void {
   const t = traceSettingsOf(deps?.getSettings());
-  // Without consent a pass still sends the per-session deletes owed to the install (trace-upload.ts runOnce decides).
+  // Without consent a pass still sends the per-session deletes owed to the install, and the training value owed
+  // (trace-upload.ts runOnce decides: deletesDue, trainingDue).
   if (!t.uploadUrl) return;
   traceUploader().runOnce()
     .then((r) => { if (r.sent || r.failed) deps?.emit('traces:changed'); })
@@ -542,6 +799,8 @@ export function sweepTraces(): void {
   try {
     const r = traceStore().sweep({ capBytes: t.capBytes, retentionDays: t.retentionDays, now: Date.now() });
     if (r.deleted) changed();
+    // The private list of sessions whose training is off keeps only the sessions the store still holds.
+    pruneAllowed();
   } catch (err) {
     console.error(`[traces] sweep failed: ${(err as Error).message}`);
   }
@@ -667,6 +926,22 @@ export function stopTracesRuntime(): void {
   if (uploadSoon) clearTimeout(uploadSoon);
   uploadTimer = null;
   uploadSoon = null;
+  if (trainingSoon) clearTimeout(trainingSoon);
+  trainingSoon = null;
+  // An off still held in memory is tried once more before Tars stops; what does not hold is said in the log.
+  if (heldTraining && !persistHeldTraining()) console.error('[traces] training off was not saved before Tars stopped: the next start reads the switch as it was');
+  if (trainingRetry) clearTimeout(trainingRetry);
+  trainingRetry = null;
+  heldTraining = undefined;
+  trainingUnsaved = undefined;
+  if (allowedDirty && !persistAllowed()) console.error('[traces] the list of trainable sessions was not saved before Tars stopped');
+  if (allowedRetry) clearTimeout(allowedRetry);
+  allowedRetry = null;
+  allowed = undefined;
+  allowedDirty = false;
+  allowedNote = undefined;
+  unreadableNote = undefined;
+  markNote = undefined;
   // A write still owed is tried once more before Tars stops: another save may have written the settings since (the
   // window's own, an agent's), and only this one puts a consent dropped for a revoke back.
   if (persistRetry) {
@@ -763,10 +1038,15 @@ export function openEndpointSession(agentId: string): { env: Record<string, stri
   };
   sessions.set(token, live);
   if (decision.traced) {
+    // Opened while training is on: on the private list of trainable sessions, which no agent reaches. Opened while
+    // off, it is on no list, and never trainable.
+    if (readTraining().value) allowSession(traceId);
     try {
       traceStore().openTrace({
         traceId, projectPath: agent.projectPath, agentId, agentName: agent.name, harness,
         endpointId: agent.endpointId, endpointName: endpoint?.name, endpointBaseUrl: endpoint?.approvedBaseUrl, model: agent.model, startedAt: live.startedAt,
+        // The training switch as it stands now; turned off while the session runs, it is false for good (setTraining).
+        training: readTraining().value,
       });
       const start = startOf(agent, traceId, note);
       traceStore().setStart(traceId, start);

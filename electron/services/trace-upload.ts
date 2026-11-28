@@ -102,6 +102,13 @@ export interface UploaderDeps {
    * I-1 at 965cfced0).
    */
   withdrawConsent(deletion?: { owed: boolean; since?: number; by?: 'you' | 'start' }): void;
+  /**
+   * The owner's training switch (trace feature A5) and whether its value is owed to the back-office: a change not yet
+   * taken there (`PUT /v1/installs/me/consent`, #678). Kept where a restart finds it (traces-runtime.ts readTraining).
+   */
+  training(): { value: boolean; owed: boolean };
+  /** The back-office took this value (a 2xx, or a registration that carried it): owed no more, if it still stands. */
+  trainingSent(value: boolean): void;
   /** A batch's body, compressed, at most (4 MiB: half the back-office's 8 MiB, the margin it advises). */
   maxBatchBytes?: number;
   fetch?: typeof fetch;
@@ -388,7 +395,10 @@ export class TraceUploader {
   }
 
   private async register(url: string): Promise<Install> {
-    const r = await this.call(null, url, 'POST', '/v1/installs', Buffer.from(JSON.stringify({ client: this.deps.client }))) as { installId: string; token: string };
+    // The training switch goes with the registration, recorded there as the install's first change (#678).
+    const training = this.deps.training().value;
+    const r = await this.call(null, url, 'POST', '/v1/installs', Buffer.from(JSON.stringify({ client: this.deps.client, consent: { training } }))) as { installId: string; token: string };
+    this.deps.trainingSent(training);
     // The secret the preview keyed with, so the preview's keys are the keys sent.
     const install: Install = { url, installId: r.installId, token: r.token, secret: this.secret(), registeredAt: this.now() };
     fs.mkdirSync(path.dirname(this.deps.installFile), { recursive: true, mode: 0o700 });
@@ -415,7 +425,6 @@ export class TraceUploader {
     return !!install && install.url === url && this.deps.store.owedDeletes(1).length > 0;
   }
 
-  /** One pass: the per-session deletes owed, then what is new or grew, for sessions opted in now. Never throws. */
   /** Whether the install file is not there at all (ENOENT), as opposed to there and unreadable for a moment. */
   private installFileGone(): boolean {
     try {
@@ -435,6 +444,28 @@ export class TraceUploader {
     }
   }
 
+  /**
+   * Whether the install's training value is owed to an install registered at this address: it goes with sharing off
+   * too, since it carries no session, and turning training off must reach what was already sent.
+   */
+  private trainingDue(url: string): boolean {
+    if (!this.deps.training().owed) return false;
+    const install = this.readInstall();
+    return !!install && install.url === url;
+  }
+
+  /** The install's training value, when a change is owed: before any session, so none goes ahead of a no. */
+  private async sendTraining(install: Install): Promise<void> {
+    const t = this.deps.training();
+    if (!t.owed) return;
+    await this.call(install, install.url, 'PUT', '/v1/installs/me/consent', Buffer.from(JSON.stringify({ training: t.value })));
+    this.deps.trainingSent(t.value);
+  }
+
+  /**
+   * One pass: the training value owed, then the per-session deletes owed, then what is new or grew, for sessions
+   * opted in now. Never throws.
+   */
   async runOnce(): Promise<{ sent: number; failed: number; skipped?: 'off' | 'waiting' | 'busy' }> {
     // No install file left (removed by hand): the deletes owed to it can never go. Only a file truly absent: one read
     // badly for a moment (its JSON caught mid-write, a read refused) still holds its debt (the Audit's Low at
@@ -446,7 +477,7 @@ export class TraceUploader {
     }
     const s = this.deps.settings();
     if (!s.url || this.owed() || this.halts > 0) return { sent: 0, failed: 0, skipped: 'off' };
-    if (!s.consentAt && !this.deletesDue(s.url)) return { sent: 0, failed: 0, skipped: 'off' };
+    if (!s.consentAt && !this.deletesDue(s.url) && !this.trainingDue(s.url)) return { sent: 0, failed: 0, skipped: 'off' };
     if (this.nextTryAt !== undefined && this.now() < this.nextTryAt) return { sent: 0, failed: 0, skipped: 'waiting' };
     if (this.running) return { sent: 0, failed: 0, skipped: 'busy' };
     this.running = true;
@@ -480,9 +511,12 @@ export class TraceUploader {
   private async passOnce(url: string, sharing: boolean): Promise<{ sent: number; failed: number }> {
     let sent = 0;
     try {
-      // The deletes owed first, so a failing upload never holds them back, and only to the install they are owed to,
-      // registered at the address set (a new registration forgets them: resetUploads).
+      // A training value owed goes first, to the install registered here, sharing on or off (trainingDue): never
+      // after a deletion began (halts), and never registering an install on its own.
       const held = this.readInstall();
+      if (this.halts === 0 && held && held.url === url) await this.sendTraining(held);
+      // Then the deletes owed, so a failing upload never holds them back, and only to the install they are owed to,
+      // registered at the address set (a new registration forgets them: resetUploads).
       if (held && held.url === url) await this.sendDeletes(held, url);
       if (sharing) {
         // The consent is read again before a registration and before each session: a deletion, or a withdrawn
@@ -611,6 +645,9 @@ export class TraceUploader {
       contextWindowGiven: opt(t.context_window_given as number), outputCapGiven: opt(t.output_cap_given as number),
       autoCompaction: opt(t.auto_compaction as string), compactions: Array.isArray(t.compactions) ? t.compactions : [],
       ...(Number(t.compactions_omitted) > 0 ? { compactionsOmitted: Number(t.compactions_omitted) } : {}),
+      // #678's per session field, and nothing else in it: false once the switch was off while the session ran.
+      // The store's one rule decided it (trace-store.ts summaryOf): the stamp and the private list of trainable sessions.
+      consent: { training: (t.consent as { training?: unknown } | undefined)?.training === true },
     };
     const turns = doc.turns.map(x => ({
       turnId: String(x.turn_id), sessionId: traceId, index: Number(x.turn_index), startedAt: Number(x.started_at), endedAt: opt(x.ended_at as number),
@@ -711,12 +748,14 @@ export class TraceUploader {
   }
 
   /** One session as its upload would send it now: the batches' bodies and the blobs' contents, decoded. */
-  preview(traceId: string): { document: { batches: Array<{ batchId: string; body: unknown }>; blobs: Record<string, unknown> }; counts: Record<string, number>; scrubVersion: string } | null {
+  preview(traceId: string): { consent: { training: boolean }; document: { batches: Array<{ batchId: string; body: unknown }>; blobs: Record<string, unknown> }; counts: Record<string, number>; scrubVersion: string } | null {
     const seq = this.deps.store.seqOf(traceId);
     if (seq === undefined) return null;
     const payload = this.buildPayload(this.secret(), traceId, seq);
     if (!payload) return null;
     return {
+      // What the session would carry, for the window to show beside the document (trace feature A5).
+      consent: { training: this.deps.store.session(traceId)?.session.consent.training === true },
       document: {
         batches: payload.batches.map(b => ({ batchId: b.id, body: JSON.parse(b.body.toString('utf8')) })),
         blobs: Object.fromEntries([...payload.blobs.entries()].map(([h, b]) => [h, JSON.parse(b.toString('utf8'))])),

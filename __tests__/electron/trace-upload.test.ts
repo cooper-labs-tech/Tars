@@ -251,6 +251,9 @@ function uploader(over: Partial<UploaderDeps> = {}) {
     client: { name: 'tars', version: '0.0.0-test', platform: process.platform },
     // A deletion's bookkeeping may come with the withdrawal, in the same write (the Audit's I-1 at 965cfced0).
     withdrawConsent: (d?: { owed: boolean; since?: number }) => { withdrawn++; settings.consentAt = undefined; if (d) deletion = d; },
+    // The training switch (trace feature A5, its own tests in trace-training.test.ts): on, nothing owed.
+    training: () => ({ value: true, owed: false }),
+    trainingSent: () => {},
     now: () => clock,
     ...over,
   });
@@ -316,7 +319,7 @@ describe('the trace uploader', () => {
     // `upstreamMs`) and C2's (`contextWindowGiven`, `outputCapGiven`, `autoCompaction`, `compactions`, `compactionsOmitted`; per request
     // `contextReset`) are new to it: it takes them before Tars sends them, as it took `side` (SPECS.md, Upload).
     // maskingVersion and maskCounts (trace feature B3): the back-office takes them before a Tars that sends them ships.
-    const allowed = { session: ['sessionId', 'agentId', 'agentName', 'projectKey', 'harness', 'harnessVersion', 'nativeSessionId', 'endpointKey', 'endpointName', 'model', 'startedAt', 'endedAt', 'finalStatus', 'turnCount', 'requestCount', 'tokensIn', 'tokensCached', 'tokensOut', 'mixed', 'unknownTurns', 'outcome', 'environment', 'events', 'rttMedianMs', 'clockOffsetMs', 'maskingVersion', 'maskCounts', 'contextWindowGiven', 'outputCapGiven', 'autoCompaction', 'compactions', 'compactionsOmitted'],
+    const allowed = { session: ['sessionId', 'agentId', 'agentName', 'projectKey', 'harness', 'harnessVersion', 'nativeSessionId', 'endpointKey', 'endpointName', 'model', 'startedAt', 'endedAt', 'finalStatus', 'turnCount', 'requestCount', 'tokensIn', 'tokensCached', 'tokensOut', 'mixed', 'unknownTurns', 'outcome', 'environment', 'events', 'rttMedianMs', 'clockOffsetMs', 'maskingVersion', 'maskCounts', 'contextWindowGiven', 'outputCapGiven', 'autoCompaction', 'compactions', 'compactionsOmitted', 'consent'],
       turn: ['turnId', 'sessionId', 'index', 'startedAt', 'endedAt', 'gapBeforeMs', 'requestCount', 'toolCallCount', 'toolErrorCount', 'toolMs', 'modelMs', 'tokensIn', 'tokensCached', 'tokensOut', 'finalStatus', 'finalFinishReason', 'author', 'authorDetail'],
       request: ['requestId', 'sessionId', 'turnId', 'seq', 'side', 'upstreamRequestId', 'surface', 'modelRequested', 'modelServed', 'params', 'toolsHash', 'startedAt', 'ttftMs', 'totalMs', 'tokensIn', 'tokensCached', 'tokensOut', 'status', 'error', 'finishReason', 'streamed', 'reqBytes', 'respBytes', 'messages', 'liveSessions', 'rttMs', 'clockOffsetMs', 'queueMs', 'upstreamMs', 'contextReset'],
       message: ['hash', 'role', 'createdAt', 'size', 'toolCallCount', 'hasThinking'] };
