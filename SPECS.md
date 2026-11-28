@@ -420,6 +420,29 @@ The trace of a load session records the hash of its starting context (`outcome.l
 instruction files its CLI loads at every start (codex's `AGENTS.md`, qwen-code's `QWEN.md`, pi's, opencode's). Two
 sessions of the same task share it. A load agent in bypass can still read or write any file on purpose (SECURITY.md).
 
+**Setup, test, tags and stops** (`services/load-engine.ts`, `services/load-steps.ts`). A task's setup lines and its
+test_cmd come from the approved snapshot only, and run unattended in its worktree (standard input closed, through the
+system's shell, in a process tree killed whole at the cap: a process group, or `taskkill /PID <pid> /T /F` on
+Windows), with Tars's environment less its tokens and identities, the push block, `CI=1` and no git prompt:
+- **The setup** takes the heavy-run slot when the task arrives and never waits for it: not free, the arrival is
+  blocked `heavy_slot` and dropped, before any worktree. Its lines run one after the other within 10 minutes in all; one
+  that fails or reaches the cap ends the task there (`error`, `setup: { result, line, exitCode }`, a line saying why),
+  with no session.
+- **The test** runs after the session: it waits for the slot up to the task's time cap (`test.slotWaitMs`, apart from
+  the session's `sessionMs`), then runs with that cap: `passed`, `failed` (its exit code, or `atCap` with its tree
+  killed), or `not_run`, reason `none` (no test_cmd), `heavy_slot` (the slot not free within the cap: never a failure,
+  and the window goes on) or `stopped`.
+- **The diff stat** is the session's own: between the worktree's tree after the setup and at the session's end
+  (`git add -A`, `git write-tree`, `git diff --shortstat`), so the setup's files and the ignored ones do not count.
+- **The trace** of the session is tagged once its test ended, in `outcome.load`: `tag: load:<run>`, `runId`, `taskId`,
+  `n`, `split`, `trainOk`, `diffStat`, `test`, beside `startContext`.
+- **Stops:** at the window's end by time (no new arrival; a running session keeps its cap and its test), by the
+  owner's switch, at the disk floor (the heavy runs' floor, `heavySlotMinDiskGb`, 15 GB unless set, checked every
+  quarter minute and at each arrival: `disk_floor`, "14.2 GB free, under the 15 GB floor", its sessions stopped and
+  every setup or test in flight killed), and on an error.
+- The card reads each step through the state it already has: a running load agent's `phase` (setup, session, test),
+  a finished task's `setup`, `sessionMs`, `diffStat`, `test` and `endDetail`.
+
 ### Alt-provider safety gate
 
 `spawnAgentSession` refuses to start a claude-binary alt provider that produced no `ANTHROPIC_BASE_URL`, which means no API key is configured, and the session would silently bill the user's Anthropic account:
