@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Button, DialogShell, Input, PanelCaption } from '@/components/ui';
-import type { TraceSettingsView, UploadNotice, UploadState } from '@/types/electron';
+import type { TraceSettingsView, TrainingView, UploadNotice, UploadState } from '@/types/electron';
 import type { ElectronAPI } from '@/types/electron';
 
 /** What traces.preview answers for a session: the exact payload the upload sends, and what was masked, by kind. */
@@ -112,6 +112,31 @@ export function UploadView() {
   const [consentError, setConsentError] = useState<string | null>(null);
   /** An answer's `unsaved` (a setting that took from sharing, held and not written yet), until main has written it. */
   const [answerUnsaved, setAnswerUnsaved] = useUnsavedNote();
+  /**
+   * The owner's training switch (`Traces · upload · training switch`): main's view of it, and main's refusal of a
+   * change or a read that failed, said under the switch until the next change.
+   */
+  const [training, setTraining] = useState<TrainingView | null>(null);
+  const [trainingError, setTrainingError] = useState<string | null>(null);
+  const [trainingBusy, setTrainingBusy] = useState(false);
+  const readTraining = useCallback(async () => {
+    const api = tracesApi();
+    if (!api) return;
+    try { setTraining(await api.training()); } catch (e) { setTrainingError(said('reading the training switch', e)); }
+  }, []);
+  const toggleTraining = async () => {
+    const api = tracesApi();
+    if (!api || !training) return;
+    setTrainingBusy(true);
+    try {
+      const r = await api.setTraining(!training.training);
+      if (r.ok) { setTraining(r.state); setTrainingError(null); } else { setTrainingError(r.error); void readTraining(); }
+    } catch (e) {
+      setTrainingError(said('saving the training switch', e));
+    } finally {
+      setTrainingBusy(false);
+    }
+  };
 
   const read = useCallback(async () => {
     const api = tracesApi();
@@ -146,12 +171,17 @@ export function UploadView() {
   useEffect(() => {
     void read();
     void readNotice();
+    void readTraining();
     // The notice changes with the settings (after a deletion it carries onlyAfter): read again with them.
-    const off = tracesApi()?.onChanged(() => { void read(); void readNotice(); });
-    // The uploader works on its own: its state is read again every 10 s while the view is open.
-    const tick = setInterval(() => { void tracesApi()?.uploadState().then(setState).catch(() => undefined); }, 10_000);
+    const off = tracesApi()?.onChanged(() => { void read(); void readNotice(); void readTraining(); });
+    // The uploader works on its own: its state is read again every 10 s while the view is open, and so is the
+    // training switch, whose change the back-office takes at an upload pass.
+    const tick = setInterval(() => {
+      void tracesApi()?.uploadState().then(setState).catch(() => undefined);
+      void tracesApi()?.training().then(setTraining).catch(() => undefined);
+    }, 10_000);
     return () => { off?.(); clearInterval(tick); };
-  }, [read, readNotice]);
+  }, [read, readNotice, readTraining]);
 
   /**
    * Opens the notice as main says it now, never the one read before a change (the Audit's L1 on PR 599: after a
@@ -399,6 +429,19 @@ export function UploadView() {
                 <Button size="sm" onClick={() => { void openNotice(); }} disabled={!notice && !noticeError}>What leaves this computer</Button>
                 <Button size="sm" onClick={() => { void previewOne(); }}>Preview a session</Button>
               </div>
+            </Row>
+            <Row className="space-y-1.5 py-2.5" data-training>
+              <div className="flex items-center gap-4">
+                <div className="min-w-0 flex-1">
+                  <p className="text-[12.5px] text-foreground">May be used to train models</p>
+                  <p className="mt-0.5 max-w-[430px] text-[11px] leading-tight text-muted-foreground">Each session you share carries this choice as it stood while the session ran. Turning it off also covers what was already sent. On by default.</p>
+                </div>
+                <Toggle label="May be used to train models" enabled={training?.training ?? false} disabled={!training || trainingBusy} onChange={() => { void toggleTraining(); }} />
+              </div>
+              {trainingError ? <StateLine wrap word={trainingError} tone="error" />
+                : training?.unsaved ? <StateLine wrap word={training.unsaved} tone="waiting" />
+                : training?.owed ? <StateLine word="Not yet sent to the back-office: Tars keeps trying." tone="waiting" />
+                : null}
             </Row>
           </Box>
 
