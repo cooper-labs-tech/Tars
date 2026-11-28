@@ -53,7 +53,11 @@ export function registerVerdictRoutes(app: RouteApp, deps: VerdictRouteDeps = de
     if (!caller) { send({ error: 'This agent has no project to record a verdict for.' }, 403); return; }
     const result = await deps.record(caller, parsed.verdict);
     if (result.refused === 'own-work') {
-      send({ error: 'A verdict on your own work: your traced turns made this head, or a commit before it on the branch.' }, 403);
+      send({ error: 'A verdict on your own work: one of your traced turns made this head, or a commit it holds.' }, 403);
+      return;
+    }
+    if (result.refused === 'unchecked') {
+      send({ error: 'Whether this head holds your own work could not be checked in time: record it again in a moment.' }, 503);
       return;
     }
     send(result);

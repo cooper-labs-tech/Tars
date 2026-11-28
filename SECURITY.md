@@ -1203,8 +1203,8 @@ would be sent.
 - A turn's author goes by kind (user, orchestrator, agent), never a name.
 - A gate's verdict (`POST /api/verdicts`, the tool `record_verdict`) is recorded by an agent with its own token, in
   its own name and for its own project: the shared token, Tars's pass and a gateway's secret are refused, and so is a
-  body naming another agent. Any agent of a project may record a `qa` or `audit` verdict, never on its own work (its
-  traced turns made the judged head or a commit before it), and the record keeps who did, with its name and role from
+  body naming another agent. Any agent of a project may record a `qa` or `audit` verdict, never on its own work (one of
+  its traced turns committed the judged head or a commit it holds, whatever branch the verdict names), and the record keeps who did, with its name and role from
   the fleet. `ci` is Tars's alone. It goes up in the outcome's `gates` without its report's path or its recorder's
   name, which stay here.
 - **What a verdict is not:** verdicts live in `traces.db`, which agents can write, like every trace row. A verdict is
