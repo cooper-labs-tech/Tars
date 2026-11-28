@@ -62,7 +62,8 @@ import { assembleDigest, needsPromptInjection, wrapDigestForPrompt, searchMemory
 import { guideForPrompt } from '../services/agent-guide';
 import { usableHermesConnection } from '../services/hermes-config';
 import { reviewDiff, fileDiff, repoSummary } from '../services/git-review';
-import { refuseUnknownRepository } from './review-handlers';
+import { knownProjects, refuseUnknownRepository } from './review-handlers';
+import { registerLoadHandlers } from './load-handlers';
 import { searchLogs, agentTail, fleetSummary } from '../services/log-search';
 import { usageByProvider as ledgerUsageByProvider } from '../services/usage-ledger';
 import { tasksReport } from '../services/task-watch';
@@ -231,6 +232,8 @@ export function registerIpcHandlers(deps: IpcHandlerDependencies): void {
   registerMcpConfigHandlers();
   registerTrayHandlers(deps);
   registerTracesHandlers({ getAppSettings: deps.getAppSettings, setAppSettings: deps.setAppSettings, writeAppSettings: deps.writeAppSettings });
+  // The load window (trace feature C3): its approval and the owner's grants, reached from the window alone.
+  registerLoadHandlers({ getAppSettings: deps.getAppSettings, agents: deps.agents, getMainWindow: deps.getMainWindow, projects: knownProjects });
 }
 
 // ============== Tray Panel IPC Handlers ==============

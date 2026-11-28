@@ -115,6 +115,7 @@ import {
 
 // Handlers
 import { registerIpcHandlers, IpcHandlerDependencies } from './handlers/ipc-handlers';
+import { startLoadWatch } from './handlers/load-handlers';
 import { noteApiPhase } from './core/api-listening';
 import { registerCLIPathsHandlers } from './handlers/cli-paths-handlers';
 import { registerBusHandlers } from './handlers/bus-handlers';
@@ -809,6 +810,8 @@ app.whenReady().then(async () => {
   startStallWatch();
   // Agents with no turn for 30 minutes sleep, orchestrators never (services/agent-sleep.ts).
   startSleepWatch();
+  // The load window's card hears of a pool written and a window's end (handlers/load-handlers.ts).
+  startLoadWatch();
   // What an agent started that outlives its session: recorded, and said to its orchestrator an hour on, never
   // ended by Tars (services/born-watch.ts, 2.0.5).
   startBornWatch({
