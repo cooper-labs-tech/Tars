@@ -403,6 +403,21 @@ comes at its time:
 After a quit or a crash, the next start removes the worktrees the private state names and ends a run that was running
 in error, "Tars restarted during the window".
 
+**No memory** (`services/load-session.ts`). A load session starts with nothing an earlier session wrote:
+- from Tars: its prompt is the preamble and the task, without the project's memory block or Tars's guide; its load
+  agent is in no room, its tool uses are kept out of the project's observations, its TMPDIR is emptied before each
+  session (a session whose preparation fails never starts), and none of Tars's MCP servers reaches it;
+- from its CLI, each measured against the real CLI: codex `-c features.memories=false`,
+  `memories.generate_memories=false`, `memories.use_memories=false`, and `mcp_servers.<name>.enabled=false` for each
+  Tars server its config.toml defines (a switch for one it does not define stops codex); qwen-code its managed auto
+  memory, auto dream, auto skill, team memory and structured recall off and mem0 dropped in its system settings, its
+  memory tools excluded, every Tars server disabled, no `~/.tars` folder; pi `--no-mcp`; opencode each Tars server
+  `enabled: false` in its config content and `OPENCODE_DISABLE_CLAUDE_CODE=1`.
+
+The trace of a load session records the hash of its starting context (`outcome.load.startContext`): the prompt and the
+instruction files its CLI loads at every start (codex's `AGENTS.md`, qwen-code's `QWEN.md`, pi's, opencode's). Two
+sessions of the same task share it. A load agent in bypass can still read or write any file on purpose (SECURITY.md).
+
 ### Alt-provider safety gate
 
 `spawnAgentSession` refuses to start a claude-binary alt provider that produced no `ANTHROPIC_BASE_URL`, which means no API key is configured, and the session would silently bill the user's Anthropic account:

@@ -1249,8 +1249,12 @@ would be sent.
 - **What a load session can and cannot do.** Its load agent runs unattended (bypass), in a worktree of its own at the
   task's base commit. Untracked files (a `.env`) are not in it. Its terminal blocks every push through its environment
   (`GIT_CONFIG_*`, an empty `pushInsteadOf` to a helper that does not exist), never a git config or a hook. It is a
-  guard against accidents, not a security boundary: an agent can drop its own environment. The worktrees Tars removes
-  are only those its private state
+  guard against accidents, not a security boundary: an agent can drop its own environment. The no-memory rule has the
+  same limit: Tars and each CLI hand a load session nothing an earlier session wrote (no memory block, none of Tars's
+  MCP servers, no room, the CLI's own memory switched off), but a load agent in bypass can still read or write any
+  file its user can on purpose (`~/.tars`, `~/.claude`, a global `AGENTS.md`). The hash of its starting context in
+  its trace (the prompt and the instruction files its CLI loads at every start) shows such a file changed between two
+  sessions; it stops nothing. The worktrees Tars removes are only those its private state
   (`~/.tars-private/load-run-state.json`) names, never one a record or a name pattern points at.
 - **The main window's top frame.** The handlers check the sender's frame as well as its web contents. A subframe
   shares the window's web contents.
