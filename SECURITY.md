@@ -1190,7 +1190,23 @@ name or value holding CR or LF is refused; the proxy skips a refused name again 
 **The upload** (`services/trace-upload.ts`). Opted-in sessions go to the back-office address the user sets, empty by
 default. Nothing goes before the user has read, in the window, what leaves the machine, with one session shown as it
 would be sent.
-- Every string is scrubbed first (`services/trace-scrub.ts`, whose header says what it catches and what it cannot).
+- Every string is scrubbed first (`services/trace-scrub.ts`, whose header says what it catches and what it cannot):
+  secrets, home paths (anyone's, with the user name in them), e-mail addresses, IP addresses, phone numbers and the
+  names Tars knows. Each becomes a typed placeholder numbered within its session (`<SECRET_n>`, `<HOME_n>`,
+  `<EMAIL_n>`, `<IP_n>`, `<PHONE_n>`, `<PERSON_n>`): the same value takes the same number in every message, row and
+  batch of a session and in every upload of it, and numbering starts again in the next session, so a number links
+  nothing across sessions. The numbers a session gave are kept with it in the local store, each value by a hash,
+  never as written, and go when the session is deleted. Each session carries `maskingVersion` and `maskCounts`, the
+  placeholders inserted by type.
+- The names Tars knows (`services/trace-person-names.ts`): the authors and committers of the project's git history,
+  read through safe-git, and the account's own name (git's `user.name`, the full name macOS's `id -F` or Linux's
+  passwd entry gives, the login name; none read on Windows but git's and the login). Another person's name is masked
+  when written whole ("First Last" or "Last, First"); the account's own by its parts too. So a given name or a family
+  name that is also a word ("Will this compile?", a class Price) stays, and so does another person's name written
+  alone by its given or family name, which the notice says. Not used: GitHub handles, co-authors in commit messages,
+  names typed in chats or channels, agents' names, an address book. A name Tars does not know passes, and the notice
+  says so. They are read before a session is built and before its preview, so the preview is the document sent; the
+  consent is read again after that read, before the session goes.
 - Projects and endpoints go as HMAC keys of a secret that never leaves the install, never their paths or addresses.
 - Neither the agent's name nor the endpoint's goes: both are free labels that may name a person or a host (L1).
 - A turn's author goes by kind (user, orchestrator, agent), never a name.
@@ -1240,5 +1256,8 @@ Measured by:
 - `inference-endpoints.test.ts` (the approval guard, the drop file);
 - `services/trace-reader-token.test.ts` (the door);
 - `trace-gate.test.ts`;
-- `trace-scrub.test.ts` and `trace-upload.test.ts` (the upload, against a stand-in back-office);
+- `trace-scrub.test.ts`, `trace-scrub-personal.test.ts` (its failures listed first: what passes, what must stay, the
+  overlaps with secrets, the numbering, Unicode) and `trace-upload.test.ts` (the upload, against a stand-in
+  back-office);
+- `e2e/trace-personal-data.spec.ts` (the window's preview of a real session holding personal data);
 - `e2e/traces-native.spec.ts` (the whole chain against a stand-in endpoint on loopback).

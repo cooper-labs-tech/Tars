@@ -3,6 +3,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 import * as zlib from 'zlib';
 import { randomBytes } from 'crypto';
+import type { MaskNumber, MaskType } from './trace-scrub';
 import {
   hashOf, instructionText, isStreamed, opensTurn, parseRequest, parseResponse, type Surface,
 } from './trace-wire';
@@ -182,6 +183,10 @@ CREATE TABLE IF NOT EXISTS typed_inputs (
   text_norm TEXT NOT NULL, closed INTEGER NOT NULL DEFAULT 0, used_by TEXT
 );
 CREATE INDEX IF NOT EXISTS typed_inputs_agent ON typed_inputs(agent_id, at);
+CREATE TABLE IF NOT EXISTS mask_numbers (
+  trace_id TEXT NOT NULL, type TEXT NOT NULL, key_hash TEXT NOT NULL, n INTEGER NOT NULL,
+  PRIMARY KEY (trace_id, type, key_hash)
+);
 `;
 
 /** Per request, what the cap counts on top of its blobs: the rows themselves. */
@@ -361,6 +366,28 @@ export class TraceStore {
   seqOf(traceId: string): number | undefined {
     const r = this.db.prepare('SELECT updated_seq FROM traces WHERE trace_id = ?').get(traceId) as { updated_seq?: number } | undefined;
     return r?.updated_seq;
+  }
+
+  /**
+   * The numbers a session's upload gave its masked values (trace-scrub.ts MaskSession), each value by a hash, never
+   * as written: loaded at each build of it, so they hold as the session grows (the Audit's M2 at 38ccde8cb).
+   */
+  maskNumbers(traceId: string): MaskNumber[] {
+    return (this.db.prepare('SELECT type, key_hash, n FROM mask_numbers WHERE trace_id = ?').all(traceId) as Array<{ type: MaskType; key_hash: string; n: number }>)
+      .map(r => ({ type: r.type, keyHash: r.key_hash, n: r.n }));
+  }
+
+  /** Keeps the numbers a build gave; those already kept stay as they are. */
+  keepMaskNumbers(traceId: string, rows: MaskNumber[]): void {
+    if (!rows.length || !this.hasTrace(traceId)) return;
+    const put = this.db.prepare('INSERT OR IGNORE INTO mask_numbers (trace_id, type, key_hash, n) VALUES (?, ?, ?, ?)');
+    this.db.transaction(() => { for (const r of rows) put.run(traceId, r.type, r.keyHash, r.n); })();
+  }
+
+  /** The project folder a session was recorded in, if there is such a session. */
+  projectOf(traceId: string): string | undefined {
+    const r = this.db.prepare('SELECT project_path FROM traces WHERE trace_id = ?').get(traceId) as { project_path?: string } | undefined;
+    return r?.project_path;
   }
 
   /** The start of the newest session in the store, if any. */
@@ -656,6 +683,7 @@ export class TraceStore {
       this.db.prepare('DELETE FROM typed_inputs WHERE used_by IN (SELECT turn_id FROM turns WHERE trace_id = ?)').run(traceId);
       this.db.prepare('DELETE FROM turns WHERE trace_id = ?').run(traceId);
       this.db.prepare('DELETE FROM uploads WHERE trace_id = ?').run(traceId);
+      this.db.prepare('DELETE FROM mask_numbers WHERE trace_id = ?').run(traceId);
       deleted += this.db.prepare('DELETE FROM traces WHERE trace_id = ?').run(traceId).changes;
     }
     return deleted;
