@@ -1248,9 +1248,9 @@ would be sent.
   agent writes there stops nothing. A record whose tasks or planned arrivals were changed stops its run with an error.
 - **What a load session can and cannot do.** Its load agent runs unattended (bypass), in a worktree of its own at the
   task's base commit. Untracked files (a `.env`) are not in it. Its terminal blocks every push through its environment
-  (`GIT_CONFIG_*`, an empty `pushInsteadOf` to a helper that does not exist), never a git config or a hook. A session
-  that unsets that environment in its own shell is not stopped by it: the preamble forbids the push, and the
-  worktree's commits stay local. The worktrees Tars removes are only those its private state
+  (`GIT_CONFIG_*`, an empty `pushInsteadOf` to a helper that does not exist), never a git config or a hook. It is a
+  guard against accidents, not a security boundary: an agent can drop its own environment. The worktrees Tars removes
+  are only those its private state
   (`~/.tars-private/load-run-state.json`) names, never one a record or a name pattern points at.
 - **The main window's top frame.** The handlers check the sender's frame as well as its web contents. A subframe
   shares the window's web contents.
