@@ -23,6 +23,7 @@ import { chooseGh, prStatesOfProjects, type PrState } from './github-watch';
 import { defaultTracePairs, traceDecision } from './trace-gate';
 import { projectEnvValues, type ScrubContext } from './trace-scrub';
 import { TraceUploader } from './trace-upload';
+import type { ToolCallPart } from './tool-calls';
 import { SECRET_FIELDS, keysKeptAfter, withKeptKeys } from './settings-secrets';
 
 /**
@@ -1009,6 +1010,21 @@ export function noteCliInterrupt(agentId: string, at: number = Date.now()): void
     if (traceStore().addIntervention(live.traceId, { kind: 'interrupted', at: cutAt ?? at, by: 'cli', during: cutAt !== undefined ? 'answer' : 'tools' })) changed();
   } catch (err) {
     console.error(`[traces] the CLI's interruption not recorded: ${(err as Error).message}`);
+  }
+}
+
+/**
+ * A tool call the agent's harness wrote in its own log (trace feature C1, services/tool-calls.ts), onto the traced
+ * session it happened in: read late, after its request or its session's end, it still lands there; a line of another
+ * session finds none. Nothing for an agent never traced (no session opened the store in this run).
+ */
+export function noteToolCall(agentId: string, part: ToolCallPart): void {
+  if (!deps || !store) return;
+  try {
+    const traceId = store.traceForToolCall(agentId, part);
+    if (traceId && store.addToolCall(traceId, part)) changed();
+  } catch (err) {
+    console.error(`[traces] a tool call not recorded: ${(err as Error).message}`);
   }
 }
 

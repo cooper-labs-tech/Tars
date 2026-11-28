@@ -72,6 +72,8 @@ export function sessionDocument(store: TraceStore, traceId: string, seen: Set<st
         error: r.error ?? null, finish_reason: r.finishReason ?? null, attempts: r.attempts, held_ms: r.heldMs,
         req_bytes: r.reqBytes, resp_bytes: r.respBytes, bodies_dropped: r.bodiesDropped, system_hash: systemHash, tools_hash: toolsHash,
         cancel: r.cancel ?? null,
+        // How the time since the previous reply divides, and the tool calls this request carries (trace feature C1).
+        gap: r.gap ?? null, tool_calls: r.toolCalls ?? null,
       });
       if (!m) continue;
       const inputHashes = m.input.map(v => v.hash);

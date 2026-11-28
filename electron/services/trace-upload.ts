@@ -7,6 +7,26 @@ import { canonicalJson } from './trace-wire';
 import { sessionDocument } from './trace-export';
 import { partsOf, type TraceStore } from './trace-store';
 import { scrubValue, SCRUB_VERSION, type ScrubContext } from './trace-scrub';
+import { TOOL_CALLS_PER_REQUEST_MAX, type ToolCallRecord } from './tool-calls';
+
+/**
+ * A request's tool calls as they leave: those whose id is one TOOL_CALL_ID leaves, the first
+ * TOOL_CALLS_PER_REQUEST_MAX of them, and how many more there were.
+ */
+function toolCallsOf(calls: unknown): { toolCalls?: ToolCallRecord[]; toolCallsOmitted?: number } {
+  if (!Array.isArray(calls) || !calls.length) return {};
+  // A call whose id is no such id is left out whole and counted, never cut: a cut id names another call.
+  const fit = (calls as ToolCallRecord[]).filter(c => TOOL_CALL_ID.test(String(c.toolCallId)));
+  const sent = fit.slice(0, TOOL_CALLS_PER_REQUEST_MAX);
+  return { ...(sent.length ? { toolCalls: sent } : {}), ...(calls.length > sent.length ? { toolCallsOmitted: calls.length - sent.length } : {}) };
+}
+
+/**
+ * The tool call ids that leave: letters, digits and `_ . : -`, 1 to 128 of them. The id is the one string of a call,
+ * sent as the model gave it, unscrubbed (the Audit of #688); the back office caps it at 128 characters, and refuses a
+ * whole batch for a longer one (wave 8 of #678).
+ */
+const TOOL_CALL_ID = /^[A-Za-z0-9_.:-]{1,128}$/;
 
 /** The longest branch the back-office takes, in bytes (UTF-8). */
 export const MAX_BRANCH_BYTES = 255;
@@ -446,6 +466,10 @@ export class TraceUploader {
         finishReason: opt(r.finish_reason as string), reqBytes: Number(r.req_bytes), respBytes: Number(r.resp_bytes), messages,
         // A request the harness gave up while held: who cut it, why, when, and nothing delivered.
         ...(r.cancel ? { cancel: r.cancel } : {}),
+        // How the time since the previous reply divides, and its tool calls: ids, numbers, exit codes and flags, never a
+        // command or an output; past TOOL_CALLS_PER_REQUEST_MAX, counted (trace feature C1).
+        ...(r.gap ? { gap: r.gap } : {}),
+        ...toolCallsOf(r.tool_calls),
       };
     });
     const messages = [...remote.values()].filter(m => m.role !== 'tools').map(m => ({

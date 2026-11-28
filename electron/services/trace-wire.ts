@@ -344,6 +344,33 @@ export function opensTurn(surface: Surface, input: unknown[]): boolean {
   return lastInstruction(surface, input) !== null;
 }
 
+/**
+ * The ids of the tool calls whose results a request newly carries (trace feature C1): those after the model's last
+ * entry in its history (its calls, its answer), read back from the end. A user message among them (words typed while
+ * the tools ran, a reminder) is passed over.
+ */
+export function newToolResultIds(surface: Surface, input: unknown[]): string[] {
+  const ids: string[] = [];
+  for (let i = input.length - 1; i >= 0; i--) {
+    const m = asObj(input[i]);
+    if (surface === 'openai_responses') {
+      if (m.type === 'function_call_output' || m.type === 'custom_tool_call_output') { if (asStr(m.call_id)) ids.push(asStr(m.call_id)); continue; }
+      if (m.type === 'function_call' || m.type === 'custom_tool_call' || m.type === 'reasoning' || m.role === 'assistant') break;
+      continue;
+    }
+    if (m.role === 'assistant') break;
+    if (surface === 'openai_chat') {
+      if (m.role === 'tool' && asStr(m.tool_call_id)) ids.push(asStr(m.tool_call_id));
+      continue;
+    }
+    for (const c of asArr(m.content)) {
+      const block = asObj(c);
+      if (block.type === 'tool_result' && asStr(block.tool_use_id)) ids.push(asStr(block.tool_use_id));
+    }
+  }
+  return ids.reverse();
+}
+
 /** The instruction's own words, the harness's reminders left out: what authorship is matched on. */
 export function instructionText(surface: Surface, input: unknown[]): string {
   const last = lastInstruction(surface, input);

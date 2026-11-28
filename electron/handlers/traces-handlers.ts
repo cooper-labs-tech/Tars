@@ -318,6 +318,8 @@ export function registerTracesHandlers(deps: TracesHandlerDeps): void {
       'the requests a harness gave up while Tars held them for a paused endpoint',
       'why each request cut before its end was cut, by whom (the harness, Tars, the hold\'s limit or the endpoint), when, and how much of the answer had reached the harness',
       'what was done to each turn: an Esc or a Ctrl-C typed into it, a stop or a restart, who sent the next instruction (by kind) and how long after, whether it corrected a finished turn, and a later session that took its task',
+      'how the wait before each request divides: its tools\' run, the wait for typed words and whose they were (by kind), the endpoint\'s pause, and the harness\'s own time',
+      'each tool call, by its id: its exit code, how long it ran, whether it was denied, timed out or failed, and whether the harness cut its output (with how many bytes, when it counts them), never its command or its output',
     ],
     stays: ['your keys and Tars\'s tokens (masked before upload)', 'sessions of projects and agents not opted in', 'the endpoints\' keys and addresses', 'anything outside traced sessions'],
     scrubbing: {
