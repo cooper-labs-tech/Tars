@@ -364,7 +364,7 @@ const CAP_REFUSED = 'The output cap is a whole number of tokens, at least 1 and 
 
 /**
  * A count of tokens as typed (`Settings · Inference endpoints · context window and output cap`): digits, with or
- * without separators (131072, 131,072, 131 072, 131_072). null: empty, which clears it; NaN: not a whole number.
+ * without separators (65536, 65,536, 65 536, 65_536). null: empty, which clears it; NaN: not a whole number.
  */
 function tokensOf(typed: string): number | null {
   const t = typed.trim();
