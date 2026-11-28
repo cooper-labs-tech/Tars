@@ -1201,6 +1201,18 @@ would be sent.
 - Projects and endpoints go as HMAC keys of a secret that never leaves the install, never their paths or addresses.
 - Neither the agent's name nor the endpoint's goes: both are free labels that may name a person or a host (L1).
 - A turn's author goes by kind (user, orchestrator, agent), never a name.
+- A gate's verdict (`POST /api/verdicts`, the tool `record_verdict`) is recorded by an agent with its own token, in
+  its own name and for its own project: the shared token, Tars's pass and a gateway's secret are refused, and so is a
+  body naming another agent. Any agent of a project may record a `qa` or `audit` verdict, never on its own work (one of
+  its traced turns committed the judged head or a commit it holds, whatever branch the verdict names), and the record keeps who did, with its name and role from
+  the fleet. `ci` is Tars's alone. It goes up in the outcome's `gates` without its report's path or its recorder's
+  name, which stay here.
+- The own-work check trusts git's committer dates (`%ct`), which the committer sets: a recorder that dates its
+  commits outside its turns gets past it. For any other agent, the worst it does is refuse a verdict, never record a
+  false one.
+- **What a verdict is not:** verdicts live in `traces.db`, which agents can write, like every trace row. A verdict is
+  a label from a cooperative fleet, held by the route and the tool, not a proof against an agent that edits the
+  file. A list of gate agents the owner designates would be the stronger form; it is the owner's to ask for.
 - A turn's workspace goes as numbers and hashes only: the commits at its start and end as git names them (as the
   session's outcome already sends its head), two tree hashes that name no file, its files and lines counted, and
   their survival. Never a path or a line of the files.
