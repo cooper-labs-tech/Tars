@@ -11,7 +11,11 @@ import { updateSharedJsonSync } from '../utils/shared-file';
 import { startEndpointProxy, stopEndpointProxy, type HoldEvent, type ProxySession } from './endpoint-proxy';
 import { endpointLaunchFor, piModelsWithEndpoint, type EndpointLaunch } from './endpoint-harness';
 import { ENDPOINT_HARNESSES, endpointTarget, ensureDropFolder, transportOf } from './inference-endpoints';
-import { TraceStore, boundOutcomeTasks, type TraceEvent, type TraceStart, type TraceTask } from './trace-store';
+import {
+  CORRECTION_WINDOW_MS, TraceStore, boundOutcomeTasks, type InterventionDuring, type InterventionEvent, type RequestCancel, type TraceEvent,
+  type TraceStart, type TraceTask, type TurnAuthor,
+} from './trace-store';
+import { InterruptKeys, interruptKeyOf, type InterruptKey } from '../core/interrupt-keys';
 import { takeSessionStart } from '../core/session-start';
 import type { OneTaskQueue, QueueEvent } from '../core/one-task';
 import { liveTaskLedger } from './task-ledger';
@@ -529,6 +533,8 @@ function ensureProxy(): void {
     sessionOf: (token) => sessions.get(token),
     targetOf: (endpointId) => endpointTarget(d.getSettings(), endpointId),
     liveSessions: liveTracedSessions,
+    cutOf: (agentId, startedAt, at) => cutOf(agentId, startedAt, at),
+    inFlight: (agentId, delta) => requestInFlight(agentId, delta),
     record: (rec) => {
       if (traceStore().ingest(rec)) {
         changed();
@@ -568,6 +574,11 @@ export function stopTracesRuntime(): void {
     if (persistRetry) clearTimeout(persistRetry);
     persistRetry = null;
   }
+  // The interventions' state is this run's.
+  windowKeys.dispose();
+  lastKeys.clear();
+  tarsEndings.clear();
+  inFlight.clear();
   // A consent dropped for a revoke that is still not written stays dropped: the next start reads closed.
   consentHeldForRevoke = undefined;
   revokeComesBack = false;
@@ -647,7 +658,10 @@ export function openEndpointSession(agentId: string): { env: Record<string, stri
         traceId, projectPath: agent.projectPath, agentId, agentName: agent.name, harness,
         endpointId: agent.endpointId, endpointName: endpoint?.name, endpointBaseUrl: endpoint?.approvedBaseUrl, model: agent.model, startedAt: live.startedAt,
       });
-      traceStore().setStart(traceId, startOf(agent, traceId, note));
+      const start = startOf(agent, traceId, note);
+      traceStore().setStart(traceId, start);
+      // The session that had this task before reads the link on its last turn (trace feature B3): sent again with it.
+      if (start.redelegatedFrom) traceStore().touch(start.redelegatedFrom);
       changed();
       describeSession(traceId, agent, live.startedAt);
     } catch (err) {
@@ -755,6 +769,7 @@ export function closeEndpointSession(token: string | undefined): void {
   sessions.delete(token);
   if (!live) return;
   waits.delete(live.agentId);
+  windowKeys.forget(live.agentId);
   if (!live.traced) return;
   const endedAt = Date.now();
   const agent = agentOf(live.agentId);
@@ -959,7 +974,7 @@ type Sender =
 export function noteTypedForTraces(origin: { agentId: string; from?: string; sender?: Sender; taskRef?: string } | undefined, text: string): void {
   if (!origin || !deps || !liveTraceOf(origin.agentId)) return;
   const s = origin.sender;
-  let author = 'user';
+  let author: Exclude<TurnAuthor, 'unknown'> = 'user';
   let detail: string | undefined;
   let closed = false;
   if (s?.kind === 'agent') {
@@ -987,6 +1002,123 @@ export function noteTypedForTraces(origin: { agentId: string; from?: string; sen
     traceStore().noteTypedInput({ agentId: origin.agentId, at: Date.now(), author, authorDetail: detail, text, closed, ...(origin.taskRef ? { taskRef: origin.taskRef } : {}) });
   } catch (err) {
     console.error(`[traces] typed input not noted: ${(err as Error).message}`);
+  }
+}
+
+// ── Interventions and the cause of a cut (trace feature B3, 27/11) ────────
+
+export { CORRECTION_WINDOW_MS };
+
+/** A key is the cause of a harness's hang-up that comes within this of it, during the request. */
+const KEY_CUT_MS = 10_000;
+/** Tars ending a terminal is the cause of a hang-up that comes within this of it, of a request begun before. */
+const TARS_CUT_MS = 30_000;
+/** A CLI's log of an interrupted turn ties to a cut its watcher read within this. */
+const CLI_TIE_MS = 60_000;
+/** A generic ending (a terminal replaced) keeps the cause a caller named this shortly before (a restart). */
+const NAMED_ENDING_MS = 2000;
+
+/** Where Tars ends an agent's terminal: what a cut by Tars and an interruption say. */
+export type TarsEnding = 'stop' | 'restart' | 'sleep' | 'remove' | 'quit' | 'replace';
+type During = InterventionDuring;
+
+/** Each agent's requests in flight at the endpoint proxy. */
+const inFlight = new Map<string, number>();
+/** The last Esc or Ctrl-C from the window, per agent. */
+const lastKeys = new Map<string, { key: InterruptKey; at: number }>();
+/** The last time Tars ended an agent's terminal, and why. */
+const tarsEndings = new Map<string, { cause: TarsEnding; at: number }>();
+
+/** A request of the agent's in flight (+1) or over (-1): the proxy's count (endpoint-proxy.ts inFlight). */
+export function requestInFlight(agentId: string, delta: number): void {
+  const n = Math.max(0, (inFlight.get(agentId) ?? 0) + delta);
+  if (n) inFlight.set(agentId, n); else inFlight.delete(agentId);
+}
+
+/** What the agent was doing when a key came: answering (a request in flight), running tools (its turn open), or neither. */
+function duringOf(agentId: string): During | undefined {
+  if ((inFlight.get(agentId) ?? 0) > 0) return 'answer';
+  const live = liveSessionOf(agentId);
+  try {
+    if (live && traceStore().lastTurnOpen(live.traceId)) return 'tools';
+  } catch (err) {
+    console.error(`[traces] the turn's state not read: ${(err as Error).message}`);
+  }
+  return undefined;
+}
+
+function addIntervention(agentId: string, e: InterventionEvent): void {
+  const live = liveSessionOf(agentId);
+  if (!live) return;
+  try {
+    if (traceStore().addIntervention(live.traceId, e)) changed();
+  } catch (err) {
+    console.error(`[traces] an intervention not recorded: ${(err as Error).message}`);
+  }
+}
+
+const windowKeys = new InterruptKeys<During | undefined>((agentId, key, at, during) => {
+  lastKeys.set(agentId, { key, at });
+  // Into a turn only: an Esc at an idle prompt cuts nothing.
+  if (during) addIntervention(agentId, { kind: 'interrupted', at, by: key, during });
+});
+
+/**
+ * Keys a person typed from the window into an agent's terminal (core/pty-manager.ts writeHumanInput), read for a lone
+ * Esc or Ctrl-C (core/interrupt-keys.ts): what the agent was doing is read as the key comes. A traced session only.
+ */
+export function noteWindowKeys(agentId: string, chunk: string, at: number = Date.now()): void {
+  if (!liveSessionOf(agentId)) return;
+  windowKeys.feed(agentId, chunk, at, interruptKeyOf(chunk) ? duringOf(agentId) : undefined);
+}
+
+/**
+ * Tars ends an agent's terminal, said just before it does: the cause of the cut of a request then in flight, and an
+ * intervention on the session's turn (a restart, or an interruption when a turn was open). A generic ending (`ifNone`,
+ * a terminal replaced, core/pty-kill.ts) keeps a cause a caller named just before.
+ */
+export function noteTarsEnding(agentId: string, cause: TarsEnding, at: number = Date.now(), opts: { ifNone?: boolean } = {}): void {
+  const named = tarsEndings.get(agentId);
+  if (opts.ifNone && named && at - named.at < NAMED_ENDING_MS) return;
+  tarsEndings.set(agentId, { cause, at });
+  windowKeys.forget(agentId);
+  if (cause === 'restart' || cause === 'replace') { addIntervention(agentId, { kind: 'restarted', at, by: cause }); return; }
+  const during = duringOf(agentId);
+  if (during) addIntervention(agentId, { kind: 'interrupted', at, by: cause, during });
+}
+
+/**
+ * Why an agent's harness hung up on a request begun at `startedAt`, cut at `at` (the proxy's cutOf): Tars ending its
+ * terminal, else an Esc or a Ctrl-C from the window during the request, an Esc still in its wait included (the harness
+ * hangs up before the wait is over). Undefined when Tars knows of none: never a guess.
+ */
+export function cutOf(agentId: string, startedAt: number, at: number): Pick<RequestCancel, 'by' | 'cause'> | undefined {
+  const ending = tarsEndings.get(agentId);
+  if (ending && startedAt <= ending.at && ending.at <= at && at - ending.at <= TARS_CUT_MS) return { by: 'tars', cause: ending.cause };
+  const waiting = windowKeys.pending(agentId);
+  const keys = [lastKeys.get(agentId), waiting ? { key: 'esc' as const, at: waiting.at } : undefined]
+    .filter((k): k is { key: InterruptKey; at: number } => !!k && startedAt <= k.at && k.at <= at && at - k.at <= KEY_CUT_MS)
+    .sort((a, b) => b.at - a.at);
+  return keys.length ? { by: 'harness', cause: keys[0].key } : undefined;
+}
+
+/**
+ * The CLI's own log says the agent's turn was interrupted (codex's turn_aborted, pi's; services/task-watch.ts): the
+ * latest cut of its live session with no cause Tars knew, within the minute, takes it, and the turn reads interrupted,
+ * unless a key or Tars's own ending already said so.
+ */
+export function noteCliInterrupt(agentId: string, at: number = Date.now()): void {
+  const live = liveSessionOf(agentId);
+  if (!live) return;
+  try {
+    const cutAt = traceStore().reviseUnknownCut(live.traceId, at - CLI_TIE_MS, 'cli_interrupt');
+    if (cutAt !== undefined) changed();
+    const key = lastKeys.get(agentId);
+    const ending = tarsEndings.get(agentId);
+    if ((key && at - key.at <= CLI_TIE_MS) || (ending && at - ending.at <= CLI_TIE_MS)) return;
+    if (traceStore().addIntervention(live.traceId, { kind: 'interrupted', at: cutAt ?? at, by: 'cli', during: cutAt !== undefined ? 'answer' : 'tools' })) changed();
+  } catch (err) {
+    console.error(`[traces] the CLI's interruption not recorded: ${(err as Error).message}`);
   }
 }
 

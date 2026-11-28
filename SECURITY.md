@@ -1176,6 +1176,10 @@ else.
   package does not say it, is asked in a throwaway folder, which is its working folder, its home and its npm prefix,
   removed after the probe. On Windows, the machine's model is read by `%SystemRoot%\System32\reg.exe`, never `reg`
   by its bare name, which Windows looks for in the working folder first.
+- What opened each turn is matched to who typed it: Tars's own writes, and, for a traced session only, the words the
+  owner sends from an agent's pane (the field's words when Enter is pressed alone), kept beside them: those older than
+  7 days go whenever the next words are noted, and all of a session's go with it. The upload sends a turn's author by kind and what was done to the turn (its
+  interventions: kinds, times, delays), never these words apart from the messages they are.
 - What is kept is bounded: off by default for every project and every agent, a size cap and a retention set in
   Settings, and a delete in the back-office.
 - A deleted session leaves a tombstone: its id, why it went (user, retention, cap) and when, nothing of its content.

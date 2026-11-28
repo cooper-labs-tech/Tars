@@ -117,8 +117,25 @@ function sse(res, data, event) {
 const pause = (ms) => new Promise((r) => setTimeout(r, ms));
 
 async function answerChat(body, res, marker, chunkDelayMs = 0, emptyFirstChunk = false) {
-  const d = decide(body, chatToolResult(body.messages), marker);
   const id = `chatcmpl-${randomBytes(6).toString('hex')}`;
+  // A task that says SLOW STREAM is answered in text at once, a word every 200 ms for about 8 s: a stream long enough
+  // for a person's Esc to land in it (trace feature B3). It stops when the client hangs up.
+  const said = textOf(asObj(asArr(body.messages).filter((m) => asObj(m).role === 'user').pop()).content);
+  if (body.stream && /SLOW STREAM/.test(said)) {
+    res.writeHead(200, { 'Content-Type': 'text/event-stream', 'Cache-Control': 'no-cache', 'X-Request-Id': `standin-${id}` });
+    const base = { id, object: 'chat.completion.chunk', created: Math.floor(Date.now() / 1000), model: MODEL_ID };
+    let gone = false;
+    res.on('close', () => { gone = true; });
+    for (let i = 0; i < 40 && !gone; i++) {
+      sse(res, { ...base, choices: [{ index: 0, delta: { content: `word${i} ` }, finish_reason: null }] });
+      await pause(200);
+    }
+    if (gone) return { cut: true, requestId: `standin-${id}` };
+    sse(res, { ...base, choices: [{ index: 0, delta: {}, finish_reason: 'stop' }] });
+    res.end('data: [DONE]\n\n');
+    return { lastChunkAt: Date.now(), requestId: `standin-${id}` };
+  }
+  const d = decide(body, chatToolResult(body.messages), marker);
   const finish = d.call ? 'tool_calls' : 'stop';
   if (!body.stream) {
     const message = d.call

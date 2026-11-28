@@ -1,7 +1,7 @@
 import * as http from 'http';
 import * as https from 'https';
 import { firstContentEnd, surfaceOf, type Surface } from './trace-wire';
-import type { WireRecord } from './trace-store';
+import type { RequestCancel, WireRecord } from './trace-store';
 import { requestTiming, type RequestTiming } from './server-timing';
 
 /**
@@ -36,6 +36,12 @@ import { requestTiming, type RequestTiming } from './server-timing';
  *   `session-id`). No other header is recorded: codex's installation id header goes on to the endpoint as it came,
  *   and nowhere else. And the endpoint's Server-Timing, read with the times this proxy sent the answered attempt (its
  *   request written out whole) and got its headers: the round trip and the clocks' offset (server-timing.ts).
+ * - **A cancel on each request cut before its end** (trace feature B3, 27/11): `{ by, cause, at, deliveredBytes }`.
+ *   By the harness hanging up (before the first byte or mid-stream; its cause is the runtime's when it knows one, an
+ *   Esc, a Ctrl-C or the CLI's own log, else `abandoned_while_held` or `unknown`), by Tars ending its terminal, by
+ *   the proxy at its hold's ceiling (`hold_ceiling`, the endpoint's last answer passed), or by the endpoint cutting the
+ *   stream (`stream_cut`, its error kept). A cut by the harness or Tars is no error of the endpoint's.
+ *   `deliveredBytes` is what of the model's response was written to the harness before the cut.
  *
  * It speaks the three protocols the endpoints serve, chat completions, Responses and Anthropic Messages (with
  * count_tokens), plus `GET /v1/models`. Nothing else is forwarded.
@@ -72,6 +78,14 @@ export interface ProxyDeps {
   /** The traced sessions live on this computer now (traces-runtime.ts): counted when a request comes in. */
   liveSessions?(): number;
   onHold?(e: HoldEvent): void;
+  /**
+   * Why an agent's harness hung up on a request started at `startedAt`, cut at `at`, when Tars knows: it ended the
+   * terminal (stop, restart, sleep, removal, quit, a terminal replaced), or an Esc or a Ctrl-C came from the window
+   * during the request (traces-runtime.ts). Undefined when it knows of none.
+   */
+  cutOf?(agentId: string, startedAt: number, at: number): Pick<RequestCancel, 'by' | 'cause'> | undefined;
+  /** A request of an agent's in flight (+1) from its arrival to the response's end or the harness's hang-up (-1). */
+  inFlight?(agentId: string, delta: 1 | -1): void;
   sleep?(ms: number, signal: AbortSignal): Promise<void>;
   now?(): number;
   maxBodyBytes?: number;
@@ -266,13 +280,25 @@ export function createEndpointProxy(deps: ProxyDeps): http.Server {
     if (req.method !== 'GET') headers['content-length'] = String(body.length);
 
     const controller = new AbortController();
-    res.on('close', () => { if (!res.writableFinished) controller.abort(); });
+    // In flight from here to the response's end or the harness's hang-up, for the runtime to tell an Esc into an
+    // answer from one at an idle prompt (trace feature B3).
+    deps.inFlight?.(session.agentId, 1);
+    /** When the harness hung up before the response's end, if it did. */
+    let harnessGoneAt: number | undefined;
+    /** What of the model's response was written to the harness. */
+    let delivered = 0;
+    res.on('close', () => {
+      deps.inFlight?.(session.agentId, -1);
+      if (!res.writableFinished) { harnessGoneAt = now(); controller.abort(); }
+    });
 
     const giveUpAt = startedAt + Math.max(0, target.holdMaxSeconds) * 1000;
     let attempts = 0;
     let held = false;
     let heldMs = 0;
     let timing: RequestTiming | undefined;
+    /** When the proxy stopped holding at its ceiling and let the endpoint's answer pass, if it did. */
+    let ceilingAt: number | undefined;
     const clearHold = () => {
       if (held) deps.onHold?.({ agentId: session.agentId, endpointId: session.endpointId, cleared: true });
       held = false;
@@ -289,10 +315,11 @@ export function createEndpointProxy(deps: ProxyDeps): http.Server {
       }
       if (controller.signal.aborted) {
         reply?.res.destroy();
-        // Gone while the try after a hold was in flight: given up while held. Before any hold, another matter.
+        // Gone before the endpoint answered: while the try after a hold was in flight (given up while held), or before
+        // any hold (the harness gave up waiting for the first byte).
         const wasHeld = held;
         clearHold();
-        if (wasHeld) recordGivenUp();
+        recordGivenUp(wasHeld);
         return;
       }
 
@@ -315,15 +342,18 @@ export function createEndpointProxy(deps: ProxyDeps): http.Server {
           const before = now();
           await sleep(delay, controller.signal);
           heldMs += now() - before;
-          if (controller.signal.aborted) { clearHold(); recordGivenUp(); return; }
+          if (controller.signal.aborted) { clearHold(); recordGivenUp(true); return; }
           continue;
         }
+        // A pause the hold's ceiling lets through: the proxy stops holding, the endpoint's answer passes as it came.
+        if (target.holdMaxSeconds > 0) ceilingAt = now();
       }
       clearHold();
+      const proxyCut = (): RequestCancel | undefined => (ceilingAt !== undefined ? { by: 'proxy', cause: 'hold_ceiling', at: ceilingAt, deliveredBytes: 0 } : undefined);
 
       if (!reply) {
         sendError(res, surface, 502, 'endpoint_unreachable', `The endpoint could not be reached (${failure?.code ?? failure?.message ?? 'no answer'}).`);
-        record(null, Buffer.alloc(0), undefined, failure?.code ?? 'unreachable');
+        record(null, Buffer.alloc(0), undefined, failure?.code ?? 'unreachable', undefined, [], proxyCut());
         return;
       }
 
@@ -348,6 +378,7 @@ export function createEndpointProxy(deps: ProxyDeps): http.Server {
       upstream.on('data', (chunk: Buffer) => {
         if (firstByteAt === undefined) firstByteAt = now();
         if (keepCopy) { copy.push(chunk); copied += chunk.length; marks.push(copied, now()); }
+        if (harnessGoneAt === undefined) delivered += chunk.length;
         if (!res.write(chunk)) {
           upstream.pause();
           res.once('drain', () => upstream.resume());
@@ -357,28 +388,46 @@ export function createEndpointProxy(deps: ProxyDeps): http.Server {
       upstream.on('error', (err) => { broken = err.message; });
       upstream.on('close', () => {
         if (!upstream.complete && !broken) broken = 'the endpoint closed the stream';
-        if (broken) res.destroy(); else res.end();
         const rid = upstream.headers['x-request-id'];
-        record(upstream, Buffer.concat(copy), firstByteAt, broken, Array.isArray(rid) ? rid[0] : rid, marks);
+        const id = Array.isArray(rid) ? rid[0] : rid;
+        // The harness hung up first: its cut, never the endpoint's error (the stream closes because Tars aborted it).
+        if (harnessGoneAt !== undefined) {
+          record(upstream, Buffer.concat(copy), firstByteAt, undefined, id, marks, harnessCut(harnessGoneAt, false));
+          return;
+        }
+        if (broken) res.destroy(); else res.end();
+        const cancel = broken ? { by: 'endpoint' as const, cause: 'stream_cut', at: now(), deliveredBytes: delivered } : proxyCut();
+        record(upstream, Buffer.concat(copy), firstByteAt, broken, id, marks, cancel);
       });
       return;
     }
 
     /**
-     * A request the harness gave up while it was held (the endpoint pausing): demand that never reached the model,
-     * which left no record until A3 (27/11). Recorded after the harness is gone, never on its path: status 499, the
-     * de facto "client closed the request", with a structured cancel rather than free text.
+     * Why the harness hung up, at `at`: what the runtime knows (Tars ended its terminal, or an Esc or a Ctrl-C came
+     * from the window during this request, cutOf), else given up while held (A3), else unknown (its own timeout, a
+     * crash): never a guess.
      */
-    function recordGivenUp(): void {
-      const at = now();
-      record(null, Buffer.alloc(0), undefined, undefined, undefined, [], { by: 'harness', cause: 'abandoned_while_held', at, deliveredBytes: 0 });
+    function harnessCut(at: number, wasHeld: boolean): RequestCancel {
+      const told = deps.cutOf?.(session!.agentId, startedAt, at);
+      if (told) return { ...told, at, deliveredBytes: delivered };
+      return { by: 'harness', cause: wasHeld ? 'abandoned_while_held' : 'unknown', at, deliveredBytes: delivered };
+    }
+
+    /**
+     * A request the harness gave up before the endpoint answered: while it was held (the endpoint pausing), demand that
+     * never reached the model (A3), or waiting for the first byte (B3). Recorded after the harness is gone, never on
+     * its path: status 499, the de facto "client closed the request", with a structured cancel rather than free text.
+     */
+    function recordGivenUp(wasHeld: boolean): void {
+      record(null, Buffer.alloc(0), undefined, undefined, undefined, [], harnessCut(harnessGoneAt ?? now(), wasHeld));
     }
 
     function record(upstream: http.IncomingMessage | null, responseBody: Buffer, firstByteAt: number | undefined, error?: string, upstreamRequestId?: string, marks: number[] = [], cancel?: WireRecord['cancel']): void {
       if (!session!.traced || !surface || !deps.record) return;
+      const gaveUp = cancel?.by === 'harness' || cancel?.by === 'tars';
       const rec: WireRecord = {
         traceId: session!.traceId, agentId: session!.agentId, surface, startedAt, firstByteAt, endedAt: now(),
-        status: cancel ? 499 : upstream?.statusCode ?? 502, contentType: upstream?.headers['content-type'], requestBody: body, responseBody,
+        status: upstream?.statusCode ?? (gaveUp ? 499 : 502), contentType: upstream?.headers['content-type'], requestBody: body, responseBody,
         upstreamRequestId, attempts, heldMs, error, liveSessions, nativeSessionId, timing: upstream ? timing : undefined,
         ...(cancel ? { cancel } : {}),
       };

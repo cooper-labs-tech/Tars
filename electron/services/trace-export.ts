@@ -1,5 +1,5 @@
 import { hashOf } from './trace-wire';
-import type { TraceFilter, TraceStore } from './trace-store';
+import { givenUpWhileHeld, type TraceFilter, type TraceStore } from './trace-store';
 
 /**
  * Sessions in the reader's trace format tables: the export file (JSONL, one row per line, `table` naming its
@@ -55,7 +55,8 @@ export function sessionDocument(store: TraceStore, traceId: string, seen: Set<st
   };
   for (const t of s.turns) {
     // A request given up while held never reached the endpoint: it is listed with its cancel, and counted in neither.
-    const reached = t.requests.filter(r => !r.cancel);
+    // Any other cut request reached it, and counts.
+    const reached = t.requests.filter(r => !givenUpWhileHeld(r));
     const main = reached.filter(r => !r.side);
     doc.turns.push({
       turn_id: t.turnId, trace_id: x.traceId, turn_index: t.index, started_at: t.startedAt, ended_at: t.endedAt ?? null,
@@ -65,6 +66,8 @@ export function sessionDocument(store: TraceStore, traceId: string, seen: Set<st
       tokens_in: t.requests.reduce((a, r) => a + (r.tokensIn ?? 0), 0), tokens_cached: t.requests.reduce((a, r) => a + (r.tokensCached ?? 0), 0),
       tokens_out: t.requests.reduce((a, r) => a + (r.tokensOut ?? 0), 0), final_status: t.finalStatus ?? null,
       author: t.author, author_detail: t.authorDetail ?? null, task_ref: t.taskRef ?? null,
+      // What a person, an orchestrator or Tars did to the turn (trace feature B3).
+      interventions: t.interventions ?? null,
     });
     for (const r of t.requests) {
       const m = store.requestMessages(r.requestId);

@@ -11,6 +11,7 @@ import { broadcastToAllWindows } from '../utils/broadcast';
 import { scheduleTick } from '../utils/agents-tick';
 import { hasOrchestratorPowers } from './agent-role';
 import { clearSessionStart, noteSessionStart } from './session-start';
+import { noteTarsEnding } from '../services/traces-runtime';
 import type { AgentStatus } from '../types';
 
 /**
@@ -400,6 +401,8 @@ async function restartNow(agent: AgentStatus, cause: 'settings' | 'asked'): Prom
       const old = ptyProcesses.get(agent.ptyId);
       ptyProcesses.delete(agent.ptyId);
       try {
+        // Its traced session told first: a restart, and the cause of a cut in flight (trace feature B3).
+        if (old) noteTarsEnding(agent.id, 'restart');
         if (old) killPty(old);
       } catch (err) {
         console.warn(`[restart] ${agent.name || agent.id}: the old terminal did not close cleanly:`, err);

@@ -502,6 +502,8 @@ export class TraceUploader {
       author: String(x.author),
       // The ref of the task it served: the link from a turn to its task that survives the outcome's cap.
       ...(x.task_ref ? { taskRef: String(x.task_ref) } : {}),
+      // Its interventions (trace feature B3): kinds, times, delays and a session id, never words.
+      ...(x.interventions ? { interventions: x.interventions as Record<string, unknown> } : {}),
     }));
     const links = new Map<string, Array<{ position: number; message_hash: string; direction: string }>>();
     for (const l of doc.request_messages) {
