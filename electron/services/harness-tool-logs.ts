@@ -19,7 +19,8 @@ import { opencodeToolPartOf, qwenToolPartOf, type ToolCallPart } from './tool-ca
  *   rule on every system: it uses xdg-basedir; measured on macOS only). It is opened read-only, and only the parts of
  *   the sessions begun in the agent's folder since its traced session started are read, at most OPENCODE_PASS_ROWS_MAX a
  *   pass, each row once more each time it changes (a running call, then its end). Once opencode has exited cleanly,
- *   the store itself is never opened: after the session's end it is read once from a copy, deleted at once.
+ *   the store itself is never opened: after the session's end it is read once from a copy, deleted at once, for a store
+ *   of OPENCODE_COPY_BYTES_MAX at most; a copy a crash left behind is removed at the next start.
  *
  * Read only, from the harness's own folders, never its configuration; a file or a database that is missing, or one
  * of another version, is nothing, and the other sessions are still read.
@@ -46,6 +47,8 @@ export interface HarnessToolLogsDeps {
   dataHome?: () => string;
   /** Where a copy of opencode's store, closed cleanly, is read: os.tmpdir() in the app. */
   tmpDir?: () => string;
+  /** Tests only: OPENCODE_COPY_BYTES_MAX. */
+  copyBytesMax?: number;
   now?: () => number;
 }
 
@@ -59,18 +62,31 @@ export const OPENCODE_PASS_ROWS_MAX = 500;
 const OPENCODE_LOCK_WAIT_MS = 50;
 /** A session of opencode begun this much before the traced session is still its own (clocks, the launch). */
 const OPENCODE_START_SLACK_MS = 1000;
+/**
+ * The biggest store copied after its session's end. The copy is byte by byte on Tars's main thread wherever Node makes
+ * no clone (measured on 28/11 on APFS, under Node 22 and Electron 44: 64 MB in 0.05 to 0.21 s, 256 MB in 0.36 to 0.82 s).
+ */
+export const OPENCODE_COPY_BYTES_MAX = 64 * 1024 * 1024;
+/** A copy's folder this old is no copy in use (one lives for one pass, a moment): the first pass removes it. */
+export const OPENCODE_COPY_SWEEP_AGE_MS = 5 * 60_000;
+const OPENCODE_COPY_PREFIX = 'tars-opencode-';
 
 export class HarnessToolLogs {
   private files = new Map<string, { offset: number; partial: string }>();
   private cursors = new Map<string, { at: number; id: string }>();
   /** The store as each ended session's copy was read (its time and size): the same store is not copied again. */
   private copied = new Map<string, string>();
+  private swept = false;
 
   constructor(private deps: HarnessToolLogsDeps) {}
 
   /** One pass over every followed session; never throws. */
   tick(): void {
     const now = (this.deps.now ?? Date.now)();
+    if (!this.swept) {
+      this.swept = true;
+      this.sweepCopies(now);
+    }
     for (const s of this.deps.sessions()) {
       if (s.endedAt !== undefined && now - s.endedAt > ENDED_GRACE_MS) {
         this.cursors.delete(s.traceId);
@@ -82,6 +98,27 @@ export class HarnessToolLogs {
         else if (s.harness === 'opencode') this.readOpencode(s);
       } catch (err) {
         console.warn(`[traces] ${s.harness}'s log not read for ${s.traceId}: ${(err as Error).message}`);
+      }
+    }
+  }
+
+  /**
+   * The copies of opencode's store that a crash, or a removal that failed, left in the temporary folder: each one holds
+   * every session's messages and tool output. Removed at the first pass after Tars starts, each by its own folder's name,
+   * once older than OPENCODE_COPY_SWEEP_AGE_MS (another Tars, sharing the folder, may be reading a fresh one).
+   */
+  private sweepCopies(now: number): void {
+    const tmp = (this.deps.tmpDir ?? os.tmpdir)();
+    let names: string[];
+    try { names = fs.readdirSync(tmp); } catch { return; }
+    for (const name of names) {
+      if (!OPENCODE_COPY_NAME.test(name)) continue;
+      const dir = path.join(tmp, name);
+      try {
+        const st = fs.lstatSync(dir);
+        if (st.isDirectory() && now - st.mtimeMs >= OPENCODE_COPY_SWEEP_AGE_MS) fs.rmSync(dir, { recursive: true, force: true });
+      } catch (err) {
+        console.warn(`[traces] a copy of opencode's store not removed, ${dir}: ${(err as Error).message}`);
       }
     }
   }
@@ -123,13 +160,16 @@ export class HarnessToolLogs {
     // written since the last pass and moved into the store by its clean exit, are read from a copy in Tars's own
     // temporary folder, deleted at once, and only once for a store that has not changed since (the Audit of #692).
     if (s.endedAt === undefined) return;
-    const seen = storeSignature(file);
+    const st = fs.statSync(file);
+    const seen = `${st.mtimeMs}:${st.size}`;
     if (this.copied.get(s.traceId) === seen) return;
     this.copied.set(s.traceId, seen);
-    const dir = fs.mkdtempSync(path.join((this.deps.tmpDir ?? os.tmpdir)(), 'tars-opencode-'));
+    // Node clones a file only on the Linux file systems that can: elsewhere, APFS included, the copy is byte by byte,
+    // on Tars's main thread (measured on 28/11). Past the bound it is not made, and the last request's toolMs stays null.
+    if (st.size > (this.deps.copyBytesMax ?? OPENCODE_COPY_BYTES_MAX)) return;
+    const dir = fs.mkdtempSync(path.join((this.deps.tmpDir ?? os.tmpdir)(), OPENCODE_COPY_PREFIX));
     try {
       const copy = path.join(dir, 'opencode.db');
-      // A clone where the file system makes one (APFS, Btrfs): no second copy of the bytes.
       fs.copyFileSync(file, copy, fs.constants.COPYFILE_FICLONE);
       this.readOpencodeRows(copy, s);
     } finally {
@@ -175,11 +215,8 @@ function walClosed(file: string): boolean {
   return header[18] === 2 && !fs.existsSync(`${file}-wal`);
 }
 
-/** A store as it is now: a write moves its time, and a checkpoint its time or its size. */
-function storeSignature(file: string): string {
-  const st = fs.statSync(file);
-  return `${st.mtimeMs}:${st.size}`;
-}
+/** The name mkdtemp gives a copy's folder: the prefix and six letters or digits, nothing wider. */
+const OPENCODE_COPY_NAME = /^tars-opencode-[A-Za-z0-9]{6}$/;
 
 function defaultDataHome(): string {
   return process.env.XDG_DATA_HOME || path.join(os.homedir(), '.local', 'share');
