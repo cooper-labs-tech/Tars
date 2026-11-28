@@ -7,6 +7,7 @@ import type { AgentStatus, AppSettings } from '../../../electron/types';
 import { DATA_DIR, PRIVATE_DIR } from '../../../electron/constants';
 import { assertThrowaway } from '../../setup/throwaway-dirs';
 import { hasPosixModes } from '../../setup/platform-limits';
+import Database from 'better-sqlite3';
 
 /**
  * Trace feature A5 (27/11): the owner's switch "May be used to train models", in the window, and what it stamps.
@@ -31,6 +32,16 @@ import { hasPosixModes } from '../../setup/platform-limits';
  * W9. (Found by the Frontend building the toggle, #693.) The back-office takes an owed change and the window is not
  *     told (`traces:changed`), so its "not yet sent" line stays until its next read; or it is told when nothing
  *     changed (a value that is not the owed one, or nothing owed).
+ * Added before their fix (the Audit's M1 and its notes on #690 at 050c79fd9): each session's "no" lived only in the
+ * trace store, under ~/.tars, which every agent is handed.
+ * W10. A session opened while the switch is off, or one running when it was turned off, whose stamp an agent set back
+ *      to 1 in the store, previews or uploads as trainable: its "no" is not also kept in the private folder.
+ * W11. The private list of denied sessions cannot be read (garbage in it): a session leaves as trainable.
+ * W12. The list keeps the ids of sessions the store no longer holds after a sweep, and grows for ever.
+ * W13. A change while a pass is running waits for the 5-minute pass: the 2-second pass finds the uploader busy and
+ *      does not run once it is free.
+ * W14. An off held in memory (its write refused) and taken by the back-office: the window is not told.
+ * W15. The running sessions could not be marked in the store: the answer to the off says nothing of it.
  */
 
 assertThrowaway({ DATA_DIR, PRIVATE_DIR });
@@ -55,6 +66,7 @@ const EP = 'ep-0a0b0d';
 const BASE = 'http://127.0.0.1:9/v1';
 const AGENT = 'agent-t';
 const TRAINING_FILE = path.join(PRIVATE_DIR, 'traces-training.json');
+const DENIED_FILE = path.join(PRIVATE_DIR, 'traces-training-denied.json');
 let memory: AppSettings;
 let runtime: typeof import('../../../electron/services/traces-runtime');
 let emitted: string[] = [];
@@ -79,6 +91,7 @@ beforeEach(async () => {
   handlers.clear();
   memory = settings();
   fs.rmSync(TRAINING_FILE, { force: true });
+  fs.rmSync(DENIED_FILE, { force: true });
   runtime = await import('../../../electron/services/traces-runtime');
   const getAgent = (id: string) => (id === AGENT ? ({ id, name: 'T', traces: true, projectPath: P1, provider: 'qwen-code', model: 'open-coder-1', endpointId: EP } as unknown as AgentStatus) : undefined);
   emitted = [];
@@ -96,6 +109,7 @@ afterEach(() => {
   runtime.stopTracesRuntime();
   fs.rmSync(runtime.TRACES_CONSENT_FILE, { force: true });
   fs.rmSync(TRAINING_FILE, { force: true });
+  fs.rmSync(DENIED_FILE, { force: true });
   fs.rmSync(path.dirname(runtime.TRACES_DB_FILE), { recursive: true, force: true });
 });
 
@@ -226,5 +240,109 @@ describe('the training switch', () => {
       fs.chmodSync(PRIVATE_DIR, 0o700);
       fs.chmodSync(TRAINING_FILE, 0o600);
     }
+  });
+});
+
+describe('a session\'s "no" kept where no agent reaches it (the Audit\'s M1 on #690)', () => {
+  /** What an agent can do: it is handed ~/.tars, and so the trace store. */
+  const forge = (traceId: string) => {
+    const db = new Database(runtime.TRACES_DB_FILE);
+    db.prepare('UPDATE traces SET training = 1 WHERE trace_id = ?').run(traceId);
+    db.close();
+  };
+  const ingest = (traceId: string) => {
+    const req = Buffer.from(JSON.stringify({ model: 'open-coder-1', messages: [{ role: 'user', content: traceId }] }));
+    const resp = Buffer.from(JSON.stringify({ choices: [{ message: { role: 'assistant', content: 'done' }, finish_reason: 'stop' }], usage: { prompt_tokens: 1, completion_tokens: 1 } }));
+    runtime.traceStore().ingest({ traceId, agentId: AGENT, surface: 'openai_chat', startedAt: Date.now(), endedAt: Date.now() + 5, status: 200, contentType: 'application/json', requestBody: req, responseBody: resp, attempts: 1, heldMs: 0 });
+  };
+  type Preview = { consent: unknown; document: { batches: Array<{ body: { sessions?: Array<{ consent?: unknown }> } }> } };
+  const leaves = (traceId: string) => {
+    const p = runtime.previewUpload(traceId) as Preview;
+    return { preview: p.consent, sent: p.document.batches[0].body.sessions?.[0].consent };
+  };
+
+  it('W10. opened while off, or running when turned off: false, though an agent sets the stamp back to 1', () => {
+    call('traces:setTraining', false);
+    const off = runtime.openEndpointSession(AGENT);
+    const openedOff = traceOf(off.token)!;
+    ingest(openedOff);
+    runtime.closeEndpointSession(off.token);
+    call('traces:setTraining', true);
+    const run = runtime.openEndpointSession(AGENT);
+    const running = traceOf(run.token)!;
+    ingest(running);
+    call('traces:setTraining', false);
+    runtime.closeEndpointSession(run.token);
+    for (const id of [openedOff, running]) {
+      forge(id);
+      expect(runtime.traceStore().session(id)?.session.consent, 'the store says yes now').toEqual({ training: true });
+      expect(leaves(id), id).toEqual({ preview: { training: false }, sent: { training: false } });
+    }
+    expect(fs.existsSync(DENIED_FILE), 'kept in the private folder').toBe(true);
+    if (hasPosixModes()) expect(fs.statSync(DENIED_FILE).mode & 0o077).toBe(0);
+  });
+
+  it('W11. a list that cannot be read denies every session', () => {
+    const s = runtime.openEndpointSession(AGENT);
+    const id = traceOf(s.token)!;
+    ingest(id);
+    runtime.closeEndpointSession(s.token);
+    expect(leaves(id).sent).toEqual({ training: true });
+    fs.mkdirSync(PRIVATE_DIR, { recursive: true });
+    fs.writeFileSync(DENIED_FILE, 'not json {', { mode: 0o600 });
+    expect(leaves(id), 'an unreadable list').toEqual({ preview: { training: false }, sent: { training: false } });
+  });
+
+  it('W12. the sweep drops the ids of sessions the store no longer holds', () => {
+    call('traces:setTraining', false);
+    const a = runtime.openEndpointSession(AGENT);
+    const kept = traceOf(a.token)!;
+    runtime.closeEndpointSession(a.token);
+    const b = runtime.openEndpointSession(AGENT);
+    const gone = traceOf(b.token)!;
+    runtime.closeEndpointSession(b.token);
+    expect(JSON.parse(fs.readFileSync(DENIED_FILE, 'utf8')).ids.sort()).toEqual([kept, gone].sort());
+    runtime.traceStore().remove({ traceIds: [gone] });
+    runtime.sweepTraces();
+    expect(JSON.parse(fs.readFileSync(DENIED_FILE, 'utf8')).ids).toEqual([kept]);
+  });
+
+  it('W13. a change while a pass runs: the 2-second pass runs once the busy one ends', async () => {
+    vi.useFakeTimers();
+    const runs = vi.spyOn(runtime.traceUploader(), 'runOnce')
+      .mockResolvedValueOnce({ sent: 0, failed: 0, skipped: 'busy' })
+      .mockResolvedValue({ sent: 0, failed: 0 });
+    call('traces:setTraining', false);
+    await vi.advanceTimersByTimeAsync(2_100);
+    expect(runs).toHaveBeenCalledTimes(1);
+    await vi.advanceTimersByTimeAsync(5_000);
+    expect(runs, 'once the busy pass is over').toHaveBeenCalledTimes(2);
+  });
+
+  it.skipIf(!hasPosixModes())('W14. an off held in memory, taken by the back-office: the window is told', () => {
+    fs.mkdirSync(PRIVATE_DIR, { recursive: true });
+    fs.writeFileSync(TRAINING_FILE, JSON.stringify({ training: true, owed: false }), { mode: 0o400 });
+    fs.chmodSync(PRIVATE_DIR, 0o500);
+    try {
+      call('traces:setTraining', false);
+      emitted = [];
+      (runtime.traceUploader() as unknown as { deps: { trainingSent(v: boolean): void } }).deps.trainingSent(false);
+      expect(call('traces:training')).toMatchObject({ training: false, owed: false });
+      expect(emitted).toEqual(['traces:changed']);
+    } finally {
+      fs.chmodSync(PRIVATE_DIR, 0o700);
+      fs.chmodSync(TRAINING_FILE, 0o600);
+    }
+  });
+
+  it('W15. sessions the store could not mark: the answer to the off says so', () => {
+    const s = runtime.openEndpointSession(AGENT);
+    traceOf(s.token);
+    vi.spyOn(runtime.traceStore(), 'denyTraining').mockImplementation(() => { throw Object.assign(new Error('database is locked'), { code: 'SQLITE_BUSY' }); });
+    const off = call('traces:setTraining', false) as { ok: boolean; unsaved?: string };
+    expect(off.ok).toBe(true);
+    expect(off.unsaved ?? '').toMatch(/SQLITE_BUSY|database is locked/);
+    expect((call('traces:training') as { unsaved?: string }).unsaved ?? '').toMatch(/SQLITE_BUSY|database is locked/);
+    runtime.closeEndpointSession(s.token);
   });
 });
