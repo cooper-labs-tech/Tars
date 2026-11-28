@@ -402,6 +402,7 @@ export class TraceUploader {
       // What the harness was given at launch, and its compactions (trace feature C2): each its own line in the notice.
       contextWindowGiven: opt(t.context_window_given as number), outputCapGiven: opt(t.output_cap_given as number),
       autoCompaction: opt(t.auto_compaction as string), compactions: Array.isArray(t.compactions) ? t.compactions : [],
+      ...(Number(t.compactions_omitted) > 0 ? { compactionsOmitted: Number(t.compactions_omitted) } : {}),
     };
     const turns = doc.turns.map(x => ({
       turnId: String(x.turn_id), sessionId: traceId, index: Number(x.turn_index), startedAt: Number(x.started_at), endedAt: opt(x.ended_at as number),

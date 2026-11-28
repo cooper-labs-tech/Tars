@@ -4,7 +4,7 @@ import * as path from 'path';
 import * as zlib from 'zlib';
 import { randomBytes } from 'crypto';
 import {
-  hashOf, historyRewrite, instructionText, isStreamed, opensTurn, parseRequest, parseResponse, type Surface,
+  hashOf, historyKeys, historyRewrite, instructionText, isStreamed, opensTurn, parseRequest, parseResponse, type Surface,
 } from './trace-wire';
 import type { SessionEnvironment } from './session-environment';
 import { sessionTiming, type RequestTiming } from './server-timing';
@@ -138,6 +138,8 @@ export interface TraceSessionSummary {
   rttMedianMs?: number; clockOffsetMs?: number;
   /** What the harness was given at launch, and its compactions (trace feature C2). */
   contextWindowGiven?: number; outputCapGiven?: number; autoCompaction?: 'on' | 'off'; compactions?: TraceCompaction[];
+  /** The compactions left out past the newest MAX_COMPACTIONS. */
+  compactionsOmitted?: number;
 }
 
 /**
@@ -247,7 +249,31 @@ const ADDED_COLUMNS: Array<[table: string, column: string, type: string]> = [
   ['traces', 'auto_compaction', 'TEXT'],
   ['traces', 'compactions_json', 'TEXT'],
   ['requests', 'context_reset_json', 'TEXT'],
+  // Each main request's history keys (trace-wire.ts historyKeys), which the next request is compared with; and the
+  // compactions past the newest MAX_COMPACTIONS, counted.
+  ['requests', 'history_keys', 'TEXT'],
+  ['traces', 'compactions_omitted', 'INTEGER'],
 ];
+
+/**
+ * A session keeps its newest compactions, this many, and counts the rest (`compactions_omitted`): the back-office takes
+ * at most 1,000, and a harness that rewrote its history at every request must not get the whole session refused.
+ */
+export const MAX_COMPACTIONS = 200;
+
+/**
+ * The harnesses whose history the rewrite rule is measured on (trace feature C2): codex 0.163 and 0.170 keep it whole
+ * at the head; Qwen Code 0.25.2 does, its reminders aside (trace-wire.ts historyKeys). The others' requests are never
+ * marked on the wire's guess: measured, they join this list.
+ */
+const REWRITE_MEASURED = new Set(['codex', 'qwen-code']);
+
+/** The newest MAX_COMPACTIONS of a list in time order, and how many more were left out. */
+function capped(list: TraceCompaction[], omitted: number): { list: TraceCompaction[]; omitted: number } {
+  const sorted = [...list].sort((a, b) => a.at - b.at);
+  if (sorted.length <= MAX_COMPACTIONS) return { list: sorted, omitted };
+  return { list: sorted.slice(sorted.length - MAX_COMPACTIONS), omitted: omitted + sorted.length - MAX_COMPACTIONS };
+}
 
 /** Per request, what the cap counts on top of its blobs: the rows themselves. */
 const ROW_BYTES = 512;
@@ -290,6 +316,7 @@ function summaryOf(r: Row): TraceSessionSummary {
     contextWindowGiven: optNum(r.context_window_given), outputCapGiven: optNum(r.output_cap_given),
     autoCompaction: r.auto_compaction === 'on' || r.auto_compaction === 'off' ? r.auto_compaction : undefined,
     compactions: jsonOf<TraceCompaction[]>(r.compactions_json) ?? [],
+    compactionsOmitted: num(r.compactions_omitted) > 0 ? num(r.compactions_omitted) : undefined,
   };
 }
 
@@ -425,7 +452,7 @@ export class TraceStore {
    */
   applyHarnessCompactions(traceId: string, events: HarnessCompaction[]): void {
     this.db.transaction(() => {
-      const row = this.db.prepare('SELECT compactions_json FROM traces WHERE trace_id = ?').get(traceId) as Row | undefined;
+      const row = this.db.prepare('SELECT compactions_json, compactions_omitted FROM traces WHERE trace_id = ?').get(traceId) as Row | undefined;
       if (!row) return;
       const list = jsonOf<TraceCompaction[]>(row.compactions_json) ?? [];
       const resets = this.db.prepare(`SELECT request_id, started_at, context_reset_json FROM requests
@@ -433,6 +460,8 @@ export class TraceStore {
       let touched = false;
       for (const e of [...events].sort((a, b) => a.at - b.at)) {
         if (list.some(c => c.source === 'harness' && c.at === e.at && c.kind === e.kind)) continue;
+        // Older than the newest kept, once some were left out: counted already, at a reading before this one.
+        if (num(row.compactions_omitted) > 0 && list.length >= MAX_COMPACTIONS && e.at < list[0].at) continue;
         const claimed = new Set(list.filter(c => c.source === 'harness' && c.requestId).map(c => c.requestId));
         const r = resets.find(x => num(x.started_at) >= e.at - 2000 && num(x.started_at) <= e.at + 600_000
           && !claimed.has(String(x.request_id)) && jsonOf<ContextReset>(x.context_reset_json)?.kind !== 'new');
@@ -450,8 +479,9 @@ export class TraceStore {
         touched = true;
       }
       if (!touched) return;
-      list.sort((a, b) => a.at - b.at);
-      this.db.prepare('UPDATE traces SET compactions_json = ?, updated_seq = ? WHERE trace_id = ?').run(JSON.stringify(list), this.nextSeq(), traceId);
+      const kept = capped(list, num(row.compactions_omitted));
+      this.db.prepare('UPDATE traces SET compactions_json = ?, compactions_omitted = ?, updated_seq = ? WHERE trace_id = ?')
+        .run(JSON.stringify(kept.list), kept.omitted, this.nextSeq(), traceId);
     })();
   }
 
@@ -611,14 +641,17 @@ export class TraceStore {
     const lastEnd = optNum(trace.last_end_at);
     // A history rewritten since the last main request (trace feature C2): a compaction or a truncation stays in its
     // turn, whatever its last message looks like; only a new task someone typed through Tars opens one (kind new).
-    const seen = side || !req ? undefined : this.rewriteOf(rec, req, resp.usage.input);
-    const reset = seen?.reset;
+    const seen = side || !req ? undefined : this.rewriteOf(rec, req, resp.usage.input, String(trace.harness));
+    let reset = seen?.reset;
     // The same history sent again (a retry) is the request before it: never a turn of its own.
     let opens = !side && !seen?.again && (!lastTurn || (!!req && opensTurn(rec.surface, req.input)));
     let typedBy: ReturnType<TraceStore['authorFor']> | undefined;
     if (reset && opens && req) {
       typedBy = this.authorFor(rec.agentId, instructionText(rec.surface, req.input), rec.startedAt);
       if (typedBy.author === 'unknown') opens = false;
+      // Typed through Tars, a new task: after a cleared history, a reset of kind new; with the history kept at its head
+      // (an answer cut short, then typed words), the history went on, and nothing was reset (the Audit's I-2 on #687).
+      else if (seen?.kept) reset = undefined;
       else reset.kind = 'new';
     }
     let turnId = optStr(lastTurn?.turn_id);
@@ -676,14 +709,15 @@ export class TraceStore {
     this.db.prepare(`INSERT INTO requests (request_id, upstream_request_id, trace_id, turn_id, seq, side, surface, model_requested,
       model_served, params_json, system_hash, tools_hash, started_at, ttft_ms, total_ms, tokens_in, tokens_cached, tokens_out, status, error,
       finish_reason, streamed, req_bytes, resp_bytes, new_messages, attempts, held_ms, bodies_dropped, live_sessions,
-      rtt_ms, clock_offset_ms, queue_ms, upstream_ms, context_reset_json)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`).run(
+      rtt_ms, clock_offset_ms, queue_ms, upstream_ms, context_reset_json, history_keys)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`).run(
       requestId, rec.upstreamRequestId ?? null, rec.traceId, turnId ?? null, seqRow.n, side ? 1 : 0, rec.surface, req?.model ?? null,
       resp.modelServed ?? null, req ? JSON.stringify(req.params) : null, systemHash ?? null, toolsHash ?? null, rec.startedAt,
       ttft, total, resp.usage.input, resp.usage.cached, resp.usage.output,
       rec.status, rec.error ?? resp.error ?? null, resp.finishReason ?? null, req?.stream ? 1 : 0, rec.requestBody.length, rec.responseBody.length,
       newMessages, rec.attempts, rec.heldMs, dropped ? 1 : 0, typeof rec.liveSessions === 'number' ? rec.liveSessions : null,
-      rec.timing?.rttMs ?? null, rec.timing?.clockOffsetMs ?? null, rec.timing?.queueMs ?? null, rec.timing?.upstreamMs ?? null, reset ? JSON.stringify(reset) : null);
+      rec.timing?.rttMs ?? null, rec.timing?.clockOffsetMs ?? null, rec.timing?.queueMs ?? null, rec.timing?.upstreamMs ?? null, reset ? JSON.stringify(reset) : null,
+      !side && req ? JSON.stringify(historyKeys(req.input).map(c => c.key)) : null);
     // The harness's own session id: the first it sent stays (a resumed session keeps the id it began with).
     if (rec.nativeSessionId) {
       this.db.prepare('UPDATE traces SET native_session_id = ? WHERE trace_id = ? AND native_session_id IS NULL').run(rec.nativeSessionId, rec.traceId);
@@ -713,7 +747,8 @@ export class TraceStore {
     if (reset && reset.kind !== 'new') {
       const list = jsonOf<TraceCompaction[]>(trace.compactions_json) ?? [];
       list.push({ at: rec.startedAt, kind: reset.kind as TraceCompaction['kind'], requestId, source: 'wire' });
-      this.db.prepare('UPDATE traces SET compactions_json = ? WHERE trace_id = ?').run(JSON.stringify(list), rec.traceId);
+      const kept = capped(list, num(trace.compactions_omitted));
+      this.db.prepare('UPDATE traces SET compactions_json = ?, compactions_omitted = ? WHERE trace_id = ?').run(JSON.stringify(kept.list), kept.omitted, rec.traceId);
     }
     return requestId;
   }
@@ -724,23 +759,27 @@ export class TraceStore {
    * not kept (past the cap: nothing to compare). The tokens it dropped: the earlier prompt less this one, as the
    * endpoint counted them, when both are known and it shrank.
    */
-  private rewriteOf(rec: WireRecord, req: NonNullable<ReturnType<typeof parseRequest>>, promptTokens: number): { reset?: ContextReset; again: boolean } | undefined {
+  private rewriteOf(rec: WireRecord, req: NonNullable<ReturnType<typeof parseRequest>>, promptTokens: number, harness: string): { reset?: ContextReset; kept?: boolean; again: boolean } | undefined {
     if (this.bodiesDropped || req.params.previous_response_id !== undefined) return undefined;
-    const prev = this.db.prepare(`SELECT request_id, tokens_in FROM requests WHERE trace_id = ? AND side = 0 AND bodies_dropped = 0
-      ORDER BY rowid DESC LIMIT 1`).get(rec.traceId) as Row | undefined;
-    if (!prev) return undefined;
-    const links = this.db.prepare('SELECT message_hash, direction FROM request_messages WHERE request_id = ? ORDER BY position').all(prev.request_id) as Row[];
-    const hashes = links.filter(l => l.direction === 'input').map(l => String(l.message_hash));
-    if (!hashes.length) return undefined;
-    const again = hashes.length === req.input.length && req.input.every((m, i) => hashOf(m) === hashes[i]);
-    if (again) return { again: true };
-    const outHash = links.find(l => l.direction === 'output')?.message_hash;
-    const output = outHash ? this.getBlob(String(outHash)) : undefined;
+    const prev = this.db.prepare(`SELECT request_id, tokens_in, history_keys FROM requests WHERE trace_id = ? AND side = 0 AND bodies_dropped = 0
+      AND history_keys IS NOT NULL ORDER BY rowid DESC LIMIT 1`).get(rec.traceId) as Row | undefined;
+    const keys = jsonOf<string[]>(prev?.history_keys) ?? [];
+    if (!prev || !keys.length) return undefined;
+    // The same history sent again (its keys, the harness's reminders aside): a retry, whatever the harness.
+    const cur = historyKeys(req.input).map(c => c.key);
+    if (cur.length === keys.length && cur.every((k, i) => k === keys[i])) return { again: true };
+    // A harness whose history is not measured is never marked on the wire's guess (the Audit's I-1 on #687).
+    if (!REWRITE_MEASURED.has(harness)) return { again: false };
+    const out = this.db.prepare(`SELECT message_hash FROM request_messages WHERE request_id = ? AND direction = 'output'`).get(prev.request_id) as Row | undefined;
+    const output = out ? this.getBlob(String(out.message_hash)) : undefined;
     const askedTool = (Array.isArray(output) ? output : output === undefined ? [] : [output]).flatMap(i => partsOf(i)).some(p => p.kind === 'tool_call');
-    const kind = historyRewrite(rec.surface, { hashes, askedTool }, req.input);
-    if (!kind) return { again: false };
+    const rewrite = historyRewrite(rec.surface, { keys, askedTool }, req.input);
+    if (!rewrite) return { again: false };
     const dropped = num(prev.tokens_in) - promptTokens;
-    return { reset: { kind, ...(promptTokens > 0 && num(prev.tokens_in) > 0 && dropped > 0 ? { droppedTokens: dropped } : {}) }, again: false };
+    return {
+      reset: { kind: rewrite.kind, ...(promptTokens > 0 && num(prev.tokens_in) > 0 && dropped > 0 ? { droppedTokens: dropped } : {}) },
+      kept: rewrite.kept, again: false,
+    };
   }
 
   private where(f: TraceFilter): { sql: string; args: unknown[] } {

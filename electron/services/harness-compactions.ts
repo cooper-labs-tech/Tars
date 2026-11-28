@@ -13,10 +13,10 @@ import * as path from 'path';
  *   (`originalTokenCount`, `newTokenCount`) and its status (1: compressed). Kind `summarize`: it asks the model for a
  *   state snapshot of the chat.
  *
- * Read only, from the agent's own folders, bounded: codex's one rollout named by the session's own id (a safe id only),
- * in the days the session spans; Qwen Code's one transcript of the agent's folder that overlaps the session, none when
- * two do (which one is this session's cannot be told); a file over `maxBytes` is not read. A malformed line is
- * skipped.
+ * Read only, from the agent's own folders, bounded and asynchronously: codex's one rollout named by the session's own
+ * id (a safe id only), in the days the session spans; Qwen Code's one transcript of the agent's folder that overlaps
+ * the session, looked for among the 64 most recently written, none when two overlap (which one is this session's cannot
+ * be told); a file over `maxBytes` is not read. A malformed line is skipped.
  */
 
 export interface HarnessCompaction {
@@ -29,8 +29,9 @@ export interface HarnessCompaction {
 
 /** A file read at most (8 MiB): a rollout or a transcript this long is not read. */
 export const MAX_LOG_BYTES = 8 * 1024 * 1024;
-/** The transcripts of a folder looked at, at most. */
+/** The transcripts of a folder looked at, at most, the newest first; and the names listed before that, at most. */
 const MAX_CANDIDATES = 64;
+const MAX_LISTED = 5000;
 const SAFE_SESSION_ID = /^[A-Za-z0-9][A-Za-z0-9-]{0,127}$/;
 
 type Json = Record<string, unknown>;
@@ -90,15 +91,30 @@ export function qwenCompactions(text: string): HarnessCompaction[] {
   return out;
 }
 
-/** A file's text when it is a file of at most `maxBytes`, else null. */
-function readBounded(file: string, maxBytes: number): string | null {
+/** A file's text when it is a file of at most `maxBytes`, else null. Read off the main thread (fs.promises). */
+async function readBounded(file: string, maxBytes: number): Promise<string | null> {
   try {
-    const st = fs.statSync(file);
+    const st = await fs.promises.stat(file);
     if (!st.isFile() || st.size > maxBytes) return null;
-    return fs.readFileSync(file, 'utf8');
+    return await fs.promises.readFile(file, 'utf8');
   } catch {
     return null;
   }
+}
+
+/** The names of a folder that end so, the most recently written first, `limit` at most; none when it cannot be read. */
+async function newestFirst(folder: string, suffix: string, limit: number): Promise<Array<{ name: string; mtimeMs: number }>> {
+  let names: string[];
+  try { names = (await fs.promises.readdir(folder)).filter(n => n.endsWith(suffix)).slice(0, MAX_LISTED); } catch { return []; }
+  const stated = await Promise.all(names.map(async (name) => {
+    try {
+      const st = await fs.promises.stat(path.join(folder, name));
+      return st.isFile() ? { name, mtimeMs: st.mtimeMs } : null;
+    } catch {
+      return null;
+    }
+  }));
+  return stated.filter((s): s is { name: string; mtimeMs: number } => s !== null).sort((a, b) => b.mtimeMs - a.mtimeMs).slice(0, limit);
 }
 
 /** The local dates a session spans, a day either side, as codex names its folders. */
@@ -112,11 +128,14 @@ function daysOf(startedAt: number, endedAt: number): string[][] {
   return out;
 }
 
-/** A session's compactions from its harness's own log, or none. */
-export function readHarnessCompactions(o: {
+/**
+ * A session's compactions from its harness's own log, or none. Asynchronous and bounded (the Audit's I-4 on #687): the
+ * files are listed, stated and read through fs.promises, so a session's end never holds the main process on them.
+ */
+export async function readHarnessCompactions(o: {
   harness: string; codexHome?: string; qwenHome?: string; cwd?: string; nativeSessionId?: string;
   startedAt: number; endedAt: number; maxBytes?: number;
-}): HarnessCompaction[] {
+}): Promise<HarnessCompaction[]> {
   const maxBytes = o.maxBytes ?? MAX_LOG_BYTES;
   const within = (c: HarnessCompaction) => c.at >= o.startedAt - 60_000 && c.at <= o.endedAt + 60_000;
   if (o.harness === 'codex') {
@@ -124,10 +143,10 @@ export function readHarnessCompactions(o: {
     for (const day of daysOf(o.startedAt, o.endedAt)) {
       const folder = path.join(o.codexHome, 'sessions', ...day);
       let names: string[];
-      try { names = fs.readdirSync(folder); } catch { continue; }
+      try { names = await fs.promises.readdir(folder); } catch { continue; }
       const name = names.find(n => n.startsWith('rollout-') && n.endsWith(`-${o.nativeSessionId}.jsonl`));
       if (!name) continue;
-      const text = readBounded(path.join(folder, name), maxBytes);
+      const text = await readBounded(path.join(folder, name), maxBytes);
       return text === null ? [] : codexCompactions(text).filter(within);
     }
     return [];
@@ -135,16 +154,14 @@ export function readHarnessCompactions(o: {
   if (o.harness === 'qwen-code') {
     if (!o.qwenHome || !o.cwd) return [];
     const chats = path.join(o.qwenHome, 'projects', o.cwd.replace(/[^a-zA-Z0-9]/g, '-'), 'chats');
-    let names: string[];
-    try { names = fs.readdirSync(chats).filter(n => n.endsWith('.jsonl')).slice(0, MAX_CANDIDATES); } catch { return []; }
+    // The most recently written first (the Audit's I-3 on #687): in a folder of many chats, this session's is among
+    // the newest, whatever order the folder lists its names in.
+    const listed = await newestFirst(chats, '.jsonl', MAX_CANDIDATES);
     // The transcripts written to since the session began, and begun before it ended.
     const overlapping: Array<{ text: string }> = [];
-    for (const n of names) {
-      const file = path.join(chats, n);
-      let st: fs.Stats;
-      try { st = fs.statSync(file); } catch { continue; }
-      if (!st.isFile() || st.mtimeMs < o.startedAt) continue;
-      const text = readBounded(file, maxBytes);
+    for (const { name, mtimeMs } of listed) {
+      if (mtimeMs < o.startedAt) break;
+      const text = await readBounded(path.join(chats, name), maxBytes);
       if (text === null) return [];
       const first = linesOf(text.slice(0, 64 * 1024).split('\n')[0] ?? '')[0];
       const begun = first ? timeOf(first) : undefined;

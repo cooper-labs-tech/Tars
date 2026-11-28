@@ -381,34 +381,72 @@ function isModelItem(item: unknown): boolean {
   return o.role === 'assistant' || o.type === 'function_call' || o.type === 'custom_tool_call' || o.type === 'reasoning';
 }
 
+/** A user message that says nothing but the harness's reminders (and holds no tool result or image). */
+function isReminderOnly(item: unknown): boolean {
+  const o = asObj(item);
+  if (o.role !== 'user') return false;
+  const parts = typeof o.content === 'string' ? [] : asArr(o.content).map(asObj);
+  if (parts.some(p => p.type !== undefined && p.type !== 'text' && p.type !== 'input_text')) return false;
+  const text = textOfContent(o.content);
+  return text.trim() !== '' && withoutReminders(text) === '';
+}
+
+/** An item with its reminder blocks taken out of every text, and the parts they emptied dropped. */
+function withoutReminderParts(item: unknown): unknown {
+  const o = asObj(item);
+  if (typeof o.content === 'string') return { ...o, content: withoutReminders(o.content) };
+  if (!Array.isArray(o.content)) return item;
+  const parts = o.content.map((p) => {
+    const q = asObj(p);
+    return typeof q.text === 'string' ? { ...q, text: withoutReminders(q.text) } : p;
+  }).filter(p => !(typeof asObj(p).text === 'string' && asObj(p).text === '' && ['text', 'input_text'].includes(String(asObj(p).type))));
+  return { ...o, content: parts };
+}
+
 /**
- * Whether a request's history rewrites the one before (trace feature C2), and how, from what crossed the wire only:
+ * A history's keys, as the rewrite rule compares them (trace feature C2): each item's hash with the harness's reminder
+ * blocks taken out, the messages that say nothing but reminders left out. Measured on Qwen Code 0.25.2 (28/11): a
+ * reminder appended to the first user message moves into a trailing reminder-only message, which the next request
+ * drops; the task, the answers and the tool results stay. 16 hex characters each; `index` is the item's place.
+ */
+export function historyKeys(input: unknown[]): Array<{ key: string; index: number }> {
+  const out: Array<{ key: string; index: number }> = [];
+  input.forEach((item, index) => {
+    if (!isReminderOnly(item)) out.push({ key: hashOf(withoutReminderParts(item)).slice(0, 16), index });
+  });
+  return out;
+}
+
+/**
+ * Whether a request's history rewrites the one before (trace feature C2), and how, from what crossed the wire only,
+ * compared by their keys (historyKeys):
  * - kept whole at the head and grown as a conversation grows (the tool's result the last answer asked for, or after
  *   a plain answer the answer itself), or sent again as it was: no rewrite;
  * - kept at the head but grown with a new instruction instead of the tool's result or the answer (codex 0.163 after a
- *   compaction, measured 27/11: the old history, then the summary as a user message): `compact`;
+ *   compaction, measured 27/11: the old history, then the summary as a user message): `compact`, `kept: true`. An
+ *   answer cut short then words typed through Tars look the same: the caller tells them apart (trace-store.ts);
  * - not kept at the head: `truncate` when only older items were dropped (nothing new before the items kept, no new
  *   instruction after them), else `compact` (a summary in place of what went).
- * `previous` is the earlier main request's history, by hash, and whether its answer asked for a tool.
+ * `previous` is the earlier main request's keys, and whether its answer asked for a tool.
  */
-export function historyRewrite(surface: Surface, previous: { hashes: string[]; askedTool: boolean }, input: unknown[]): 'compact' | 'truncate' | null {
-  const prev = previous.hashes;
+export function historyRewrite(surface: Surface, previous: { keys: string[]; askedTool: boolean }, input: unknown[]): { kind: 'compact' | 'truncate'; kept: boolean } | null {
+  const prev = previous.keys;
   if (!prev.length) return null;
-  const cur = input.map(hashOf);
-  if (prev.every((h, i) => cur[i] === h)) {
-    const grown = input.slice(prev.length);
+  const cur = historyKeys(input);
+  if (prev.every((k, i) => cur[i]?.key === k)) {
+    const grown = cur.slice(prev.length).map(c => input[c.index]);
     if (!grown.length) return null;
     const continues = previous.askedTool ? grown.some(i => isToolResult(surface, i)) : grown.some(isModelItem);
     if (continues) return null;
-    return grown.some(i => lastInstruction(surface, [i]) !== null) ? 'compact' : null;
+    return grown.some(i => lastInstruction(surface, [i]) !== null) ? { kind: 'compact', kept: true } : null;
   }
   const kept = new Set(prev);
   let lastKept = -1;
-  cur.forEach((h, i) => { if (kept.has(h)) lastKept = i; });
-  if (lastKept < 0) return 'compact';
-  const newBefore = cur.slice(0, lastKept + 1).some(h => !kept.has(h));
-  const newInstruction = input.slice(lastKept + 1).some(i => lastInstruction(surface, [i]) !== null);
-  return newBefore || newInstruction ? 'compact' : 'truncate';
+  cur.forEach((c, i) => { if (kept.has(c.key)) lastKept = i; });
+  if (lastKept < 0) return { kind: 'compact', kept: false };
+  const newBefore = cur.slice(0, lastKept + 1).some(c => !kept.has(c.key));
+  const newInstruction = cur.slice(lastKept + 1).some(c => lastInstruction(surface, [input[c.index]]) !== null);
+  return { kind: newBefore || newInstruction ? 'compact' : 'truncate', kept: false };
 }
 
 /** The instruction's own words, the harness's reminders left out: what authorship is matched on. */

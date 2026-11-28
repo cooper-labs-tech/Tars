@@ -47,7 +47,7 @@ export function sessionDocument(store: TraceStore, traceId: string, seen: Set<st
       native_session_id: x.nativeSessionId ?? null, environment: x.environment ?? null, events: x.events ?? [],
       rtt_median_ms: x.rttMedianMs ?? null, clock_offset_ms: x.clockOffsetMs ?? null,
       context_window_given: x.contextWindowGiven ?? null, output_cap_given: x.outputCapGiven ?? null,
-      auto_compaction: x.autoCompaction ?? null, compactions: x.compactions ?? [],
+      auto_compaction: x.autoCompaction ?? null, compactions: x.compactions ?? [], compactions_omitted: x.compactionsOmitted ?? 0,
     },
     turns: [], requests: [], request_messages: [], messages: [],
   };

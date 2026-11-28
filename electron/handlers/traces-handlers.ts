@@ -338,6 +338,7 @@ export function registerTracesHandlers(deps: TracesHandlerDeps): void {
       'whether the harness compacts its history on its own',
       'when the harness compacted or cut its history, and the prompt\'s length before and after',
       'which requests came after the history was rewritten, and how many tokens it dropped',
+      'how many of a session\'s compactions were left out past its newest 200',
       'an install id, to delete everything this install sent',
     ],
     stays: ['your keys and Tars\'s tokens (masked before upload)', 'sessions of projects and agents not opted in', 'the endpoints\' keys and addresses', 'anything outside traced sessions',

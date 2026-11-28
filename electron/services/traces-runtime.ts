@@ -732,16 +732,19 @@ export function closeEndpointSession(token: string | undefined): void {
  */
 function readCompactionsOf(live: LiveSession, folder: string | undefined, endedAt: number): void {
   if (live.harness !== 'codex' && live.harness !== 'qwen-code') return;
+  const failed = (err: unknown) => console.error(`[traces] the compactions of ${live.traceId} were not read: ${(err as Error).message}`);
   try {
     const nativeSessionId = traceStore().list({ traceId: live.traceId, limit: 1 }).sessions[0]?.nativeSessionId;
-    const events = readHarnessCompactions({
+    // Read asynchronously (fs.promises, bounded): a session's end never holds the main process on the files.
+    void readHarnessCompactions({
       harness: live.harness, codexHome: codexHome(), qwenHome: path.join(os.homedir(), '.qwen'), cwd: folder,
       nativeSessionId, startedAt: live.startedAt, endedAt,
-    });
-    traceStore().applyHarnessCompactions(live.traceId, events);
-    changed();
+    }).then((events) => {
+      traceStore().applyHarnessCompactions(live.traceId, events);
+      changed();
+    }).catch(failed);
   } catch (err) {
-    console.error(`[traces] the compactions of ${live.traceId} were not read: ${(err as Error).message}`);
+    failed(err);
   }
 }
 

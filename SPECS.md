@@ -299,10 +299,14 @@ from the window, or from an agent's drop file (`~/.tars/endpoint-keys/<name>.key
   harness compacts on its own (`endpoint-harness.ts`);
 - a history rewritten since the last main request is a compaction or a truncation (`trace-wire.ts` historyRewrite):
   that request is marked (`contextReset`, with the tokens it dropped) and stays in its turn, whatever its last message
-  looks like; only a new task typed through Tars opens one (kind `new`). The same history sent again opens no turn.
-  At the session's end the harness's own log names the compactions, read only and bounded from the agent's own
-  folders (`harness-compactions.ts`): codex's `compacted` rollout line, Qwen Code's `chat_compression` transcript line;
-  one no log names stays, from the wire.
+  looks like; only a new task typed through Tars opens one (kind `new`; typed words after an answer cut short, the
+  history kept, reset nothing). The same history sent again opens no turn. Histories are compared without the
+  harness's `<system-reminder>` blocks (Qwen Code 0.25.2 moves them between requests, measured), and only for the
+  harnesses whose history is measured (codex, Qwen Code); the others are never marked on the wire's guess.
+  At the session's end the harness's own log names the compactions, read only, asynchronously and bounded from the
+  agent's own folders (`harness-compactions.ts`): codex's `compacted` rollout line, Qwen Code's `chat_compression`
+  transcript line (among its 64 newest); one no log names stays, from the wire. A session keeps its newest 200
+  compactions and counts the rest (`compactionsOmitted`).
 
 Retention and a size cap come from Settings. The back-office reads it through `window.electronAPI.traces`. An external
 reader reads it through `GET /api/traces/*`, with its own token, as the reader's trace format tables.
@@ -318,7 +322,7 @@ consent, opted-in sessions are uploaded:
   `invalid_batch`), so it takes `side` before Tars sends it: the back-office is updated first. A batch it refuses
   stays unsent and is tried again on the backoff, never sent without the mark;
 - each session with its environment, its power events, the harness's own session id, its median round trip and its
-  clock offset, what the harness was given and its compactions, and each request with its live count, its round
+  clock offset, what the harness was given, its compactions and how many were left out, and each request with its live count, its round
   trip, its clock offset, the endpoint's queue and upstream times and its `contextReset`, each field on its own line
   of the notice; the back-office takes them before Tars sends them, as
   for `side`. A harness version over 40 characters or a session id over 128, the back-office's limits, is left out,
