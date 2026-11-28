@@ -10,20 +10,23 @@ import { scrubValue, SCRUB_VERSION, type ScrubContext } from './trace-scrub';
 import { TOOL_CALLS_PER_REQUEST_MAX, type ToolCallRecord } from './tool-calls';
 
 /**
- * A request's tool calls as they leave: those whose id the back-office takes (TOOL_CALL_ID_CHARS_MAX), the first
+ * A request's tool calls as they leave: those whose id is one TOOL_CALL_ID leaves, the first
  * TOOL_CALLS_PER_REQUEST_MAX of them, and how many more there were.
  */
 function toolCallsOf(calls: unknown): { toolCalls?: ToolCallRecord[]; toolCallsOmitted?: number } {
   if (!Array.isArray(calls) || !calls.length) return {};
-  // A call whose id the back-office would refuse is left out whole and counted, never cut: a cut id names another call,
-  // and the whole batch would be refused for it.
-  const fit = (calls as ToolCallRecord[]).filter(c => [...String(c.toolCallId)].length <= TOOL_CALL_ID_CHARS_MAX);
+  // A call whose id is no such id is left out whole and counted, never cut: a cut id names another call.
+  const fit = (calls as ToolCallRecord[]).filter(c => TOOL_CALL_ID.test(String(c.toolCallId)));
   const sent = fit.slice(0, TOOL_CALLS_PER_REQUEST_MAX);
   return { ...(sent.length ? { toolCalls: sent } : {}), ...(calls.length > sent.length ? { toolCallsOmitted: calls.length - sent.length } : {}) };
 }
 
-/** The longest tool call id the back-office takes, in characters. */
-export const TOOL_CALL_ID_CHARS_MAX = 128;
+/**
+ * The tool call ids that leave: letters, digits and `_ . : -`, 1 to 128 of them. The id is the one string of a call,
+ * sent as the model gave it, unscrubbed (the Audit of #688); the back office caps it at 128 characters, and refuses a
+ * whole batch for a longer one (wave 8 of #678).
+ */
+const TOOL_CALL_ID = /^[A-Za-z0-9_.:-]{1,128}$/;
 
 /** The longest branch the back-office takes, in bytes (UTF-8). */
 export const MAX_BRANCH_BYTES = 255;
