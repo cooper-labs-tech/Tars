@@ -85,6 +85,11 @@ export interface ProxyDeps {
   record?(rec: WireRecord): void;
   /** The traced sessions live on this computer now (traces-runtime.ts): counted when a request comes in. */
   liveSessions?(): number;
+  /**
+   * A request read whole, about to be forwarded: what a turn's workspace snapshot keys on (its `startedAt` is the
+   * record's). Must return at once: nothing waits on it.
+   */
+  onRequest?(r: { traceId: string; agentId: string; surface: Surface; startedAt: number; body: Buffer }): void;
   onHold?(e: HoldEvent): void;
   /**
    * Why an agent's harness hung up on a request started at `startedAt`, cut at `at`, when Tars knows: it ended the
@@ -270,6 +275,10 @@ export function createEndpointProxy(deps: ProxyDeps): http.Server {
     if ('refused' in target) {
       sendError(res, surface, target.refused.status, target.refused.type, target.refused.message);
       return;
+    }
+
+    if (surface && req.method === 'POST') {
+      try { deps.onRequest?.({ traceId: session.traceId, agentId: session.agentId, surface, startedAt, body }); } catch { /* never the request's concern */ }
     }
 
     const upstreamUrl = new URL(`${target.baseUrl.replace(/\/+$/, '')}${pathname.slice('/v1'.length)}${url.search}`);

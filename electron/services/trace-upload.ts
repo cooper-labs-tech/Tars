@@ -177,6 +177,25 @@ const PASS_DELETES = 2000;
 const DELETE_PAGE = 100;
 const sha256 = (b: Buffer): string => createHash('sha256').update(b).digest('hex');
 
+/**
+ * What a turn changed in the agent's repository, as it goes up: numbers and hashes only (the commits as git names
+ * them, as the session's outcome.head already goes; the tree hashes; the counts; survival), never a path or a line.
+ * An unknown value is left out, never sent as 0.
+ */
+function workspaceFields(w: unknown): Record<string, string | number | boolean> {
+  if (!w || typeof w !== 'object') return {};
+  const o = w as Record<string, unknown>;
+  const out: Record<string, string | number | boolean> = {};
+  const hash = (k: string, from: string) => { if (typeof o[from] === 'string' && /^([0-9a-f]{40}|[0-9a-f]{64})$/.test(o[from] as string)) out[k] = o[from] as string; };
+  const count = (k: string, from: string) => { if (typeof o[from] === 'number' && Number.isFinite(o[from])) out[k] = o[from] as number; };
+  hash('startHead', 'start_head'); hash('endHead', 'end_head'); hash('startTree', 'start_tree'); hash('endTree', 'end_tree');
+  count('filesChanged', 'files'); count('linesAdded', 'lines_added'); count('linesRemoved', 'lines_removed');
+  count('changedLines', 'changed_lines'); count('survivedLines', 'survived_lines');
+  if (typeof o.reverted === 'boolean') out.reverted = o.reverted;
+  if (o.survival_basis === 'session_end' || o.survival_basis === 'merged' || o.survival_basis === 'deleted') out.survivalBasis = o.survival_basis;
+  return out;
+}
+
 export class TraceUploader {
   private readonly now: () => number;
   private readonly http: typeof fetch;
@@ -589,6 +608,7 @@ export class TraceUploader {
       ...(x.task_ref ? { taskRef: String(x.task_ref) } : {}),
       // Its interventions (trace feature B3): kinds, times, delays and a session id, never words.
       ...(x.interventions ? { interventions: x.interventions as Record<string, unknown> } : {}),
+      ...workspaceFields(x.workspace),
     }));
     const links = new Map<string, Array<{ position: number; message_hash: string; direction: string }>>();
     for (const l of doc.request_messages) {

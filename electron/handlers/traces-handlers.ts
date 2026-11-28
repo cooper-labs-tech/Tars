@@ -348,9 +348,16 @@ export function registerTracesHandlers(deps: TracesHandlerDeps): void {
       'how the wait before each request divides: its tools\' run, the wait for typed words and whose they were (by kind), the endpoint\'s pause, and the harness\'s own time',
       'each tool call, by its id: its exit code, how long it ran, whether it was denied, timed out or failed, and whether the harness cut its output (with how many bytes, when it counts them), never its command or its output',
       'This install\'s id, with every request to an inference endpoint whose install header you turned on, only while you share and this install is registered, and never after a deletion: so that endpoint can tie its own copy of those requests to this install, and delete it with the rest',
+      'for each turn, the commit the repository was on at its start and at its end, as git names them (startHead, endHead)',
+      'for each turn, a hash of the working tree at its start and at its end, which names no file (startTree, endTree)',
+      'for each turn, how many files it changed and how many lines it added and removed (filesChanged, linesAdded, linesRemoved)',
+      'for each turn, how many of the lines it added are still there when the session ends, and again when its branch is merged or deleted (changedLines, survivedLines, reverted, survivalBasis)',
     ],
-    stays: ['your keys and Tars\'s tokens (masked before upload)', 'sessions of projects and agents not opted in', 'the endpoints\' keys and addresses', 'anything outside traced sessions',
-      'your computer\'s name, your user name, its serial number and its IP addresses: Tars never reads them', 'a harness\'s installation id (codex sends one): never kept'],
+    stays: [
+      'your keys and Tars\'s tokens (masked before upload)', 'sessions of projects and agents not opted in', 'the endpoints\' keys and addresses', 'anything outside traced sessions',
+      'your computer\'s name, your user name, its serial number and its IP addresses: Tars never reads them', 'a harness\'s installation id (codex sends one): never kept',
+      'the paths and the contents of the files a turn changed (kept on this computer only, to count what lasts, and deleted with the session)',
+    ],
     scrubbing: {
       version: SCRUB_VERSION,
       catches: ['every secret Tars holds (settings keys, endpoint keys, its own tokens)', 'the values of the project\'s .env files', 'keys by shape (OpenAI, Anthropic, GitHub, Slack, AWS, Google, Stripe, npm, Hugging Face, JWT, private keys)', 'secrets after a telling name (password=, api_key:, "token":)', 'passwords in URLs, Bearer and Basic credentials',

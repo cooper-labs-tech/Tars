@@ -37,6 +37,10 @@ import { mergeToolCall, toolCallAt, toolCallRecordOf, toolCallSpan, type ToolCal
  *   A tombstone is kept TOMBSTONE_DAYS, then pruned by the sweep; one still owed stays until it is sent, or until what
  *   was sent is forgotten (resetUploads: a new install, or a whole deletion that went through, covers it).
  *
+ * - **Workspace** (turn-workspace.ts): per turn, the agent's checkout at its start and end (HEAD, a tree hash), its
+ *   files and lines, and the share of its added lines that survive; the file versions kept to count that stay here,
+ *   local only, counted against the cap and deleted with the session.
+ *
  * Every write here comes after the response has reached the harness: ingest() never throws to its caller.
  */
 
@@ -409,7 +413,22 @@ export interface TraceTurnView {
   taskRef?: string;
   /** Its interventions (trace feature B3), absent when none. */
   interventions?: TurnInterventions;
+  /** What the turn changed in the agent's repository (turn-workspace.ts); absent when nothing was recorded. */
+  workspace?: TurnWorkspaceView;
 }
+
+/** A turn's repository record: null is unknown (a failed snapshot, lost bytes), never 0. */
+export interface TurnWorkspaceView {
+  startHead: string | null; startTree: string | null; endHead: string | null; endTree: string | null;
+  files: number | null; linesAdded: number | null; linesRemoved: number | null;
+  changedLines: number | null; survivedLines: number | null; reverted: boolean | null;
+  survivalBasis: 'session_end' | 'merged' | 'deleted' | null; survivalAt: number | null;
+}
+
+/** A file's version kept to measure survival: its text, or binary, or neither (its bytes were not kept). Local only. */
+export interface StoredVersion { id: string; text?: string; binary?: boolean }
+/** A workspace snapshot's place: a turn's start, or the session's end. */
+export interface WorkspacePoint { index: number; at: number; kind: 'turn' | 'end'; head: string | null; tree: string | null; ms: number; failed: boolean }
 
 export interface TracePart {
   kind: 'text' | 'thinking' | 'tool_call' | 'tool_result' | 'image';
@@ -470,6 +489,25 @@ CREATE TABLE IF NOT EXISTS mask_numbers (
   trace_id TEXT NOT NULL, type TEXT NOT NULL, key_hash TEXT NOT NULL, n INTEGER NOT NULL,
   PRIMARY KEY (trace_id, type, key_hash)
 );
+CREATE TABLE IF NOT EXISTS workspace_points (
+  trace_id TEXT NOT NULL, idx INTEGER NOT NULL, at INTEGER NOT NULL, kind TEXT NOT NULL, head TEXT, tree TEXT,
+  ms INTEGER, failed INTEGER NOT NULL DEFAULT 0, PRIMARY KEY (trace_id, idx)
+);
+CREATE TABLE IF NOT EXISTS workspace_turns (
+  trace_id TEXT NOT NULL, started_at INTEGER NOT NULL, start_head TEXT, start_tree TEXT, end_head TEXT, end_tree TEXT,
+  files INTEGER, lines_added INTEGER, lines_removed INTEGER, changed_lines INTEGER, survived_lines INTEGER,
+  reverted INTEGER, survival_basis TEXT, survival_at INTEGER, PRIMARY KEY (trace_id, started_at)
+);
+CREATE TABLE IF NOT EXISTS workspace_versions (
+  trace_id TEXT NOT NULL, idx INTEGER NOT NULL, path TEXT NOT NULL, id TEXT, binary INTEGER NOT NULL DEFAULT 0,
+  codec TEXT, data BLOB, PRIMARY KEY (trace_id, idx, path)
+);
+CREATE TABLE IF NOT EXISTS workspace_renames (
+  trace_id TEXT NOT NULL, idx INTEGER NOT NULL, from_path TEXT NOT NULL, to_path TEXT NOT NULL, PRIMARY KEY (trace_id, idx, from_path)
+);
+CREATE TABLE IF NOT EXISTS workspace_final (
+  trace_id TEXT PRIMARY KEY, state TEXT NOT NULL, checked_at INTEGER NOT NULL, next_at INTEGER NOT NULL, tries INTEGER NOT NULL DEFAULT 0
+);
 `;
 
 /**
@@ -500,6 +538,18 @@ const ADDED_COLUMNS: ReadonlyArray<readonly [table: string, column: string, type
   // Trace feature C1: the ids of the tool calls whose results a request newly carries.
   ['requests', 'tool_result_ids', 'TEXT'],
 ];
+
+/** How long after its end a session's branch is still watched for a merge or a deletion (as the PR watch, 14 days). */
+const WORKSPACE_FINAL_DAYS = 14;
+
+/** The file versions one session keeps to measure survival, at most: past it a version keeps its id, not its text. */
+const WORKSPACE_KEPT_BYTES = 64 * 1024 * 1024;
+
+const WORKSPACE_COLUMNS: Record<string, string> = {
+  startHead: 'start_head', startTree: 'start_tree', endHead: 'end_head', endTree: 'end_tree', files: 'files',
+  linesAdded: 'lines_added', linesRemoved: 'lines_removed', changedLines: 'changed_lines', survivedLines: 'survived_lines',
+  reverted: 'reverted', survivalBasis: 'survival_basis', survivalAt: 'survival_at',
+};
 
 /** Per request, what the cap counts on top of its blobs: the rows themselves. */
 const ROW_BYTES = 512;
@@ -610,6 +660,31 @@ export function partsOf(message: unknown): TracePart[] {
     parts.push({ kind: 'tool_call', toolName: optStr(fn.name), toolCallId: optStr(c.id), text: String(fn.arguments ?? ''), size: size(fn.arguments) });
   }
   return parts;
+}
+
+const nullNum = (v: unknown): number | null => (typeof v === 'number' ? v : null);
+const nullStr = (v: unknown): string | null => (typeof v === 'string' && v !== '' ? v : null);
+
+function workspaceViewOf(r: Row): TurnWorkspaceView {
+  return {
+    startHead: nullStr(r.start_head), startTree: nullStr(r.start_tree), endHead: nullStr(r.end_head), endTree: nullStr(r.end_tree),
+    files: nullNum(r.files), linesAdded: nullNum(r.lines_added), linesRemoved: nullNum(r.lines_removed),
+    changedLines: nullNum(r.changed_lines), survivedLines: nullNum(r.survived_lines),
+    reverted: r.reverted === 1 ? true : r.reverted === 0 ? false : null,
+    survivalBasis: (nullStr(r.survival_basis) as TurnWorkspaceView['survivalBasis']), survivalAt: nullNum(r.survival_at),
+  };
+}
+
+/**
+ * Whether a request is a side one (no tools, or a system prompt other than the session's), with the session's main
+ * system prompt as it stands after it: the one rule ingest() and opensTurnAt() share.
+ */
+function sideOf(mainSystemHash: unknown, req: ReturnType<typeof parseRequest>): { side: boolean; systemHash?: string; mainSystem?: string } {
+  const systemHash = req && req.system !== undefined ? hashOf(req.system) : undefined;
+  const hasTools = !!req?.tools && req.tools.length > 0;
+  let mainSystem = optStr(mainSystemHash);
+  if (!mainSystem && hasTools) mainSystem = systemHash ?? 'none';
+  return { side: !!req && (!hasTools || (systemHash ?? 'none') !== mainSystem), systemHash, mainSystem };
 }
 
 function roleOf(message: unknown): string {
@@ -947,6 +1022,156 @@ export class TraceStore {
     return r;
   }
 
+  /**
+   * Whether this request, as it arrives, opens a turn of the session: ingest()'s own rule (not a side request, and
+   * the first of the session or a new instruction), read before the response, for the turn's workspace snapshot.
+   */
+  opensTurnAt(traceId: string, surface: Surface, body: Buffer): boolean {
+    try {
+      const trace = this.db.prepare('SELECT main_system_hash FROM traces WHERE trace_id = ?').get(traceId) as Row | undefined;
+      if (!trace) return false;
+      const req = parseRequest(surface, body);
+      if (!req || sideOf(trace.main_system_hash, req).side) return false;
+      const any = this.db.prepare('SELECT 1 FROM turns WHERE trace_id = ? LIMIT 1').get(traceId);
+      return !any || opensTurn(surface, req.input);
+    } catch {
+      return false;
+    }
+  }
+
+  /** A workspace snapshot's place in the session (turn-workspace.ts). */
+  addWorkspacePoint(traceId: string, p: WorkspacePoint): void {
+    this.db.prepare(`INSERT OR REPLACE INTO workspace_points (trace_id, idx, at, kind, head, tree, ms, failed) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`)
+      .run(traceId, p.index, p.at, p.kind, p.head, p.tree, p.ms, p.failed ? 1 : 0);
+  }
+
+  workspacePoints(traceId: string): WorkspacePoint[] {
+    return (this.db.prepare('SELECT * FROM workspace_points WHERE trace_id = ? ORDER BY idx').all(traceId) as Row[]).map(r => ({
+      index: num(r.idx), at: num(r.at), kind: String(r.kind) as WorkspacePoint['kind'], head: optStr(r.head) ?? null,
+      tree: optStr(r.tree) ?? null, ms: num(r.ms), failed: r.failed === 1,
+    }));
+  }
+
+  /**
+   * A file's version at a boundary, kept to measure survival: compressed, local only, counted against the cap and
+   * deleted with the session. Past WORKSPACE_KEPT_BYTES for the session its text is not kept (unknown, never 0).
+   */
+  addWorkspaceVersion(traceId: string, index: number, filePath: string, v: StoredVersion | null): void {
+    let data: Buffer | null = null;
+    if (v?.text !== undefined) {
+      const kept = (this.db.prepare('SELECT COALESCE(SUM(length(data)), 0) AS n FROM workspace_versions WHERE trace_id = ?').get(traceId) as { n: number }).n;
+      const packed = compress(Buffer.from(v.text, 'utf8'));
+      if (kept + packed.length <= WORKSPACE_KEPT_BYTES) data = packed;
+    }
+    const before = (this.db.prepare('SELECT length(data) AS n FROM workspace_versions WHERE trace_id = ? AND idx = ? AND path = ?').get(traceId, index, filePath) as { n: number | null } | undefined)?.n ?? 0;
+    this.db.prepare(`INSERT OR REPLACE INTO workspace_versions (trace_id, idx, path, id, binary, codec, data) VALUES (?, ?, ?, ?, ?, ?, ?)`)
+      .run(traceId, index, filePath, v?.id ?? null, v?.binary ? 1 : 0, data ? CODEC : null, data);
+    this.db.prepare('UPDATE traces SET bytes = bytes + ? WHERE trace_id = ?').run((data?.length ?? 0) - before, traceId);
+  }
+
+  /**
+   * Each file a turn changed and its version at every boundary of the session: a boundary before its first change
+   * holds the version from before it, one between two changes the latest. Absent is null, bytes not kept undefined.
+   */
+  workspaceHistories(traceId: string): Array<{ path: string; versions: Array<StoredVersion | null> }> {
+    const points = (this.db.prepare('SELECT COUNT(*) AS n FROM workspace_points WHERE trace_id = ?').get(traceId) as { n: number }).n;
+    const rows = this.db.prepare('SELECT idx, path, id, binary, codec, data FROM workspace_versions WHERE trace_id = ? ORDER BY path, idx').all(traceId) as Row[];
+    const byPath = new Map<string, Row[]>();
+    for (const r of rows) { const list = byPath.get(String(r.path)) ?? []; list.push(r); byPath.set(String(r.path), list); }
+    const versionOfRow = (r: Row): StoredVersion | null => {
+      if (r.id === null || r.id === undefined) return null;
+      if (r.binary === 1) return { id: String(r.id), binary: true };
+      if (r.data) return { id: String(r.id), text: decompress(String(r.codec), r.data as Buffer).toString('utf8') };
+      return { id: String(r.id) };
+    };
+    return [...byPath.entries()].map(([p, list]) => {
+      const length = Math.max(points, num(list[list.length - 1].idx) + 1);
+      const versions: Array<StoredVersion | null> = [];
+      let at = 0;
+      for (let i = 0; i < length; i++) {
+        while (at + 1 < list.length && num(list[at + 1].idx) <= i) at++;
+        versions.push(versionOfRow(list[at]));
+      }
+      return { path: p, versions };
+    });
+  }
+
+  /** Writes the fields given of the turn that began at `startedAt` (null included: unknown), the others untouched. */
+  setTurnWorkspace(traceId: string, startedAt: number, fields: Partial<TurnWorkspaceView>): void {
+    const keys = Object.keys(fields).filter(k => k in WORKSPACE_COLUMNS) as Array<keyof TurnWorkspaceView>;
+    const value = (k: keyof TurnWorkspaceView) => { const v = fields[k]; return typeof v === 'boolean' ? (v ? 1 : 0) : v ?? null; };
+    this.db.prepare(`INSERT INTO workspace_turns (trace_id, started_at) VALUES (?, ?) ON CONFLICT(trace_id, started_at) DO NOTHING`).run(traceId, startedAt);
+    if (!keys.length) return;
+    this.db.prepare(`UPDATE workspace_turns SET ${keys.map(k => `${WORKSPACE_COLUMNS[k]} = ?`).join(', ')} WHERE trace_id = ? AND started_at = ?`)
+      .run(...keys.map(value), traceId, startedAt);
+  }
+
+  /** The turns' repository records, by turn start. */
+  workspaceTurns(traceId: string): Array<TurnWorkspaceView & { startedAt: number }> {
+    return (this.db.prepare('SELECT * FROM workspace_turns WHERE trace_id = ? ORDER BY started_at').all(traceId) as Row[]).map(r => ({ startedAt: num(r.started_at), ...workspaceViewOf(r) }));
+  }
+
+  /**
+   * Each turn's survival, measured at the session's end, or again at its branch's merge or deletion: written, and
+   * the session's change sequence moved, only when something changed (a reader and the uploader see it again).
+   */
+  setSurvival(traceId: string, rows: Array<{ startedAt: number; changedLines: number | null; survivedLines: number | null; reverted: boolean | null }>, basis: 'session_end' | 'merged' | 'deleted', at: number): boolean {
+    return this.db.transaction(() => {
+      let moved = false;
+      for (const r of rows) {
+        const cur = this.db.prepare('SELECT changed_lines, survived_lines, reverted, survival_basis FROM workspace_turns WHERE trace_id = ? AND started_at = ?').get(traceId, r.startedAt) as Row | undefined;
+        const reverted = r.reverted === null ? null : r.reverted ? 1 : 0;
+        if (cur && cur.changed_lines === r.changedLines && cur.survived_lines === r.survivedLines && cur.reverted === reverted && cur.survival_basis === basis) continue;
+        this.setTurnWorkspace(traceId, r.startedAt, { changedLines: r.changedLines, survivedLines: r.survivedLines, reverted: r.reverted, survivalBasis: basis, survivalAt: at });
+        moved = true;
+      }
+      if (moved) this.db.prepare('UPDATE traces SET updated_seq = ? WHERE trace_id = ?').run(this.nextSeq(), traceId);
+      return moved;
+    })();
+  }
+
+  /**
+   * Ended sessions whose survival was measured at their end only, with a branch in their outcome: those a merge or a
+   * deletion of that branch may still measure again (turn-workspace.ts finalize). Never one checked for good (on the
+   * default branch, no branch, measured), never one waiting for its next check, never one ended more than
+   * WORKSPACE_FINAL_DAYS ago; the least recently checked first, then the oldest (the Audit's M1 at 08e5b439d: ten that
+   * could never be measured used to hold the line for good).
+   */
+  workspaceToFinalize(limit: number, now = Date.now()): Array<{ traceId: string; agentId: string; projectPath: string }> {
+    return (this.db.prepare(`SELECT t.trace_id, t.agent_id, t.project_path FROM traces t
+      LEFT JOIN workspace_final f ON f.trace_id = t.trace_id
+      WHERE t.ended_at IS NOT NULL AND t.ended_at >= ? AND t.outcome_json LIKE '%"branch"%'
+        AND EXISTS (SELECT 1 FROM workspace_turns w WHERE w.trace_id = t.trace_id AND w.survival_basis = 'session_end')
+        AND NOT EXISTS (SELECT 1 FROM workspace_turns w WHERE w.trace_id = t.trace_id AND w.survival_basis IN ('merged', 'deleted'))
+        AND (f.trace_id IS NULL OR (f.state = 'waiting' AND f.next_at <= ?))
+      ORDER BY COALESCE(f.checked_at, 0) ASC, t.ended_at ASC LIMIT ?`).all(now - WORKSPACE_FINAL_DAYS * 86_400_000, now, limit) as Row[])
+      .map(r => ({ traceId: String(r.trace_id), agentId: String(r.agent_id), projectPath: String(r.project_path) }));
+  }
+
+  /**
+   * What a check of a session's branch found: measured ('done'), never measurable ('never': on the default branch, no
+   * branch), or to ask again ('waiting': still open, or git could not tell), an hour on, doubling to a day.
+   */
+  noteFinalCheck(traceId: string, result: string, now: number): void {
+    const state = result === 'merged' || result === 'deleted' || result === 'done' ? 'done'
+      : result === 'default-branch' || result === 'no-branch' ? 'never' : 'waiting';
+    const tries = ((this.db.prepare('SELECT tries FROM workspace_final WHERE trace_id = ?').get(traceId) as { tries?: number } | undefined)?.tries ?? 0) + 1;
+    const next = now + Math.min(86_400_000, 3_600_000 * 2 ** (tries - 1));
+    this.db.prepare(`INSERT INTO workspace_final (trace_id, state, checked_at, next_at, tries) VALUES (?, ?, ?, ?, ?)
+      ON CONFLICT(trace_id) DO UPDATE SET state = excluded.state, checked_at = excluded.checked_at, next_at = excluded.next_at, tries = excluded.tries`)
+      .run(traceId, state, now, next, tries);
+  }
+
+  /** A file renamed whole at a boundary (the same blob under another path): its lines are followed through it. */
+  addWorkspaceRename(traceId: string, index: number, from: string, to: string): void {
+    this.db.prepare('INSERT OR REPLACE INTO workspace_renames (trace_id, idx, from_path, to_path) VALUES (?, ?, ?, ?)').run(traceId, index, from, to);
+  }
+
+  workspaceRenames(traceId: string): Array<{ index: number; from: string; to: string }> {
+    return (this.db.prepare('SELECT idx, from_path, to_path FROM workspace_renames WHERE trace_id = ? ORDER BY idx').all(traceId) as Row[])
+      .map(r => ({ index: num(r.idx), from: String(r.from_path), to: String(r.to_path) }));
+  }
+
   /** What Tars typed into an agent's terminal, and from whom: the authorship a turn is matched to. */
   noteTypedInput(t: TypedInput): void {
     const text = norm(t.text);
@@ -1038,11 +1263,7 @@ export class TraceStore {
     const heldOnly = givenUpWhileHeld({ cancel: rec.cancel, status: rec.status, attempts: rec.attempts, heldMs: rec.heldMs });
     const req = parseRequest(rec.surface, rec.requestBody);
     const resp = parseResponse(rec.surface, rec.status, rec.contentType, rec.responseBody);
-    const systemHash = req && req.system !== undefined ? hashOf(req.system) : undefined;
-    const hasTools = !!req?.tools && req.tools.length > 0;
-    let mainSystem = optStr(trace.main_system_hash);
-    if (!mainSystem && hasTools) mainSystem = systemHash ?? 'none';
-    const side = !!req && (!hasTools || (systemHash ?? 'none') !== mainSystem);
+    const { side, systemHash, mainSystem } = sideOf(trace.main_system_hash, req);
 
     const lastTurn = this.db.prepare('SELECT * FROM turns WHERE trace_id = ? ORDER BY turn_index DESC LIMIT 1').get(rec.traceId) as Row | undefined;
     const lastEnd = optNum(trace.last_end_at);
@@ -1203,6 +1424,7 @@ export class TraceStore {
       ? { ...JSON.parse(String(trace.start_json)) as TraceStart, ...(firstRequestAt !== undefined ? { firstRequestAt } : {}) }
       : undefined;
     const turns = this.db.prepare('SELECT * FROM turns WHERE trace_id = ? ORDER BY turn_index').all(traceId) as Row[];
+    const workspace = new Map(this.workspaceTurns(traceId).map(({ startedAt, ...w }) => [startedAt, w as TurnWorkspaceView]));
     const requests = this.db.prepare('SELECT * FROM requests WHERE trace_id = ? ORDER BY started_at, side, seq').all(traceId) as Row[];
     const gaps = this.requestGaps(traceId, turns, requests);
     const view = (r: Row): TraceRequestView => ({
@@ -1229,6 +1451,7 @@ export class TraceStore {
         requests: requests.filter(r => r.turn_id === t.turn_id).map(view),
         ...(optStr(t.task_ref) ? { taskRef: String(t.task_ref) } : {}),
         ...(interventions[i] ? { interventions: interventions[i] } : {}),
+        ...(workspace.has(num(t.started_at)) ? { workspace: workspace.get(num(t.started_at)) } : {}),
       })),
     };
   }
@@ -1352,8 +1575,10 @@ export class TraceStore {
     const r = this.db.prepare('SELECT COUNT(*) AS n FROM requests').get() as { n: number };
     // The tool calls' rows, by what they hold (trace feature C1): as toolCallRowBytes counts them for their session.
     const c = this.db.prepare('SELECT COALESCE(SUM(length(CAST(tool_call_id AS BLOB)) + length(CAST(part_json AS BLOB))), 0) AS s FROM tool_calls').get() as { s: number };
+    // The file versions kept to measure survival count against the cap too.
+    const kept = (this.db.prepare('SELECT COALESCE(SUM(length(data)), 0) AS n FROM workspace_versions').get() as { n: number }).n;
     const byProject = this.db.prepare('SELECT project_path AS projectPath, COUNT(*) AS sessions, COALESCE(SUM(bytes), 0) AS bytes FROM traces GROUP BY project_path ORDER BY project_path').all() as Array<{ projectPath: string; sessions: number; bytes: number }>;
-    return { bytes: b.s + r.n * ROW_BYTES + c.s, sessions: t.n, requests: r.n, blobs: b.n, oldest: t.oldest ?? undefined, bodiesDropped: this.bodiesDropped, byProject };
+    return { bytes: b.s + r.n * ROW_BYTES + c.s + kept, sessions: t.n, requests: r.n, blobs: b.n, oldest: t.oldest ?? undefined, bodiesDropped: this.bodiesDropped, byProject };
   }
 
   private dropOrphanBlobs(): void {
@@ -1377,6 +1602,7 @@ export class TraceStore {
       this.db.prepare('DELETE FROM tool_calls WHERE trace_id = ?').run(traceId);
       this.db.prepare('DELETE FROM uploads WHERE trace_id = ?').run(traceId);
       this.db.prepare('DELETE FROM mask_numbers WHERE trace_id = ?').run(traceId);
+      for (const table of ['workspace_points', 'workspace_turns', 'workspace_versions', 'workspace_renames', 'workspace_final']) this.db.prepare(`DELETE FROM ${table} WHERE trace_id = ?`).run(traceId);
       const gone = this.db.prepare('DELETE FROM traces WHERE trace_id = ?').run(traceId).changes;
       if (gone) {
         this.db.prepare('INSERT INTO tombstones (trace_id, reason, at, owed) VALUES (?, ?, ?, ?)')

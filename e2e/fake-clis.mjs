@@ -556,6 +556,31 @@ export async function run() {
     return 'too many steps';
   }
 
+  // `tars-fake-files <base64url JSON>`, a command only a spec's endpoint asks for (trace-turn-workspace.spec.ts): the
+  // edits a coding agent's tools make, for real, in the folder it runs in: `write` (path to text), `delete` (paths),
+  // then `commit` (a message: git add -A and a commit, identity on the command line). A path is relative and stays
+  // inside the folder. Said back as the tool's result; logged.
+  function fakeFiles(encoded) {
+    const job = JSON.parse(Buffer.from(encoded, 'base64url').toString('utf8'));
+    const cwd = process.cwd();
+    const inside = (p) => {
+      const full = path.resolve(cwd, p);
+      if (path.isAbsolute(p) || !full.startsWith(cwd + path.sep)) throw new Error(`refused path ${p}`);
+      return full;
+    };
+    for (const [p, text] of Object.entries(job.write ?? {})) { const full = inside(p); fs.mkdirSync(path.dirname(full), { recursive: true }); fs.writeFileSync(full, text); }
+    for (const p of job.delete ?? []) fs.rmSync(inside(p), { force: true });
+    let committed = '';
+    if (job.commit) {
+      const id = ['-c', 'user.name=fake agent', '-c', 'user.email=fake@example.com', '-c', 'commit.gpgSign=false'];
+      spawnSync('git', [...id, 'add', '-A'], { cwd });
+      const r = spawnSync('git', [...id, 'commit', '-q', '-m', job.commit], { cwd, encoding: 'utf8' });
+      committed = r.status === 0 ? ` and committed "${job.commit}"` : ` (commit failed: ${(r.stderr || '').trim()})`;
+    }
+    log({ files: Object.keys(job.write ?? {}), deleted: job.delete ?? [], commit: job.commit ?? null, committed });
+    return `wrote ${Object.keys(job.write ?? {}).length} file(s)${committed}\n`;
+  }
+
   // On an inference endpoint (Tars's endpoint proxy, OPENAI_BASE_URL and OPENAI_API_KEY in its environment, as
   // Qwen Code 0.25.2 reads them with --auth-type openai, measured 19/11): a turn is a model's, through chat
   // completions, streamed, with a shell tool. The command asked for is run as its words say (an `echo` prints its
@@ -660,7 +685,10 @@ export async function run() {
         let command = '';
         try { command = JSON.parse(c.arguments).command ?? ''; } catch { /* nothing */ }
         const started = Date.now();
-        const r = await runFakeCommand(command);
+        // `tars-fake-files <json>` (trace-turn-workspace.spec.ts) writes and commits for real (fakeFiles); any other
+        // command runs as e2e/fake-command.mjs reads it.
+        const files = /^tars-fake-files (\S+)$/.exec(String(command).trim());
+        const r = files ? { out: fakeFiles(files[1]), code: 0 } : await runFakeCommand(command);
         qwenLine({ type: 'system', subtype: 'ui_telemetry', systemPayload: { uiEvent: { 'event.name': 'qwen-code.tool_call', 'event.timestamp': new Date().toISOString(), call_id: c.id, function_name: c.name, duration_ms: Date.now() - started, started_at_ms: started, status: r.code === 0 ? 'success' : 'error', execution_status: r.code === 0 ? 'success' : 'error', success: r.code === 0, decision: 'auto_accept' } } });
         results.push({ c, r });
         messages.push({ role: 'tool', tool_call_id: c.id, content: r.out || `exit ${r.code}` });
