@@ -206,7 +206,8 @@ export function createLoadEngine(deps: LoadEngineDeps) {
         const timed = { slotWaitMs: got.waitedMs, durationMs: r.durationMs };
         if (r.aborted) return { result: 'not_run', reason: 'stopped', ...timed };
         if (r.atCap) return { result: 'failed', atCap: true, ...timed };
-        return r.exitCode === 0 ? { result: 'passed', exitCode: 0, ...timed } : { result: 'failed', ...(r.exitCode !== null ? { exitCode: r.exitCode } : {}), ...timed };
+        if (r.exitCode === 0) return { result: 'passed', exitCode: 0, ...timed };
+        return { result: 'failed', ...(r.exitCode !== null ? { exitCode: r.exitCode } : {}), ...timed };
       } finally {
         got.lease.release();
       }
