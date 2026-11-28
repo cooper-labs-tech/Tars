@@ -3113,6 +3113,11 @@ export interface UploadState {
   deletionCleared: boolean;
   /** A deletion asked for and not confirmed by the back-office: sharing stays off; offer "delete again". */
   deletionOwed: boolean;
+  /**
+   * Whether this install's id goes now (X-Install-Id) to an endpoint whose install header is on: main's own answer.
+   * Read it rather than restate the rule: main has cases the window cannot see.
+   */
+  installIdSent: boolean;
   /** Whose the latest deletion is, while there is one: 'you' or 'start' (TraceSettings.uploadDeletionBy). */
   deletionBy?: 'you' | 'start';
 }

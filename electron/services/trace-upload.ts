@@ -97,6 +97,12 @@ export interface UploadStateView {
   deletionCleared: boolean;
   /** A deletion asked for and not yet confirmed by the back-office: sharing stays off until it is done. */
   deletionOwed: boolean;
+  /**
+   * Whether the install id goes now to an endpoint whose install header is on: main's own answer (currentInstallId
+   * gives one), so the window never restates the rule, which has cases it cannot see (an install file a deletion
+   * could not remove, an id that is no canonical uuid).
+   */
+  installIdSent: boolean;
   /** Whose the latest deletion is, while there is one: 'you' or 'start' (TraceSettings.uploadDeletionBy). */
   deletionBy?: 'you' | 'start';
 }
@@ -266,6 +272,7 @@ export class TraceUploader {
       lastError: this.lastError, nextTryAt: this.nextTryAt, ...(this.notice ? { notice: this.notice } : {}),
       deletionCleared: this.clearedUnsaid,
       deletionOwed: owed,
+      installIdSent: this.currentInstallId() !== null,
       ...(s.since !== undefined && s.deletionBy ? { deletionBy: s.deletionBy } : {}),
     };
   }
