@@ -59,6 +59,11 @@ import { assertThrowaway } from '../../setup/throwaway-dirs';
  *     separator or a dot-dot leads the path outside ~/.qwen, and that file is read.
  * 16. (The Audit of #678.) A Qwen Code or opencode time with a fraction leaves as one, and the back office refuses the
  *     batch: a call's time is a whole number.
+ * 17. (The Audit of #692, 28/11.) opencode's clean exit moves its last rows into the store and removes the -wal: the
+ *     rows written after the last pass (the last request's call, in the session's last 2 s) sit in a store 14 leaves
+ *     unopened, the grace reads nothing, and the last request's toolMs is null. Read after the session's end from a
+ *     copy in Tars's temporary folder, the copy may be left there (its read failing too), be opened where opencode's
+ *     store is, or be made again at every pass of the grace for a store that has not changed.
  */
 
 assertThrowaway({ DATA_DIR, PRIVATE_DIR });
@@ -71,13 +76,16 @@ let root: string;
 let home: string;
 let dataHome: string;
 let folder: string;
+/** Tars's temporary folder, where a copy of opencode's store is read. */
+let tmp: string;
 
 beforeEach(() => {
   root = fs.mkdtempSync(path.join(os.tmpdir(), 'tars-c1b-'));
   home = path.join(root, 'home');
   dataHome = path.join(root, 'data');
   folder = path.join(root, 'project');
-  for (const d of [home, dataHome, folder]) fs.mkdirSync(d, { recursive: true });
+  tmp = path.join(root, 'tmp');
+  for (const d of [home, dataHome, folder, tmp]) fs.mkdirSync(d, { recursive: true });
 });
 afterEach(() => { fs.rmSync(root, { recursive: true, force: true }); });
 
@@ -162,7 +170,7 @@ describe('opencode parts', () => {
 /** A follower over throwaway folders, its notes kept. */
 function follower(list: () => FollowedSession[], sessionIdOf: (agentId: string) => string | undefined = () => undefined) {
   const noted: Array<{ agentId: string; part: ToolCallPart }> = [];
-  const logs = new HarnessToolLogs({ sessions: list, sessionIdOf, note: (agentId, part) => noted.push({ agentId, part }), homeDir: () => home, dataHome: () => dataHome });
+  const logs = new HarnessToolLogs({ sessions: list, sessionIdOf, note: (agentId, part) => noted.push({ agentId, part }), homeDir: () => home, dataHome: () => dataHome, tmpDir: () => tmp });
   return { logs, noted };
 }
 
@@ -330,7 +338,7 @@ describe('opencode\'s WAL store', () => {
     return { file, writer };
   }
 
-  it('14: closed cleanly (no -wal), it is not opened, and no file is made beside it', () => {
+  it('14: closed cleanly (no -wal) while its session runs, it is not opened, and no file is made beside it', () => {
     const t = Date.now();
     const { file, writer } = walStore(t);
     writer.close();
@@ -358,6 +366,44 @@ describe('opencode\'s WAL store', () => {
     expect(busy).toBe(0);
     expect(noted.map(n => n.part.callId)).toContain('call_w');
     expect(new Set(noted.map(n => n.part.callId)).size).toBe(41);
+  });
+
+  it('17: after its session ended, the rows its clean exit moved into the store are read once, from a copy deleted at once', () => {
+    const t = Date.now();
+    const { file, writer } = walStore(t);
+    const s: FollowedSession = { traceId: 'tr2', agentId: 'o', harness: 'opencode', folder, startedAt: t - 1000 };
+    const { logs, noted } = follower(() => [s]);
+    logs.tick();
+    // Within one 2 s pass: the last request's call, its answer, and opencode's clean exit, which removes the -wal.
+    writer.prepare('INSERT INTO part VALUES (?, ?, ?, ?, ?, ?)').run('p2', 'm', 'ses_mine', t + 10, t + 20, JSON.stringify(opencodePart('call_last', { status: 'completed', start: t + 10, end: t + 19, exit: 0 })));
+    writer.close();
+    expect(fs.readdirSync(path.dirname(file)), 'opencode\'s clean exit').toEqual(['opencode.db']);
+    s.endedAt = Date.now();
+    logs.tick();
+    expect(noted.map(n => n.part.callId)).toEqual(['call_w', 'call_last']);
+    expect(fs.readdirSync(path.dirname(file)), 'nothing beside opencode\'s store').toEqual(['opencode.db']);
+    expect(fs.readdirSync(tmp), 'the copy deleted').toEqual([]);
+    // The store unchanged, the grace's next pass copies nothing: Tars's temporary folder is not touched again.
+    const old = Math.floor(t / 1000) - 60;
+    fs.utimesSync(tmp, old, old);
+    logs.tick();
+    expect(fs.statSync(tmp).mtimeMs, 'no second copy').toBe(old * 1000);
+    expect(noted).toHaveLength(2);
+  });
+
+  it('17: a copy whose read fails (a store of another version) is deleted all the same', () => {
+    const t = Date.now();
+    const file = path.join(dataHome, 'opencode', 'opencode.db');
+    fs.mkdirSync(path.dirname(file), { recursive: true });
+    const writer = new Database(file);
+    writer.pragma('journal_mode = WAL');
+    writer.exec('CREATE TABLE session (id TEXT PRIMARY KEY, directory TEXT, time_created INTEGER)');
+    writer.close();
+    const { logs, noted } = follower(() => [{ traceId: 'tr2', agentId: 'o', harness: 'opencode', folder, startedAt: t - 1000, endedAt: t }]);
+    logs.tick();
+    expect(noted).toEqual([]);
+    expect(fs.readdirSync(tmp), 'the copy deleted').toEqual([]);
+    expect(fs.readdirSync(path.dirname(file)), 'nothing beside opencode\'s store').toEqual(['opencode.db']);
   });
 });
 
