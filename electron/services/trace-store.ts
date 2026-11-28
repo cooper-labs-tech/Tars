@@ -108,6 +108,11 @@ export interface TraceOutcome {
   gates?: Array<{ kind: string; verdict: string; at?: number }>;
   heldRequests?: number;
   requestErrors?: number;
+  /**
+   * A load window's session (trace feature C3): the hash of what it started from, its prompt and the instruction files
+   * its CLI loads at every start (load-session.ts startContextOf). Two sessions of the same task share it.
+   */
+  load?: { startContext: { sha256: string; files: Array<{ path: string; sha256: string | null }> } };
 }
 
 export interface TraceSessionSummary {

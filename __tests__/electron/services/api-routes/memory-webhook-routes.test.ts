@@ -172,6 +172,36 @@ describe('POST /api/memory/remember', () => {
     expect(rec.agentId).toBe('a1');
   });
 
+  it('gives a load agent no context: its session start would reopen a memory channel (the Audit\'s Info on #691)', async () => {
+    const memDir = path.join(h.home, '.claude', 'projects', ENCODED, 'memory');
+    fs.mkdirSync(memDir, { recursive: true });
+    fs.writeFileSync(path.join(memDir, 'MEMORY.md'), '# Index\n- key fact');
+    (agents as Map<string, AgentStatus>).set('load-1', makeAgent({ id: 'load-1', projectPath: PROJECT, load: true }));
+    (agents as Map<string, AgentStatus>).set('a1', makeAgent({ id: 'a1', projectPath: PROJECT }));
+    const handler = findHandler(app, 'GET', '/api/memory/context');
+    const url = new URL(`http://x/api/memory/context?project_path=${encodeURIComponent(PROJECT)}`);
+    const refused = await call(handler, { url, callerAgentId: 'load-1' });
+    expect(refused.status).toBe(403);
+    expect(JSON.stringify(refused.data)).not.toContain('key fact');
+    // Another agent of the project reads it as before.
+    expect((await call(handler, { url, callerAgentId: 'a1' })).data).toMatchObject({ context: expect.stringContaining('key fact') });
+  });
+
+  it('records nothing of a load agent\'s tool use, whose hook posts with its own token (load-no-memory.test.ts N10)', async () => {
+    (agents as Map<string, AgentStatus>).set('load-1', makeAgent({ id: 'load-1', projectPath: PROJECT, load: true }));
+    (agents as Map<string, AgentStatus>).set('a1', makeAgent({ id: 'a1', projectPath: PROJECT }));
+    const handler = findHandler(app, 'POST', '/api/memory/remember');
+    const ledger = path.join(h.home, '.tars', 'observations', `${ENCODED}.jsonl`);
+    const refused = await call(handler, { callerAgentId: 'load-1', body: { agent_id: 'load-1', project_path: PROJECT, content: 'Edited a.ts', type: 'file_edit' } });
+    expect(refused.status).toBe(403);
+    // Named as the agent by another caller: nothing either.
+    await call(handler, { callerAgentId: 'a1', body: { agent_id: 'load-1', project_path: PROJECT, content: 'Edited b.ts', type: 'file_edit' } });
+    expect(fs.existsSync(ledger) ? fs.readFileSync(ledger, 'utf-8') : '').toBe('');
+    // Another agent's is recorded as before.
+    expect((await call(handler, { callerAgentId: 'a1', body: { agent_id: 'a1', project_path: PROJECT, content: 'Edited c.ts', type: 'file_edit' } })).data).toMatchObject({ success: true });
+    expect(fs.readFileSync(ledger, 'utf-8')).toContain('Edited c.ts');
+  });
+
   it('rejects missing content or project_path', async () => {
     const handler = findHandler(app, 'POST', '/api/memory/remember');
     expect((await call(handler, { body: { project_path: PROJECT } })).status).toBe(400);

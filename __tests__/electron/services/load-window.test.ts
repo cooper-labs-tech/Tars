@@ -5,7 +5,7 @@ import * as path from 'node:path';
 import { createHash } from 'node:crypto';
 import { checkGrant, readGrants, writeGrant, type LoadGrant } from '../../../electron/services/load-grants';
 import { createLoadWindow, type LoadWindowDeps } from '../../../electron/services/load-window';
-import { readRun, updateRun } from '../../../electron/services/load-run-record';
+import { readRun, updateRun, type LoadArrival } from '../../../electron/services/load-run-record';
 import { planArrivals } from '../../../electron/services/load-pool';
 import { hasPosixModes } from '../../setup/platform-limits';
 
@@ -68,6 +68,9 @@ import { hasPosixModes } from '../../setup/platform-limits';
  *      the tasks and the planned arrivals come from the verified snapshot, the approved task lines and the approved
  *      window; a record that disagrees with them stops its run with an error; the set-asides are private too. The
  *      record is a log of the run, read for nothing a decision needs.
+ *  A8. (The Audit's Infos on #685 at d43af8072, written before their code.) The card shows the record's arrivals and
+ *      agents as any agent wrote them (false progress), or its refusals: the running view takes the progress from the
+ *      engine (deps.progress) and the refusals from the approval, and an edited record changes nothing it shows.
  */
 
 let dir: string;
@@ -292,7 +295,9 @@ describe('the Projects view', () => {
       { ...g(projects.off, ['codex']), enabled: false }, g(projects.ghfail, ['codex']), g(projects.bare, []),
     ];
     loadAgents = [{ id: 'a-1', name: 'Load 1', projectPath: projects.pub, provider: 'codex', endpointId: 'ep-1', model: 'open-coder-1' }];
-    const w = createLoadWindow(deps());
+    // What the engine holds of a run: its arrivals (never the run's log, the Audit's Infos on #685).
+    const engine: { holds?: { arrivals: LoadArrival[]; agents: [] } } = {};
+    const w = createLoadWindow(deps({ progress: () => engine.holds }));
     const v = await w.projects();
     expect(v.projects.map(x => x.path).sort()).toEqual(Object.values(projects).sort());
     expect(v.endpoints).toEqual([{ id: 'ep-1', name: 'Shared host', models: ['open-coder-1'] }]);
@@ -315,7 +320,11 @@ describe('the Projects view', () => {
     writePool('p', [line({ task_id: 'pub-1' })]);
     const shown = (await w.refresh()).proposal!;
     const r = await w.approve({ pool: 'p', sha256: shown.sha256, proposalId: shown.id, window: {} }) as { runId: string };
+    // Written into the run's log, it puts no agent in a window; held by the engine, it does.
     updateRun(path.join(dir, 'runs'), r.runId, x => ({ ...x, arrivals: [{ n: 1, taskId: 'pub-1', plannedAt: now, actualAt: now, agentId: 'a-1', harness: 'codex' }] }));
+    expect((await w.projects()).projects.find(x => x.path === projects.pub)!.agents[0].inWindow).toBe(false);
+    expect(r.runId).toBeTruthy();
+    engine.holds = { arrivals: [{ n: 1, taskId: 'pub-1', plannedAt: now, actualAt: now, agentId: 'a-1', harness: 'codex' }], agents: [] };
     expect((await w.projects()).projects.find(x => x.path === projects.pub)!.agents[0].inWindow).toBe(true);
   });
 
@@ -453,6 +462,24 @@ describe('the approval', () => {
     editRecord(second.record, (r) => { (r.tasks as Array<Record<string, unknown>>)[0].split = 'eval'; });
     expect((await w.refresh()).running).toBeUndefined();
     expect((await w.refresh()).last).toMatchObject({ runId: second.runId, stop: { reason: 'error', detail: expect.stringContaining('record') } });
+  });
+
+  it('A8: the card shows the engine\'s progress, and an edited record changes nothing it shows', async () => {
+    const progress = {
+      arrivals: [{ n: 1, taskId: 'p-1', plannedAt: now, actualAt: now, agentId: 'a-1', harness: 'codex' as const }, { n: 2, taskId: 'p-2', plannedAt: now, actualAt: now, blocked: 'max_concurrent' as const }],
+      agents: [{ agentId: 'a-1', name: 'Load 1', project: projects.pub, harness: 'codex' as const, created: true }],
+    };
+    const w = createLoadWindow(deps({ progress: () => progress }));
+    const { runId, record } = await approved(w, 'p');
+    const before = (await w.refresh()).running!;
+    expect(before).toMatchObject({ runId, started: 1, runningNow: 1, blocked: { max_concurrent: 1 }, agents: [{ agentId: 'a-1', taskId: 'p-1' }] });
+    editRecord(record, (r) => {
+      r.arrivals = [1, 2, 3].map(n => ({ n, taskId: 'p-1', plannedAt: now, actualAt: now, agentId: 'a-9', end: 'done', endedAt: now }));
+      r.agents = [{ agentId: 'a-9', name: 'Forged', project: projects.pub, harness: 'pi', created: false }];
+      r.refused = [];
+      r.refusedProjects = [];
+    });
+    expect((await w.refresh()).running).toEqual(before);
   });
 
   it('A7: "not now" is kept in the private folder; a set-aside written under ~/.tars hides nothing', async () => {

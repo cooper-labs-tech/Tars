@@ -384,6 +384,42 @@ the approval. The run record, `run.json`, is the run's log, read for what the wi
 the window, the tasks with their split and train_ok, the planned arrivals, each arrival as it went (blocked and why:
 `max_concurrent`, `busy_cap`, `heavy_slot` or `no_harness`), the agents, the worktrees and a copy of the stop.
 
+**The run** (`services/load-engine.ts`). At approval, the proposal's missing load agents are made through the one
+creation of an agent (`core/agent-create.ts`, which the window's form calls too and through which it can never make a
+load agent): Load N, on the grant's endpoint and model, `load: true`, traced, unattended. Then each planned arrival
+comes at its time:
+- one that cannot start is recorded blocked and dropped, never queued: `max_concurrent`, `busy_cap` (a seam that
+  allows every arrival until the busy cap lands), `no_harness` (no load agent of its project free, running a
+  harness the task and the grant accept, on the grant's endpoint and model: the private grant decides, read again at
+  launch, never the fleet record alone). An admitted one holds its place and its agent at once. Over the API a load
+  agent cannot be changed, typed into or handed its team or its project's memory (403 `load_agent`);
+- an admitted one gets a worktree at the task's base_commit, on `load/<run>/<task>-<n>` under the project's
+  `.worktrees`, named in `~/.tars-private/load-run-state.json` before git makes it, and a fresh session of its load
+  agent there, on a preamble (no push, no pull request, no deploy, no migration, no production) and the task's prompt.
+  A load agent's terminal blocks every push through its environment (`url.<helper>.pushInsteadOf` given as
+  `GIT_CONFIG_*` variables): no git config is written, no hook installed;
+- it ends when its turn does (`done`, `error`), at its cap (stopped, `at_cap`) or with the run (`stopped`). Its session
+  is stopped, so the next task starts fresh, the agent handed back, and its worktree and branch removed, from the
+  private state only.
+
+After a quit or a crash, the next start removes the worktrees the private state names and ends a run that was running
+in error, "Tars restarted during the window".
+
+**No memory** (`services/load-session.ts`). A load session starts with nothing an earlier session wrote:
+- from Tars: its prompt is the preamble and the task, without the project's memory block or Tars's guide; its load
+  agent is in no room, its tool uses are kept out of the project's observations, its TMPDIR is emptied before each
+  session (a session whose preparation fails never starts), and none of Tars's MCP servers reaches it;
+- from its CLI, each measured against the real CLI: codex `-c features.memories=false`,
+  `memories.generate_memories=false`, `memories.use_memories=false`, and `mcp_servers.<name>.enabled=false` for each
+  Tars server its config.toml defines (a switch for one it does not define stops codex); qwen-code its managed auto
+  memory, auto dream, auto skill, team memory and structured recall off and mem0 dropped in its system settings, its
+  memory tools excluded, every Tars server disabled, no `~/.tars` folder; pi `--no-mcp`; opencode each Tars server
+  `enabled: false` in its config content and `OPENCODE_DISABLE_CLAUDE_CODE=1`.
+
+The trace of a load session records the hash of its starting context (`outcome.load.startContext`): the prompt and the
+instruction files its CLI loads at every start (codex's `AGENTS.md`, qwen-code's `QWEN.md`, pi's, opencode's). Two
+sessions of the same task share it. A load agent in bypass can still read or write any file on purpose (SECURITY.md).
+
 ### Alt-provider safety gate
 
 `spawnAgentSession` refuses to start a claude-binary alt provider that produced no `ANTHROPIC_BASE_URL`, which means no API key is configured, and the session would silently bill the user's Anthropic account:

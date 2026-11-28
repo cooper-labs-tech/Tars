@@ -6,6 +6,7 @@ import { nodeHookCommand, usesNodeHooks } from '../utils/hook-command';
 import { safeEffort } from '../providers/cli-provider';
 import type { AgentPermissionMode } from '../types';
 import { writeSharedJsonSync } from '../utils/shared-file';
+import { QWEN_LOAD_MEMORY } from './load-session';
 
 /**
  * Qwen Code, as Tars runs it (2.0.4). Measured with qwen 0.25.2 (a Gemini CLI
@@ -232,7 +233,7 @@ function administratorSettings(file: string): Record<string, unknown> | null {
  * (underAdministrator); one that cannot be read stops the agent from starting,
  * and says why. qwen 0.25.2 docs. `systemFile` is for tests.
  */
-export function writeQwenAgentSettings(agentId: string, opts: { effort?: string; systemFile?: string } = {}, dataDir?: string): string {
+export function writeQwenAgentSettings(agentId: string, opts: { effort?: string; systemFile?: string; load?: boolean } = {}, dataDir?: string): string {
   const name = SAFE_ID.test(agentId) ? agentId : agentId.replace(/[^A-Za-z0-9_-]/g, '_').slice(0, 80) || 'agent';
   const file = path.join(qwenDataDir(dataDir), 'agents', `${name}.json`);
   const admin = administratorSettings(opts.systemFile ?? qwenSystemSettingsFile(process.platform, process.env, dataDir));
@@ -242,6 +243,8 @@ export function writeQwenAgentSettings(agentId: string, opts: { effort?: string;
     mcpServers: qwenMcpServers(dataDir),
     ...(effort ? { model: { reasoningEffort: effort } } : {}),
     general: { enableAutoUpdate: false },
+    // A load agent: every memory of qwen's own off (services/load-session.ts, the no-memory rule).
+    ...(opts.load ? { memory: { ...QWEN_LOAD_MEMORY } } : {}),
   };
   writeJson(file, admin ? underAdministrator(tars, admin) : tars);
   return file;

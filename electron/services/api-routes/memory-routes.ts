@@ -2,6 +2,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 import { DATA_DIR } from '../../constants';
 import { RouteApp, RouteContext } from './types';
+import { agents } from '../../core/agent-manager';
 import {
   assembleDigest,
   searchMemory,
@@ -62,6 +63,12 @@ export function registerMemoryRoutes(app: RouteApp, ctx: RouteContext): void {
   // The block injected at session start: project memory, recent activity,
   // Hermes' own memory files, and a pointer to the connected backends.
   app.get('/api/memory/context', async (req, sendJson) => {
+    // A load agent's session starts from its task alone (the load window's no-memory rule; the Audit's Info on #691):
+    // a CLI that read its session start's context would otherwise get its project's memory.
+    if (req.callerAgentId && agents.get(req.callerAgentId)?.load === true) {
+      sendJson({ error: 'a load agent\'s session gets no context' }, 403);
+      return;
+    }
     const projectPath = req.url.searchParams.get('project_path') || '';
     if (!projectPath) {
       sendJson({ context: '' });
@@ -186,6 +193,12 @@ export function registerMemoryRoutes(app: RouteApp, ctx: RouteContext): void {
 
     if (!projectPath || !content) {
       sendJson({ success: false, error: 'project_path and content are required' }, 400);
+      return;
+    }
+    // A load agent's tool uses are kept from the observations every session of its project reads (the load window's
+    // no-memory rule, services/load-session.ts): neither the caller nor the agent named may be one.
+    if ([req.callerAgentId, agentId].some(id => !!id && agents.get(id)?.load === true)) {
+      sendJson({ success: false, error: 'a load agent\'s session records no observation' }, 403);
       return;
     }
 

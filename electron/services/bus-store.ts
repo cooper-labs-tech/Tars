@@ -226,9 +226,11 @@ function writeBusNow(): void {
 /* ── Rooms ─────────────────────────────────────────────────────────────── */
 
 function memberIdsFor(roomId: string, kind: 'global' | 'project', projectPath?: string): string[] {
+  // A load agent is in no room: a post would be typed into its next session, which starts from its task alone (the
+  // load window's no-memory rule, services/load-session.ts).
   const override = state.memberOverrides[roomId];
-  if (override) return override.filter(id => agents.has(id));
-  const all = Array.from(agents.values());
+  if (override) return override.filter(id => agents.has(id) && agents.get(id)?.load !== true);
+  const all = Array.from(agents.values()).filter(a => a.load !== true);
   if (kind === 'global') return all.filter(isSuperAgent).map(a => a.id);
   // A chat's runner is a conversation, not a member of its project's room
   // (ORCHESTRATOR-PER-CHAT.md, 4.6): what crosses the room reaches Main.

@@ -81,3 +81,21 @@ describe('the title of a project room', () => {
     }
   });
 });
+
+/**
+ * A load agent is no member of its project's room (the load window's no-memory rule, #691, load-no-memory.test.ts N11):
+ * a post naming nobody goes to every member, and is typed into a member's next session, so a load session would start
+ * with what other sessions wrote. Written before the code. How it fails: the load agent is among the room's members.
+ */
+describe('a project room\'s members', () => {
+  it('every agent of the project but a load agent', () => {
+    const agent = (id: string, load: boolean) => ({
+      id, name: id, status: 'idle', provider: 'codex', projectPath: '/work/demo', skills: [], output: [],
+      lastActivity: new Date().toISOString(), ...(load ? { load: true } : {}),
+    } as unknown as AgentStatus);
+    manager.agents.set('w1', agent('w1', false));
+    manager.agents.set('load-1', agent('load-1', true));
+    const room = store.listRooms().find(r => r.kind === 'project' && r.projectPath === '/work/demo')!;
+    expect(room.memberIds).toEqual(['w1']);
+  });
+});

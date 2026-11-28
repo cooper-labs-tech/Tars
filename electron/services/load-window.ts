@@ -6,6 +6,7 @@ import {
   type LoadHarness, type LoadSplit, type LoadTask, type LoadWindowParams, type RefusedLine,
 } from './load-pool';
 import { approvedEndpoint, type LoadGrant } from './load-grants';
+import type { LoadRunPlan } from './load-engine';
 import { writeSecretFileSync } from '../utils/secret-file';
 import {
   createRun, newRunId, readRun, readSnapshot, updateRun,
@@ -62,9 +63,11 @@ export interface LoadWindowDeps {
   /** Tells the window the state changed (load:changed). */
   emit(): void;
   /** The engine's start of an approved run (the scheduler); none in this part. */
-  startRun?(run: LoadRunRecord): void;
+  startRun?(run: LoadRunRecord, agents: LoadProposal['agents']): void;
   /** The engine's stop of a run (its sessions stopped where they are). */
   stopRun?(runId: string): void;
+  /** A run's progress as the engine holds it (load-engine.ts): what the card shows, never the run's log. */
+  progress?(runId: string): { arrivals: LoadArrival[]; agents: LoadRunRecord['agents'] } | undefined;
 }
 
 export type Visibility = 'public' | 'allowed_by_name' | 'refused';
@@ -427,6 +430,9 @@ export function createLoadWindow(deps: LoadWindowDeps) {
     runId: string; pool: string; snapshotSha256: string; window: LoadWindowParams; approvedAt: number;
     /** The snapshot's lines of the tasks approved: with the window, they give the run's tasks and planned arrivals. */
     lines: number[];
+    /** The proposal's refusals, as the owner saw them approving (the Audit's Infos on #685: never the log's). */
+    refused?: LoadRunRecord['refused'];
+    refusedProjects?: LoadRunRecord['refusedProjects'];
     /** The owner's stop, or the window's end or an error, as Tars recorded it. */
     stop?: LoadRunRecord['stop'];
   }
@@ -467,22 +473,25 @@ export function createLoadWindow(deps: LoadWindowDeps) {
   interface ApprovedRun { run: LoadRunRecord; intact: boolean; log?: LoadRunRecord }
 
   /**
-   * The runs the owner approved, newest first, each as its approval and its snapshot say. Its record adds only what
-   * the window shows of it as it goes; `intact` is false when its snapshot is no longer the bytes approved.
+   * The runs the owner approved, newest first, each as its approval and its snapshot say, its progress as the engine
+   * holds it. Its record (the log) is read only to check it against the approval: it adds nothing the card shows.
+   * `intact` is false when its snapshot is no longer the bytes approved.
    */
   function approvedRuns(): ApprovedRun[] {
     // Newest first; at the same moment, the one approved later in the file.
     return approvals().map((a, i) => ({ a, i })).sort((x, y) => y.a.approvedAt - x.a.approvedAt || y.i - x.i).map(({ a }) => {
       let log: LoadRunRecord | undefined;
       try { log = readRun(deps.runsDir, a.runId); } catch { log = undefined; }
+      const progress = deps.progress?.(a.runId);
       const snapshot = readSnapshot(deps.runsDir, a.runId);
       const intact = !!snapshot && sha256(snapshot) === a.snapshotSha256;
       const derived = intact ? derivedOf(a, snapshot!) : { tasks: [], planned: [] };
       const run: LoadRunRecord = {
         version: 1, runId: a.runId, pool: a.pool, poolDir: log?.poolDir ?? '', writtenAt: log?.writtenAt ?? a.approvedAt, snapshotSha256: a.snapshotSha256,
         approvedAt: a.approvedAt, approvedBy: 'owner', window: a.window, endsAt: a.approvedAt + a.window.window_min * 60_000,
-        ...derived, refused: log?.refused ?? [], refusedProjects: log?.refusedProjects ?? [],
-        arrivals: log?.arrivals ?? [], agents: log?.agents ?? [], worktrees: log?.worktrees ?? [],
+        // The refusals from the approval, the progress from the engine: the log under ~/.tars shows the card nothing.
+        ...derived, refused: a.refused ?? [], refusedProjects: a.refusedProjects ?? [],
+        arrivals: progress?.arrivals ?? [], agents: progress?.agents ?? [], worktrees: [],
         ...(a.stop ? { stop: a.stop } : {}),
       };
       return { run, intact, log };
@@ -556,10 +565,14 @@ export function createLoadWindow(deps: LoadWindowDeps) {
     };
     // The approval first, where no agent is handed it, with all a decision about the run reads; then the record (its
     // log) and the snapshot.
-    const approval: Approval = { runId: record.runId, pool: record.pool, snapshotSha256: record.snapshotSha256, window: record.window, approvedAt: now, lines: tasks.map(t => t.line) };
+    const approval: Approval = {
+      runId: record.runId, pool: record.pool, snapshotSha256: record.snapshotSha256, window: record.window, approvedAt: now, lines: tasks.map(t => t.line),
+      refused: record.refused, refusedProjects: record.refusedProjects,
+    };
     writeSecretFileSync(deps.approvedFile, `${JSON.stringify([...approvals(), approval], null, 2)}\n`);
     createRun(deps.runsDir, record, pool.bytes);
-    deps.startRun?.(record);
+    // The engine (load-engine.ts): the load agents the proposal planned made where missing, then the arrivals armed.
+    deps.startRun?.(record, proposal.agents);
     deps.emit();
     return { ok: true, runId: record.runId };
   }
@@ -586,7 +599,35 @@ export function createLoadWindow(deps: LoadWindowDeps) {
     return { ok: true };
   }
 
-  return { refresh, approve, notNow, stop, projects, project, settle };
+  /**
+   * What the engine runs (load-engine.ts): the run's window, its approved tasks whole and its planned arrivals, from
+   * the private approval and the verified snapshot alone; none for a run not approved or whose snapshot changed.
+   */
+  function runPlan(runId: string): LoadRunPlan | undefined {
+    const a = approvals().find(x => x.runId === runId);
+    const snapshot = a ? readSnapshot(deps.runsDir, a.runId) : undefined;
+    if (!a || !snapshot || sha256(snapshot) !== a.snapshotSha256) return undefined;
+    const lines = new Set(a.lines);
+    return {
+      runId: a.runId, endsAt: a.approvedAt + a.window.window_min * 60_000, window: { max_concurrent: a.window.max_concurrent },
+      tasks: parseTasksJsonl(snapshot.toString('utf8')).tasks.filter(t => lines.has(t.line)),
+      planned: derivedOf(a, snapshot).planned.map(p => ({ n: p.n, taskId: p.taskId, plannedAt: p.plannedAt })),
+    };
+  }
+
+  /** Whether the run is the one under way. */
+  const isRunning = (runId: string): boolean => current()?.runId === runId;
+
+  /** The engine ends a run (an error it met), its stop kept with the approval. */
+  function endRun(runId: string, stopped: NonNullable<LoadRunRecord['stop']>): void {
+    setStop(runId, stopped);
+    deps.emit();
+  }
+
+  /** The runs approved and not stopped: at a start, those a quit or a crash cut. */
+  const unstoppedRunIds = (): string[] => approvals().filter(a => !a.stop).map(a => a.runId);
+
+  return { refresh, approve, notNow, stop, projects, project, settle, runPlan, isRunning, endRun, unstoppedRunIds };
 }
 
 export type LoadWindow = ReturnType<typeof createLoadWindow>;

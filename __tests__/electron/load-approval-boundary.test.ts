@@ -75,7 +75,7 @@ describe('the handlers take the main window\'s calls only', () => {
   let dispose: () => void;
   const W = { send: vi.fn(), mainFrame: { url: 'app://-/index.html' } };
   const project = '/work/atlas';
-  const endpoint = { id: 'ep-1', name: 'Host', baseUrl: 'http://127.0.0.1:9/v1', approved: true, approvedBaseUrl: 'http://127.0.0.1:9/v1', models: ['m'] };
+  const endpoint = { id: 'ep-00b001', name: 'Host', baseUrl: 'http://127.0.0.1:9/v1', approved: true, approvedBaseUrl: 'http://127.0.0.1:9/v1', models: ['m'] };
 
   beforeEach(async () => {
     dir = fs.mkdtempSync(path.join(os.tmpdir(), 'load-boundary-'));
@@ -97,7 +97,7 @@ describe('the handlers take the main window\'s calls only', () => {
     const other = { sender: { send: vi.fn() } };
     // A subframe of the main window shares its web contents, not its main frame (the Audit's I-1 at fdd82ca3d).
     const subframe = { sender: W, senderFrame: { url: 'about:blank' } };
-    const grant = { path: project, enabled: true, allowedByName: false, endpointId: 'ep-1', model: 'm', harnesses: ['codex'] };
+    const grant = { path: project, enabled: true, allowedByName: false, endpointId: 'ep-00b001', model: 'm', harnesses: ['codex'] };
     for (const [channel, arg] of [['load:approve', { pool: 'p', sha256: 'x', proposalId: 'y', window: {} }], ['load:grant', grant], ['load:notNow', { pool: 'p', sha256: 'x' }], ['load:stop', 'r']] as const) {
       expect(await handlers.get(channel)!(other, arg), channel).toMatchObject({ ok: false, error: expect.stringContaining('click') });
       expect(await handlers.get(channel)!(subframe, arg), `${channel} from a subframe`).toMatchObject({ ok: false, error: expect.stringContaining('click') });

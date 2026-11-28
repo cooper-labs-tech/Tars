@@ -1,5 +1,5 @@
 import { validateEndpointChoice } from '../services/inference-endpoints';
-import { clearPreRegistered, preRegisterAgent } from '../services/traces-runtime';
+import { clearPreRegistered, noteLoadStartContext, preRegisterAgent } from '../services/traces-runtime';
 import { registerTracesHandlers } from './traces-handlers';
 import { apiListening, NOT_LISTENING } from '../core/api-listening';
 import { measureFleetDisk, readFleetResources } from '../services/fleet-resources-runtime';
@@ -70,6 +70,8 @@ import type { TaskQuery } from '../services/task-cost';
 import { oneReadingAtATime } from '../core/one-reading-at-a-time';
 import { consumeResumeSessionId, resolveResumeSessionId, spendResume } from '../utils/resume-session';
 import { registerAgentLauncher, launchAgent, launchBegins, launchAbandoned, sessionStarting, type AgentLauncher } from '../core/agent-launch';
+import { registerAgentCreator, type AgentCreateConfig, type AgentCreator } from '../core/agent-create';
+import { loadSessionEnv, startContextOf } from '../services/load-session';
 import { noTerminalAnswer } from '../core/no-terminal';
 import { orchestratorMoved } from '../core/chat-identity';
 import { launchSettings, restartForSettings, noteLaunch, restartAgent, pendingRestarts } from '../core/agent-restart';
@@ -232,7 +234,7 @@ export function registerIpcHandlers(deps: IpcHandlerDependencies): void {
   registerTrayHandlers(deps);
   registerTracesHandlers({ getAppSettings: deps.getAppSettings, setAppSettings: deps.setAppSettings, writeAppSettings: deps.writeAppSettings });
   // The load window (trace feature C3): its approval and the owner's grants, reached from the window alone.
-  registerLoadHandlers({ getAppSettings: deps.getAppSettings, agents: deps.agents, getMainWindow: deps.getMainWindow, projects: knownProjects });
+  registerLoadHandlers({ getAppSettings: deps.getAppSettings, agents: deps.agents, getMainWindow: deps.getMainWindow, projects: knownProjects, saveAgents: deps.saveAgents });
 }
 
 // ============== Tray Panel IPC Handlers ==============
@@ -336,29 +338,9 @@ function registerAgentHandlers(deps: IpcHandlerDependencies): void {
   } = deps;
 
   // Create a new agent (now creates a PTY-backed terminal)
-  ipcMain.handle('agent:create', async (_event, config: {
-    projectPath: string;
-    skills: string[];
-    worktree?: WorktreeConfig;
-    character?: AgentCharacter;
-    name?: string;
-    secondaryProjectPath?: string;
-    permissionMode?: AgentPermissionMode;
-    effort?: AgentEffort;
-    provider?: AgentProvider;
-    model?: string;
-    localModel?: string;
-    obsidianVaultPaths?: string[];
-    /** The Orchestrator toggle. See core/agent-role.ts. */
-    role?: AgentRole;
-    /** The toggle's old name, read when `role` is absent. */
-    orchestratorMode?: boolean;
-    cliPath?: string;
-    /** The inference endpoint its harness runs on (services/inference-endpoints.ts), with `model` one of its models. */
-    endpointId?: string;
-    /** Its own trace switch, off by default (services/trace-gate.ts). */
-    traces?: boolean;
-  }) => {
+  // The one creation of an agent, its record and its terminal (core/agent-create.ts): the window's handler below and
+  // the load window's load agents both come through here.
+  const createInTerminal: AgentCreator = async (config) => {
     const id = uuidv4();
     // An endpoint, its harness and its model, before anything is created.
     const endpointWrong = validateEndpointChoice(getAppSettings(), { endpointId: config.endpointId, provider: config.provider, model: config.model });
@@ -453,6 +435,9 @@ function registerAgentHandlers(deps: IpcHandlerDependencies): void {
         env: {
           ...withPath(cleanEnv, fullPath, process.platform),
           ...providerEnvVars,
+          // A load agent's terminal blocks every push, through its environment alone, and opencode's gets none of
+          // Tars's servers (services/load-session.ts).
+          ...(config.load === true ? loadSessionEnv(agentProvider.id, { ...cleanEnv, ...providerEnvVars }) : {}),
         },
       });
       // The keys this shell's environment carries, for the start that reuses it (core/agent-manager.ts).
@@ -502,6 +487,7 @@ function registerAgentHandlers(deps: IpcHandlerDependencies): void {
       cliPath: config.cliPath,
       ...(config.endpointId ? { endpointId: config.endpointId } : {}),
       ...(config.traces === true ? { traces: true } : {}),
+      ...(config.load === true ? { load: true } : {}),
     };
     // A new orchestrator takes the role from its project's current one.
     const demoted = assignRole(status, role, agents.values());
@@ -558,7 +544,10 @@ function registerAgentHandlers(deps: IpcHandlerDependencies): void {
     });
 
     return { ...status, ptyId };
-  });
+  };
+  registerAgentCreator(createInTerminal);
+  // The window's form never makes a load agent: only the load window does (services/load-agents.ts).
+  ipcMain.handle('agent:create', (_event, config: AgentCreateConfig) => createInTerminal({ ...config, load: undefined }));
 
   // Start an agent with a prompt (sends command to PTY). The one launch of an
   // agent's CLI into its terminal: the handler below and the restart that
@@ -800,9 +789,11 @@ function registerAgentHandlers(deps: IpcHandlerDependencies): void {
       : undefined;
 
     // CLIs without Claude's SessionStart hook get the project's memory in the
-    // prompt instead - otherwise those agents start knowing nothing.
+    // prompt instead - otherwise those agents start knowing nothing. Never a
+    // load agent: its session starts from its task alone (services/load-session.ts).
+    const loadSession = agent.load === true;
     let memory = '';
-    if (needsPromptInjection(cliProvider.configDir)) {
+    if (!loadSession && needsPromptInjection(cliProvider.configDir)) {
       try {
         const digest = await assembleDigest({
           projectPath: agent.projectPath,
@@ -821,7 +812,8 @@ function registerAgentHandlers(deps: IpcHandlerDependencies): void {
     // other CLI started a turn nobody asked for (the Audit's N1 on #448). They
     // are owed to the first message Tars types into that session instead
     // (oweToFirstMessage, below).
-    const preamble = [guideForPrompt(agent, cliProvider.configDir), memory].filter(Boolean).join('\n\n');
+    // A load agent gets no guide either: it names Tars's tools, which its session has none of, and its identity.
+    const preamble = loadSession ? '' : [guideForPrompt(agent, cliProvider.configDir), memory].filter(Boolean).join('\n\n');
     const promptWithMemory = prompt.trim() ? [preamble, prompt].filter(Boolean).join('\n\n') : '';
 
     // Which conversation to continue. Without a word from the caller, the usual
@@ -874,6 +866,7 @@ function registerAgentHandlers(deps: IpcHandlerDependencies): void {
       chrome: appSettingsForCommand.chromeEnabled,
       // BUG 5: an orchestrator cannot edit files.
       orchestratorMode: isSuperAgentCheck,
+      load: loadSession,
     });
 
     // How the command starts (platform/launch.ts): typed into the shell on
@@ -942,6 +935,8 @@ function registerAgentHandlers(deps: IpcHandlerDependencies): void {
       throw err;
     }
     noteLaunch(cliProcess, launched);
+    // What a load session started from, with its trace, open now that its terminal is (services/load-session.ts).
+    if (loadSession) noteLoadStartContext(agent.id, startContextOf(cliProvider.id, promptWithMemory));
     oweToFirstMessage(cliProcess, promptWithMemory ? '' : preamble);
     // amp takes its task typed in, once it runs (core/typed-task.ts).
     typeLaunchTask(cliProvider, cliProcess, { prompt: promptWithMemory, skills: allAgentSkills, isSuperAgent: isSuperAgentCheck });

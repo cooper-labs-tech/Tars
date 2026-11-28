@@ -47,6 +47,16 @@ export function agentTmpEnv(agentId: string, root = TMP_ROOT): { TMPDIR: string;
 }
 
 /**
+ * The agent's folder emptied and made again, before a load session (the load window's no-memory rule,
+ * services/load-session.ts): nothing an earlier session left in its TMPDIR. Only its own folder, by its name under
+ * the root: a link in its place is removed, never followed (rmSync does not follow it).
+ */
+export function emptyAgentTmp(agentId: string, root = TMP_ROOT): { TMPDIR: string; CLAUDE_CODE_TMPDIR: string } {
+  fs.rmSync(path.join(root, shortIdOf(agentId)), { recursive: true, force: true });
+  return agentTmpEnv(agentId, root);
+}
+
+/**
  * The same, or nothing when the folder cannot be made (a full disk, a file in
  * its way): the CLI then starts with the temporary folder it would have had,
  * rather than not at all.
