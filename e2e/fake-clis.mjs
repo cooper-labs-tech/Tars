@@ -537,9 +537,10 @@ export async function run() {
         let command = '';
         try { command = JSON.parse(c.arguments).command ?? ''; } catch { /* nothing */ }
         const echoed = /^echo (.+)$/.exec(String(command).trim());
-        // A push is run for real, as the harness would run its shell tool, where its session works and with its
-        // environment: what a load session's push block must stop (e2e/load-window-runner.spec.ts).
-        if (/^git push\b/.test(String(command).trim())) {
+        // Any command but a bare echo is run for real, as the harness would run its shell tool, where its session works
+        // and with its environment: a push a load session's push block must stop (e2e/load-window-runner.spec.ts), a
+        // file its diff stat must count (e2e/load-window-setup-and-tests.spec.ts).
+        if (command && !echoed) {
           const r = spawnSync('/bin/sh', ['-c', String(command)], { cwd: process.cwd(), env: process.env, encoding: 'utf8', timeout: 20_000 });
           log({ shell: String(command), cwd: process.cwd(), exit: r.status, stderr: String(r.stderr ?? '').slice(-400) });
           messages.push({ role: 'tool', tool_call_id: c.id, content: `exit ${r.status}\n${String(r.stderr ?? '').slice(-400)}` });

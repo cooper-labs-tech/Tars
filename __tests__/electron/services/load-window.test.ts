@@ -71,6 +71,9 @@ import { hasPosixModes } from '../../setup/platform-limits';
  *  A8. (The Audit's Infos on #685 at d43af8072, written before their code.) The card shows the record's arrivals and
  *      agents as any agent wrote them (false progress), or its refusals: the running view takes the progress from the
  *      engine (deps.progress) and the refusals from the approval, and an edited record changes nothing it shows.
+ *  A9. (Part 3, written before its code.) The card cannot tell what a running task does (its setup, its session, its
+ *      test) or how a finished one went: its setup (passed, failed at a line, at its cap), its session's own time, its
+ *      diff stat, its test (passed, failed, at its cap, not run and why, the slot's wait) and why it ended.
  */
 
 let dir: string;
@@ -480,6 +483,32 @@ describe('the approval', () => {
       r.refusedProjects = [];
     });
     expect((await w.refresh()).running).toEqual(before);
+  });
+
+  it('A9: the card reads what a running task does, and how each finished one went', async () => {
+    const diffStat = { files: 2, insertions: 14, deletions: 3 };
+    const progress = {
+      arrivals: [
+        { n: 1, taskId: 'p-1', plannedAt: now, actualAt: now, agentId: 'a-1', harness: 'codex' as const, phase: 'test' as const },
+        { n: 2, taskId: 'p-2', plannedAt: now, actualAt: now, agentId: 'a-2', harness: 'codex' as const, end: 'done' as const, endedAt: now + 9000,
+          setup: { result: 'passed' as const, lines: 2, durationMs: 4000 }, sessionMs: 5000, diffStat,
+          test: { result: 'not_run' as const, reason: 'heavy_slot', slotWaitMs: 600_000 } },
+        { n: 3, taskId: 'p-1', plannedAt: now, actualAt: now, agentId: 'a-2', harness: 'codex' as const, end: 'error' as const, endedAt: now + 1000,
+          setup: { result: 'failed' as const, lines: 2, line: 2, exitCode: 1, durationMs: 900 }, endDetail: 'setup line 2 exited 1' },
+      ],
+      agents: [
+        { agentId: 'a-1', name: 'Load 1', project: projects.pub, harness: 'codex' as const, created: true },
+        { agentId: 'a-2', name: 'Load 2', project: projects.pub, harness: 'codex' as const, created: true },
+      ],
+    };
+    const w = createLoadWindow(deps({ progress: () => progress }));
+    await approved(w, 'p');
+    const view = (await w.refresh()).running!;
+    expect(view.agents.find(a => a.agentId === 'a-1')).toMatchObject({ taskId: 'p-1', phase: 'test' });
+    expect(view.finished.find(x => x.n === 2)).toMatchObject({
+      end: 'done', setup: { result: 'passed', lines: 2 }, sessionMs: 5000, diffStat, test: { result: 'not_run', reason: 'heavy_slot', slotWaitMs: 600_000 },
+    });
+    expect(view.finished.find(x => x.n === 3)).toMatchObject({ end: 'error', setup: { result: 'failed', line: 2, exitCode: 1 }, endDetail: 'setup line 2 exited 1' });
   });
 
   it('A7: "not now" is kept in the private folder; a set-aside written under ~/.tars hides nothing', async () => {

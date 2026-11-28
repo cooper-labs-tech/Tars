@@ -42,12 +42,28 @@ export interface LoadArrival {
   endedAt?: number;
   /** How its session ended: done, at_cap (stopped at its time cap), stopped (the window stopped), error. */
   end?: 'done' | 'at_cap' | 'stopped' | 'error';
+  /** Why it ended, in a line, when the end alone does not say it ("setup line 2 exited 1"); never a command's text. */
+  endDetail?: string;
+  /** What it does now, while it runs: its setup, its session, its test. */
+  phase?: 'setup' | 'session' | 'test';
+  /** Its setup lines' outcome, when it has any. */
+  setup?: LoadSetupResult;
+  /** Its session's own time, from its launch to its end: never the slot's wait, nor its setup's or its test's time. */
+  sessionMs?: number;
+  /** What its session changed in its worktree, from after its setup to its end (its setup's files and ignored ones not). */
+  diffStat?: { files: number; insertions: number; deletions: number };
   /** Its test_cmd's outcome, once run; the time it waited for the heavy-run slot, apart from its session's. */
   test?: LoadTestResult;
 }
 
-/** A task's test: passed or failed with its counts, or not run with why (the slot not free within its cap): no failure. */
-export interface LoadTestResult { result: 'passed' | 'failed' | 'not_run'; reason?: string; exitCode?: number; passed?: number; failed?: number; slotWaitMs?: number }
+/**
+ * A task's test: passed, failed (with its exit code, or at its cap), or not run with why: `none` (no test_cmd),
+ * `heavy_slot` (the slot not free within the task's cap), `stopped` (the window stopped): never a failure.
+ */
+export interface LoadTestResult { result: 'passed' | 'failed' | 'not_run'; reason?: string; exitCode?: number; atCap?: boolean; passed?: number; failed?: number; slotWaitMs?: number; durationMs?: number }
+
+/** A task's setup: its lines passed, or the line that failed (its exit code) or reached the 10-minute cap, or a stop. */
+export interface LoadSetupResult { result: 'passed' | 'failed' | 'at_cap' | 'stopped'; lines: number; line?: number; exitCode?: number; durationMs: number }
 
 export interface LoadRunAgent { agentId: string; name: string; project: string; harness: LoadHarness; created: boolean }
 

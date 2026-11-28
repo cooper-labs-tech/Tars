@@ -1265,6 +1265,13 @@ would be sent.
   `dispatch`, `run-task`), and its start gets neither its team (`bootstrap`) nor its project's memory
   (`/api/memory/context`): 403 `load_agent`. The window's own edit stays the owner's; a load agent it moves off the
   grant is never picked.
+- **A task's setup and test commands are the owner's approved pool's, run unattended.** They are read from the
+  snapshot the owner approved (its sha256 checked), never from the live pool or the run's log, and run in the task's
+  worktree with Tars's environment less its tokens and identities (`CLAUDE_MGR_*`, `TARS_*`, `DOROTHY_*`,
+  `CLAUDE_AGENT_*`, the providers' keys), the push block, `CI=1` and no git prompt, standard input closed, their whole
+  process tree killed at their cap or a stop. They are commands the owner approved, not a sandbox: a setup line can do
+  whatever its user can, as the session after it can. The worktree is handed to no step once it reaches elsewhere
+  through a link.
 - **The main window's top frame.** The handlers check the sender's frame as well as its web contents. A subframe
   shares the window's web contents.
 - **What was shown is what is approved.** Approve carries the pool's sha256 and the proposal's id. A pool or a

@@ -112,7 +112,13 @@ export interface TraceOutcome {
    * A load window's session (trace feature C3): the hash of what it started from, its prompt and the instruction files
    * its CLI loads at every start (load-session.ts startContextOf). Two sessions of the same task share it.
    */
-  load?: { startContext: { sha256: string; files: Array<{ path: string; sha256: string | null }> } };
+  load?: {
+    startContext?: { sha256: string; files: Array<{ path: string; sha256: string | null }> };
+    /** Part 3's tags, once its test ended: `load:<run>`, its task and arrival, split, train_ok, diff stat and test. */
+    tag?: string; runId?: string; taskId?: string; n?: number; split?: string; trainOk?: boolean;
+    diffStat?: { files: number; insertions: number; deletions: number };
+    test?: Record<string, unknown>;
+  };
 }
 
 export interface TraceSessionSummary {
@@ -334,8 +340,27 @@ export class TraceStore {
   endTrace(traceId: string, endedAt: number, outcome?: TraceOutcome): void {
     const last = this.db.prepare('SELECT final_status FROM turns WHERE trace_id = ? ORDER BY turn_index DESC LIMIT 1').get(traceId) as { final_status?: string } | undefined;
     const status = last?.final_status === 'done' ? 'done' : last?.final_status === 'failed' ? 'failed' : last ? 'abandoned' : 'abandoned';
+    // A load session's tags may be there already (its test ended before its terminal): kept beside what comes now.
+    const kept = this.outcomeOf(traceId)?.load;
+    const merged = outcome === undefined ? undefined : { ...outcome, ...(kept || outcome.load ? { load: { ...kept, ...outcome.load } } : {}) };
     this.db.prepare(`UPDATE traces SET ended_at = ?, final_status = ?, outcome_json = COALESCE(?, outcome_json), updated_seq = ? WHERE trace_id = ?`)
-      .run(endedAt, status, outcome === undefined ? null : JSON.stringify(outcome), this.nextSeq(), traceId);
+      .run(endedAt, status, merged === undefined ? null : JSON.stringify(merged), this.nextSeq(), traceId);
+  }
+
+  /**
+   * A load session's tags (the load window's part 3), merged into its outcome's `load` whenever they come, before or
+   * after its end; the session changes, so it is sent again.
+   */
+  mergeLoadOutcome(traceId: string, load: NonNullable<TraceOutcome['load']>): void {
+    const outcome = this.outcomeOf(traceId) ?? {};
+    const merged: TraceOutcome = { ...outcome, load: { ...outcome.load, ...load } };
+    this.db.prepare('UPDATE traces SET outcome_json = ?, updated_seq = ? WHERE trace_id = ?').run(JSON.stringify(merged), this.nextSeq(), traceId);
+  }
+
+  private outcomeOf(traceId: string): TraceOutcome | undefined {
+    const row = this.db.prepare('SELECT outcome_json FROM traces WHERE trace_id = ?').get(traceId) as { outcome_json?: string | null } | undefined;
+    if (!row?.outcome_json) return undefined;
+    try { return JSON.parse(row.outcome_json) as TraceOutcome; } catch { return undefined; }
   }
 
   /** The sessions with something not yet uploaded (new, or grown since), oldest change first. */

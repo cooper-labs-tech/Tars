@@ -10,10 +10,10 @@ import type { LoadRunPlan } from './load-engine';
 import { writeSecretFileSync } from '../utils/secret-file';
 import {
   createRun, newRunId, readRun, readSnapshot, updateRun,
-  LOAD_BLOCK_REASONS, type LoadArrival, type LoadBlockReason, type LoadRunRecord, type LoadTestResult,
+  LOAD_BLOCK_REASONS, type LoadArrival, type LoadBlockReason, type LoadRunRecord, type LoadSetupResult, type LoadTestResult,
 } from './load-run-record';
 
-export type { LoadTestResult };
+export type { LoadSetupResult, LoadTestResult };
 
 /**
  * The load window (trace feature C3, 27/11): Tars proposes a window from the newest pool under
@@ -147,8 +147,13 @@ export interface LoadRunView {
   finishedCount: number;
   blocked: Record<LoadBlockReason, number>;
   blockedArrivals: Array<{ n: number; at: number; taskId: string; project: string; reason: LoadBlockReason; detail?: string }>;
-  agents: Array<{ agentId: string; name: string; project: string; harness: LoadHarness; taskId?: string; split?: LoadSplit; capMin?: number; startedAt?: number }>;
-  finished: Array<{ n: number; taskId: string; project: string; split: LoadSplit; end?: LoadArrival['end']; startedAt?: number; endedAt?: number; test?: LoadTestResult }>;
+  /** The load agents, each with the task it runs now and what it does: its setup, its session, its test (part 3). */
+  agents: Array<{ agentId: string; name: string; project: string; harness: LoadHarness; taskId?: string; split?: LoadSplit; capMin?: number; startedAt?: number; phase?: LoadArrival['phase'] }>;
+  /** Each finished task: how it ended and why, its setup, its session's own time, its diff stat and its test (part 3). */
+  finished: Array<{
+    n: number; taskId: string; project: string; split: LoadSplit; end?: LoadArrival['end']; startedAt?: number; endedAt?: number;
+    endDetail?: string; setup?: LoadSetupResult; sessionMs?: number; diffStat?: LoadArrival['diffStat']; test?: LoadTestResult;
+  }>;
   stop?: LoadRunRecord['stop'];
 }
 
@@ -411,11 +416,17 @@ export function createLoadWindow(deps: LoadWindowDeps) {
       agents: r.agents.map((g) => {
         const at = open.find(a => a.agentId === g.agentId);
         const t = at ? task.get(at.taskId) : undefined;
-        return { agentId: g.agentId, name: g.name, project: g.project, harness: g.harness, ...(at && t ? { taskId: t.taskId, split: t.split, capMin: t.time_cap_min, startedAt: at.actualAt } : {}) };
+        return {
+          agentId: g.agentId, name: g.name, project: g.project, harness: g.harness,
+          ...(at && t ? { taskId: t.taskId, split: t.split, capMin: t.time_cap_min, startedAt: at.actualAt, ...(at.phase ? { phase: at.phase } : {}) } : {}),
+        };
       }),
       finished: started.filter(a => a.endedAt !== undefined).sort((a, b) => (b.endedAt ?? 0) - (a.endedAt ?? 0)).map(a => ({
         n: a.n, taskId: a.taskId, project: task.get(a.taskId)?.project ?? '', split: task.get(a.taskId)?.split ?? 'train',
-        end: a.end, startedAt: a.actualAt, endedAt: a.endedAt, ...(a.test ? { test: a.test } : {}),
+        end: a.end, startedAt: a.actualAt, endedAt: a.endedAt,
+        ...(a.endDetail ? { endDetail: a.endDetail } : {}), ...(a.setup ? { setup: a.setup } : {}),
+        ...(a.sessionMs !== undefined ? { sessionMs: a.sessionMs } : {}), ...(a.diffStat ? { diffStat: a.diffStat } : {}),
+        ...(a.test ? { test: a.test } : {}),
       })),
       ...(r.stop ? { stop: r.stop } : {}),
     };

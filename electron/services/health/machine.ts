@@ -165,7 +165,8 @@ function run(file: string, args: string[]): Promise<string | null> {
   });
 }
 
-function diskFreeGb(home: string): number | null {
+/** The free disk where `home` is, in GB to a tenth (the load window's disk floor reads it too, load-handlers.ts). */
+export function diskFreeGb(home: string): number | null {
   try {
     const s = fs.statfsSync(home);
     return tenth((Number(s.bavail) * Number(s.bsize)) / (1024 * MB));

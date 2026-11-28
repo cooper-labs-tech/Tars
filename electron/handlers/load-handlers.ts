@@ -1,5 +1,6 @@
 import { app, ipcMain, type BrowserWindow, type IpcMainInvokeEvent } from 'electron';
-import { execFile } from 'child_process';
+import { execFile, spawn } from 'child_process';
+import * as os from 'os';
 import * as path from 'path';
 import { DATA_DIR, privatePath } from '../constants';
 import type { AgentProvider, AgentStatus, AppSettings } from '../types';
@@ -8,12 +9,16 @@ import { createAgent } from '../core/agent-create';
 import { launchAgent } from '../core/agent-launch';
 import { stopAgent } from '../core/agent-stop';
 import { agentStatusEmitter, emitAgentStatus } from '../services/agent-events';
-import { createLoadEngine } from '../services/load-engine';
+import { createLoadEngine, type LoadEngineDeps, type LoadLease, type LoadSlotAsk } from '../services/load-engine';
+import { runStep, stepEnv } from '../services/load-steps';
+import { askSlot, giveSlotBack, slotTicketOf } from '../services/heavy-slot-runtime';
+import type { SlotAsk } from '../services/heavy-slot';
+import { diskFreeGb } from '../services/health/machine';
 import { endpointsOf } from '../services/inference-endpoints';
 import { updateRun } from '../services/load-run-record';
 import { safeGit } from '../utils/safe-git';
 import { buildFullPath } from '../utils/path-builder';
-import { traceSettingsOf } from '../services/traces-runtime';
+import { liveTraceOf, traceSettingsOf, traceStore } from '../services/traces-runtime';
 import { emptyAgentTmp } from '../services/agent-tmp';
 import { createLoadWindow, type LoadWindow, type LoadWindowDeps } from '../services/load-window';
 import { checkGrant, readGrants, writeGrant, LOAD_GRANTS_FILE } from '../services/load-grants';
@@ -54,6 +59,79 @@ function gh(args: string[]): Promise<string> {
 }
 
 const POLL_MS = 5000;
+
+/**
+ * A minute of the load window's clocks: a session's time cap, the setup's 10 minutes, a test's cap and the disk check.
+ * 60 000 ms; under DOROTHY_E2E only, in a build that is not packaged, DOROTHY_E2E_LOAD_MINUTE_MS (200 at least): the
+ * pool's caps are whole minutes from 10 to 120, which no E2E can wait.
+ */
+function loadMinuteMs(): number {
+  const asked = process.env.DOROTHY_E2E_LOAD_MINUTE_MS;
+  if (process.env.DOROTHY_E2E !== '1' || app.isPackaged || !asked || !/^\d{1,9}$/.test(asked)) return 60_000;
+  return Math.max(200, Number(asked));
+}
+
+/**
+ * A lease's own process: the heavy-run slot holds a lease by a process, never one of Tars's own (its rule, for the
+ * agents' runs), so each of the load window's leases gets a shell of its own that waits on its standard input. It
+ * ends when the lease is given back, and by itself when Tars is gone (its input closes).
+ */
+function leaseHolder(): { pid: number; end(): void } | undefined {
+  const child = process.platform === 'win32'
+    ? spawn(process.env.ComSpec || 'cmd.exe', ['/d', '/c', 'set /p x='], { stdio: ['pipe', 'ignore', 'ignore'], windowsHide: true })
+    : spawn('/bin/sh', ['-c', 'read -r _'], { stdio: ['pipe', 'ignore', 'ignore'] });
+  child.on('error', () => { /* no holder: the slot is not asked */ });
+  if (!child.pid) return undefined;
+  return {
+    pid: child.pid,
+    end: () => {
+      try { child.stdin?.end(); } catch { /* gone */ }
+      const t = setTimeout(() => { if (child.exitCode === null) child.kill(); }, 1000);
+      t.unref?.();
+    },
+  };
+}
+
+/**
+ * The heavy-run slot for the load window (services/heavy-slot-runtime.ts), each lease held by a process of its own
+ * (leaseHolder) and given back by the engine: a setup's now or never (the slot's next pass, two seconds at most), a
+ * test's within its cap (asked every second, given back at the cap or a stop). A slot that is not running grants
+ * nothing.
+ */
+function loadSlot(): LoadEngineDeps['slot'] {
+  const askOf = (a: LoadSlotAsk, pid: number): SlotAsk => ({
+    agentId: a.agentId, agentName: a.agentName, projectPath: a.projectPath, pid, terminalPid: pid, priority: 'normal', label: a.label, orchestrator: false,
+  });
+  const lease = (id: string, agentId: string, holder: { end(): void }): LoadLease => {
+    let back = false;
+    return { release: () => { if (!back) { back = true; giveSlotBack(id, agentId); holder.end(); } } };
+  };
+  /** Asks, then reads its ticket until granted, `until` passes, or the signal: a lease, or nothing and the ask given back. */
+  async function take(a: LoadSlotAsk, until: number, signal?: AbortSignal): Promise<LoadLease | undefined> {
+    const holder = leaseHolder();
+    if (!holder) return undefined;
+    let id: string;
+    try { id = (await askSlot(askOf(a, holder.pid))).id; } catch { holder.end(); return undefined; }
+    for (;;) {
+      const t = slotTicketOf(id, a.agentId);
+      if (t?.state === 'granted') return lease(id, a.agentId, holder);
+      if (!t || signal?.aborted || Date.now() >= until) { giveSlotBack(id, a.agentId); holder.end(); return undefined; }
+      await new Promise<void>((resolve) => {
+        const timer = setTimeout(done, Math.max(0, Math.min(250, until - Date.now())));
+        function done() { clearTimeout(timer); signal?.removeEventListener('abort', done); resolve(); }
+        signal?.addEventListener('abort', done, { once: true });
+      });
+    }
+  }
+  return {
+    takeNow: a => take(a, Date.now() + 2000),
+    takeWithin: async (a, ms, signal) => {
+      const started = Date.now();
+      const got = await take(a, started + ms, signal);
+      return { ...(got ? { lease: got } : {}), waitedMs: Date.now() - started };
+    },
+  };
+}
 
 /** The registered window's way to tell it the state, for the watch main.ts starts. */
 let tellWindow: (() => void) | undefined;
@@ -162,6 +240,15 @@ export function registerLoadHandlers(deps: LoadHandlerDeps): { window: LoadWindo
       }
       tell();
     },
+    minuteMs: loadMinuteMs(),
+    slot: loadSlot(),
+    // A setup line or a test_cmd: Tars's environment, its PATH completed, without its tokens (services/load-steps.ts).
+    runStep: o => runStep({ ...o, env: stepEnv({ ...process.env, PATH: buildFullPath() }) }),
+    freeDiskGb: () => diskFreeGb(os.homedir()),
+    // The floor every heavy run of the machine waits behind (services/heavy-slot-runtime.ts): 15 GB unless set.
+    diskFloorGb: () => Number(deps.getAppSettings().heavySlotMinDiskGb ?? 15),
+    traceOf: agentId => liveTraceOf(agentId),
+    tagTrace: (traceId, load) => traceStore().mergeLoadOutcome(traceId, load),
   });
 
   /** An approved run: the load agents its proposal planned made where missing, through the one creation, then armed. */
