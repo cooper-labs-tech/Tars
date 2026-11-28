@@ -72,6 +72,8 @@
 // 26. A request's `toolCalls` takes more than 64, an item without its four booleans, a `toolCallId` over 128
 //     characters, an `ms` other than an int >= 0 or null, an `exit` other than an int or null, a
 //     `truncatedBytes` under 1, or another key; `toolCallsOmitted` under 1; or valid ones are refused.
+// 27. A session's `compactionsOmitted` (C2 after #687's Audit: the compactions past the newest 200 Tars keeps)
+//     takes something other than an int >= 1, or a valid one is refused.
 // 21. A session's `consent` (27/11, the training consent it was recorded under) takes anything but
 //     {training: boolean}, or a valid one is refused.
 // 10 again (the client's own contract, 27/11): every environment value may be null, the
@@ -426,6 +428,11 @@ test('26. a request\'s toolCalls', () => {
   ];
   for (const t of badCalls) assert.ok(errs({ ...ok, requests: [{ ...request, toolCalls: t }] }).length, JSON.stringify(t).slice(0, 80));
   for (const n of [0, -1, 1.5]) assert.ok(errs({ ...ok, requests: [{ ...request, toolCallsOmitted: n }] }).length, String(n));
+});
+
+test('27. compactionsOmitted: a count', () => {
+  for (const n of [1, 200, 1_000_000]) assert.ok(!('errors' in validateBatch(withSession({ compactionsOmitted: n }))), String(n));
+  for (const n of [0, -1, 1.5, '3', true]) assert.ok(errs(withSession({ compactionsOmitted: n })).length, String(n));
 });
 
 test('16. a turn\'s taskRef', () => {

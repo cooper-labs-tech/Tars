@@ -100,8 +100,9 @@
 //
 // What the harness was given, its compactions, and each request's reset, gap and tool calls (28/11, C1 and C2):
 // the ways it can fail, written before the code.
-// X1. A session sent with `contextWindowGiven`, `outputCapGiven`, `autoCompaction` or `compactions` (sent `[]` on
-//     every session), or a request with `contextReset`, `gap`, `toolCalls` or `toolCallsOmitted`, is refused.
+// X1. A session sent with `contextWindowGiven`, `outputCapGiven`, `autoCompaction`, `compactions` (sent `[]` on every
+//     session) or `compactionsOmitted` (#687's Audit), or a request with `contextReset`, `gap`, `toolCalls` or
+//     `toolCallsOmitted`, is refused.
 // X2. They are not stored, or not read back as sent: the session on the list and in the detail, the request in the
 //     detail and on the join; a gap's nulls and a tool call's null exit kept as null.
 // X3. Sent without them (an older Tars), they read back other than `null`, or without the key.
@@ -184,7 +185,7 @@ const WORKSPACE = {
 // The columns migration 006 adds, left out where a migration step compares every other value.
 // What the harness was given and its compactions (C2), a request's context reset, its gap and its tool calls (C1).
 const CONTEXT = {
-  contextWindowGiven: 200000, outputCapGiven: 32000, autoCompaction: 'on',
+  contextWindowGiven: 200000, outputCapGiven: 32000, autoCompaction: 'on', compactionsOmitted: 7,
   compactions: [{ at: T0 + 1500, kind: 'compact', before: 180000, after: 40000, requestId: 'req-2', source: 'harness' }, { at: T0 + 2200, kind: 'truncate', source: 'wire' }],
 };
 const CONTEXT_RESET = { kind: 'compact', droppedTokens: 140000 };
@@ -194,7 +195,7 @@ const TOOL_CALLS = [
   { toolCallId: 'call_0a1b2c3d4e5f6a7b8c9d0e1f', exit: null, ms: null, denied: true, timedOut: false, failed: false, truncated: false },
 ];
 // The columns migration 008 adds, left out where a migration step compares every other value.
-const WAVE_EIGHT_COLUMNS = ['context_window_given', 'output_cap_given', 'auto_compaction', 'compactions', 'context_reset', 'gap', 'tool_calls', 'tool_calls_omitted'];
+const WAVE_EIGHT_COLUMNS = ['context_window_given', 'output_cap_given', 'auto_compaction', 'compactions', 'compactions_omitted', 'context_reset', 'gap', 'tool_calls', 'tool_calls_omitted'];
 const WAVE_FOUR_COLUMNS = [
   'rtt_median_ms', 'clock_offset_ms', 'rtt_ms', 'queue_ms', 'upstream_ms', 'start_head', 'end_head', 'start_tree', 'end_tree',
   'files_changed', 'lines_added', 'lines_removed', 'changed_lines', 'survived_lines', 'reverted', 'survival_basis',
