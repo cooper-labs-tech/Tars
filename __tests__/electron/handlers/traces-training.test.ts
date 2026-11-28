@@ -28,6 +28,9 @@ import { hasPosixModes } from '../../setup/platform-limits';
  *     the consent it would carry.
  * W8. Turning it off on a disk that refuses the write: the off does not apply at once (sessions still stamped true),
  *     or the window is told it holds. Turning it on there: the on applies though not written.
+ * W9. (Found by the Frontend building the toggle, #693.) The back-office takes an owed change and the window is not
+ *     told (`traces:changed`), so its "not yet sent" line stays until its next read; or it is told when nothing
+ *     changed (a value that is not the owed one, or nothing owed).
  */
 
 assertThrowaway({ DATA_DIR, PRIVATE_DIR });
@@ -54,6 +57,7 @@ const AGENT = 'agent-t';
 const TRAINING_FILE = path.join(PRIVATE_DIR, 'traces-training.json');
 let memory: AppSettings;
 let runtime: typeof import('../../../electron/services/traces-runtime');
+let emitted: string[] = [];
 
 const settings = (): AppSettings => ({
   inferenceEndpoints: [{ id: EP, name: 'Local', baseUrl: BASE, allowTraces: true, approved: true, approvedBaseUrl: BASE, models: ['open-coder-1'] }],
@@ -77,7 +81,8 @@ beforeEach(async () => {
   fs.rmSync(TRAINING_FILE, { force: true });
   runtime = await import('../../../electron/services/traces-runtime');
   const getAgent = (id: string) => (id === AGENT ? ({ id, name: 'T', traces: true, projectPath: P1, provider: 'qwen-code', model: 'open-coder-1', endpointId: EP } as unknown as AgentStatus) : undefined);
-  runtime.configureTraces({ getSettings: () => memory, setSettings: (s) => { memory = s; }, writeSettings: () => {}, getAgent, emit: () => {} });
+  emitted = [];
+  runtime.configureTraces({ getSettings: () => memory, setSettings: (s) => { memory = s; }, writeSettings: () => {}, getAgent, emit: (channel: string) => { emitted.push(channel); } });
   const { registerTracesHandlers } = await import('../../../electron/handlers/traces-handlers');
   registerTracesHandlers({ getAppSettings: () => memory, setAppSettings: (s) => { memory = s; }, writeAppSettings: () => {} });
   runtime.recordConsent(AT);
@@ -175,6 +180,23 @@ describe('the training switch', () => {
     expect(preview.consent, 'what the window shows').toEqual({ training: false });
     expect(preview.document.batches[0].body.sessions?.[0].consent, 'what would be sent').toEqual({ training: false });
     runtime.closeEndpointSession(s.token);
+  });
+
+  it('W9. the back-office taking the owed change tells the window once; nothing taken, nothing told', () => {
+    // What a PUT answered 2xx calls: the runtime's own dependency of its uploader.
+    const sent = (value: boolean) => (runtime.traceUploader() as unknown as { deps: { trainingSent(v: boolean): void } }).deps.trainingSent(value);
+    call('traces:setTraining', false);
+    expect(call('traces:training')).toMatchObject({ training: false, owed: true });
+    emitted = [];
+    sent(true);
+    expect(emitted, 'not the owed value').toEqual([]);
+    expect(call('traces:training')).toMatchObject({ owed: true });
+    sent(false);
+    expect(emitted, 'the owed change taken').toEqual(['traces:changed']);
+    expect(call('traces:training')).toMatchObject({ training: false, owed: false });
+    emitted = [];
+    sent(false);
+    expect(emitted, 'nothing owed any more').toEqual([]);
   });
 
   it.skipIf(!hasPosixModes())('W8. off applies at once on a disk that refuses it, and says so; on is not applied unwritten', () => {
