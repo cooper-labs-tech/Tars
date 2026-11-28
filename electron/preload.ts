@@ -1073,7 +1073,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
   // Tars's endpoint proxy. A key goes in and never comes back (keySet only). Approval is here and nowhere else.
   endpoints: {
     list: () => ipcRenderer.invoke('endpoints:list'),
-    save: (e: { id?: string; name: string; baseUrl: string; allowTraces: boolean; holdMaxSeconds?: number; sendSessionHeaders?: boolean; allowPlainHttp?: boolean; extraHeaders?: Record<string, string>; shown?: { baseUrl: string; extraHeaders: Record<string, string> } }) => ipcRenderer.invoke('endpoints:save', e),
+    save: (e: { id?: string; name: string; baseUrl: string; allowTraces: boolean; holdMaxSeconds?: number; sendSessionHeaders?: boolean; sendInstallHeader?: boolean; allowPlainHttp?: boolean; extraHeaders?: Record<string, string>; shown?: { baseUrl: string; extraHeaders: Record<string, string> } }) => ipcRenderer.invoke('endpoints:save', e),
     approve: (id: string, seen: { baseUrl: string; extraHeaders: Record<string, string> }) => ipcRenderer.invoke('endpoints:approve', id, seen),
     setKey: (id: string, key: string | null) => ipcRenderer.invoke('endpoints:setKey', id, key),
     remove: (id: string) => ipcRenderer.invoke('endpoints:remove', id),

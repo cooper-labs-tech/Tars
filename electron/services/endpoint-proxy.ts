@@ -14,9 +14,12 @@ import { requestTiming, type RequestTiming } from './server-timing';
  *   per request: it never reaches a harness, an environment, a config file, a log or a record.
  * - When the endpoint asks for them (its "send session headers" option, off by default, since they name the agent and
  *   its session to the endpoint), it adds `X-Session-Id` (the trace id) and `X-Agent-Id`, overwriting any a harness
- *   sent; off, a harness's own go through as they are. The endpoint's extra headers (a small fixed map the owner
+ *   sent; off, a harness's own go through as they are. With them, and only when the owner also turned on the
+ *   endpoint's install header, `X-Install-Id`: the install's back-office id, while it is registered (never after a
+ *   deletion), so that a deletion of the whole install can reach the endpoint's own copy. A harness's own X-Install-Id
+ *   is always dropped. The endpoint's extra headers (a small fixed map the owner
  *   sets, never a credential: agents can read it) go with every request, over a harness's header of the same name;
- *   none may name the credential, the hop or the session headers (REFUSED_EXTRA_HEADERS). Nothing else changes:
+ *   none may name the credential, the hop, the session headers or the install header (REFUSED_EXTRA_HEADERS). Nothing else changes:
  *   unknown params and response fields go through as they are, and a stream is relayed chunk by chunk as it comes. The
  *   one header it sets besides is `Accept-Encoding: identity`, so the copy it records is readable.
  * - **Pause, not fail**: before any byte of a response has reached the harness, a 503 (endpoint_busy) or a 429
@@ -63,6 +66,11 @@ export interface ProxyTarget {
   holdMaxSeconds: number;
   /** Add X-Session-Id and X-Agent-Id (the endpoint's option, off by default). */
   sendSessionHeaders?: boolean;
+  /**
+   * The install's back-office id, sent as X-Install-Id with the session headers: present only when the endpoint's
+   * owner turned the install header on and the install is registered (inference-endpoints.ts endpointTarget).
+   */
+  installId?: string;
   /** The endpoint's extra headers, sent with every request (a refused name is skipped here too). */
   extraHeaders?: Record<string, string>;
 }
@@ -115,9 +123,17 @@ const MAX_WAIT_MS = 60_000;
 const BACKOFF_S = [2, 4, 8, 30];
 export const DEFAULT_MAX_BODY = 16 * 1024 * 1024;
 
-/** Request headers never forwarded as the harness sent them: the hop's own, and its credential. */
+/**
+ * The install's back-office id (trace feature A4), sent as exactly `X-Install-Id`. Its value's contract: a lower-case
+ * canonical uuid (8-4-4-4-12 hex), the only value the endpoint reads; any other id sends no header (trace-upload.ts
+ * currentInstallId, CANONICAL_UUID). Set by Tars
+ * alone, for an endpoint whose owner turned it on, while the install is registered. A harness's own is always dropped,
+ * whatever the endpoint's switches: no harness names an install.
+ */
+export const INSTALL_HEADER = 'X-Install-Id';
+/** Request headers never forwarded as the harness sent them: the hop's own, its credential, and an install id. */
 const DROP_REQUEST = new Set(['host', 'connection', 'keep-alive', 'proxy-authorization', 'proxy-connection', 'te', 'trailer',
-  'transfer-encoding', 'upgrade', 'authorization', 'x-api-key', 'content-length', 'accept-encoding']);
+  'transfer-encoding', 'upgrade', 'authorization', 'x-api-key', 'content-length', 'accept-encoding', INSTALL_HEADER.toLowerCase()]);
 /** Set by Tars when the endpoint asks for them, never a harness's then. */
 const SESSION_HEADERS = new Set(['x-session-id', 'x-agent-id']);
 /**
@@ -127,7 +143,7 @@ const SESSION_HEADERS = new Set(['x-session-id', 'x-agent-id']);
  */
 export const REFUSED_EXTRA_HEADERS = new Set(['authorization', 'x-api-key', 'cookie', 'set-cookie', 'host', 'content-length',
   'content-type', 'content-encoding', 'transfer-encoding', 'connection', 'keep-alive', 'te', 'trailer', 'upgrade', 'expect',
-  'accept-encoding', ...SESSION_HEADERS]);
+  'accept-encoding', ...SESSION_HEADERS, INSTALL_HEADER.toLowerCase()]);
 export const isRefusedExtraHeader = (name: string): boolean => {
   const lower = name.toLowerCase();
   return REFUSED_EXTRA_HEADERS.has(lower) || lower.startsWith('proxy-');
@@ -275,6 +291,7 @@ export function createEndpointProxy(deps: ProxyDeps): http.Server {
     if (target.sendSessionHeaders) {
       headers['x-session-id'] = session.traceId;
       headers['x-agent-id'] = session.agentId;
+      if (target.installId) headers[INSTALL_HEADER] = target.installId;
     }
     headers['accept-encoding'] = 'identity';
     if (req.method !== 'GET') headers['content-length'] = String(body.length);
