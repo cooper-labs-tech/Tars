@@ -64,12 +64,23 @@ import { assertThrowaway } from '../../setup/throwaway-dirs';
  *     unopened, the grace reads nothing, and the last request's toolMs is null. Read after the session's end from a
  *     copy in Tars's temporary folder, the copy may be left there (its read failing too), be opened where opencode's
  *     store is, or be made again at every pass of the grace for a store that has not changed.
+ * 18. (The Audit of #692, 28/11.) A crash, or a removal that failed, leaves a copy of opencode's whole store (every
+ *     session's messages and tool output) in the temporary folder for good. The follower's first pass removes the
+ *     copies older than a few minutes; it may remove none, a fresh one (a copy in use, another Tars's), or a folder
+ *     that is not one of its copies.
+ * 19. (The Audit of #692; measured on 28/11.) Node clones a file only on the Linux file systems that can (on APFS,
+ *     which `cp -c` clones in 3 ms, its copy of 256 MB took 0.4 to 0.8 s), so the copy is byte by byte on Tars's main
+ *     thread, however big the store: past OPENCODE_COPY_BYTES_MAX it must not be made at all (the last request's
+ *     toolMs stays null), and under it it must.
  */
 
 assertThrowaway({ DATA_DIR, PRIVATE_DIR });
 
 import { opencodeToolPartOf, qwenToolPartOf, toolCallAt, toolCallRecordOf, type ToolCallPart } from '../../../electron/services/tool-calls';
-import { HarnessToolLogs, ENDED_GRACE_MS, QWEN_PASS_BYTES_MAX, OPENCODE_PASS_ROWS_MAX, type FollowedSession } from '../../../electron/services/harness-tool-logs';
+import {
+  HarnessToolLogs, ENDED_GRACE_MS, QWEN_PASS_BYTES_MAX, OPENCODE_PASS_ROWS_MAX, type FollowedSession,
+  type HarnessToolLogsDeps,
+} from '../../../electron/services/harness-tool-logs';
 import { qwenTranscriptPath } from '../../../electron/services/qwen-code';
 
 let root: string;
@@ -168,9 +179,9 @@ describe('opencode parts', () => {
 });
 
 /** A follower over throwaway folders, its notes kept. */
-function follower(list: () => FollowedSession[], sessionIdOf: (agentId: string) => string | undefined = () => undefined) {
+function follower(list: () => FollowedSession[], sessionIdOf: (agentId: string) => string | undefined = () => undefined, over: Partial<HarnessToolLogsDeps> = {}) {
   const noted: Array<{ agentId: string; part: ToolCallPart }> = [];
-  const logs = new HarnessToolLogs({ sessions: list, sessionIdOf, note: (agentId, part) => noted.push({ agentId, part }), homeDir: () => home, dataHome: () => dataHome, tmpDir: () => tmp });
+  const logs = new HarnessToolLogs({ sessions: list, sessionIdOf, note: (agentId, part) => noted.push({ agentId, part }), homeDir: () => home, dataHome: () => dataHome, tmpDir: () => tmp, ...over });
   return { logs, noted };
 }
 
@@ -404,6 +415,45 @@ describe('opencode\'s WAL store', () => {
     expect(noted).toEqual([]);
     expect(fs.readdirSync(tmp), 'the copy deleted').toEqual([]);
     expect(fs.readdirSync(path.dirname(file)), 'nothing beside opencode\'s store').toEqual(['opencode.db']);
+  });
+
+  it('19: past the bound, an ended session\'s closed store is not copied at all; under it, it is', () => {
+    const t = Date.now();
+    const { file, writer } = walStore(t);
+    writer.close();
+    const size = fs.statSync(file).size;
+    const s: FollowedSession = { traceId: 'tr2', agentId: 'o', harness: 'opencode', folder, startedAt: t - 1000, endedAt: t };
+    const over = follower(() => [s], undefined, { copyBytesMax: size - 1 });
+    const old = Math.floor(t / 1000) - 60;
+    fs.utimesSync(tmp, old, old);
+    over.logs.tick();
+    expect(fs.statSync(tmp).mtimeMs, 'no copy made, not even a folder for it').toBe(old * 1000);
+    expect(over.noted).toEqual([]);
+    const under = follower(() => [s], undefined, { copyBytesMax: size });
+    under.logs.tick();
+    expect(under.noted.map(n => n.part.callId)).toEqual(['call_w']);
+    expect(fs.readdirSync(tmp), 'the copy deleted').toEqual([]);
+    expect(fs.readdirSync(path.dirname(file)), 'nothing beside opencode\'s store').toEqual(['opencode.db']);
+  });
+});
+
+describe('the copies of opencode\'s store', () => {
+  it('18: the first pass removes the copies a crash left, older than the limit, by their own name only', () => {
+    // An hour old: past the few minutes a copy can be in use (it lives for one pass), however the limit is set.
+    const old = Math.floor(Date.now() / 1000) - 3600;
+    const made = (name: string, at?: number) => {
+      const d = path.join(tmp, name);
+      fs.mkdirSync(d);
+      fs.writeFileSync(path.join(d, 'opencode.db'), 'every session of opencode');
+      if (at !== undefined) fs.utimesSync(d, at, at);
+    };
+    made('tars-opencode-AbC123', old);
+    made('tars-opencode-Fresh1');
+    made('tars-opencode-old', old);
+    made('tars-run-AbC123', old);
+    const { logs } = follower(() => []);
+    logs.tick();
+    expect(fs.readdirSync(tmp).sort()).toEqual(['tars-opencode-Fresh1', 'tars-opencode-old', 'tars-run-AbC123']);
   });
 });
 
