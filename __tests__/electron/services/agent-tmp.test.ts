@@ -4,7 +4,7 @@ import * as os from 'node:os';
 import * as path from 'node:path';
 import * as net from 'node:net';
 import { execFileSync } from 'node:child_process';
-import { TMP_ROOT, agentTmpEnv, enforceTmpRetention, shortIdOf } from '../../../electron/services/agent-tmp';
+import { TMP_ROOT, agentTmpEnv, emptyAgentTmp, enforceTmpRetention, shortIdOf } from '../../../electron/services/agent-tmp';
 import { DATA_DIR } from '../../../electron/constants';
 import { hasPosixModes } from '../../setup/platform-limits';
 import { cannotSymlink } from '../../setup/symlink-privilege';
@@ -52,6 +52,9 @@ import { cannotSymlink } from '../../setup/symlink-privilege';
  *     reused only while it says the unit is young.
  * 16. (L3) A unit written between its measure and its deletion (a pass can take 100 s) goes anyway: its top's date is
  *     read again just before it is deleted.
+ * Added with the load window's no-memory rule (#691, load-no-memory.test.ts N12), written before the code:
+ * 17. A load session finds what the one before it left in its TMPDIR: the folder is not emptied before it starts; or
+ *     emptying it touches another agent's folder, follows a link planted in its place, or leaves no folder to start in.
  */
 
 const DAY = 86_400_000;
@@ -129,6 +132,29 @@ describe("an agent's folder", () => {
       if (hasPosixModes()) expect(st.mode & 0o777).toBe(0o700);
     }
     expect(fs.readdirSync(outside)).toEqual([]);
+  });
+
+  it('17. emptied before a load session: what the session before left is gone, another agent\'s stays, a link is not followed', () => {
+    const load = agentTmpEnv('load-1', root);
+    const other = agentTmpEnv('worker', root);
+    fs.writeFileSync(path.join(load.TMPDIR, 'notes.txt'), 'what an earlier task found');
+    fs.mkdirSync(path.join(load.CLAUDE_CODE_TMPDIR, 'session'), { recursive: true });
+    fs.writeFileSync(path.join(other.TMPDIR, 'keep.txt'), 'another agent\'s');
+
+    const again = emptyAgentTmp('load-1', root);
+
+    expect(again).toEqual(load);
+    expect(fs.readdirSync(load.TMPDIR)).toEqual([]);
+    expect(fs.readdirSync(load.CLAUDE_CODE_TMPDIR)).toEqual([]);
+    expect(fs.readFileSync(path.join(other.TMPDIR, 'keep.txt'), 'utf8')).toBe('another agent\'s');
+    if (!cannotSymlink()) {
+      fs.writeFileSync(path.join(outside, 'theirs.txt'), 'x');
+      fs.rmSync(path.join(root, shortIdOf('load-1')), { recursive: true, force: true });
+      fs.symlinkSync(outside, path.join(root, shortIdOf('load-1')));
+      emptyAgentTmp('load-1', root);
+      expect(fs.readdirSync(outside)).toEqual(['theirs.txt']);
+      expect(fs.lstatSync(path.join(root, shortIdOf('load-1'))).isSymbolicLink()).toBe(false);
+    }
   });
 });
 

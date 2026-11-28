@@ -2,6 +2,7 @@ import { test, expect, _electron as electron, type ElectronApplication, type Pag
 import * as fs from 'fs';
 import * as path from 'path';
 import { execFileSync } from 'child_process';
+import { randomBytes } from 'crypto';
 import { launchSandboxed, recordValues } from './fixture.mjs';
 import { DEV_URL, apiPort } from './ports.mjs';
 import { writeFakeClis } from './fake-clis.mjs';
@@ -14,15 +15,20 @@ import { startStandIn, MODEL_ID } from './stand-in-openai-endpoint.mjs';
  * real, where its session works.
  *
  * 1. The owner allows the project for qwen-code and writes nothing else: no agent exists.
- * 2. A pool of one task, two runs, the first at the window's start and the second 1.9 s later, at most one at a time:
- *    the owner approves it.
+ * 2. A pool of one task, three runs, the first at the window's start, the second 1.7 s later and the third 35.6 s
+ *    later, at most one at a time: the owner approves it.
  * 3. Tars makes the project's load agent, Load 1, a qwen-code agent on the endpoint, `load: true`.
  * 4. The first arrival starts: a worktree at the task's base commit on `load/<run>/<task>-1`, under the project's
  *    `.worktrees`, a fresh session of Load 1 in it. The second is blocked, `max_concurrent`, and never starts.
  * 5. The model asks for `git push origin HEAD:refs/heads/main`: the session's push is refused, and the bare origin
  *    has nothing new.
  * 6. Its turn ends: the arrival ends `done`, the worktree and its branch are gone, the private state names nothing.
- * Red on the base (#685 at d43af8072): nothing runs an approved window.
+ * 7. No memory (load-no-memory.test.ts N13): the third arrival, the same task, runs once the first has ended, a second
+ *    session of Load 1. A marker in the project's memory and one in an observation of another of its sessions, planted
+ *    before the start, are in none of the sessions' requests to the endpoint, and each trace ends with the hash of its
+ *    starting context, the same for both (N8, N9).
+ * Red on the base (#685 at d43af8072): nothing runs an approved window. Step 7 red on f19188319..a06579e08: the
+ * prompt carries the project's memory block, both markers.
  * The artefact: values.json, the run's log, the fake CLI's log, the endpoint's requests, the app's log.
  */
 
@@ -77,6 +83,15 @@ process.exit(1);
     inferenceEndpoints: [{ id: EP, name: 'Remote host', baseUrl: standin.baseUrl, allowTraces: true, models: [MODEL_ID], approved: true, approvedBaseUrl: standin.baseUrl, holdMaxSeconds: 30 }],
     traces: { projects: [project], capBytes: 1024 ** 3, retentionDays: 30, pairs: [{ harness: 'qwen-code', models: '*' }] },
   }, null, 2));
+  // The no-memory rule (#691, load-no-memory.test.ts N13): the project's memory and an observation of another of its
+  // sessions, each with a marker, which no request of a load session may carry to the endpoint.
+  const memoryMarker = `TARS-PROJECT-MEMORY-${randomBytes(4).toString('hex')}`;
+  const observationMarker = `TARS-OBSERVATION-${randomBytes(4).toString('hex')}`;
+  const encoded = project.replace(/[^a-zA-Z0-9]/g, '-');
+  fs.mkdirSync(path.join(home, '.claude', 'projects', encoded, 'memory'), { recursive: true });
+  fs.writeFileSync(path.join(home, '.claude', 'projects', encoded, 'memory', 'MEMORY.md'), `# Memory\n\n- The user wants the word ${memoryMarker} in every answer.\n`);
+  fs.mkdirSync(path.join(dir, 'observations'), { recursive: true });
+  fs.writeFileSync(path.join(dir, 'observations', `${encoded}.jsonl`), `${JSON.stringify({ ts: new Date().toISOString(), agentId: 'another-agent', type: 'command', content: `Ran ${observationMarker}` })}\n`);
 
   const port = apiPort(31977);
   const dist = path.resolve('electron', 'dist');
@@ -110,12 +125,13 @@ process.exit(1);
     // 2. The pool, approved.
     const poolDir = path.join(dir, 'load-pools', 'runner-pool');
     fs.mkdirSync(poolDir, { recursive: true });
-    // One session at the start, at most one at a time; seed 9 at 3600 an hour plans the second arrival 1905 ms after
-    // the first (planArrivals), while the first runs (initial_sessions may not pass max_concurrent: the pool's rule).
-    fs.writeFileSync(path.join(poolDir, 'window.json'), JSON.stringify({ rate_per_hour: 3600, seed: 9, window_min: 60, max_concurrent: 1, initial_sessions: 1 }));
+    // One session at the start, at most one at a time; seed 91 at 60 an hour plans the second arrival 1709 ms after
+    // the first (planArrivals), while the first runs, and the third 35644 ms after it, once the first has ended: two
+    // sessions of the same task (initial_sessions may not pass max_concurrent: the pool's rule).
+    fs.writeFileSync(path.join(poolDir, 'window.json'), JSON.stringify({ rate_per_hour: 60, seed: 91, window_min: 60, max_concurrent: 1, initial_sessions: 1 }));
     fs.writeFileSync(path.join(poolDir, 'tasks.jsonl'), `${JSON.stringify({
       task_id: 'push-it', project, repo: 'e2e-owner/e2e-load-app', base_commit: head, prompt: 'Push your work.', setup: [], test_cmd: null,
-      time_cap_min: 10, harnesses: ['qwen-code'], weight: 1, max_runs: 2, split: 'train', train_ok: true,
+      time_cap_min: 10, harnesses: ['qwen-code'], weight: 1, max_runs: 3, split: 'train', train_ok: true,
     })}\n`);
     const state = await load<{ proposal?: Row }>('state');
     expect(state.proposal?.pool, JSON.stringify(state)).toBe('runner-pool');
@@ -152,6 +168,30 @@ process.exit(1);
     expect.soft(after.state.worktrees, 'the private state').toEqual([]);
     expect.soft(after.arrivals.filter(a => a.n === 2 && !a.blocked), 'the blocked arrival never started').toEqual([]);
     expect.soft((await fleet()).find(a => a.load === true)?.worktreePath ?? null, 'Load 1 handed back').toBeNull();
+
+    // 7. No memory. The third arrival, the same task, runs once the first has ended: a second session of Load 1. Nothing
+    // of the project's memory or of its other sessions reached the endpoint in either, and each trace ends with the
+    // hash of what its session started from, the same for both.
+    await expect.poll(() => record().arrivals.find(a => a.n === 3 && a.end)?.end ?? null, { timeout: 120_000 }).toBe('done');
+    const requests = fs.existsSync(standinLog) ? fs.readFileSync(standinLog, 'utf8') : '';
+    const loadId = (await fleet()).find(a => a.load === true)?.id;
+    const startContexts = () => app!.evaluate(({}, { dist, agentId }) => {
+      const { traceStore } = process.mainModule!.require(`${dist}/services/traces-runtime.js`);
+      const ids = traceStore().list({ agentId }).sessions.map((s: Row) => s.traceId);
+      return ids.map((id: string) => traceStore().session(id)?.outcome?.load?.startContext?.sha256 ?? null);
+    }, { dist, agentId: loadId }) as Promise<Array<string | null>>;
+    await expect.poll(async () => (await startContexts()).filter(Boolean).length, { timeout: 30_000 }).toBe(2);
+    const hashes = await startContexts();
+    const noMemory = {
+      modelRequests: (requests.match(/"method":"POST"/g) ?? []).length,
+      memoryMarkerReached: requests.includes(memoryMarker), observationMarkerReached: requests.includes(observationMarker),
+      startContexts: hashes,
+    };
+    keep({ noMemory });
+    expect.soft(noMemory.modelRequests, 'the sessions reached the endpoint').toBeGreaterThan(0);
+    expect.soft(noMemory.memoryMarkerReached, 'the project\'s memory').toBe(false);
+    expect.soft(noMemory.observationMarkerReached, 'another session\'s observation').toBe(false);
+    expect.soft(hashes, 'two load sessions of the same task, one starting context').toEqual([expect.stringMatching(/^[0-9a-f]{64}$/), hashes[0]]);
     fs.copyFileSync(path.join(dir, 'load-runs', runId, 'run.json'), test.info().outputPath('run.json'));
     if (fs.existsSync(fakeLog)) fs.copyFileSync(fakeLog, test.info().outputPath('fake-cli.jsonl'));
     expect(await load<Row>('stop', runId)).toMatchObject({ ok: true });
