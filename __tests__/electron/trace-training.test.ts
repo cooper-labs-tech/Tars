@@ -6,7 +6,8 @@ import * as http from 'node:http';
 import * as zlib from 'node:zlib';
 import type { AddressInfo } from 'node:net';
 import { TraceStore } from '../../electron/services/trace-store';
-import { sessionDocument } from '../../electron/services/trace-export';
+import { sessionDocument, traceExportLines } from '../../electron/services/trace-export';
+import Database from 'better-sqlite3';
 import { TraceUploader, type UploaderDeps } from '../../electron/services/trace-upload';
 
 /**
@@ -36,8 +37,13 @@ import { TraceUploader, type UploaderDeps } from '../../electron/services/trace-
  *    sessions already sent); or sessions go with it.
  * 10. With no install, a change owed is sent anywhere, or registers an install on its own.
  * Added before its fix (the Audit's M1 on #690 at 050c79fd9): the store is under ~/.tars, which every agent is handed.
- * 11. A session the private list denies, whose stamp an agent set back to 1 in the store, goes as trainable, in the
+ * 11. A session the private list does not name, whose stamp an agent set to 1 in the store, goes as trainable, in the
  *     upload or in the preview.
+ * Added before their fix (the Audit's M1 on #690 at 6cd9a8598, the orchestrator's ruling: trainable is a positive,
+ * private fact, the session on the list of those Tars opened while training was on, never the absence of a no):
+ * 12. A session copied in the store under a new id with training=1 reads trainable in the list, the change list, the
+ *     session document (the reader's and the export's), or the upload.
+ * 13. A store given no rule for what is trainable reads a stamped session as trainable (it must fail closed).
  */
 
 const HOME = os.homedir();
@@ -99,9 +105,12 @@ let store: TraceStore;
 let bo: BackOffice;
 let consentAt: string | undefined;
 let training: { value: boolean; owed: boolean };
-let denied = new Set<string>();
+/** The private list of sessions opened while training was on, as the runtime keeps it; the store reads it. */
+let allowed = new Set<string>();
 
+/** A session opened while the switch was on goes on the list, as openEndpointSession does it. */
 function seed(traceId: string, opts: { training?: boolean } = {}, startedAt = 1000) {
+  if (opts.training === true) allowed.add(traceId);
   store.openTrace({ traceId, projectPath: PROJECT, agentId: 'agent-1', agentName: 'Q', harness: 'qwen-code', endpointId: 'ep-000001', model: 'open-coder-1', startedAt, ...(opts.training !== undefined ? { training: opts.training } : {}) });
   const req = Buffer.from(JSON.stringify({ model: 'open-coder-1', messages: [{ role: 'user', content: traceId }] }));
   const resp = Buffer.from(JSON.stringify({ choices: [{ message: { role: 'assistant', content: 'done' }, finish_reason: 'stop' }], usage: { prompt_tokens: 1, completion_tokens: 1 } }));
@@ -120,7 +129,6 @@ function uploader(over: Partial<UploaderDeps> = {}) {
     withdrawConsent: () => { consentAt = undefined; },
     training: () => ({ ...training }),
     trainingSent: (value: boolean) => { if (training.value === value) training = { value, owed: false }; },
-    trainingDenied: (traceId: string) => denied.has(traceId),
     now: () => 1_000_000,
     ...over,
   });
@@ -128,12 +136,12 @@ function uploader(over: Partial<UploaderDeps> = {}) {
 
 beforeEach(async () => {
   dir = fs.mkdtempSync(path.join(os.tmpdir(), 'trace-training-'));
-  store = new TraceStore(path.join(dir, 'traces.db'));
+  allowed = new Set();
+  store = new TraceStore(path.join(dir, 'traces.db'), { trainable: (traceId) => allowed.has(traceId) });
   bo = new BackOffice();
   await bo.start();
   consentAt = '2026-11-27T00:00:00Z';
   training = { value: true, owed: false };
-  denied = new Set();
 });
 afterEach(async () => {
   store.close();
@@ -246,10 +254,10 @@ describe('the upload', () => {
     expect(training.owed).toBe(false);
   });
 
-  it('11: a session the private list denies goes as false, its stamp set back to 1 or not, in the upload and the preview', async () => {
+  it('11: a session the private list does not name goes as false, its stamp 1, in the upload and the preview', async () => {
     seed('forged', { training: true });
     seed('fair', { training: true }, 2000);
-    denied.add('forged');
+    allowed.delete('forged');
     const u = uploader();
     const preview = u.preview('forged') as { consent: unknown; document: { batches: Array<{ body: { sessions?: Array<{ consent?: unknown }> } }> } };
     expect(preview.consent).toEqual({ training: false });
@@ -257,6 +265,34 @@ describe('the upload', () => {
     await u.runOnce();
     const consent = Object.fromEntries(bo.sessions.map(s => [s.sessionId, s.consent]));
     expect(consent).toEqual({ forged: { training: false }, fair: { training: true } });
+  });
+
+  it('12: a session copied under a new id with training=1 reads false wherever the field leaves', async () => {
+    seed('orig', { training: true });
+    // What an agent can write into the store: the same session under an id Tars never opened, stamped yes.
+    seed('copy', {}, 1500);
+    const db = new Database(path.join(dir, 'traces.db'));
+    db.prepare('UPDATE traces SET training = 1 WHERE trace_id = ?').run('copy');
+    db.close();
+    expect(store.list({}).sessions.find(s => s.traceId === 'copy')?.consent).toEqual({ training: false });
+    expect(store.changes({}).sessions.find(s => s.traceId === 'copy')?.consent).toEqual({ training: false });
+    expect(store.session('copy')?.session.consent).toEqual({ training: false });
+    expect(sessionDocument(store, 'copy')?.trace.consent).toEqual({ training: false });
+    const exported = [...traceExportLines(store, { traceId: 'copy' })].map(l => JSON.parse(l)).find(r => r.table === 'traces');
+    expect(exported?.consent).toEqual({ training: false });
+    await uploader().runOnce();
+    const consent = Object.fromEntries(bo.sessions.map(s => [s.sessionId, s.consent]));
+    expect(consent).toEqual({ orig: { training: true }, copy: { training: false } });
+  });
+
+  it('13: a store given no rule for what is trainable reads every session false', () => {
+    seed('s', { training: true });
+    const bare = new TraceStore(path.join(dir, 'traces.db'));
+    try {
+      expect(bare.session('s')?.session.consent).toEqual({ training: false });
+    } finally {
+      bare.close();
+    }
   });
 
   it('10: with no install, a change owed goes nowhere and registers nothing', async () => {

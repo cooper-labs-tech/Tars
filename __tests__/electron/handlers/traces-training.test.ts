@@ -35,9 +35,14 @@ import Database from 'better-sqlite3';
  * Added before their fix (the Audit's M1 and its notes on #690 at 050c79fd9): each session's "no" lived only in the
  * trace store, under ~/.tars, which every agent is handed.
  * W10. A session opened while the switch is off, or one running when it was turned off, whose stamp an agent set back
- *      to 1 in the store, previews or uploads as trainable: its "no" is not also kept in the private folder.
- * W11. The private list of denied sessions cannot be read (garbage in it): a session leaves as trainable.
+ *      to 1 in the store, reads as trainable where the field leaves: the reader's session document
+ *      (GET /api/traces/sessions/:id), the change list (GET /api/traces/sessions), the export, the upload, the preview.
+ *      (Rewritten at 6cd9a8598 for the orchestrator's ruling: trainable is a positive, private fact, a session on the
+ *      list of those Tars opened while training was on, never the absence of a no.)
+ * W11. The private list cannot be read (garbage in it): a session reads trainable; or the window is not told; or the
+ *      file is left as it is, so every later session is lost too; or a session from before it reads trainable.
  * W12. The list keeps the ids of sessions the store no longer holds after a sweep, and grows for ever.
+ * W16. A session copied in the store under a new id with training=1 reads trainable anywhere the field leaves.
  * W13. A change while a pass is running waits for the 5-minute pass: the 2-second pass finds the uploader busy and
  *      does not run once it is free.
  * W14. An off held in memory (its write refused) and taken by the back-office: the window is not told.
@@ -66,7 +71,13 @@ const EP = 'ep-0a0b0d';
 const BASE = 'http://127.0.0.1:9/v1';
 const AGENT = 'agent-t';
 const TRAINING_FILE = path.join(PRIVATE_DIR, 'traces-training.json');
-const DENIED_FILE = path.join(PRIVATE_DIR, 'traces-training-denied.json');
+const ALLOWED_FILE = path.join(PRIVATE_DIR, 'traces-training-allowed.json');
+/** The list and any copy of it a run moved aside (an unreadable one). */
+const asideOf = () => (fs.existsSync(PRIVATE_DIR) ? fs.readdirSync(PRIVATE_DIR).filter(f => f.startsWith('traces-training-allowed.json.unreadable-')) : []);
+const clearAllowed = () => {
+  fs.rmSync(ALLOWED_FILE, { force: true });
+  for (const f of asideOf()) fs.rmSync(path.join(PRIVATE_DIR, f), { force: true });
+};
 let memory: AppSettings;
 let runtime: typeof import('../../../electron/services/traces-runtime');
 let emitted: string[] = [];
@@ -91,7 +102,7 @@ beforeEach(async () => {
   handlers.clear();
   memory = settings();
   fs.rmSync(TRAINING_FILE, { force: true });
-  fs.rmSync(DENIED_FILE, { force: true });
+  clearAllowed();
   runtime = await import('../../../electron/services/traces-runtime');
   const getAgent = (id: string) => (id === AGENT ? ({ id, name: 'T', traces: true, projectPath: P1, provider: 'qwen-code', model: 'open-coder-1', endpointId: EP } as unknown as AgentStatus) : undefined);
   emitted = [];
@@ -109,7 +120,7 @@ afterEach(() => {
   runtime.stopTracesRuntime();
   fs.rmSync(runtime.TRACES_CONSENT_FILE, { force: true });
   fs.rmSync(TRAINING_FILE, { force: true });
-  fs.rmSync(DENIED_FILE, { force: true });
+  clearAllowed();
   fs.rmSync(path.dirname(runtime.TRACES_DB_FILE), { recursive: true, force: true });
 });
 
@@ -243,7 +254,7 @@ describe('the training switch', () => {
   });
 });
 
-describe('a session\'s "no" kept where no agent reaches it (the Audit\'s M1 on #690)', () => {
+describe('trainable is a private, positive fact: a session Tars opened while training was on (the Audit\'s M1 on #690)', () => {
   /** What an agent can do: it is handed ~/.tars, and so the trace store. */
   const forge = (traceId: string) => {
     const db = new Database(runtime.TRACES_DB_FILE);
@@ -256,12 +267,23 @@ describe('a session\'s "no" kept where no agent reaches it (the Audit\'s M1 on #
     runtime.traceStore().ingest({ traceId, agentId: AGENT, surface: 'openai_chat', startedAt: Date.now(), endedAt: Date.now() + 5, status: 200, contentType: 'application/json', requestBody: req, responseBody: resp, attempts: 1, heldMs: 0 });
   };
   type Preview = { consent: unknown; document: { batches: Array<{ body: { sessions?: Array<{ consent?: unknown }> } }> } };
-  const leaves = (traceId: string) => {
+  /** The field everywhere it leaves: the reader's document, the change list, the export, the preview and its batch. */
+  const everywhere = async (traceId: string) => {
+    const { sessionDocument, traceExportLines } = await import('../../../electron/services/trace-export');
+    const store = runtime.traceStore();
     const p = runtime.previewUpload(traceId) as Preview;
-    return { preview: p.consent, sent: p.document.batches[0].body.sessions?.[0].consent };
+    return {
+      document: sessionDocument(store, traceId)?.trace.consent,
+      changes: store.changes({}).sessions.find(s => s.traceId === traceId)?.consent,
+      exported: [...traceExportLines(store, { traceId })].map(l => JSON.parse(l)).find(r => r.table === 'traces')?.consent,
+      preview: p.consent,
+      sent: p.document.batches[0].body.sessions?.[0].consent,
+    };
   };
+  const no = { document: { training: false }, changes: { training: false }, exported: { training: false }, preview: { training: false }, sent: { training: false } };
+  const yes = { document: { training: true }, changes: { training: true }, exported: { training: true }, preview: { training: true }, sent: { training: true } };
 
-  it('W10. opened while off, or running when turned off: false, though an agent sets the stamp back to 1', () => {
+  it('W10. opened while off, or running when turned off: false everywhere, though an agent sets the stamp back to 1', async () => {
     call('traces:setTraining', false);
     const off = runtime.openEndpointSession(AGENT);
     const openedOff = traceOf(off.token)!;
@@ -271,40 +293,65 @@ describe('a session\'s "no" kept where no agent reaches it (the Audit\'s M1 on #
     const run = runtime.openEndpointSession(AGENT);
     const running = traceOf(run.token)!;
     ingest(running);
+    expect(await everywhere(running), 'opened while on, not turned off yet').toEqual(yes);
     call('traces:setTraining', false);
     runtime.closeEndpointSession(run.token);
     for (const id of [openedOff, running]) {
       forge(id);
-      expect(runtime.traceStore().session(id)?.session.consent, 'the store says yes now').toEqual({ training: true });
-      expect(leaves(id), id).toEqual({ preview: { training: false }, sent: { training: false } });
+      expect(await everywhere(id), id).toEqual(no);
     }
-    expect(fs.existsSync(DENIED_FILE), 'kept in the private folder').toBe(true);
-    if (hasPosixModes()) expect(fs.statSync(DENIED_FILE).mode & 0o077).toBe(0);
+    expect(fs.existsSync(ALLOWED_FILE), 'kept in the private folder').toBe(true);
+    if (hasPosixModes()) expect(fs.statSync(ALLOWED_FILE).mode & 0o077).toBe(0);
   });
 
-  it('W11. a list that cannot be read denies every session', () => {
+  it('W16. a session copied under a new id with training=1 is false everywhere', async () => {
     const s = runtime.openEndpointSession(AGENT);
-    const id = traceOf(s.token)!;
-    ingest(id);
+    const orig = traceOf(s.token)!;
+    ingest(orig);
     runtime.closeEndpointSession(s.token);
-    expect(leaves(id).sent).toEqual({ training: true });
-    fs.mkdirSync(PRIVATE_DIR, { recursive: true });
-    fs.writeFileSync(DENIED_FILE, 'not json {', { mode: 0o600 });
-    expect(leaves(id), 'an unreadable list').toEqual({ preview: { training: false }, sent: { training: false } });
+    const copy = 'tr_copiedbyanagent0001';
+    const db = new Database(runtime.TRACES_DB_FILE);
+    const row = db.prepare('SELECT * FROM traces WHERE trace_id = ?').get(orig) as Record<string, unknown>;
+    const cols = Object.keys(row);
+    db.prepare(`INSERT INTO traces (${cols.join(', ')}) VALUES (${cols.map(() => '?').join(', ')})`).run(...cols.map(c => (c === 'trace_id' ? copy : c === 'training' ? 1 : row[c])));
+    db.close();
+    ingest(copy);
+    expect(await everywhere(orig), 'the original').toEqual(yes);
+    expect(await everywhere(copy), 'the copy').toEqual(no);
+  });
+
+  it('W11. an unreadable list: none trainable, said in the window, moved aside, and a new list from then on', async () => {
+    const s = runtime.openEndpointSession(AGENT);
+    const before = traceOf(s.token)!;
+    ingest(before);
+    runtime.closeEndpointSession(s.token);
+    expect((await everywhere(before)).sent).toEqual({ training: true });
+    // The next start finds the list unreadable.
+    runtime.stopTracesRuntime();
+    fs.writeFileSync(ALLOWED_FILE, 'not json {', { mode: 0o600 });
+    expect(await everywhere(before), 'a session from before').toEqual(no);
+    expect((call('traces:training') as { unsaved?: string }).unsaved ?? '', 'the window told').toMatch(/could not be read/i);
+    expect(asideOf(), 'moved aside').toHaveLength(1);
+    expect(fs.readFileSync(path.join(PRIVATE_DIR, asideOf()[0]), 'utf8')).toBe('not json {');
+    const after = runtime.openEndpointSession(AGENT);
+    const later = traceOf(after.token)!;
+    ingest(later);
+    runtime.closeEndpointSession(after.token);
+    expect(await everywhere(later), 'a session opened after, on the new list').toEqual(yes);
+    expect(JSON.parse(fs.readFileSync(ALLOWED_FILE, 'utf8')).ids).toEqual([later]);
   });
 
   it('W12. the sweep drops the ids of sessions the store no longer holds', () => {
-    call('traces:setTraining', false);
     const a = runtime.openEndpointSession(AGENT);
     const kept = traceOf(a.token)!;
     runtime.closeEndpointSession(a.token);
     const b = runtime.openEndpointSession(AGENT);
     const gone = traceOf(b.token)!;
     runtime.closeEndpointSession(b.token);
-    expect(JSON.parse(fs.readFileSync(DENIED_FILE, 'utf8')).ids.sort()).toEqual([kept, gone].sort());
+    expect(JSON.parse(fs.readFileSync(ALLOWED_FILE, 'utf8')).ids.sort()).toEqual([kept, gone].sort());
     runtime.traceStore().remove({ traceIds: [gone] });
     runtime.sweepTraces();
-    expect(JSON.parse(fs.readFileSync(DENIED_FILE, 'utf8')).ids).toEqual([kept]);
+    expect(JSON.parse(fs.readFileSync(ALLOWED_FILE, 'utf8')).ids).toEqual([kept]);
   });
 
   it('W13. a change while a pass runs: the 2-second pass runs once the busy one ends', async () => {

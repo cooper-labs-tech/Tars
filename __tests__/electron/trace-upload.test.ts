@@ -205,7 +205,6 @@ function uploader(over: Partial<UploaderDeps> = {}) {
     // The training switch (trace feature A5, its own tests in trace-training.test.ts): on, nothing owed.
     training: () => ({ value: true, owed: false }),
     trainingSent: () => {},
-    trainingDenied: () => false,
     now: () => clock,
     ...over,
   });
