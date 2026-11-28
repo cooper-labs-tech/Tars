@@ -1207,6 +1207,9 @@ would be sent.
   its traced turns committed the judged head or a commit it holds, whatever branch the verdict names), and the record keeps who did, with its name and role from
   the fleet. `ci` is Tars's alone. It goes up in the outcome's `gates` without its report's path or its recorder's
   name, which stay here.
+- The own-work check trusts git's committer dates (`%ct`), which the committer sets: a recorder that dates its
+  commits outside its turns gets past it. For any other agent, the worst it does is refuse a verdict, never record a
+  false one.
 - **What a verdict is not:** verdicts live in `traces.db`, which agents can write, like every trace row. A verdict is
   a label from a cooperative fleet, held by the route and the tool, not a proof against an agent that edits the
   file. A list of gate agents the owner designates would be the stronger form; it is the owner's to ask for.

@@ -295,7 +295,8 @@ from the window, or from an agent's drop file (`~/.tars/endpoint-keys/<name>.key
     an agent's `ci` is refused. A qa or audit verdict on the recorder's own work is refused, whatever branch it names:
     a commit one of its own traced turns made (between the turn's start and end heads, committed while the turn ran,
     within 2 s) is the judged head or an ancestor of it. A checkout, a pull or a fetch moved HEAD to commits made
-    before, and is no work; a merge commit a pull makes in the recorder's own turn counts as its work (a known limit).
+    before, and is no work. A pull in the recorder's own turn counts as its work for what it brings in that turn (a
+    known limit): its merge commit, and the commits others made while the turn ran that it fast-forwards to.
     That check runs first, within the same deadline, and a verdict whose check did not finish is refused too (503).
     The latest per gate, pull request and head stands.
   - **Linked turns:** the project's turns whose end head is the judged head, in any session, turns that only sat on
