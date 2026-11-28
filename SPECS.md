@@ -330,9 +330,10 @@ from the window, or from an agent's drop file (`~/.tars/endpoint-keys/<name>.key
   size and its session's bytes, by its id and its facts, so the cap counts it. Qwen Code's and opencode's (measured:
   0.25.2, 1.19.6) are read by a follower of their own (`services/harness-tool-logs.ts`), every 2 s while a traced
   session of theirs runs and 30 s after its end: Qwen Code's chat file of the agent's session (its `qwen-code.tool_call`
-  telemetry and `tool_result` lines), each byte once, at most 1 MiB a pass; opencode's database, opened read-only,
-  the `tool` parts of the sessions begun in the agent's folder since the traced session started, at most 500 rows a
-  pass. A harness not read (none other runs on an endpoint yet) leaves its requests' `toolMs` null.
+  telemetry and `tool_result` lines; its session id, posted by the agent's hooks, a plain id before it joins the path),
+  each byte once, at most 1 MiB a pass; opencode's database, opened read-only, the `tool` parts of the sessions begun
+  in the agent's folder since the traced session started, at most 500 rows a pass, and never opened while opencode is
+  not running (its WAL store closed cleanly has no -wal, which a read-only open would make and leave). A harness not read (none other runs on an endpoint yet) leaves its requests' `toolMs` null.
 
 Retention and a size cap come from Settings. The back-office reads it through `window.electronAPI.traces`. An external
 reader reads it through `GET /api/traces/*`, with its own token, as the reader's trace format tables.
