@@ -97,7 +97,10 @@ export interface EndpointView {
   models: string[]; modelsReadAt?: string; modelsError?: string;
   agents: Array<{ id: string; name: string; projectPath: string; provider: string; model?: string }>;
   approved: boolean; approvedBaseUrl?: string; changedBy?: InferenceEndpoint['changedBy'];
-  holdMaxSeconds: number; sendSessionHeaders: boolean; health?: InferenceEndpoint['health'];
+  holdMaxSeconds: number; sendSessionHeaders: boolean;
+  /** X-Install-Id on every request, while the install is registered with the back-office (only with the session headers). */
+  sendInstallHeader: boolean;
+  health?: InferenceEndpoint['health'];
   /** The traffic is plain http, not encrypted at the HTTP level (a private network, or the owner's allowance). */
   plainHttp: boolean;
   allowPlainHttp: boolean;
@@ -157,7 +160,7 @@ export function cleanBaseUrl(raw: unknown): string | null {
 export function saveEndpoint(
   settings: AppSettings,
   input: {
-    id?: string; name?: string; baseUrl?: string; allowTraces?: boolean; holdMaxSeconds?: number; sendSessionHeaders?: boolean; allowPlainHttp?: boolean; extraHeaders?: unknown;
+    id?: string; name?: string; baseUrl?: string; allowTraces?: boolean; holdMaxSeconds?: number; sendSessionHeaders?: boolean; sendInstallHeader?: boolean; allowPlainHttp?: boolean; extraHeaders?: unknown;
     /** The window's save of an endpoint that exists: the address and extra headers its form showed when opened. */
     shown?: { baseUrl?: unknown; extraHeaders?: unknown };
   },
@@ -200,6 +203,14 @@ export function saveEndpoint(
   if (transportOf(baseUrl!) === 'http-public' && !allowPlainHttp) {
     return { ok: false, error: 'A public address takes https. Plain http goes to loopback and private networks only, unless the owner allows it for this endpoint in the window.' };
   }
+  // The install header (X-Install-Id): the owner's, in the window, and only with the session headers. Turning them off
+  // turns it off too, so it never goes alone.
+  if (input.sendInstallHeader !== undefined && !owner) return { ok: false, error: 'Only the owner turns the install header on for an endpoint, in the window.' };
+  const sendSessionHeaders = input.sendSessionHeaders ?? current?.sendSessionHeaders ?? false;
+  if (input.sendInstallHeader === true && !sendSessionHeaders) {
+    return { ok: false, error: 'The install header goes only with the session headers: turn them on too.' };
+  }
+  const sendInstallHeader = sendSessionHeaders && (input.sendInstallHeader ?? current?.sendInstallHeader === true);
   let extraHeaders = current?.extraHeaders ?? {};
   if (input.extraHeaders !== undefined) {
     const clean = cleanExtraHeaders(input.extraHeaders);
@@ -210,7 +221,7 @@ export function saveEndpoint(
   const next: InferenceEndpoint = {
     ...(current ?? { id: newId(list), models: [], approved: false }),
     name, baseUrl: baseUrl!, allowTraces, holdMaxSeconds: hold,
-    sendSessionHeaders: input.sendSessionHeaders ?? current?.sendSessionHeaders ?? false,
+    sendSessionHeaders, sendInstallHeader,
     allowPlainHttp, extraHeaders,
   } as InferenceEndpoint;
   if (owner) {
@@ -320,14 +331,18 @@ export function endpointViews(settings: AppSettings, agents: AgentStatus[]): End
     agents: agents.filter(a => a.endpointId === e.id).map(a => ({ id: a.id, name: a.name ?? a.id, projectPath: a.projectPath, provider: String(a.provider ?? ''), model: a.model })),
     approved: e.approved === true, approvedBaseUrl: e.approvedBaseUrl, changedBy: e.changedBy,
     holdMaxSeconds: typeof e.holdMaxSeconds === 'number' ? e.holdMaxSeconds : DEFAULT_HOLD_SECONDS,
-    sendSessionHeaders: e.sendSessionHeaders === true, health: e.health,
+    sendSessionHeaders: e.sendSessionHeaders === true, sendInstallHeader: e.sendSessionHeaders === true && e.sendInstallHeader === true, health: e.health,
     plainHttp: transportOf(e.baseUrl) !== 'https', allowPlainHttp: e.allowPlainHttp === true,
     extraHeaders: { ...(e.extraHeaders ?? {}) }, ...(e.approvedExtraHeaders ? { approvedExtraHeaders: { ...e.approvedExtraHeaders } } : {}),
   }));
 }
 
-/** Where the proxy sends an agent's requests, or why it must not. Only an approved endpoint, at its approved URL. */
-export function endpointTarget(settings: AppSettings, id: string): ProxyTarget | { refused: { status: number; type: string; message: string } } {
+/**
+ * Where the proxy sends an agent's requests, or why it must not. Only an approved endpoint, at its approved URL.
+ * `installId` is the install's back-office id while it is registered (trace-upload.ts currentInstallId), or null: the
+ * target carries it only for an endpoint whose owner turned the install header on, with the session headers.
+ */
+export function endpointTarget(settings: AppSettings, id: string, installId?: string | null): ProxyTarget | { refused: { status: number; type: string; message: string } } {
   const e = endpointsOf(settings).find(x => x.id === id);
   if (!e) return { refused: { status: 404, type: 'endpoint_not_found', message: 'This agent\'s endpoint is no longer in Tars.' } };
   if (!e.approved || !e.approvedBaseUrl || e.approvedBaseUrl !== e.baseUrl) {
@@ -337,6 +352,7 @@ export function endpointTarget(settings: AppSettings, id: string): ProxyTarget |
     baseUrl: e.approvedBaseUrl, key: settings.endpointKeys?.[id] || null,
     holdMaxSeconds: typeof e.holdMaxSeconds === 'number' ? e.holdMaxSeconds : DEFAULT_HOLD_SECONDS, sendSessionHeaders: e.sendSessionHeaders === true,
     extraHeaders: { ...(e.extraHeaders ?? {}) },
+    ...(installId && e.sendSessionHeaders === true && e.sendInstallHeader === true ? { installId } : {}),
   };
 }
 

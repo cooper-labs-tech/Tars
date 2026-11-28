@@ -461,7 +461,8 @@ export async function run() {
       return;
     }
     const directive = /\b(DELEGATE|SEND|ECHO|APPROVE) (\S+)(?: (.+))?$/ms.exec(text);
-    if (kind === 'qwen-code' && process.env.OPENAI_BASE_URL) answer = await modelTurn(text);
+    const endpoint = endpointOf();
+    if (endpoint) answer = await modelTurn(text, endpoint);
     else if (!directive) answer = 'ok';
     else if (directive[1] === 'ECHO') answer = `echo ${directive[2]}`;
     else if (directive[1] === 'APPROVE') answer = (opts.bypass || await ask(directive[2])) ? `ran echo ${directive[2]}` : `did not run echo ${directive[2]}`;
@@ -486,21 +487,38 @@ export async function run() {
   // argument), on every system alike, and its output is sent back as the tool's result. Logged: each request's
   // status, the time its first chunk came and the time it ended, and what the key looked like (its first four
   // characters), never the key.
-  async function modelTurn(text) {
-    const base = process.env.OPENAI_BASE_URL.replace(/\/+$/, '');
-    const key = process.env.OPENAI_API_KEY ?? '';
+  // Where a harness on an inference endpoint sends its model calls, read as the real one reads it: qwen-code from
+  // OPENAI_BASE_URL, OPENAI_API_KEY and OPENAI_MODEL; opencode from the provider Tars writes into
+  // OPENCODE_CONFIG_CONTENT (its baseURL, its apiKey naming an environment variable, its one model). Null off one.
+  function endpointOf() {
+    if (kind === 'qwen-code' && process.env.OPENAI_BASE_URL) {
+      return { base: process.env.OPENAI_BASE_URL, key: process.env.OPENAI_API_KEY ?? '', model: process.env.OPENAI_MODEL };
+    }
+    if (kind === 'opencode' && process.env.OPENCODE_CONFIG_CONTENT) {
+      let provider;
+      try { provider = JSON.parse(process.env.OPENCODE_CONFIG_CONTENT).provider?.['tars-endpoint']; } catch { return null; }
+      if (!provider?.options?.baseURL) return null;
+      const keyVar = /^\{env:([A-Z0-9_]+)\}$/.exec(String(provider.options.apiKey ?? ''))?.[1];
+      return { base: provider.options.baseURL, key: keyVar ? process.env[keyVar] ?? '' : String(provider.options.apiKey ?? ''), model: Object.keys(provider.models ?? {})[0] };
+    }
+    return null;
+  }
+
+  async function modelTurn(text, endpoint) {
+    const base = endpoint.base.replace(/\/+$/, '');
+    const key = endpoint.key;
     const tools = [{ type: 'function', function: { name: 'run_shell_command', description: 'Run a shell command', parameters: { type: 'object', properties: { command: { type: 'string' } }, required: ['command'] } } }];
     const messages = [{ role: 'system', content: 'You are a stand-in coding agent.' }, { role: 'user', content: text }];
     // A task that asks for a title gets a side request first, as opencode's title call is (no tools, a system prompt of
     // its own, not streamed): what a trace marks `side`.
     if (/\btitle\b/i.test(text)) {
-      const res = await fetch(`${base}/chat/completions`, { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${key}` }, body: JSON.stringify({ model: process.env.OPENAI_MODEL, messages: [{ role: 'system', content: 'Generate a short title for the conversation.' }, { role: 'user', content: text }], stream: false }) });
+      const res = await fetch(`${base}/chat/completions`, { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${key}` }, body: JSON.stringify({ model: endpoint.model, messages: [{ role: 'system', content: 'Generate a short title for the conversation.' }, { role: 'user', content: text }], stream: false }) });
       await res.text();
       log({ model: true, side: true, status: res.status, keyHead: key.slice(0, 4), keyLength: key.length });
     }
     for (let step = 0; step < 4; step++) {
       const sentAt = Date.now();
-      const res = await fetch(`${base}/chat/completions`, { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${key}` }, body: JSON.stringify({ model: process.env.OPENAI_MODEL, messages, tools, stream: true, stream_options: { include_usage: true } }) });
+      const res = await fetch(`${base}/chat/completions`, { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${key}` }, body: JSON.stringify({ model: endpoint.model, messages, tools, stream: true, stream_options: { include_usage: true } }) });
       let firstChunkAt;
       let raw = '';
       const reader = res.body.getReader();
@@ -510,7 +528,7 @@ export async function run() {
         if (firstChunkAt === undefined) firstChunkAt = Date.now();
         raw += Buffer.from(value).toString('utf8');
       }
-      log({ model: true, status: res.status, sentAt, firstChunkAt, endAt: Date.now(), keyHead: key.slice(0, 4), keyLength: key.length, model_: process.env.OPENAI_MODEL });
+      log({ model: true, status: res.status, sentAt, firstChunkAt, endAt: Date.now(), keyHead: key.slice(0, 4), keyLength: key.length, model_: endpoint.model });
       if (!res.ok) return `the endpoint answered ${res.status}`;
       let content = '';
       const calls = new Map();

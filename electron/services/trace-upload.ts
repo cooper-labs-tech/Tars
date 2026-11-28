@@ -61,6 +61,15 @@ export interface UploaderDeps {
 
 interface Install { url: string; installId: string; token: string; secret: string; registeredAt: number }
 
+/**
+ * The X-Install-Id value's contract (the orchestrator's of 27/11): a lower-case canonical uuid, 8-4-4-4-12 hex, which
+ * is all the endpoint reads; it ignores any other value. The upload itself takes more (any id the back-office gives),
+ * and both agree only because the back-office issues randomUUID(). A canonical uuid with capitals goes lower-cased; any
+ * other id sends no header, and the log says so once, so a future id format fails where it can be seen rather than
+ * silently stop install-wide deletions from reaching the endpoint's copy.
+ */
+const CANONICAL_UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
 export interface UploadStateView {
   configured: boolean;
   consentAt?: string;
@@ -88,6 +97,12 @@ export interface UploadStateView {
   deletionCleared: boolean;
   /** A deletion asked for and not yet confirmed by the back-office: sharing stays off until it is done. */
   deletionOwed: boolean;
+  /**
+   * Whether the install id goes now to an endpoint whose install header is on: main's own answer (currentInstallId
+   * gives one), so the window never restates the rule, which has cases it cannot see (an install file a deletion
+   * could not remove, an id that is no canonical uuid).
+   */
+  installIdSent: boolean;
   /** Whose the latest deletion is, while there is one: 'you' or 'start' (TraceSettings.uploadDeletionBy). */
   deletionBy?: 'you' | 'start';
 }
@@ -125,6 +140,10 @@ export class TraceUploader {
   private halts = 0;
   /** An owed deletion cleared by itself, not yet acknowledged by the window. */
   private clearedUnsaid = false;
+  /** The ids of the installs this run deleted or forgot: never told to an endpoint again (currentInstallId). */
+  private readonly retired = new Set<string>();
+  /** The install ids already said not to be canonical uuids, so the log says it once per id, not at every request. */
+  private readonly notUuidSaid = new Set<string>();
 
   constructor(private readonly deps: UploaderDeps) {
     this.now = deps.now ?? Date.now;
@@ -146,6 +165,9 @@ export class TraceUploader {
    * the reason, which the log says too.
    */
   private dropInstall(): string | null {
+    // Its id is never told to an endpoint again in this run, even when the file will not go (currentInstallId).
+    const old = this.readInstall();
+    if (old && typeof old.installId === 'string') this.retired.add(old.installId);
     try {
       fs.unlinkSync(this.deps.installFile);
       return null;
@@ -192,6 +214,34 @@ export class TraceUploader {
     return { ok: true };
   }
 
+  /**
+   * The install's back-office id, which the endpoint proxy tells an endpoint whose owner turned its install header on
+   * (X-Install-Id, trace feature A4), so that a deletion of the whole install can reach that endpoint's own copy. Null
+   * unless sharing is on (the upload notice the user agreed to names it; a deletion and a 401 both take the consent
+   * back), and this install is registered with the back-office the settings name now, with no deletion owed, and was
+   * registered after the latest deletion's moment (so an install file that could not be removed after a deletion is
+   * never told again, in a later run either), and not deleted or forgotten in this run. The value's contract: a
+   * lower-case canonical uuid (CANONICAL_UUID). Any other id gives null, and the log says so once.
+   */
+  currentInstallId(): string | null {
+    const s = this.deps.settings();
+    if (!s.url || !s.consentAt || s.deletionOwed) return null;
+    const install = this.readInstall();
+    if (!install || install.url !== s.url) return null;
+    if (typeof install.installId !== 'string' || !CANONICAL_UUID.test(install.installId)) {
+      const said = String(install.installId);
+      if (!this.notUuidSaid.has(said)) {
+        this.notUuidSaid.add(said);
+        console.warn('[traces] the install id is not a canonical uuid: no endpoint is told it (X-Install-Id), so an install-wide deletion cannot reach an endpoint\'s own copy');
+      }
+      return null;
+    }
+    if (this.retired.has(install.installId)) return null;
+    if (s.since !== undefined && !(typeof install.registeredAt === 'number' && install.registeredAt > s.since)) return null;
+    // In lower case, as the header's value is pinned: one install, one spelling at the endpoint.
+    return install.installId.toLowerCase();
+  }
+
   /** Whether a deletion is owed now: for the consent check, which must not touch what the window is told. */
   isDeletionOwed(): boolean {
     return this.owed();
@@ -222,6 +272,7 @@ export class TraceUploader {
       lastError: this.lastError, nextTryAt: this.nextTryAt, ...(this.notice ? { notice: this.notice } : {}),
       deletionCleared: this.clearedUnsaid,
       deletionOwed: owed,
+      installIdSent: this.currentInstallId() !== null,
       ...(s.since !== undefined && s.deletionBy ? { deletionBy: s.deletionBy } : {}),
     };
   }

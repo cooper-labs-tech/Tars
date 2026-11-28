@@ -85,6 +85,7 @@ export function registerTracesHandlers(deps: TracesHandlerDeps): void {
       baseUrl: typeof i.baseUrl === 'string' ? i.baseUrl : undefined, allowTraces: typeof i.allowTraces === 'boolean' ? i.allowTraces : undefined,
       holdMaxSeconds: typeof i.holdMaxSeconds === 'number' ? i.holdMaxSeconds : undefined,
       sendSessionHeaders: typeof i.sendSessionHeaders === 'boolean' ? i.sendSessionHeaders : undefined,
+      sendInstallHeader: typeof i.sendInstallHeader === 'boolean' ? i.sendInstallHeader : undefined,
       allowPlainHttp: typeof i.allowPlainHttp === 'boolean' ? i.allowPlainHttp : undefined,
       // Checked by saveEndpoint (cleanExtraHeaders): anything but a map of header names to values is refused there.
       extraHeaders: i.extraHeaders,
@@ -95,12 +96,13 @@ export function registerTracesHandlers(deps: TracesHandlerDeps): void {
     if (!r.ok) return r;
     // Traces turned off for an endpoint is a revoke of sharing: it applies first, then is written (holdRevoke), with
     // the rest of the save when that grants nothing (names, the hold, the defaults the save fills in). A save that
-    // also grants (session headers or plain http turned on, the address moved, which the save approves with the key,
+    // also grants (session headers, the install header or plain http turned on, the address moved, which the save approves with the key,
     // or extra headers changed, which go out with it) has that part written first.
     const before = (deps.getAppSettings().inferenceEndpoints ?? []).find(e => e.id === r.endpoint.id);
     let held: string | undefined;
     if (before?.allowTraces === true && r.endpoint.allowTraces === false) {
       const grants = (before.sendSessionHeaders !== true && r.endpoint.sendSessionHeaders === true)
+        || (before.sendInstallHeader !== true && r.endpoint.sendInstallHeader === true)
         || (before.allowPlainHttp !== true && r.endpoint.allowPlainHttp === true)
         || before.baseUrl !== r.endpoint.baseUrl
         || !sameExtraHeaders(before.extraHeaders, r.endpoint.extraHeaders);
@@ -307,6 +309,7 @@ export function registerTracesHandlers(deps: TracesHandlerDeps): void {
       'their timing, token counts, the harness and its version, the model and the endpoint\'s name',
       'who wrote each turn (you, an orchestrator, an agent, a channel) and how the session ended (branch, commit)',
       'an install id, to delete everything this install sent',
+      'the install\'s id, with every request to an inference endpoint whose install header you turned on, only while you share and this install is registered, and never after a deletion: so that endpoint can tie its own copy of those requests to this install, and delete it with the rest',
     ],
     stays: ['your keys and Tars\'s tokens (masked before upload)', 'sessions of projects and agents not opted in', 'the endpoints\' keys and addresses', 'anything outside traced sessions'],
     scrubbing: {

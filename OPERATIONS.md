@@ -1283,6 +1283,11 @@ the agents rather than raising the ceiling.
 - Closed models (Claude, GPT, o-series, Gemini) are left out by default. The switch is in Settings, with the warning
   about their terms.
 - Session headers (`X-Session-Id`, `X-Agent-Id`) are an endpoint's option, off by default.
+- The install id (`X-Install-Id`) is another, off by default and only with the session headers: for an endpoint that
+  keeps its own copy of what it serves, so that "delete everything" at the back-office can reach that copy. It goes only
+  while sharing is on and this install is registered with the back-office. To check what an endpoint is told: Settings, Inference
+  endpoints, the endpoint's switches; the upload state says whether the install is registered. After a deletion
+  nothing is sent until sharing is given again and a pass registers a new install, whose new id then goes.
 - The cap and the retention are swept every hour and after any write that crosses the cap: the oldest ended sessions
   go first, and open sessions are never deleted by retention. Past the cap with only open sessions left, request
   metadata is still written and bodies are not (`bodiesDropped`).

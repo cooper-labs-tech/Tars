@@ -234,10 +234,14 @@ The proxy:
 - swaps the token for the endpoint's key;
 - adds `X-Session-Id` (the trace id) and `X-Agent-Id` when the endpoint's "send session headers" is on (off by
   default);
+- adds `X-Install-Id` (that exact name), the install's back-office id as a lower-case canonical uuid (any other id sends no header, and the log says so once), when the endpoint's "send install id" is on too (off by default,
+  the owner's in the window, refused without the session headers), only while sharing is on and the install is
+  registered with the back-office, and never after a deletion (`TraceUploader.currentInstallId`); a harness's own is always dropped. So a
+  deletion of the whole install can reach the endpoint's own copy of what it served;
 - adds the endpoint's extra headers, a fixed map of at most 16 (`extraHeaders`), to every request, over a harness's
   header of the same name. None may be the credential (Authorization, x-api-key, Cookie), the connection's own or the
   body's framing (Host, Content-Length, Content-Type, Transfer-Encoding, Connection, Accept-Encoding, any hop-by-hop
-  or `Proxy-` header), or a session header; a name or value with CR or LF is refused. They are kept with the endpoint's
+  or `Proxy-` header), a session header or the install header; a name or value with CR or LF is refused. They are kept with the endpoint's
   record, which agents read, so never a credential;
 - passes chat completions, Responses, Anthropic Messages and `/v1/models` unchanged, streams included, chunk by chunk.
 

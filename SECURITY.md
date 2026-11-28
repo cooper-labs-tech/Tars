@@ -1181,10 +1181,38 @@ their outputs.
 **Session headers.** `X-Session-Id` and `X-Agent-Id` name the agent and its session to the endpoint. The proxy adds
 them only for an endpoint whose "send session headers" option is on, which is off by default.
 
+**Install header** (trace feature A4). An endpoint may keep its own copy of every request it serves, uploaded or not.
+With the owner's "send install id" switch on for that endpoint, the proxy adds `X-Install-Id` to every request: the
+install's back-office id, a pseudonymous uuid the back-office gave at registration, in lower case, so that a deletion of the whole
+install at the back-office can be passed on to that copy. What leaves, and what does not:
+- the id only, never the install's token, its HMAC secret, a machine id or anything else;
+- only from the window: an agent's save that turns it on is refused, and turning it on is a grant like the session
+  headers (written before it applies);
+- only with the session headers: a save asking for it without them is refused, and turning them off turns it off;
+- only while sharing is on, since the upload notice the user agreed to is what names it, and the install is registered
+  with the back-office the settings name now (`currentInstallId` in `services/trace-upload.ts`): an install never
+  registered sends nothing;
+- never while a deletion is owed, never an install deleted or forgotten (a 401), and never one registered before the
+  latest deletion's moment, so an install file a full or read-only folder kept after a deletion is not told again
+  after a restart either, nor one the back-office forgot (a 401 takes the consent back). A new registration sends the
+  new id;
+- a harness's own `X-Install-Id` is always dropped, whatever the switches, and no extra header may set it: no
+  harness or agent names an install;
+- the value's contract: **a lower-case canonical uuid** (8-4-4-4-12 hex), the only value the endpoint reads. A
+  canonical uuid with capitals goes lower-cased. Any other id, though the upload itself takes it (any id the
+  back-office gives; both agree only because the back-office issues `randomUUID()`), sends no header, and the log
+  says so once in a line that names no id: a new id format fails where it is seen, rather than silently stop
+  install-wide deletions from reaching the endpoint's copy.
+What it does not do: the endpoint's own purge is the endpoint's. Tars tells it the id; it cannot make it delete.
+One case is left open: an install the back-office forgot (a 401, not a deletion of yours) whose file could be neither
+removed nor emptied, with sharing given again and Tars restarted before a pass. Its id goes until that pass, whose 401
+takes the consent back again. The deletion's moment does not date it, since no deletion was asked for.
+
 **Extra headers.** An endpoint may carry up to 16 fixed headers, sent with every request to it and with its probes,
 to the approved address only. They are not a secret: they are kept in `app-settings.json` with the endpoint, and every
 agent reads them, so a credential never goes there (the key has its own path, above). None may name the credential
-(Authorization, x-api-key, Cookie), the connection's own headers or the body's framing, or the session headers, and a
+(Authorization, x-api-key, Cookie), the connection's own headers or the body's framing, the session headers or the
+install header, and a
 name or value holding CR or LF is refused; the proxy skips a refused name again when it sends.
 
 **The upload** (`services/trace-upload.ts`). Opted-in sessions go to the back-office address the user sets, empty by
