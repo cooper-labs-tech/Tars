@@ -97,6 +97,18 @@
 // C6. The value set at registration is not in the feed.
 // C7. A deleted install's changes stay in the feed (its tombstone is in the deletions feed already).
 // C8. Migration 007's down loses anything else, its up reads them null.
+//
+// What the harness was given, its compactions, and each request's reset, gap and tool calls (28/11, C1 and C2):
+// the ways it can fail, written before the code.
+// X1. A session sent with `contextWindowGiven`, `outputCapGiven`, `autoCompaction` or `compactions` (sent `[]` on
+//     every session), or a request with `contextReset`, `gap`, `toolCalls` or `toolCallsOmitted`, is refused.
+// X2. They are not stored, or not read back as sent: the session on the list and in the detail, the request in the
+//     detail and on the join; a gap's nulls and a tool call's null exit kept as null.
+// X3. Sent without them (an older Tars), they read back other than `null`, or without the key.
+// X4. Sent again without them, a session or request loses them.
+// X5. A malformed one is taken (a window under 1,024, a compaction kind outside its three, a gap's author outside
+//     #680's list, a 65th tool call); the batch must be refused whole.
+// X6. Migration 008's down loses anything else, its up reads them null.
 import { describe, it, before, after } from 'node:test';
 import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
@@ -170,6 +182,19 @@ const WORKSPACE = {
   linesRemoved: 7, changedLines: 127, survivedLines: 127, reverted: false, survivalBasis: 'session_end',
 };
 // The columns migration 006 adds, left out where a migration step compares every other value.
+// What the harness was given and its compactions (C2), a request's context reset, its gap and its tool calls (C1).
+const CONTEXT = {
+  contextWindowGiven: 200000, outputCapGiven: 32000, autoCompaction: 'on',
+  compactions: [{ at: T0 + 1500, kind: 'compact', before: 180000, after: 40000, requestId: 'req-2', source: 'harness' }, { at: T0 + 2200, kind: 'truncate', source: 'wire' }],
+};
+const CONTEXT_RESET = { kind: 'compact', droppedTokens: 140000 };
+const GAP = { ms: 5000, toolMs: 3000, inputWaitMs: 1500, inputBy: 'user', heldMs: 0, harnessMs: 500 };
+const TOOL_CALLS = [
+  { toolCallId: 'call_3f9a8b7c6d5e4f3a2b1c0d9e', exit: 0, ms: 1200, denied: false, timedOut: false, failed: false, truncated: true, truncatedBytes: 4096 },
+  { toolCallId: 'call_0a1b2c3d4e5f6a7b8c9d0e1f', exit: null, ms: null, denied: true, timedOut: false, failed: false, truncated: false },
+];
+// The columns migration 008 adds, left out where a migration step compares every other value.
+const WAVE_EIGHT_COLUMNS = ['context_window_given', 'output_cap_given', 'auto_compaction', 'compactions', 'context_reset', 'gap', 'tool_calls', 'tool_calls_omitted'];
 const WAVE_FOUR_COLUMNS = [
   'rtt_median_ms', 'clock_offset_ms', 'rtt_ms', 'queue_ms', 'upstream_ms', 'start_head', 'end_head', 'start_tree', 'end_tree',
   'files_changed', 'lines_added', 'lines_removed', 'changed_lines', 'survived_lines', 'reverted', 'survival_basis',
@@ -707,6 +732,56 @@ describe('trace back-office, end to end', () => {
     note('consent.afterDelete', afterDelete.changes.length);
   });
 
+  it('takes what the harness was given, its compactions, and each request\'s reset, gap and tool calls, and refuses them malformed', async () => {
+    const detail = async () => (await call('GET', `/v1/read/sessions/${installA.id}/sess-1`, { token: reader.token })).json;
+    const sessionKeys = Object.keys(CONTEXT);
+    const requestKeys = ['contextReset', 'gap', 'toolCalls', 'toolCallsOmitted'];
+    // X3. Sent without them: null, never absent.
+    const before = await detail();
+    assert.deepEqual(note('context.before', [sessionKeys.map((k) => [k in before.session, before.session[k]]), before.requests.map((r: any) => requestKeys.map((k) => [k in r, r[k]]))]),
+      [sessionKeys.map(() => [true, null]), before.requests.map(() => requestKeys.map(() => [true, null]))]);
+    // X1, X2. Sent with them.
+    const sent = await call('PUT', '/v1/batches/batch-context', { token: installA.token, body: {
+      schema: 1, sessions: [session({ finalStatus: 'done', endedAt: T0 + 6000, ...CONTEXT })],
+      requests: [{ ...requests[1], contextReset: CONTEXT_RESET, gap: GAP, toolCalls: TOOL_CALLS, toolCallsOmitted: 3 }],
+    } });
+    assert.equal(sent.status, 200, String(sent.buf));
+    const after = await detail();
+    assert.deepEqual(note('context.session', Object.fromEntries(sessionKeys.map((k) => [k, after.session[k]]))), CONTEXT);
+    const req2 = after.requests[1];
+    assert.deepEqual(note('context.request', [req2.contextReset, req2.gap, req2.toolCalls, req2.toolCallsOmitted]), [CONTEXT_RESET, GAP, TOOL_CALLS, 3]);
+    assert.deepEqual(after.requests[0].gap, null);
+    const listed = (await call('GET', '/v1/read/sessions?agent=agent-1', { token: reader.token })).json.sessions;
+    assert.deepEqual(listed.map((s: any) => [s.contextWindowGiven, s.autoCompaction, s.compactions?.length]), [[200000, 'on', 2]]);
+    const joined = (await call('GET', '/v1/read/requests?upstreamRequestId=up-222', { token: reader.token })).json.requests;
+    assert.deepEqual(joined.map((r: any) => [r.gap?.ms, r.toolCalls?.length, r.contextReset?.kind]), [[5000, 2, 'compact']]);
+    // X4. Sent again without them: kept.
+    const older = await call('PUT', '/v1/batches/batch-context-older', { token: installA.token, body: {
+      schema: 1, sessions: [session({ finalStatus: 'done', endedAt: T0 + 6000 })], requests: [requests[1]],
+    } });
+    assert.equal(older.status, 200, String(older.buf));
+    const kept = await detail();
+    assert.deepEqual(note('context.keptAfterOlder', [kept.session.contextWindowGiven, kept.session.compactions?.length, kept.requests[1].gap?.ms, kept.requests[1].toolCallsOmitted]),
+      [200000, 2, 5000, 3]);
+    // X5. Malformed: refused whole.
+    const bad: Array<[string, Record<string, unknown>, Record<string, unknown>]> = [
+      ['smallWindow', { contextWindowGiven: 512 }, {}],
+      ['compactionKind', { compactions: [{ at: T0, kind: 'squash', source: 'wire' }] }, {}],
+      ['gapAuthor', {}, { gap: { ...GAP, inputBy: 'Some Person' } }],
+      ['sixtyFifthCall', {}, { toolCalls: Array.from({ length: 65 }, () => TOOL_CALLS[0]) }],
+    ];
+    const codes: Array<[string, number, string]> = [];
+    for (const [name, s, q] of bad) {
+      const put = await call('PUT', `/v1/batches/batch-bad-context-${name}`, { token: installA.token, body: {
+        schema: 1, sessions: [session({ finalStatus: 'done', endedAt: T0 + 6000, outputCapGiven: 999, ...s })], requests: [{ ...requests[1], toolCallsOmitted: 99, ...q }],
+      } });
+      codes.push([name, put.status, put.json.error]);
+    }
+    assert.deepEqual(note('context.malformed', codes), bad.map(([n]) => [n, 422, 'invalid_batch']));
+    const still = await detail();
+    assert.deepEqual([still.session.outputCapGiven, still.requests[1].toolCallsOmitted], [32000, 3]);
+  });
+
   it('migrates a database that holds requests: down keeps every row but the marks, up reads them back unknown', async () => {
     // M1, M2. The server stopped, as an operator migrates; what it logged so far is kept for the artefact.
     const earlier = srv.log.slice();
@@ -719,7 +794,7 @@ describe('trace back-office, end to end', () => {
         const tables = (await client.query("SELECT tablename FROM pg_tables WHERE schemaname = 'public' AND tablename NOT IN ('schema_migrations', 'install_consent_changes') ORDER BY 1")).rows.map((r) => r.tablename as string);
         const out: Record<string, string> = {};
         for (const t of tables) {
-          const r = (await client.query(`SELECT count(*)::int AS n, md5(coalesce(string_agg(x, '|' ORDER BY x), '')) AS d FROM (SELECT (to_jsonb(t) - 'side' - 'environment' - 'events' - 'live_sessions' - 'start' - 'lost_demand' - 'lost_demand_omitted' - 'cancel' - 'task_ref' - 'masking_version' - 'mask_counts' - 'interventions' - ${WAVE_FOUR_COLUMNS.map((c) => `'${c}'`).join(' - ')} - 'consent' - 'consent_training' - 'consent_at')::text AS x FROM "${t}" t) s`)).rows[0];
+          const r = (await client.query(`SELECT count(*)::int AS n, md5(coalesce(string_agg(x, '|' ORDER BY x), '')) AS d FROM (SELECT (to_jsonb(t) - 'side' - 'environment' - 'events' - 'live_sessions' - 'start' - 'lost_demand' - 'lost_demand_omitted' - 'cancel' - 'task_ref' - 'masking_version' - 'mask_counts' - 'interventions' - ${WAVE_FOUR_COLUMNS.map((c) => `'${c}'`).join(' - ')} - 'consent' - 'consent_training' - 'consent_at' - ${WAVE_EIGHT_COLUMNS.map((c) => `'${c}'`).join(' - ')})::text AS x FROM "${t}" t) s`)).rows[0];
           out[t] = `${r.n}:${r.d}`;
         }
         return out;
@@ -753,7 +828,14 @@ describe('trace back-office, end to end', () => {
         (await client.query('SELECT consent_training AS t FROM installs WHERE consent_training IS NOT NULL')).rows.map((r) => r.t),
       ];
       assert.deepEqual(note('migrate.withData.waveFiveBefore', await waveFive()), [[['sess-1', 'true']], [false]]);
-      // C8, T6, K6, L6, E8, M2. Down through 007, 006, 005, 004, 003, then 002.
+      const waveEight = async () => [
+        (await client.query('SELECT session_id, context_window_given, auto_compaction, jsonb_array_length(compactions) AS n FROM sessions WHERE context_window_given IS NOT NULL OR compactions IS NOT NULL ORDER BY 1')).rows.map((r) => [r.session_id, r.context_window_given, r.auto_compaction, r.n]),
+        (await client.query("SELECT request_id, context_reset->>'kind' AS k, (gap->>'ms')::int AS g, jsonb_array_length(tool_calls) AS t, tool_calls_omitted AS o FROM requests WHERE context_reset IS NOT NULL OR gap IS NOT NULL OR tool_calls IS NOT NULL ORDER BY 1")).rows.map((r) => [r.request_id, r.k, r.g, r.t, r.o]),
+      ];
+      assert.deepEqual(note('migrate.withData.waveEightBefore', await waveEight()), [[['sess-1', CONTEXT.contextWindowGiven, 'on', 2]], [['req-2', 'compact', GAP.ms, 2, 3]]]);
+      // X6, C8, T6, K6, L6, E8, M2. Down through 008, 007, 006, 005, 004, 003, then 002.
+      note('migrate.withData.down008', runCli(['migrate', 'down'], env).trim());
+      assert.deepEqual(note('migrate.withData.afterDown008', await rows()), before, 'the down of 008 kept every row and value but its own');
       note('migrate.withData.down007', runCli(['migrate', 'down'], env).trim());
       assert.deepEqual(note('migrate.withData.afterDown007', await rows()), before, 'the down of 007 kept every row and value but its own');
       note('migrate.withData.down006', runCli(['migrate', 'down'], env).trim());
@@ -774,6 +856,7 @@ describe('trace back-office, end to end', () => {
       assert.deepEqual(note('migrate.withData.waveThreeAfterUp', await waveThree()), [[], []]);
       assert.deepEqual(note('migrate.withData.waveFourAfterUp', await waveFour()), [[], [], []]);
       assert.deepEqual(note('migrate.withData.waveFiveAfterUp', await waveFive()), [[], []]);
+      assert.deepEqual(note('migrate.withData.waveEightAfterUp', await waveEight()), [[], []]);
     } finally {
       // Up again and serving whatever this step found, so a failure here is this step's alone.
       runCli(['migrate', 'up'], env);
