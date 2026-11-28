@@ -325,7 +325,8 @@ from the window, or from an agent's drop file (`~/.tars/endpoint-keys/<name>.key
   read from the harness's own log by the watchers that already follow it (`services/tool-calls.ts`): codex 0.170's
   `CommandExecution` items and output lines (measured), pi 1.3.0's and 1.5.2's `toolResult` lines (read in their
   code). A line read late, after its request or the session's end, still lands on the session it happened in, and
-  moves its change sequence; one outside every session of the agent is dropped. The other harnesses' logs are not
+  moves its change sequence; one outside every session of the agent is dropped. Each call's row weighs in the store's
+  size and its session's bytes, by its id and its facts, so the cap counts it. The other harnesses' logs are not
   read yet: their requests' `toolMs` is null.
 
 Retention and a size cap come from Settings. The back-office reads it through `window.electronAPI.traces`. An external
@@ -342,9 +343,10 @@ consent, opted-in sessions are uploaded:
   `invalid_batch`), so it takes `side` before Tars sends it: the back-office is updated first. A batch it refuses
   stays unsent and is tried again on the backoff, never sent without the mark;
 - a session's `start` and `lostDemand`, a request's `cancel`, `gap` and `toolCalls` (at most 64 per request, and
-  never a call whose id is longer than the back-office's 128 characters, left out whole rather than cut; the rest
-  counted in `toolCallsOmitted`) and a turn's `interventions`, each with its line in the notice. The back-office
-  takes them before a Tars that sends them, as it took `side`;
+  only a call whose id is letters, digits and `_ . : -`, 1 to 128 of them: the id is the one string of a call, sent
+  unscrubbed, and the back-office caps it at 128; any other is left out whole, never cut; the rest counted in
+  `toolCallsOmitted`) and a turn's `interventions`, each with its line in the notice. The back-office takes them
+  before a Tars that sends them, as it took `side`;
 - resumed after a restart, with backoff.
 
 `deleteEverywhere` asks the back-office to delete all of it.
