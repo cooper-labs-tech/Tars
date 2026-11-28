@@ -18,7 +18,8 @@ import { opencodeToolPartOf, qwenToolPartOf, type ToolCallPart } from './tool-ca
  * - **opencode** keeps its sessions in SQLite, <XDG data home, else ~/.local/share>/opencode/opencode.db (the same
  *   rule on every system: it uses xdg-basedir; measured on macOS only). It is opened read-only, and only the parts of
  *   the sessions begun in the agent's folder since its traced session started are read, at most OPENCODE_PASS_ROWS_MAX a
- *   pass, each row once more each time it changes (a running call, then its end).
+ *   pass, each row once more each time it changes (a running call, then its end). Once opencode has exited cleanly,
+ *   the store itself is never opened: after the session's end it is read once from a copy, deleted at once.
  *
  * Read only, from the harness's own folders, never its configuration; a file or a database that is missing, or one
  * of another version, is nothing, and the other sessions are still read.
@@ -43,6 +44,8 @@ export interface HarnessToolLogsDeps {
   note: (agentId: string, part: ToolCallPart) => void;
   homeDir?: () => string;
   dataHome?: () => string;
+  /** Where a copy of opencode's store, closed cleanly, is read: os.tmpdir() in the app. */
+  tmpDir?: () => string;
   now?: () => number;
 }
 
@@ -60,6 +63,8 @@ const OPENCODE_START_SLACK_MS = 1000;
 export class HarnessToolLogs {
   private files = new Map<string, { offset: number; partial: string }>();
   private cursors = new Map<string, { at: number; id: string }>();
+  /** The store as each ended session's copy was read (its time and size): the same store is not copied again. */
+  private copied = new Map<string, string>();
 
   constructor(private deps: HarnessToolLogsDeps) {}
 
@@ -69,6 +74,7 @@ export class HarnessToolLogs {
     for (const s of this.deps.sessions()) {
       if (s.endedAt !== undefined && now - s.endedAt > ENDED_GRACE_MS) {
         this.cursors.delete(s.traceId);
+        this.copied.delete(s.traceId);
         continue;
       }
       try {
@@ -110,10 +116,28 @@ export class HarnessToolLogs {
   private readOpencode(s: FollowedSession): void {
     const file = path.join((this.deps.dataHome ?? defaultDataHome)(), 'opencode', 'opencode.db');
     if (!fs.existsSync(file)) return;
+    if (!walClosed(file)) { this.readOpencodeRows(file, s); return; }
     // Closed cleanly, a WAL store has no -wal: opening it, even read-only, makes the -wal and the -shm and leaves them
-    // behind (better-sqlite3 opens no `immutable` URI; measured on 28/11). Nothing new comes from an opencode that is
-    // not running: its calls were read while it ran.
-    if (walClosed(file)) return;
+    // behind (better-sqlite3 opens no `immutable` URI; measured on 28/11), so it is never opened. While its session
+    // runs, an opencode that is not running writes nothing new. After the session's end, the rows of its last moments,
+    // written since the last pass and moved into the store by its clean exit, are read from a copy in Tars's own
+    // temporary folder, deleted at once, and only once for a store that has not changed since (the Audit of #692).
+    if (s.endedAt === undefined) return;
+    const seen = storeSignature(file);
+    if (this.copied.get(s.traceId) === seen) return;
+    this.copied.set(s.traceId, seen);
+    const dir = fs.mkdtempSync(path.join((this.deps.tmpDir ?? os.tmpdir)(), 'tars-opencode-'));
+    try {
+      const copy = path.join(dir, 'opencode.db');
+      // A clone where the file system makes one (APFS, Btrfs): no second copy of the bytes.
+      fs.copyFileSync(file, copy, fs.constants.COPYFILE_FICLONE);
+      this.readOpencodeRows(copy, s);
+    } finally {
+      fs.rmSync(dir, { recursive: true, force: true });
+    }
+  }
+
+  private readOpencodeRows(file: string, s: FollowedSession): void {
     // A moment at most on a lock (a store not in WAL mode, mid-write): never the driver's 5 s on Tars's main thread.
     const db = new Database(file, { readonly: true, fileMustExist: true, timeout: OPENCODE_LOCK_WAIT_MS });
     try {
@@ -149,6 +173,12 @@ function walClosed(file: string): boolean {
   const fd = fs.openSync(file, 'r');
   try { fs.readSync(fd, header, 0, 20, 0); } finally { fs.closeSync(fd); }
   return header[18] === 2 && !fs.existsSync(`${file}-wal`);
+}
+
+/** A store as it is now: a write moves its time, and a checkpoint its time or its size. */
+function storeSignature(file: string): string {
+  const st = fs.statSync(file);
+  return `${st.mtimeMs}:${st.size}`;
 }
 
 function defaultDataHome(): string {

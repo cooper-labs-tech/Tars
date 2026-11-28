@@ -333,7 +333,9 @@ from the window, or from an agent's drop file (`~/.tars/endpoint-keys/<name>.key
   telemetry and `tool_result` lines; its session id, posted by the agent's hooks, a plain id before it joins the path),
   each byte once, at most 1 MiB a pass; opencode's database, opened read-only, the `tool` parts of the sessions begun
   in the agent's folder since the traced session started, at most 500 rows a pass, and never opened while opencode is
-  not running (its WAL store closed cleanly has no -wal, which a read-only open would make and leave). A harness not read (none other runs on an endpoint yet) leaves its requests' `toolMs` null.
+  not running (its WAL store closed cleanly has no -wal, which a read-only open would make and leave). After the
+  session's end, the rows opencode's clean exit moved into the store (its last call, written after the last pass) are
+  read once from a copy in Tars's temporary folder, deleted at once, so the last request keeps its tool time. A harness not read (none other runs on an endpoint yet) leaves its requests' `toolMs` null.
 
 Retention and a size cap come from Settings. The back-office reads it through `window.electronAPI.traces`. An external
 reader reads it through `GET /api/traces/*`, with its own token, as the reader's trace format tables.
