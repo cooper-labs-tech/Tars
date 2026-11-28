@@ -51,6 +51,14 @@ import { assertThrowaway } from '../../setup/throwaway-dirs';
  * 13. (Found reading the code, 27/11, before its fix.) opencode's database, locked by a write (a store not in WAL mode),
  *     holds a pass on Tars's main thread for the driver's own wait, 5 s: a pass waits a moment at most, reads nothing,
  *     and the next pass reads what is there.
+ * 14. (The Audit of #692, 28/11; measured.) opencode 1.19.6 keeps its store in WAL mode, and its clean close removes
+ *     the -wal and -shm: a read-only open then makes them again and leaves them behind (better-sqlite3 opens no
+ *     `immutable` URI). A store closed so must not be opened; one opencode runs must be read beside its writer, which
+ *     never meets SQLITE_BUSY for it.
+ * 15. (The Audit of #692.) Qwen's chat file is found from the session id the agent's own hooks posted: an id with a
+ *     separator or a dot-dot leads the path outside ~/.qwen, and that file is read.
+ * 16. (The Audit of #678.) A Qwen Code or opencode time with a fraction leaves as one, and the back office refuses the
+ *     batch: a call's time is a whole number.
  */
 
 assertThrowaway({ DATA_DIR, PRIVATE_DIR });
@@ -305,6 +313,74 @@ describe('the follower, opencode', () => {
     new Database(path.join(dataHome, 'opencode', 'opencode.db')).exec('CREATE TABLE other (x INTEGER)');
     expect(() => logs.tick()).not.toThrow();
     expect(noted.map(n => n.part.callId)).toEqual(['call_q']);
+  });
+});
+
+describe('opencode\'s WAL store', () => {
+  /** A store in WAL mode, as opencode 1.19.6 keeps it, with one call of the agent's session; its writer left open. */
+  function walStore(t: number): { file: string; writer: Database.Database } {
+    const file = path.join(dataHome, 'opencode', 'opencode.db');
+    fs.mkdirSync(path.dirname(file), { recursive: true });
+    const writer = new Database(file);
+    writer.pragma('journal_mode = WAL');
+    writer.exec(`CREATE TABLE session (id TEXT PRIMARY KEY, project_id TEXT, directory TEXT, title TEXT, time_created INTEGER, time_updated INTEGER);
+      CREATE TABLE part (id TEXT PRIMARY KEY, message_id TEXT, session_id TEXT, time_created INTEGER, time_updated INTEGER, data TEXT);`);
+    writer.prepare('INSERT INTO session VALUES (?, ?, ?, ?, ?, ?)').run('ses_mine', 'p', folder, 't', t - 500, t);
+    writer.prepare('INSERT INTO part VALUES (?, ?, ?, ?, ?, ?)').run('p1', 'm', 'ses_mine', t, t + 1, JSON.stringify(opencodePart('call_w', { status: 'completed', start: t, end: t + 5, exit: 0 })));
+    return { file, writer };
+  }
+
+  it('14: closed cleanly (no -wal), it is not opened, and no file is made beside it', () => {
+    const t = Date.now();
+    const { file, writer } = walStore(t);
+    writer.close();
+    expect(fs.readdirSync(path.dirname(file)), 'opencode\'s clean close').toEqual(['opencode.db']);
+    const { logs, noted } = follower(() => [{ traceId: 'tr2', agentId: 'o', harness: 'opencode', folder, startedAt: t - 1000 }]);
+    logs.tick();
+    expect(fs.readdirSync(path.dirname(file)), 'no -wal or -shm left behind').toEqual(['opencode.db']);
+    expect(noted).toEqual([]);
+  });
+
+  it('14: while opencode runs, it is read beside its writer, which never meets SQLITE_BUSY', () => {
+    const t = Date.now();
+    const { writer } = walStore(t);
+    const { logs, noted } = follower(() => [{ traceId: 'tr2', agentId: 'o', harness: 'opencode', folder, startedAt: t - 1000 }]);
+    let busy = 0;
+    const put = writer.prepare('INSERT OR REPLACE INTO part VALUES (?, ?, ?, ?, ?, ?)');
+    for (let i = 0; i < 40; i++) {
+      logs.tick();
+      try { put.run(`q${i}`, 'm', 'ses_mine', t, t + 10 + i, JSON.stringify(opencodePart(`call_${i}`, { status: 'completed', start: t, end: t + 1, exit: 0 }))); } catch (err) {
+        if ((err as { code?: string }).code === 'SQLITE_BUSY') busy++; else throw err;
+      }
+    }
+    logs.tick();
+    writer.close();
+    expect(busy).toBe(0);
+    expect(noted.map(n => n.part.callId)).toContain('call_w');
+    expect(new Set(noted.map(n => n.part.callId)).size).toBe(41);
+  });
+});
+
+describe('Qwen\'s session id', () => {
+  it('15: an id with a separator or a dot-dot reads nothing, never a file outside ~/.qwen', () => {
+    const t = Date.now();
+    // Where a crafted id would lead: ~/.qwen/projects/<folder>/chats/<id>.jsonl, four folders up, is the home.
+    fs.writeFileSync(path.join(home, 'outside.jsonl'), `${qwenTelemetry(t, 'call_out', { started: t, ms: 1, success: true })}\n`);
+    for (const id of ['../../../../outside', 'a/b', 'a\\b', '..']) {
+      const { logs, noted } = follower(() => [{ traceId: 'tr1', agentId: 'q', harness: 'qwen-code', folder, startedAt: t - 1000 }], () => id);
+      logs.tick();
+      expect(noted, JSON.stringify(id)).toEqual([]);
+    }
+  });
+});
+
+describe('whole numbers', () => {
+  it('16: Qwen Code\'s and opencode\'s times with fractions leave as whole numbers', () => {
+    const t = Date.now();
+    const q = qwenToolPartOf(qwenTelemetry(t, 'call_q', { started: t + 0.4, ms: 883.6, success: true }))!;
+    expect(toolCallRecordOf(q).ms).toBe(884);
+    const o = opencodeToolPartOf(opencodePart('call_o', { status: 'completed', start: t + 0.25, end: t + 835.7, exit: 0 }))!;
+    expect(toolCallRecordOf(o).ms).toBe(835);
   });
 });
 
