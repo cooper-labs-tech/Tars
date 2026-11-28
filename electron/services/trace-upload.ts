@@ -607,6 +607,10 @@ export class TraceUploader {
       start: t.start ? startWithin(scrub(t.start)) : undefined,
       lostDemand: Array.isArray(t.lost_demand) && t.lost_demand.length ? scrub(t.lost_demand) : undefined,
       lostDemandOmitted: Number(t.lost_demand_omitted ?? 0) > 0 ? Number(t.lost_demand_omitted) : undefined,
+      // What the harness was given at launch, and its compactions (trace feature C2): each its own line in the notice.
+      contextWindowGiven: opt(t.context_window_given as number), outputCapGiven: opt(t.output_cap_given as number),
+      autoCompaction: opt(t.auto_compaction as string), compactions: Array.isArray(t.compactions) ? t.compactions : [],
+      ...(Number(t.compactions_omitted) > 0 ? { compactionsOmitted: Number(t.compactions_omitted) } : {}),
     };
     const turns = doc.turns.map(x => ({
       turnId: String(x.turn_id), sessionId: traceId, index: Number(x.turn_index), startedAt: Number(x.started_at), endedAt: opt(x.ended_at as number),
@@ -645,7 +649,7 @@ export class TraceUploader {
         status: Number(r.status), error: r.error ? String(scrub(String(r.error))).slice(0, 2000) : undefined,
         finishReason: opt(r.finish_reason as string), reqBytes: Number(r.req_bytes), respBytes: Number(r.resp_bytes), messages,
         liveSessions: opt(r.live_sessions as number), rttMs: opt(r.rtt_ms as number), clockOffsetMs: opt(r.clock_offset_ms as number),
-        queueMs: opt(r.queue_ms as number), upstreamMs: opt(r.upstream_ms as number),
+        queueMs: opt(r.queue_ms as number), upstreamMs: opt(r.upstream_ms as number), contextReset: opt(r.context_reset as Record<string, unknown>),
         // A request the harness gave up while held: who cut it, why, when, and nothing delivered.
         ...(r.cancel ? { cancel: r.cancel } : {}),
         // How the time since the previous reply divides, and its tool calls: ids, numbers, exit codes and flags, never a

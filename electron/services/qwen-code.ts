@@ -232,15 +232,27 @@ function administratorSettings(file: string): Record<string, unknown> | null {
  * (underAdministrator); one that cannot be read stops the agent from starting,
  * and says why. qwen 0.25.2 docs. `systemFile` is for tests.
  */
-export function writeQwenAgentSettings(agentId: string, opts: { effort?: string; systemFile?: string } = {}, dataDir?: string): string {
+export function writeQwenAgentSettings(
+  agentId: string,
+  opts: { effort?: string; systemFile?: string; generation?: { contextWindow: number | null; outputCap: number | null; autoCompaction?: 'on' | 'off' | null } } = {},
+  dataDir?: string,
+): string {
   const name = SAFE_ID.test(agentId) ? agentId : agentId.replace(/[^A-Za-z0-9_-]/g, '_').slice(0, 80) || 'agent';
   const file = path.join(qwenDataDir(dataDir), 'agents', `${name}.json`);
   const admin = administratorSettings(opts.systemFile ?? qwenSystemSettingsFile(process.platform, process.env, dataDir));
   const effort = safeEffort(opts.effort);
+  // On an inference endpoint, its model's real limits (trace feature C2, measured on 0.25.2): the context window Qwen
+  // Code compacts against (200,000 for a model it does not know) and the cap it asks for.
+  const window = opts.generation?.contextWindow ?? null;
+  const cap = opts.generation?.outputCap ?? null;
+  const generationConfig = window !== null || cap !== null
+    ? { ...(window !== null ? { contextWindowSize: window } : {}), ...(cap !== null ? { samplingParams: { max_tokens: cap } } : {}) }
+    : undefined;
+  const model = { ...(effort ? { reasoningEffort: effort } : {}), ...(generationConfig ? { generationConfig } : {}) };
   const tars = {
     hooks: readJson<HookTable>(hooksFile(dataDir), {}),
     mcpServers: qwenMcpServers(dataDir),
-    ...(effort ? { model: { reasoningEffort: effort } } : {}),
+    ...(Object.keys(model).length ? { model } : {}),
     general: { enableAutoUpdate: false },
   };
   writeJson(file, admin ? underAdministrator(tars, admin) : tars);

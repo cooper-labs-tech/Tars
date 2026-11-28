@@ -190,14 +190,14 @@ async function answerChat(body, res, marker, chunkDelayMs = 0, emptyFirstChunk =
   return { lastChunkAt: Date.now(), requestId: `standin-${id}` };
 }
 
-function answerResponses(body, res, marker) {
+function answerResponses(body, res, marker, usageFromInput = false) {
   const d = decide(body, responsesToolResult(body.input), marker);
   const calls = d.calls ?? (d.call ? [d.call] : []);
   const id = `resp_${randomBytes(6).toString('hex')}`;
   const output = calls.length
     ? calls.map((c) => ({ type: 'function_call', id: `fc_${randomBytes(6).toString('hex')}`, call_id: c.id, name: c.name, arguments: c.arguments, status: 'completed' }))
     : [{ type: 'message', id: `msg_${randomBytes(6).toString('hex')}`, role: 'assistant', status: 'completed', content: [{ type: 'output_text', text: d.text, annotations: [] }] }];
-  const response = { id, object: 'response', created_at: Math.floor(Date.now() / 1000), model: MODEL_ID, status: 'completed', output, usage: RESP_USAGE };
+  const response = { id, object: 'response', created_at: Math.floor(Date.now() / 1000), model: MODEL_ID, status: 'completed', output, usage: usageFromInput ? { ...RESP_USAGE, input_tokens: Math.ceil(JSON.stringify(body.input ?? '').length / 4) } : RESP_USAGE };
   if (!body.stream) {
     res.writeHead(200, { 'Content-Type': 'application/json', 'X-Request-Id': `standin-${id}` });
     res.end(JSON.stringify(response));
@@ -229,8 +229,10 @@ function answerResponses(body, res, marker) {
  * request) and `send` (when it began its headers) as epoch ms on a clock `skewMs` ahead of this one, `queue` (its wait
  * for a slot: `queueMs`, the full wait `queueOn429Ms` on a 429, 0 on any other error) and `upstream` (`upstreamMs`, on
  * a model's answer only; absent when the endpoint answers by itself).
+ * `usageFromInput`: a Responses answer counts its prompt as the history's JSON length over 4, so a history that a
+ * harness compacted counts fewer tokens than the one before it.
  */
-export function startStandIn({ port = 0, key = '', log = '', failFirst = [], chunkDelayMs = 0, emptyFirstChunk = false, serverTiming = null } = {}) {
+export function startStandIn({ port = 0, key = '', log = '', failFirst = [], chunkDelayMs = 0, emptyFirstChunk = false, serverTiming = null, usageFromInput = false } = {}) {
   const marker = `TARS-PROBE-${randomBytes(4).toString('hex')}`;
   const failing = [...failFirst];
   const note = (entry) => { if (log) fs.appendFileSync(log, `${JSON.stringify({ at: Date.now(), ...entry })}\n`); };
@@ -273,7 +275,7 @@ export function startStandIn({ port = 0, key = '', log = '', failFirst = [], chu
         const done = await answerChat(asObj(body), res, marker, chunkDelayMs, emptyFirstChunk);
         note({ answered: 200, ...(done ?? {}) });
       } else if (req.method === 'POST' && url === '/v1/responses') {
-        answerResponses(asObj(body), res, marker);
+        answerResponses(asObj(body), res, marker, usageFromInput);
       } else {
         res.writeHead(404, { 'Content-Type': 'application/json' });
         res.end(JSON.stringify({ error: { message: `no route ${req.method} ${url}` } }));
