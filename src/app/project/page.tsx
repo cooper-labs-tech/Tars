@@ -9,6 +9,8 @@ import { useElectronAgents } from '@/hooks/useElectron';
 import { projectNameOf, useChats } from '@/hooks/useChats';
 import { sectionOf } from '@/lib/chat-sections';
 import { AgentSquare, StateWord, clockOf } from '@/components/NewShell/chat-bits';
+import { useLoadProjects } from '@/hooks/useLoadWindow';
+import { LoadAgentsCard } from '@/components/LoadWindow/LoadAgentsCard';
 
 /**
  * A project's page, under Projects (`Shell · chats · project page, from the
@@ -29,6 +31,7 @@ function ProjectPageInner() {
   const asked = useSearchParams().get('path');
   const { chats, at } = useChats();
   const { agents, isLoading } = useElectronAgents();
+  const { view: loadView } = useLoadProjects();
 
   const project = useMemo(() => {
     if (asked) return asked;
@@ -47,7 +50,10 @@ function ProjectPageInner() {
   const open = mine.filter(chat => { const s = sectionOf(chat, now); return s !== 'Snoozed' && s !== 'Settled'; }).sort((a, b) => a.number - b.number);
   const snoozed = mine.filter(chat => sectionOf(chat, now) === 'Snoozed').length;
   const settled = mine.filter(chat => sectionOf(chat, now) === 'Settled').length;
-  const team = agents.filter(agent => agent.projectPath === project);
+  // The project's load agents have their own card (`Shell · Load window · load agents on the project page`), not the team.
+  const loadProject = loadView?.projects.find(p => p.path === project);
+  const loadIds = new Set(loadProject?.agents.map(a => a.id) ?? []);
+  const team = agents.filter(agent => agent.projectPath === project && !loadIds.has(agent.id));
   const live = team.filter(agent => !!agent.ptyId).length;
 
   return (
@@ -114,6 +120,8 @@ function ProjectPageInner() {
               </div>
             ))}
           </section>
+
+          {loadProject && <LoadAgentsCard project={loadProject} />}
 
           <section aria-label="Dashboard terminals" className="border border-border bg-card">
             <div className="flex items-center justify-between px-4 pt-3 pb-2">
