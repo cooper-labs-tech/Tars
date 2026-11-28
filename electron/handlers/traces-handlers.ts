@@ -309,7 +309,7 @@ export function registerTracesHandlers(deps: TracesHandlerDeps): void {
       'their timing, token counts, the harness and its version, the model and the endpoint\'s name',
       'who wrote each turn (you, an orchestrator, an agent, a channel) and how the session ended (branch, commit)',
       'an install id, to delete everything this install sent',
-      'This install\'s id, with every request to an inference endpoint whose install header you turned on, only while you share and this install is registered, and never after a deletion: so that endpoint can tie its own copy of those requests to this install, and delete it with the rest',
+      'the install\'s id, with every request to an inference endpoint whose install header you turned on, only while you share and this install is registered, and never after a deletion: so that endpoint can tie its own copy of those requests to this install, and delete it with the rest',
     ],
     stays: ['your keys and Tars\'s tokens (masked before upload)', 'sessions of projects and agents not opted in', 'the endpoints\' keys and addresses', 'anything outside traced sessions'],
     scrubbing: {
