@@ -929850,6 +929850,216 @@
         },
         {
           "type": "frame",
+          "id": "J3Z6R",
+          "name": "state on, not saved yet: sent once saved",
+          "width": "fill_container",
+          "fill": "$bg",
+          "stroke": "$border-strong",
+          "strokeWidth": 1,
+          "layout": "vertical",
+          "gap": 12,
+          "padding": [
+            14,
+            16
+          ],
+          "children": [
+            {
+              "type": "text",
+              "id": "T8cLgv",
+              "name": "caption",
+              "fill": "$text-muted",
+              "content": "ON, NOT SAVED YET: SENT ONCE SAVED",
+              "lineHeight": 1.4,
+              "fontFamily": "$font-mono",
+              "fontSize": 10,
+              "fontWeight": "normal"
+            },
+            {
+              "type": "frame",
+              "id": "mn15s",
+              "name": "headers",
+              "width": "fill_container",
+              "gap": 12,
+              "alignItems": "center",
+              "children": [
+                {
+                  "type": "frame",
+                  "id": "UXe6y",
+                  "name": "l",
+                  "width": 620,
+                  "layout": "vertical",
+                  "gap": 2,
+                  "children": [
+                    {
+                      "type": "text",
+                      "id": "x5BzPQ",
+                      "name": "t",
+                      "fill": "$text-primary",
+                      "content": "Send session headers",
+                      "lineHeight": 1.4,
+                      "fontFamily": "$font-ui",
+                      "fontSize": 12.5,
+                      "fontWeight": "normal"
+                    },
+                    {
+                      "type": "text",
+                      "id": "uyx26",
+                      "name": "t",
+                      "fill": "$text-secondary",
+                      "textGrowth": "fixed-width",
+                      "width": 620,
+                      "content": "Adds X-Session-Id and X-Agent-Id to every request, for a server that groups requests into sessions. Off by default: nothing about your agents goes with a request unless you turn it on.",
+                      "lineHeight": 1.4,
+                      "fontFamily": "$font-ui",
+                      "fontSize": 11,
+                      "fontWeight": "normal"
+                    }
+                  ]
+                },
+                {
+                  "type": "frame",
+                  "id": "YHgpu",
+                  "name": "sp",
+                  "width": "fill_container",
+                  "height": 1
+                },
+                {
+                  "type": "frame",
+                  "id": "w1s60",
+                  "name": "Toggle on",
+                  "width": 30,
+                  "height": 16,
+                  "fill": "$accent",
+                  "stroke": "$accent",
+                  "strokeWidth": 1,
+                  "layout": "none",
+                  "children": [
+                    {
+                      "type": "rectangle",
+                      "id": "BoZNq",
+                      "x": 16,
+                      "y": 1,
+                      "name": "knob",
+                      "fill": "$bg",
+                      "width": 12,
+                      "height": 12
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "type": "frame",
+              "id": "Glb7N",
+              "name": "install id",
+              "width": "fill_container",
+              "gap": 12,
+              "alignItems": "center",
+              "children": [
+                {
+                  "type": "frame",
+                  "id": "aQcqR",
+                  "name": "l",
+                  "width": 620,
+                  "layout": "vertical",
+                  "gap": 2,
+                  "children": [
+                    {
+                      "type": "text",
+                      "id": "IyOHA",
+                      "name": "t",
+                      "fill": "$text-primary",
+                      "content": "Send install id",
+                      "lineHeight": 1.4,
+                      "fontFamily": "$font-ui",
+                      "fontSize": 12.5,
+                      "fontWeight": "normal"
+                    },
+                    {
+                      "type": "text",
+                      "id": "vtXbh",
+                      "name": "t",
+                      "fill": "$text-secondary",
+                      "textGrowth": "fixed-width",
+                      "width": 620,
+                      "content": "Adds X-Install-Id, this install's back-office id, to every request while you share traces and Tars is registered with your back-office, so deleting everything there can reach this endpoint's own copy. Needs the session headers. Never sent after a deletion.",
+                      "lineHeight": 1.4,
+                      "fontFamily": "$font-ui",
+                      "fontSize": 11,
+                      "fontWeight": "normal"
+                    },
+                    {
+                      "type": "frame",
+                      "id": "T1rgk",
+                      "name": "state",
+                      "gap": 6,
+                      "padding": [
+                        4,
+                        0,
+                        0,
+                        0
+                      ],
+                      "alignItems": "center",
+                      "children": [
+                        {
+                          "type": "rectangle",
+                          "id": "JevmL",
+                          "name": "square",
+                          "fill": "$status-waiting",
+                          "width": 6,
+                          "height": 6
+                        },
+                        {
+                          "type": "text",
+                          "id": "bVWAY",
+                          "name": "t",
+                          "fill": "$status-waiting",
+                          "content": "sent once saved: you share traces and Tars is registered with your back-office",
+                          "lineHeight": 1.4,
+                          "fontFamily": "$font-mono",
+                          "fontSize": 10.5,
+                          "fontWeight": "normal"
+                        }
+                      ]
+                    }
+                  ]
+                },
+                {
+                  "type": "frame",
+                  "id": "NMGhY",
+                  "name": "sp",
+                  "width": "fill_container",
+                  "height": 1
+                },
+                {
+                  "type": "frame",
+                  "id": "zmNwx",
+                  "name": "Toggle on",
+                  "width": 30,
+                  "height": 16,
+                  "fill": "$accent",
+                  "stroke": "$accent",
+                  "strokeWidth": 1,
+                  "layout": "none",
+                  "children": [
+                    {
+                      "type": "rectangle",
+                      "id": "mSaeN",
+                      "x": 16,
+                      "y": 1,
+                      "name": "knob",
+                      "fill": "$bg",
+                      "width": 12,
+                      "height": 12
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "type": "frame",
           "id": "XwktW",
           "name": "state disabled: the session headers are off",
           "width": "fill_container",
@@ -930688,7 +930898,7 @@
           "fill": "$text-secondary",
           "textGrowth": "fixed-width",
           "width": 1340,
-          "content": "Beside the session headers, in the endpoint's form, the owner's only: no agent turns it on. Off by default. Turning the session headers off turns it off, and while they are off it cannot be turned on. Its line follows main's own answer (the upload state's installIdSent): \"sent now\" only when main sends the id. When main does not, the line says the reason the window can tell: a deletion not confirmed yet, sharing off, or Tars not registered with the back-office; and when none of these is the reason (an id main will not send, or an install a deletion left behind), \"not sent now: Tars is not sending it, and its log says why\".",
+          "content": "Beside the session headers, in the endpoint's form, the owner's only: no agent turns it on. Off by default. Turning the session headers off turns it off, and while they are off it cannot be turned on. Its line follows main's own answer (the upload state's installIdSent), which is the install's, not this endpoint's: while the switch differs from what is saved (turned on and not saved yet, or a new endpoint), nothing goes to this endpoint yet, and the line says \"sent once saved\". Saved, \"sent now\" only when main sends the id. When main does not, the line says the reason the window can tell: a deletion not confirmed yet, sharing off, or Tars not registered with the back-office; and when none of these is the reason (an id main will not send, or an install a deletion left behind), \"not sent now: Tars is not sending it, and its log says why\".",
           "lineHeight": 1.4,
           "fontFamily": "$font-ui",
           "fontSize": 12,
@@ -931113,6 +931323,216 @@
                     {
                       "type": "rectangle",
                       "id": "L9qe6R",
+                      "x": 16,
+                      "y": 1,
+                      "name": "knob",
+                      "fill": "$bg",
+                      "width": 12,
+                      "height": 12
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "type": "frame",
+          "id": "Lb8KZ",
+          "name": "state on, not saved yet: sent once saved",
+          "width": "fill_container",
+          "fill": "$bg",
+          "stroke": "$border-strong",
+          "strokeWidth": 1,
+          "layout": "vertical",
+          "gap": 12,
+          "padding": [
+            14,
+            16
+          ],
+          "children": [
+            {
+              "type": "text",
+              "id": "hqJZu",
+              "name": "caption",
+              "fill": "$text-muted",
+              "content": "ON, NOT SAVED YET: SENT ONCE SAVED",
+              "lineHeight": 1.4,
+              "fontFamily": "$font-mono",
+              "fontSize": 10,
+              "fontWeight": "normal"
+            },
+            {
+              "type": "frame",
+              "id": "u1f3G",
+              "name": "headers",
+              "width": "fill_container",
+              "gap": 12,
+              "alignItems": "center",
+              "children": [
+                {
+                  "type": "frame",
+                  "id": "Q4T0S",
+                  "name": "l",
+                  "width": 620,
+                  "layout": "vertical",
+                  "gap": 2,
+                  "children": [
+                    {
+                      "type": "text",
+                      "id": "l1bYuH",
+                      "name": "t",
+                      "fill": "$text-primary",
+                      "content": "Send session headers",
+                      "lineHeight": 1.4,
+                      "fontFamily": "$font-ui",
+                      "fontSize": 12.5,
+                      "fontWeight": "normal"
+                    },
+                    {
+                      "type": "text",
+                      "id": "X9soW",
+                      "name": "t",
+                      "fill": "$text-secondary",
+                      "textGrowth": "fixed-width",
+                      "width": 620,
+                      "content": "Adds X-Session-Id and X-Agent-Id to every request, for a server that groups requests into sessions. Off by default: nothing about your agents goes with a request unless you turn it on.",
+                      "lineHeight": 1.4,
+                      "fontFamily": "$font-ui",
+                      "fontSize": 11,
+                      "fontWeight": "normal"
+                    }
+                  ]
+                },
+                {
+                  "type": "frame",
+                  "id": "ePtnt",
+                  "name": "sp",
+                  "width": "fill_container",
+                  "height": 1
+                },
+                {
+                  "type": "frame",
+                  "id": "GW0f4",
+                  "name": "Toggle on",
+                  "width": 30,
+                  "height": 16,
+                  "fill": "$accent",
+                  "stroke": "$accent",
+                  "strokeWidth": 1,
+                  "layout": "none",
+                  "children": [
+                    {
+                      "type": "rectangle",
+                      "id": "P5NXq2",
+                      "x": 16,
+                      "y": 1,
+                      "name": "knob",
+                      "fill": "$bg",
+                      "width": 12,
+                      "height": 12
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "type": "frame",
+              "id": "yoqv6",
+              "name": "install id",
+              "width": "fill_container",
+              "gap": 12,
+              "alignItems": "center",
+              "children": [
+                {
+                  "type": "frame",
+                  "id": "Yl4vM",
+                  "name": "l",
+                  "width": 620,
+                  "layout": "vertical",
+                  "gap": 2,
+                  "children": [
+                    {
+                      "type": "text",
+                      "id": "H6s1l",
+                      "name": "t",
+                      "fill": "$text-primary",
+                      "content": "Send install id",
+                      "lineHeight": 1.4,
+                      "fontFamily": "$font-ui",
+                      "fontSize": 12.5,
+                      "fontWeight": "normal"
+                    },
+                    {
+                      "type": "text",
+                      "id": "FKxdp",
+                      "name": "t",
+                      "fill": "$text-secondary",
+                      "textGrowth": "fixed-width",
+                      "width": 620,
+                      "content": "Adds X-Install-Id, this install's back-office id, to every request while you share traces and Tars is registered with your back-office, so deleting everything there can reach this endpoint's own copy. Needs the session headers. Never sent after a deletion.",
+                      "lineHeight": 1.4,
+                      "fontFamily": "$font-ui",
+                      "fontSize": 11,
+                      "fontWeight": "normal"
+                    },
+                    {
+                      "type": "frame",
+                      "id": "KfdKL",
+                      "name": "state",
+                      "gap": 6,
+                      "padding": [
+                        4,
+                        0,
+                        0,
+                        0
+                      ],
+                      "alignItems": "center",
+                      "children": [
+                        {
+                          "type": "rectangle",
+                          "id": "ECnX2",
+                          "name": "square",
+                          "fill": "$status-waiting",
+                          "width": 6,
+                          "height": 6
+                        },
+                        {
+                          "type": "text",
+                          "id": "hX52Y",
+                          "name": "t",
+                          "fill": "$status-waiting",
+                          "content": "sent once saved: you share traces and Tars is registered with your back-office",
+                          "lineHeight": 1.4,
+                          "fontFamily": "$font-mono",
+                          "fontSize": 10.5,
+                          "fontWeight": "normal"
+                        }
+                      ]
+                    }
+                  ]
+                },
+                {
+                  "type": "frame",
+                  "id": "SMgrO",
+                  "name": "sp",
+                  "width": "fill_container",
+                  "height": 1
+                },
+                {
+                  "type": "frame",
+                  "id": "y1OK2",
+                  "name": "Toggle on",
+                  "width": 30,
+                  "height": 16,
+                  "fill": "$accent",
+                  "stroke": "$accent",
+                  "strokeWidth": 1,
+                  "layout": "none",
+                  "children": [
+                    {
+                      "type": "rectangle",
+                      "id": "L9vHNP",
                       "x": 16,
                       "y": 1,
                       "name": "knob",
@@ -931966,7 +932386,7 @@
           "fill": "$text-secondary",
           "textGrowth": "fixed-width",
           "width": 1340,
-          "content": "Beside the session headers, in the endpoint's form, the owner's only: no agent turns it on. Off by default. Turning the session headers off turns it off, and while they are off it cannot be turned on. Its line follows main's own answer (the upload state's installIdSent): \"sent now\" only when main sends the id. When main does not, the line says the reason the window can tell: a deletion not confirmed yet, sharing off, or Tars not registered with the back-office; and when none of these is the reason (an id main will not send, or an install a deletion left behind), \"not sent now: Tars is not sending it, and its log says why\".",
+          "content": "Beside the session headers, in the endpoint's form, the owner's only: no agent turns it on. Off by default. Turning the session headers off turns it off, and while they are off it cannot be turned on. Its line follows main's own answer (the upload state's installIdSent), which is the install's, not this endpoint's: while the switch differs from what is saved (turned on and not saved yet, or a new endpoint), nothing goes to this endpoint yet, and the line says \"sent once saved\". Saved, \"sent now\" only when main sends the id. When main does not, the line says the reason the window can tell: a deletion not confirmed yet, sharing off, or Tars not registered with the back-office; and when none of these is the reason (an id main will not send, or an install a deletion left behind), \"not sent now: Tars is not sending it, and its log says why\".",
           "lineHeight": 1.4,
           "fontFamily": "$font-ui",
           "fontSize": 12,

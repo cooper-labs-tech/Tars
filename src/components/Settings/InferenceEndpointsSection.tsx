@@ -44,8 +44,12 @@ const countOf = (m: Record<string, string>) => {
  * "sent now" only when the upload state's `installIdSent` says so (trace-upload.ts currentInstallId). Otherwise the
  * reason the window can tell (a deletion not confirmed, sharing off, not registered), else that Tars is not sending
  * it (an id main will not send, an install a deletion left behind), and the app's log says why.
+ * `installIdSent` is the install's answer, not this endpoint's: while the form's switch differs from what is saved
+ * (turned on and not saved yet, or a new endpoint), nothing goes to this endpoint yet, so "sent once saved" (the
+ * Audit's Info on #686 at 17719d981).
  */
-function installLineOf(u: UploadState): { word: string; tone: StatusTone } {
+function installLineOf(u: UploadState, unsaved: boolean): { word: string; tone: StatusTone } {
+  if (u.installIdSent && unsaved) return { word: 'sent once saved: you share traces and Tars is registered with your back-office', tone: 'waiting' };
   if (u.installIdSent) return { word: 'sent now: you share traces and Tars is registered with your back-office', tone: 'running' };
   if (u.deletionOwed) return { word: 'not sent now: a deletion is not confirmed yet', tone: 'waiting' };
   if (!u.consentAt) return { word: 'not sent now: sharing is off. It goes again once you share traces', tone: 'waiting' };
@@ -588,7 +592,7 @@ function EndpointForm({ endpoint, onDone }: { endpoint?: EndpointView; onDone: (
           {!sessionHeaders ? (
             <p className="mt-1 font-mono text-[10.5px] text-muted-foreground">turn on the session headers first: the install id goes only with them</p>
           ) : installHeader && upload ? (
-            <div className="mt-1"><State wrap {...installLineOf(upload)} /></div>
+            <div className="mt-1"><State wrap {...installLineOf(upload, (sessionHeaders && installHeader) !== (endpoint?.sendInstallHeader ?? false))} /></div>
           ) : null}
         </div>
         <Toggle label="Send install id" enabled={sessionHeaders && installHeader} disabled={!sessionHeaders} onChange={() => setInstallHeader(v => !v)} />
