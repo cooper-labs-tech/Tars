@@ -20,6 +20,7 @@ import { agentStatusOnExit, isQuitting } from '../../core/quit-state';
 import { clearStop, noteRestartAfterStop, stopAgent, stopReasonOf } from '../../core/agent-stop';
 import { diskRefusal, freeSpace } from '../../core/disk-space';
 import { noteWaker, wakeFromSleep } from '../../core/agent-asleep';
+import { VIA_OF_CHANNEL, clearSessionStart, noteSessionStart, type StartNote } from '../../core/session-start';
 import type { AgentWakeVia } from '../../types';
 import { sessionStarted, SENDER_WAIT_MS, launchBegins, launchAbandoned, dialogShown, takeSlot } from '../../core/agent-launch';
 import { getAllProviders, getProvider, isValidProvider } from '../../providers';
@@ -215,6 +216,25 @@ async function spawnAgentSession(
   } finally {
     slot.release();
   }
+}
+
+/**
+ * Why a session started through the API opens its terminal: a task that came with a ref, a channel's message, the
+ * owner's own words (their answer on Telegram, or relayed), a start with no task, or a message handed over by an agent
+ * or by Tars. By kind only: who sent it is never kept.
+ */
+function apiStartNote(agent: AgentStatus, prompt: string, opts: SpawnOpts): StartNote {
+  const sender = opts.sender;
+  const asked = opts.taskRef ? agent.taskQueue?.find(r => r.ref === opts.taskRef)?.requesterAgentId : undefined;
+  const asker = asked ?? (sender?.kind === 'agent' ? sender.id : undefined);
+  const requester = asker ? { requesterAgentId: asker } : {};
+  const via = sender?.kind === 'channel' ? VIA_OF_CHANNEL[sender.channel] : 'api';
+  if (opts.taskRef) return { trigger: 'task', via, taskRef: opts.taskRef, ...requester };
+  if (sender?.kind === 'channel') return { trigger: 'channel', via };
+  if (sender?.kind === 'user') return { trigger: 'owner', via: VIA_OF_CHANNEL[sender.via] };
+  if (sender?.kind === 'owner-relay') return { trigger: 'owner', via: 'relay' };
+  if (!prompt.trim()) return { trigger: 'start', via, ...requester };
+  return { trigger: 'task', via, ...requester };
 }
 
 async function spawnAgentSessionInSlot(
@@ -461,6 +481,8 @@ async function spawnAgentSessionInSlot(
   // after a /start typed its message into a claude not yet reading, and it was
   // lost 4 times in 5 while the caller heard 200 (the Audit, gate of #134).
   const launch = launchBegins(agent.id, { withTask: !!prompt.trim() });
+  // Why this terminal opens, for its traced session (core/session-start.ts).
+  noteSessionStart(agent.id, apiStartNote(agent, prompt, opts));
   let ptyProcess: ReturnType<typeof spawnAgentPty>;
   try {
     ptyProcess = spawnAgentPty({
@@ -476,6 +498,8 @@ async function spawnAgentSessionInSlot(
     });
   } catch (err) {
     launchAbandoned(agent.id, launch);
+    // No terminal opened: its note goes with it (core/session-start.ts).
+    clearSessionStart(agent.id);
     // No terminal left on the machine: the agent says why, as the 503 does (core/no-terminal.ts).
     markNoTerminal(agent, err, saveAgents);
     throw err;
@@ -1005,7 +1029,7 @@ function busyText(agent: AgentStatus, ref?: string): string {
  */
 async function waitTurn(agent: AgentStatus, ref: string): Promise<boolean> {
   for (;;) {
-    if (!agents.has(agent.id)) { oneTaskQueue.cancel(ref, 'its agent was removed'); return false; }
+    if (!agents.has(agent.id)) { oneTaskQueue.cancel(ref, 'its agent was removed', 'agent_removed'); return false; }
     if (!oneTaskQueue.find(ref)) return false;
     if (oneTaskQueue.takeTurn(agent.id, ref, terminalTurn(agent))) return true;
     await new Promise((r) => setTimeout(r, TASK_WAIT_STEP_MS));
@@ -1726,7 +1750,7 @@ export function replayQueuedItem(item: QueuedTask): void {
   const ctx = replayContext;
   const agent = agents.get(item.agentId);
   if (!ctx || !agent) {
-    oneTaskQueue.cancel(item.ref, agent ? 'Tars could not hand it over again' : 'its agent was removed');
+    oneTaskQueue.cancel(item.ref, agent ? 'Tars could not hand it over again' : 'its agent was removed', agent ? 'not_handed_again' : 'agent_removed');
     return;
   }
   const replay = item.replay as DispatchReplay | RunTaskReplay | undefined;
@@ -1750,7 +1774,7 @@ export function replayQueuedItem(item: QueuedTask): void {
     })();
     return;
   }
-  oneTaskQueue.cancel(item.ref, 'Tars could not hand it over again');
+  oneTaskQueue.cancel(item.ref, 'Tars could not hand it over again', 'not_handed_again');
 }
 
 /** Waits for a queued dispatch's turn, then hands it over, its turn kept until it is in the terminal or given up. */

@@ -459,6 +459,8 @@ function initApiServer() {
     power: powerMonitor,
     systemVersion: () => process.getSystemVersion(),
     locale: () => app.getSystemLocale(),
+    packaged: app.isPackaged,
+    queue: oneTaskQueue,
     emit: (channel, payload) => { const w = getMainWindow(); if (w && !w.isDestroyed()) w.webContents.send(channel, payload); },
   });
   moveLocalKanbanToHermes();

@@ -11,7 +11,11 @@ import { updateSharedJsonSync } from '../utils/shared-file';
 import { startEndpointProxy, stopEndpointProxy, type HoldEvent, type ProxySession } from './endpoint-proxy';
 import { endpointLaunchFor, piModelsWithEndpoint, type EndpointLaunch } from './endpoint-harness';
 import { ENDPOINT_HARNESSES, endpointTarget, ensureDropFolder, transportOf } from './inference-endpoints';
-import { TraceStore, type TraceEvent } from './trace-store';
+import { TraceStore, boundOutcomeTasks, type TraceEvent, type TraceStart, type TraceTask } from './trace-store';
+import { takeSessionStart } from '../core/session-start';
+import type { OneTaskQueue, QueueEvent } from '../core/one-task';
+import { liveTaskLedger } from './task-ledger';
+import { chooseGh, prStatesOfProjects, type PrState } from './github-watch';
 import { defaultTracePairs, traceDecision } from './trace-gate';
 import { machineFacts, nodeEnvironmentIo, sessionEnvironment, type MachineFacts } from './session-environment';
 import { harnessVersions } from './harness-version';
@@ -68,6 +72,14 @@ export interface TracesDeps {
   systemVersion?(): string;
   /** The system's language and region (Electron's app.getSystemLocale). */
   locale?(): string;
+  /** A packaged build (app.isPackaged): an E2E's stand-in gh is never taken there (github-watch.ts testGhOf). */
+  packaged?: boolean;
+  /**
+   * The agents' queue (core/one-task.ts oneTaskQueue): a task's queue times, and what the queue tells a traced
+   * session. Handed in rather than imported, so this module stays clear of the provider registry the queue's module
+   * loads: a require cycle (a provider loads this module) that types cannot see and that fails at runtime.
+   */
+  queue?: Pick<OneTaskQueue, 'lookup' | 'busyRun' | 'onEvent'>;
 }
 
 export interface PowerSource {
@@ -325,7 +337,15 @@ export function clearPreRegistered(id: string): void {
 }
 const agentOf = (id: string): AgentStatus | undefined => deps?.getAgent(id) ?? preRegistered.get(id);
 
-interface LiveSession extends ProxySession { harness: string; model: string; startedAt: number }
+interface LiveSession extends ProxySession {
+  harness: string;
+  model: string;
+  startedAt: number;
+  /** The ref of the task it started for, if any. */
+  startRef?: string;
+  /** The queued tasks the ledger named while it ran: their ref, when they entered the line and when their turn came. */
+  named: Map<string, { ref: string; queuedAt: number; handedAt: number }>;
+}
 const sessions = new Map<string, LiveSession>();
 const waits = new Map<string, Extract<HoldEvent, { since: number }>>();
 
@@ -465,11 +485,26 @@ export function sweepTraces(): void {
 /** What the runtime reads and writes through (the settings, the fleet, the window), without starting anything. */
 export function configureTraces(d: TracesDeps): void {
   deps = d;
+  // What the agents' queues tell a traced session: a task named once its turn came, a task dropped never to start.
+  queueEvents?.();
+  queueEvents = d.queue?.onEvent(onQueueEvent) ?? null;
+}
+
+let queueEvents: (() => void) | null = null;
+let prTimer: NodeJS.Timeout | null = null;
+
+/** How often the pull requests of ended sessions are read: every 5 minutes, or an E2E's own pace (200 ms at least). */
+function prEveryMs(): number {
+  const asked = Number(process.env.DOROTHY_PR_EVERY_MS);
+  return process.env.DOROTHY_E2E === '1' && deps?.packaged !== true && Number.isFinite(asked) && asked >= 200 ? asked : 5 * 60_000;
 }
 
 export function startTracesRuntime(d: TracesDeps): void {
   configureTraces(d);
   watchPower(d.power);
+  chooseGh(d.packaged === true);
+  prTimer = setInterval(prWatchPass, prEveryMs());
+  prTimer.unref?.();
   sweepTimer = setInterval(sweepTraces, 3600_000);
   sweepTimer.unref?.();
   sweepTraces();
@@ -513,6 +548,10 @@ export function stopTracesRuntime(): void {
   stopEndpointProxy();
   unwatchPower?.();
   unwatchPower = null;
+  queueEvents?.();
+  queueEvents = null;
+  if (prTimer) clearInterval(prTimer);
+  prTimer = null;
   if (sweepTimer) clearInterval(sweepTimer);
   sweepTimer = null;
   if (uploadTimer) clearInterval(uploadTimer);
@@ -578,6 +617,8 @@ export function endpointLaunchForAgent(agentId: string | undefined, harness: str
  */
 export function openEndpointSession(agentId: string): { env: Record<string, string>; token?: string } {
   if (!deps) return { env: {} };
+  // Why this terminal opens, said by its start: read once, whether or not the session is traced.
+  const note = takeSessionStart(agentId);
   const agent = agentOf(agentId);
   if (!onEndpoint(agent) || !agent.model) return { env: {} };
   const harness = String(agent.provider);
@@ -595,7 +636,10 @@ export function openEndpointSession(agentId: string): { env: Record<string, stri
   });
   const token = `tep_${randomBytes(24).toString('hex')}`;
   const traceId = `tr_${Date.now().toString(36)}${randomBytes(8).toString('hex')}`;
-  const live: LiveSession = { token, traceId, agentId, endpointId: agent.endpointId, traced: decision.traced, harness, model: agent.model, startedAt: Date.now() };
+  const live: LiveSession = {
+    token, traceId, agentId, endpointId: agent.endpointId, traced: decision.traced, harness, model: agent.model, startedAt: Date.now(),
+    ...(note?.taskRef ? { startRef: note.taskRef } : {}), named: new Map(),
+  };
   sessions.set(token, live);
   if (decision.traced) {
     try {
@@ -603,11 +647,22 @@ export function openEndpointSession(agentId: string): { env: Record<string, stri
         traceId, projectPath: agent.projectPath, agentId, agentName: agent.name, harness,
         endpointId: agent.endpointId, endpointName: endpoint?.name, endpointBaseUrl: endpoint?.approvedBaseUrl, model: agent.model, startedAt: live.startedAt,
       });
+      traceStore().setStart(traceId, startOf(agent, traceId, note));
       changed();
       describeSession(traceId, agent, live.startedAt);
     } catch (err) {
       console.error(`[traces] session not opened: ${(err as Error).message}`);
       live.traced = false;
+    }
+    // The commit and branch it starts from, in the folder it works in: git through safe-git (execFile, an argv array).
+    if (live.traced) {
+      void gitOutcome(agent.worktreePath || agent.projectPath).then(({ branch, head }) => {
+        try {
+          if (traceStore().setStart(traceId, { commit: head, branch })) changed();
+        } catch (err) {
+          console.error(`[traces] start commit not recorded: ${(err as Error).message}`);
+        }
+      });
     }
   }
   const env: Record<string, string> = {};
@@ -707,12 +762,172 @@ export function closeEndpointSession(token: string | undefined): void {
   void gitOutcome(folder).then((git) => {
     try {
       const counts = traceStore().requestCounts(live.traceId);
-      traceStore().endTrace(live.traceId, endedAt, { ...git, heldRequests: counts.held, requestErrors: counts.errors });
+      const tasks = tasksOf(live, endedAt);
+      const ownId = [...live.named].find(([, n]) => n.ref === live.startRef)?.[0];
+      const task = tasks.find(t => t.id === ownId) ?? tasks[0];
+      traceStore().endTrace(live.traceId, endedAt, boundOutcomeTasks({
+        ...git, heldRequests: counts.held, requestErrors: counts.errors, abandonedWhileHeld: counts.abandoned,
+        ...(task ? { task } : {}), ...(tasks.length ? { tasks } : {}),
+      }));
       changed();
     } catch (err) {
       console.error(`[traces] session not ended: ${(err as Error).message}`);
     }
   });
+}
+
+/**
+ * What started a traced session, at its spawn: an agent asleep wakes, whatever started it; else what its start said
+ * (core/session-start.ts), else `unknown`, never a guess. A task that came with a ref carries its queue times from the
+ * agent's queue, and reads `redelegation` when another session had that ref before.
+ */
+function startOf(agent: AgentStatus, traceId: string, note: ReturnType<typeof takeSessionStart>): TraceStart {
+  const start: TraceStart = {
+    trigger: agent.status === 'asleep' ? 'wake' : note?.trigger ?? 'unknown',
+    ...(note?.via ? { via: note.via } : {}), ...(note?.requesterAgentId ? { requesterAgentId: note.requesterAgentId } : {}),
+  };
+  if (!note?.taskRef) return start;
+  start.taskRef = note.taskRef;
+  const queued = deps?.queue?.lookup(note.taskRef);
+  if (queued) start.queuedAt = queued.task.queuedAt;
+  const run = deps?.queue?.busyRun(agent.id);
+  if (run?.taskRef === note.taskRef) start.handedAt = run.since;
+  const before = traceStore().sessionsWithRef(note.taskRef, traceId);
+  if (before.length) {
+    start.redelegatedFrom = before[before.length - 1];
+    if (start.trigger !== 'wake') start.trigger = 'redelegation';
+  }
+  return start;
+}
+
+/** The newest traced session of an agent's terminal. */
+function liveSessionOf(agentId: string): LiveSession | undefined {
+  let found: LiveSession | undefined;
+  for (const s of sessions.values()) if (s.agentId === agentId && s.traced) found = s;
+  return found;
+}
+
+/**
+ * The agents' queues, told to their traced session: a queued task's run named by the ledger (its queue times, and the
+ * session's own task when it started for it), and a task that left the line never to start, the demand the endpoint
+ * never saw. An agent with no traced session has nowhere to keep either.
+ */
+function onQueueEvent(e: QueueEvent): void {
+  const live = liveSessionOf(e.agentId);
+  if (!live) return;
+  try {
+    if (e.kind === 'named') {
+      live.named.set(e.taskId, { ref: e.ref, queuedAt: e.queuedAt, handedAt: e.handedAt });
+      if (e.ref === live.startRef && traceStore().setStart(live.traceId, { taskId: e.taskId })) changed();
+    } else if (traceStore().addLostDemand(live.traceId, { kind: 'queue_drop', ref: e.ref, queuedAt: e.queuedAt, at: e.at, reason: e.reason })) {
+      changed();
+    }
+  } catch (err) {
+    console.error(`[traces] a queue event not recorded: ${(err as Error).message}`);
+  }
+}
+
+/**
+ * Every task of the ledger this session ran: the agent's tasks whose time meets the session's, in order, each with
+ * its queue times. A queued task's come from the queue; one handed over without it takes the hand-off's time; one the
+ * owner typed, which nobody handed over, was queued and handed at its turn. Its first request is the session's first
+ * after it was handed. The same task in another session is linked both ways (`alsoIn`), the other session's change
+ * sequence moved with it.
+ */
+function tasksOf(live: LiveSession, endedAt: number): TraceTask[] {
+  const ledger = liveTaskLedger();
+  if (!ledger) return [];
+  const ran = ledger.tasks()
+    .filter(t => t.agentId === live.agentId && t.startedAt <= endedAt && (t.endedAt ?? endedAt) >= live.startedAt)
+    .sort((a, b) => a.startedAt - b.startedAt);
+  return ran.map((t) => {
+    const queued = live.named.get(t.id);
+    const handedAt = queued?.handedAt ?? t.handedAt ?? (t.source === 'terminal' ? t.startedAt : undefined);
+    const queuedAt = queued?.queuedAt ?? handedAt;
+    const firstRequestAt = traceStore().firstRequestAt(live.traceId, handedAt ?? t.startedAt);
+    const task: TraceTask = {
+      id: t.id, ...(queued ? { ref: queued.ref } : {}), source: t.source,
+      ...(t.parentTaskId ? { parentTaskId: t.parentTaskId } : {}), ...(t.requesterAgentId ? { requesterAgentId: t.requesterAgentId } : {}),
+      status: t.outcome, ...(queuedAt !== undefined ? { queuedAt } : {}), ...(handedAt !== undefined ? { handedAt } : {}),
+      startedAt: t.startedAt, ...(firstRequestAt !== undefined ? { firstRequestAt } : {}), ...(t.endedAt !== null ? { endedAt: t.endedAt } : {}),
+    };
+    const others = traceStore().sessionsWithTask(t.id, live.traceId);
+    if (others.length) {
+      task.alsoIn = others;
+      for (const other of others) linkTask(other, t.id, live.traceId);
+    }
+    return task;
+  });
+}
+
+/** In `traceId`'s outcome, `taskId` also ran in `alsoIn`. */
+function linkTask(traceId: string, taskId: string, alsoIn: string): void {
+  const outcome = traceStore().session(traceId)?.outcome;
+  if (!outcome?.tasks) return;
+  const link = (t: TraceTask): TraceTask => (t.id === taskId ? { ...t, alsoIn: [...new Set([...(t.alsoIn ?? []), alsoIn])] } : t);
+  // Bounded again: a link adds weight to an outcome already at its cap.
+  const bounded = boundOutcomeTasks({ ...outcome, tasks: outcome.tasks.map(link), ...(outcome.task ? { task: link(outcome.task) } : {}) });
+  traceStore().mergeOutcome(traceId, { ...bounded, tasks: bounded.tasks ?? [] });
+}
+
+/**
+ * The end of a pull request, into the ended sessions whose branch it was: in a project of its repository, on its
+ * branch, started before it was merged or closed. Once per session: one that has it is never asked again. Returns
+ * how many sessions took it.
+ */
+export function applyPrStates(states: Array<PrState & { projects: string[] }>, now: number = Date.now()): number {
+  let written = 0;
+  for (const s of traceStore().awaitingPullRequest(now - PR_WAIT_DAYS * 86_400_000)) {
+    const pr = states
+      .filter(p => p.projects.includes(s.projectPath) && p.branch === s.branch && p.at >= s.startedAt)
+      .sort((a, b) => b.at - a.at)[0];
+    if (pr && traceStore().mergeOutcome(s.traceId, { pr: { number: pr.number, state: pr.state, at: pr.at } })) written++;
+  }
+  if (written) changed();
+  return written;
+}
+
+/**
+ * How long an ended session waits for its branch's pull request: past it, gh is no longer asked for it. A branch never
+ * opened as one would keep gh asked every 5 minutes for the life of the install.
+ */
+export const PR_WAIT_DAYS = 14;
+
+/** The repository's default branch, by origin's HEAD; main and master when origin names none. */
+async function defaultBranchesOf(folder: string): Promise<string[]> {
+  const head = await safeGit(folder, ['symbolic-ref', '--quiet', '--short', 'refs/remotes/origin/HEAD'], { timeout: 5000 })
+    .then(r => r.stdout.trim(), () => '');
+  return head.startsWith('origin/') ? [head.slice('origin/'.length)] : ['main', 'master'];
+}
+
+/**
+ * The ended sessions gh is asked about: ended within PR_WAIT_DAYS, on a branch other than their repository's default,
+ * which never gets a pull request of its own.
+ *
+ * A pull request is read among the 50 its repository closed last (prStatesOf). One that closed while 50 others closed
+ * after it, before a read found it (Tars off for days in a busy repository), is not found: its sessions wait out
+ * PR_WAIT_DAYS and keep no `pr`.
+ */
+export async function sessionsToAskForPr(now: number = Date.now()): Promise<Array<{ traceId: string; projectPath: string; branch: string; startedAt: number }>> {
+  const awaiting = traceStore().awaitingPullRequest(now - PR_WAIT_DAYS * 86_400_000);
+  const defaults = new Map<string, string[]>();
+  const asked: typeof awaiting = [];
+  for (const s of awaiting) {
+    if (!defaults.has(s.projectPath)) defaults.set(s.projectPath, await defaultBranchesOf(s.projectPath));
+    if (!defaults.get(s.projectPath)!.includes(s.branch)) asked.push(s);
+  }
+  return asked;
+}
+
+/** One read of the pull requests of the projects whose ended sessions wait for one (none: no gh is run). */
+function prWatchPass(): void {
+  if (!deps || (!store && !fs.existsSync(TRACES_DB_FILE))) return;
+  sessionsToAskForPr()
+    .then((sessions) => {
+      const projects = [...new Set(sessions.map(s => s.projectPath))];
+      return projects.length ? prStatesOfProjects(projects).then((states) => { applyPrStates(states); }) : undefined;
+    })
+    .catch((err) => { console.error(`[traces] pull requests not read: ${(err as Error).message}`); });
 }
 
 /**
@@ -728,10 +943,9 @@ function gitOutcome(folder: string | undefined): Promise<{ branch?: string; head
   }));
 }
 
-/** The trace an agent's current terminal records, if any. */
+/** The trace an agent's current terminal records, if any: its newest. */
 export function liveTraceOf(agentId: string): string | undefined {
-  for (const s of sessions.values()) if (s.agentId === agentId && s.traced) return s.traceId;
-  return undefined;
+  return liveSessionOf(agentId)?.traceId;
 }
 
 type Sender =
@@ -742,7 +956,7 @@ type Sender =
   | { kind: 'owner-relay'; by: { id: string; name?: string } };
 
 /** What Tars typed into a traced agent's terminal, and from whom: the turn it opens is attributed to them. */
-export function noteTypedForTraces(origin: { agentId: string; from?: string; sender?: Sender } | undefined, text: string): void {
+export function noteTypedForTraces(origin: { agentId: string; from?: string; sender?: Sender; taskRef?: string } | undefined, text: string): void {
   if (!origin || !deps || !liveTraceOf(origin.agentId)) return;
   const s = origin.sender;
   let author = 'user';
@@ -769,7 +983,8 @@ export function noteTypedForTraces(origin: { agentId: string; from?: string; sen
     detail = origin.from;
   }
   try {
-    traceStore().noteTypedInput({ agentId: origin.agentId, at: Date.now(), author, authorDetail: detail, text, closed });
+    // With the ref of the task these words hand over, if they do: the turn they open carries it (#675).
+    traceStore().noteTypedInput({ agentId: origin.agentId, at: Date.now(), author, authorDetail: detail, text, closed, ...(origin.taskRef ? { taskRef: origin.taskRef } : {}) });
   } catch (err) {
     console.error(`[traces] typed input not noted: ${(err as Error).message}`);
   }

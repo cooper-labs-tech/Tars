@@ -59,7 +59,7 @@ function registerQueueRoutes(app_: RouteApp): void {
       const by = caller.kind === 'agent' ? (caller.agent as { name?: string }).name || caller.agent.id : 'Tars';
       const items = oneTaskQueue.queued(agent.id);
       for (const item of items) {
-        oneTaskQueue.cancel(item.ref, `it was dropped by ${by} with the rest of the queue`);
+        oneTaskQueue.cancel(item.ref, `it was dropped by ${by} with the rest of the queue`, 'queue_cleared');
         requestDropped(agent, item.ref);
         if (item.requesterId && item.requesterId !== agent.id && item.requesterId !== (caller.kind === 'agent' ? caller.agent.id : undefined)) {
           tellCancelled(item.requesterId, agent.id, by, 'the queue was dropped');
@@ -136,7 +136,7 @@ export function registerTaskRoutes(app_: RouteApp): void {
         const chat = liveChatStore()?.chatOfRunner(lead.id);
         byName = chat ? `the chat ${envelopeValue(chat.title)}` : envelopeValue(lead.name || lead.id);
       }
-      oneTaskQueue.cancel(queued.ref, right.by === 'lead' ? `it was cancelled by ${byName}` : undefined);
+      oneTaskQueue.cancel(queued.ref, right.by === 'lead' ? `it was cancelled by ${byName}` : undefined, 'cancelled');
       announceTask(queued.agentId);
       if (right.by === 'lead' && queued.requesterId) tellCancelled(queued.requesterId, queued.agentId, byName, String(reason));
       console.log(`[tasks] ${queued.ref} queued for ${worker?.name || queued.agentId} cancelled by ${callerId ?? 'Tars'} (${right.by})`);

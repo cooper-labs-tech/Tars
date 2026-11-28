@@ -1,5 +1,6 @@
 import { safeGit } from '../utils/safe-git';
 import * as fs from 'fs';
+import * as path from 'path';
 import { execFile } from 'child_process';
 import { privatePath } from '../constants';
 import { writeSecretFileSync } from '../utils/secret-file';
@@ -74,6 +75,71 @@ export async function pollGithub(repos: string[], gh: Gh, now: number = Date.now
   }
   save(state);
   return events;
+}
+
+/** How a pull request ended, by its branch: what a traced session on that branch records after its end. */
+export interface PrState { repo: string; number: number; branch: string; state: 'merged' | 'closed'; at: number }
+
+/**
+ * The merged and closed pull requests of these repositories, with their branch: one read-only list each, `--state
+ * closed`, which lists the merged ones too (gh 2.88.1, measured 27/11: `state` reads MERGED or CLOSED, `closedAt` set
+ * for both). A repository whose list fails gives nothing; the others still read.
+ */
+export async function prStatesOf(repos: string[], gh: Gh): Promise<PrState[]> {
+  const states: PrState[] = [];
+  for (const repo of repos) {
+    let prs: unknown;
+    try {
+      prs = JSON.parse(await gh([...GH_READ_ARGS, '--repo', repo, '--state', 'closed', '--limit', '50', '--json', 'number,state,headRefName,mergedAt,closedAt']));
+    } catch {
+      continue;
+    }
+    for (const p of Array.isArray(prs) ? prs as Array<Record<string, unknown>> : []) {
+      const state = p.state === 'MERGED' ? 'merged' : p.state === 'CLOSED' ? 'closed' : null;
+      const at = Date.parse(String(state === 'merged' ? p.mergedAt : p.closedAt));
+      if (!state || typeof p.number !== 'number' || typeof p.headRefName !== 'string' || !p.headRefName || !Number.isFinite(at)) continue;
+      states.push({ repo, number: p.number, branch: p.headRefName, state, at });
+    }
+  }
+  return states;
+}
+
+/** The GitHub repository of each project, by its origin: projects that share one are named together. */
+async function projectsByRepo(projectPaths: string[]): Promise<Map<string, string[]>> {
+  const byRepo = new Map<string, string[]>();
+  for (const project of new Set(projectPaths)) {
+    try {
+      const repo = githubRepoOf((await safeGit(project, ['remote', 'get-url', 'origin'])).stdout);
+      if (repo) byRepo.set(repo, [...(byRepo.get(repo) ?? []), project]);
+    } catch { /* not a repository, or no origin */ }
+  }
+  return byRepo;
+}
+
+/** The ends of the pull requests of these projects' repositories, each naming the projects of its repository. */
+export async function prStatesOfProjects(projectPaths: string[], gh: Gh = (args) => run(ghBinary, args)): Promise<Array<PrState & { projects: string[] }>> {
+  const byRepo = await projectsByRepo(projectPaths);
+  if (byRepo.size === 0) return [];
+  const states = await prStatesOf([...byRepo.keys()], gh);
+  return states.map(s => ({ ...s, projects: byRepo.get(s.repo) ?? [] }));
+}
+
+/**
+ * The gh an E2E spec stands in for GitHub with (DOROTHY_E2E_GH, an absolute path): read under DOROTHY_E2E only, never
+ * in a packaged build. The real gh comes first on the PATH Tars builds (/opt/homebrew/bin), so a stand-in placed on
+ * the spec's PATH would never answer, and the real one would reach GitHub.
+ */
+export function testGhOf(env: NodeJS.ProcessEnv, packaged: boolean): string | null {
+  if (packaged || env.DOROTHY_E2E !== '1') return null;
+  const file = env.DOROTHY_E2E_GH ?? '';
+  return path.isAbsolute(file) ? file : null;
+}
+
+/** The gh this run reads pull requests with: the E2E's stand-in when one is named (chooseGh), else gh on the PATH. */
+let ghBinary = 'gh';
+
+export function chooseGh(packaged: boolean): void {
+  ghBinary = testGhOf(process.env, packaged) ?? 'gh';
 }
 
 /** The GitHub repository of a git remote URL, as `owner/name`, or undefined for another host. */

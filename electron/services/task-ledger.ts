@@ -71,6 +71,11 @@ export interface TaskRecord {
   outcome: TaskOutcome;
   turns: number;
   sessionIds: string[];
+  /**
+   * When the work was handed over (Tars typed it in, or started a session on it), before the turn that opened the
+   * task: what a traced session's queue times read. Absent for a task typed by the owner, which nobody handed over.
+   */
+  handedAt?: number;
   /** A delegation over ACP: what the run itself reported. */
   acp?: AcpUsage;
   /**
@@ -271,6 +276,7 @@ function taskOf(v: unknown): TaskRecord | null {
     source: t.source as TaskSource, requesterAgentId: t.requesterAgentId as string | null, parentTaskId: t.parentTaskId as string | null,
     text: clip(t.text as string | undefined), startedAt: t.startedAt, endedAt: t.endedAt as number | null, lastAt: t.lastAt,
     outcome: t.outcome as TaskOutcome, turns: t.turns, sessionIds: [...t.sessionIds] as string[],
+    ...(isTime(t.handedAt) ? { handedAt: t.handedAt } : {}),
     ...(acp ? { acp } : {}),
     ...(typeof t.stopReason === 'string' ? { stopReason: t.stopReason } : {}),
     ...(usageByModel ? { usageByModel, usageTurns: t.usageTurns as number } : {}),
@@ -699,6 +705,7 @@ export function createTaskLedger(opts: {
         outcome: 'running',
         turns: 1,
         sessionIds: turn.sessionId ? [turn.sessionId] : [],
+        ...(fresh ? { handedAt: fresh.at } : {}),
       };
       open.set(agent.id, task.id);
       write({ t: 'task', task });

@@ -88,7 +88,7 @@ export async function stopAgent(
 
   // Its queue: kept, paused until someone resumes it (it would start the agent again), or dropped.
   const waiting = oneTaskQueue.queued(agent.id);
-  if (opts.dropQueue) for (const item of waiting) oneTaskQueue.cancel(item.ref, `it was dropped with the stop by ${request.by}`);
+  if (opts.dropQueue) for (const item of waiting) oneTaskQueue.cancel(item.ref, `it was dropped with the stop by ${request.by}`, 'dropped_with_stop');
   else if (waiting.length) oneTaskQueue.pause(agent.id, `stopped by ${request.by}`);
   if (opts.outcome) {
     opts.outcome.kept = opts.dropQueue ? 0 : waiting.length;

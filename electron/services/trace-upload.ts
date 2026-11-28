@@ -10,6 +10,21 @@ import { scrubValue, SCRUB_VERSION, type ScrubContext } from './trace-scrub';
 import { MAX_VERSION_CHARS } from './harness-version';
 import { MAX_SESSION_ID_CHARS } from './endpoint-proxy';
 
+/** The longest branch the back-office takes, in bytes (UTF-8). */
+export const MAX_BRANCH_BYTES = 255;
+
+/**
+ * A session's start as it leaves: a branch over what the back-office takes is left out, never cut (a cut branch names
+ * another one), or every batch of the session would be refused and hold the upload back (the Audit of #678).
+ */
+function startWithin(start: unknown): unknown {
+  const s = start as { branch?: unknown } | null;
+  if (!s || typeof s !== 'object' || typeof s.branch !== 'string' || Buffer.byteLength(s.branch) <= MAX_BRANCH_BYTES) return start;
+  const rest: Record<string, unknown> = { ...s };
+  delete rest.branch;
+  return rest;
+}
+
 /**
  * Uploading opted-in traces to a back-office (the trace back-office's HTTP API v1: register, blobs, batches,
  * delete). The address is the user's setting, empty until they set one, and nothing goes before they have read what
@@ -472,6 +487,11 @@ export class TraceUploader {
       nativeSessionId: within(t.native_session_id, MAX_SESSION_ID_CHARS), environment: opt(t.environment as Record<string, unknown>),
       events: Array.isArray(t.events) ? t.events : [],
       rttMedianMs: opt(t.rtt_median_ms as number), clockOffsetMs: opt(t.clock_offset_ms as number),
+      // What started it (its trigger by kind, never who), its task's queue times and the commit it started from; and
+      // the tasks that left its agent's queue never to start, by their kind. Each has its line in the notice.
+      start: t.start ? startWithin(scrub(t.start)) : undefined,
+      lostDemand: Array.isArray(t.lost_demand) && t.lost_demand.length ? scrub(t.lost_demand) : undefined,
+      lostDemandOmitted: Number(t.lost_demand_omitted ?? 0) > 0 ? Number(t.lost_demand_omitted) : undefined,
     };
     const turns = doc.turns.map(x => ({
       turnId: String(x.turn_id), sessionId: traceId, index: Number(x.turn_index), startedAt: Number(x.started_at), endedAt: opt(x.ended_at as number),
@@ -480,6 +500,8 @@ export class TraceUploader {
       tokensCached: Number(x.tokens_cached), tokensOut: Number(x.tokens_out), finalStatus: opt(x.final_status as string),
       // Who wrote the turn, by kind only: the detail holds names, which the back-office never gets.
       author: String(x.author),
+      // The ref of the task it served: the link from a turn to its task that survives the outcome's cap.
+      ...(x.task_ref ? { taskRef: String(x.task_ref) } : {}),
     }));
     const links = new Map<string, Array<{ position: number; message_hash: string; direction: string }>>();
     for (const l of doc.request_messages) {
@@ -506,6 +528,8 @@ export class TraceUploader {
         finishReason: opt(r.finish_reason as string), reqBytes: Number(r.req_bytes), respBytes: Number(r.resp_bytes), messages,
         liveSessions: opt(r.live_sessions as number), rttMs: opt(r.rtt_ms as number), clockOffsetMs: opt(r.clock_offset_ms as number),
         queueMs: opt(r.queue_ms as number), upstreamMs: opt(r.upstream_ms as number),
+        // A request the harness gave up while held: who cut it, why, when, and nothing delivered.
+        ...(r.cancel ? { cancel: r.cancel } : {}),
       };
     });
     const messages = [...remote.values()].filter(m => m.role !== 'tools').map(m => ({
