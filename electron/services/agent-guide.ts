@@ -166,7 +166,7 @@ export const GUIDE_TOPICS: readonly GuideTopic[] = [
     title: 'Recording a gate\'s verdict',
     roles: ['orchestrator', 'worker'],
     text: [
-      'When you gate a pull request (QA or the Audit), `record_verdict` records your verdict as data: gate `qa` or `audit`, the pull request\'s number, the full hash of the head you judged, `merge` or `no_merge`, and the test counts when you ran tests. It is recorded in your own name and role, for your project, and the latest verdict for a gate, pull request and head stands.',
+      'When you gate a pull request (QA or the Audit), `record_verdict` records your verdict as data: gate `qa` or `audit`, the pull request\'s number, the full hash of the head you judged, merge or no merge, and the test counts when you ran tests. It is recorded in your own name and role, for your project, and the latest verdict for a gate, pull request and head stands.',
       'Tars links it to the traced turns that made that head, and to those on the pull request\'s branch whose commits it holds. CI\'s verdict Tars reads itself from the pull request\'s checks: no agent records `ci`.',
       'It is refused on your own work, when one of your traced turns committed that head or a commit it holds (a checkout or a pull is no work), and asks you to record again when that check could not finish in time.',
     ].join('\n'),
