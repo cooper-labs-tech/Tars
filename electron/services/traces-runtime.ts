@@ -15,6 +15,8 @@ import { TraceStore, type TraceEvent } from './trace-store';
 import { defaultTracePairs, traceDecision } from './trace-gate';
 import { machineFacts, nodeEnvironmentIo, sessionEnvironment, type MachineFacts } from './session-environment';
 import { harnessVersions } from './harness-version';
+import { readHarnessCompactions } from './harness-compactions';
+import { codexHome } from '../providers/codex-cli';
 import { probeVersion } from '../core/version-probe';
 import { buildFullPath } from '../utils/path-builder';
 import { cliPathDirs } from '../utils/cli-path-dirs';
@@ -553,17 +555,23 @@ function onEndpoint(agent: AgentStatus | undefined): agent is AgentStatus & { en
  * What the agent's harness is given to reach its endpoint (endpoint-harness.ts), or null when it runs on none.
  * For pi, Tars's provider in its models.json is brought up to date here, before the launch reads it.
  */
+/** The model's real limits the owner set on the agent's endpoint, given to its harness at launch (trace feature C2). */
+function endpointLimitsOf(endpointId: string | undefined): { contextWindow?: number; maxOutputTokens?: number } {
+  const e = (deps?.getSettings().inferenceEndpoints ?? []).find(x => x.id === endpointId);
+  return { contextWindow: e?.contextWindow, maxOutputTokens: e?.maxOutputTokens };
+}
+
 export function endpointLaunchForAgent(agentId: string | undefined, harness: string): EndpointLaunch | null {
   if (!agentId || !deps) return null;
   const agent = agentOf(agentId);
   if (!onEndpoint(agent) || agent.provider !== harness || !agent.model) return null;
-  const launch = endpointLaunchFor(harness, { proxyBase: PROXY_BASE, model: agent.model });
+  const launch = endpointLaunchFor(harness, { proxyBase: PROXY_BASE, model: agent.model, ...endpointLimitsOf(agent.endpointId) });
   if (launch && harness === 'pi') {
     const file = path.join(process.env.PI_CODING_AGENT_DIR || path.join(os.homedir(), '.pi', 'agent'), 'models.json');
     const models = (deps.getSettings().inferenceEndpoints ?? []).filter(e => e.approved).flatMap(e => e.models ?? []);
     try {
       fs.mkdirSync(path.dirname(file), { recursive: true });
-      updateSharedJsonSync<Record<string, unknown>>(file, current => piModelsWithEndpoint(current, PROXY_BASE, models), { createMode: 0o600 });
+      updateSharedJsonSync<Record<string, unknown>>(file, current => piModelsWithEndpoint(current, PROXY_BASE, models, { model: agent.model!, contextWindow: launch.given.contextWindow, outputCap: launch.given.outputCap }), { createMode: 0o600 });
     } catch (err) {
       console.error(`[endpoints] pi's models.json not updated: ${(err as Error).message}`);
     }
@@ -580,7 +588,7 @@ export function openEndpointSession(agentId: string): { env: Record<string, stri
   const agent = agentOf(agentId);
   if (!onEndpoint(agent) || !agent.model) return { env: {} };
   const harness = String(agent.provider);
-  const launch = endpointLaunchFor(harness, { proxyBase: PROXY_BASE, model: agent.model });
+  const launch = endpointLaunchFor(harness, { proxyBase: PROXY_BASE, model: agent.model, ...endpointLimitsOf(agent.endpointId) });
   if (!launch) return { env: {} };
   ensureProxy();
   const settings = deps.getSettings();
@@ -602,6 +610,8 @@ export function openEndpointSession(agentId: string): { env: Record<string, stri
         traceId, projectPath: agent.projectPath, agentId, agentName: agent.name, harness,
         endpointId: agent.endpointId, endpointName: endpoint?.name, endpointBaseUrl: endpoint?.approvedBaseUrl, model: agent.model, startedAt: live.startedAt,
       });
+      // What the harness was given at this launch: the endpoint's window and cap, whether it compacts on its own.
+      traceStore().setContextGiven(traceId, launch.given);
       changed();
       describeSession(traceId, agent, live.startedAt);
     } catch (err) {
@@ -711,7 +721,34 @@ export function closeEndpointSession(token: string | undefined): void {
     } catch (err) {
       console.error(`[traces] session not ended: ${(err as Error).message}`);
     }
+    readCompactionsOf(live, folder, endedAt);
   });
+}
+
+/**
+ * At a session's end, the compactions its harness logged (trace feature C2): codex's rollout of this session (by its
+ * own session id), Qwen Code's transcript of the agent's folder that alone overlaps the session. Read only, from the
+ * agent's own folders, bounded (harness-compactions.ts). What the wire saw meanwhile stays; the log names it.
+ */
+function readCompactionsOf(live: LiveSession, folder: string | undefined, endedAt: number): void {
+  if (live.harness !== 'codex' && live.harness !== 'qwen-code') return;
+  const failed = (err: unknown) => console.error(`[traces] the compactions of ${live.traceId} were not read: ${(err as Error).message}`);
+  try {
+    const nativeSessionId = traceStore().list({ traceId: live.traceId, limit: 1 }).sessions[0]?.nativeSessionId;
+    // Read asynchronously (fs.promises, bounded): a session's end never holds the main process on the files.
+    void readHarnessCompactions({
+      harness: live.harness, codexHome: codexHome(), qwenHome: path.join(os.homedir(), '.qwen'), cwd: folder,
+      nativeSessionId, startedAt: live.startedAt, endedAt,
+    }).then((events) => {
+      // The runtime stopped meanwhile (Tars quitting): nothing is written, and the store the stop closed stays closed
+      // (traceStore() would open it again). As noteToolCall checks.
+      if (!deps || !store) return;
+      store.applyHarnessCompactions(live.traceId, events);
+      changed();
+    }).catch(failed);
+  } catch (err) {
+    failed(err);
+  }
 }
 
 /**

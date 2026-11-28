@@ -23,6 +23,11 @@ const asObj = (v: unknown): Json => (v && typeof v === 'object' && !Array.isArra
 const asArr = (v: unknown): unknown[] => (Array.isArray(v) ? v : []);
 const asStr = (v: unknown): string => (typeof v === 'string' ? v : '');
 const asNum = (v: unknown): number => (typeof v === 'number' && Number.isFinite(v) ? v : 0);
+/**
+ * A token count as the back-office takes it, a whole number of 0 or more: an endpoint's fraction is rounded (the Audit
+ * of #678, I-1), and a negative count from a broken endpoint is 0 (the Audit of #687 at e534063f4).
+ */
+const tokenCount = (v: unknown): number => Math.max(0, Math.round(asNum(v)));
 
 /** The traced surface a request path is, or null for anything else (models, count_tokens, unknown routes). */
 export function surfaceOf(pathname: string): Surface | null {
@@ -137,12 +142,12 @@ function sseEvents(text: string): Json[] {
 
 function chatUsage(u: unknown): WireResponse['usage'] {
   const o = asObj(u);
-  return { input: asNum(o.prompt_tokens), cached: asNum(asObj(o.prompt_tokens_details).cached_tokens), output: asNum(o.completion_tokens) };
+  return { input: tokenCount(o.prompt_tokens), cached: tokenCount(asObj(o.prompt_tokens_details).cached_tokens), output: tokenCount(o.completion_tokens) };
 }
 
 function responsesUsage(u: unknown): WireResponse['usage'] {
   const o = asObj(u);
-  return { input: asNum(o.input_tokens), cached: asNum(asObj(o.input_tokens_details).cached_tokens), output: asNum(o.output_tokens) };
+  return { input: tokenCount(o.input_tokens), cached: tokenCount(asObj(o.input_tokens_details).cached_tokens), output: tokenCount(o.output_tokens) };
 }
 
 const RESPONSES_CALLS = new Set(['function_call', 'custom_tool_call', 'local_shell_call', 'computer_call', 'mcp_call']);
@@ -220,7 +225,7 @@ function readMessages(streamed: boolean, text: string): WireResponse {
     const content = asArr(b.content);
     return {
       output: { role: 'assistant', content }, finishReason: asStr(b.stop_reason) || undefined, modelServed: asStr(b.model) || undefined,
-      usage: { input: asNum(u.input_tokens), cached: asNum(u.cache_read_input_tokens), output: asNum(u.output_tokens) },
+      usage: { input: tokenCount(u.input_tokens), cached: tokenCount(u.cache_read_input_tokens), output: tokenCount(u.output_tokens) },
       toolCalls: content.filter(c => asObj(c).type === 'tool_use').length,
     };
   }
@@ -234,9 +239,9 @@ function readMessages(streamed: boolean, text: string): WireResponse {
       const m = asObj(e.message);
       model = asStr(m.model) || undefined;
       const u = asObj(m.usage);
-      usage.input = asNum(u.input_tokens);
-      usage.cached = asNum(u.cache_read_input_tokens);
-      usage.output = asNum(u.output_tokens);
+      usage.input = tokenCount(u.input_tokens);
+      usage.cached = tokenCount(u.cache_read_input_tokens);
+      usage.output = tokenCount(u.output_tokens);
     } else if (type === 'content_block_start') {
       blocks.set(asNum(e.index), { ...asObj(e.content_block) });
     } else if (type === 'content_block_delta') {
@@ -250,7 +255,7 @@ function readMessages(streamed: boolean, text: string): WireResponse {
     } else if (type === 'message_delta') {
       finish = asStr(asObj(e.delta).stop_reason) || finish;
       const u = asObj(e.usage);
-      if (u.output_tokens !== undefined) usage.output = asNum(u.output_tokens);
+      if (u.output_tokens !== undefined) usage.output = tokenCount(u.output_tokens);
     }
   }
   const content = [...blocks.entries()].sort((a, b) => a[0] - b[0]).map(([, b]) => {
@@ -366,6 +371,87 @@ function lastInstruction(surface: Surface, input: unknown[]): Json | null {
 /** Whether a request opens a turn: its last history entry is a new user instruction (the reader's trace format). */
 export function opensTurn(surface: Surface, input: unknown[]): boolean {
   return lastInstruction(surface, input) !== null;
+}
+
+/** A history item that carries a tool's result: Responses' outputs, a chat `tool` message, Anthropic's tool_result. */
+function isToolResult(surface: Surface, item: unknown): boolean {
+  const o = asObj(item);
+  if (o.type === 'function_call_output' || o.type === 'custom_tool_call_output' || o.role === 'tool') return true;
+  return surface === 'anthropic_messages' && o.role === 'user' && asArr(o.content).some(c => asObj(c).type === 'tool_result');
+}
+
+/** A history item the model said: an assistant message, or one of Responses' output items. */
+function isModelItem(item: unknown): boolean {
+  const o = asObj(item);
+  return o.role === 'assistant' || o.type === 'function_call' || o.type === 'custom_tool_call' || o.type === 'reasoning';
+}
+
+/** A user message that says nothing but the harness's reminders (and holds no tool result or image). */
+function isReminderOnly(item: unknown): boolean {
+  const o = asObj(item);
+  if (o.role !== 'user') return false;
+  const parts = typeof o.content === 'string' ? [] : asArr(o.content).map(asObj);
+  if (parts.some(p => p.type !== undefined && p.type !== 'text' && p.type !== 'input_text')) return false;
+  const text = textOfContent(o.content);
+  return text.trim() !== '' && withoutReminders(text) === '';
+}
+
+/** An item with its reminder blocks taken out of every text, and the parts they emptied dropped. */
+function withoutReminderParts(item: unknown): unknown {
+  const o = asObj(item);
+  if (typeof o.content === 'string') return { ...o, content: withoutReminders(o.content) };
+  if (!Array.isArray(o.content)) return item;
+  const parts = o.content.map((p) => {
+    const q = asObj(p);
+    return typeof q.text === 'string' ? { ...q, text: withoutReminders(q.text) } : p;
+  }).filter(p => !(typeof asObj(p).text === 'string' && asObj(p).text === '' && ['text', 'input_text'].includes(String(asObj(p).type))));
+  return { ...o, content: parts };
+}
+
+/**
+ * A history's keys, as the rewrite rule compares them (trace feature C2): each item's hash with the harness's reminder
+ * blocks taken out, the messages that say nothing but reminders left out. Measured on Qwen Code 0.25.2 (28/11): a
+ * reminder appended to the first user message moves into a trailing reminder-only message, which the next request
+ * drops; the task, the answers and the tool results stay. 16 hex characters each; `index` is the item's place.
+ */
+export function historyKeys(input: unknown[]): Array<{ key: string; index: number }> {
+  const out: Array<{ key: string; index: number }> = [];
+  input.forEach((item, index) => {
+    if (!isReminderOnly(item)) out.push({ key: hashOf(withoutReminderParts(item)).slice(0, 16), index });
+  });
+  return out;
+}
+
+/**
+ * Whether a request's history rewrites the one before (trace feature C2), and how, from what crossed the wire only,
+ * compared by their keys (historyKeys):
+ * - kept whole at the head and grown as a conversation grows (the tool's result the last answer asked for, or after
+ *   a plain answer the answer itself), or sent again as it was: no rewrite;
+ * - kept at the head but grown with a new instruction instead of the tool's result or the answer (codex 0.163 after a
+ *   compaction, measured 27/11: the old history, then the summary as a user message): `compact`, `kept: true`. An
+ *   answer cut short then words typed through Tars look the same: the caller tells them apart (trace-store.ts);
+ * - not kept at the head: `truncate` when only older items were dropped (nothing new before the items kept, no new
+ *   instruction after them), else `compact` (a summary in place of what went).
+ * `previous` is the earlier main request's keys, and whether its answer asked for a tool.
+ */
+export function historyRewrite(surface: Surface, previous: { keys: string[]; askedTool: boolean }, input: unknown[]): { kind: 'compact' | 'truncate'; kept: boolean } | null {
+  const prev = previous.keys;
+  if (!prev.length) return null;
+  const cur = historyKeys(input);
+  if (prev.every((k, i) => cur[i]?.key === k)) {
+    const grown = cur.slice(prev.length).map(c => input[c.index]);
+    if (!grown.length) return null;
+    const continues = previous.askedTool ? grown.some(i => isToolResult(surface, i)) : grown.some(isModelItem);
+    if (continues) return null;
+    return grown.some(i => lastInstruction(surface, [i]) !== null) ? { kind: 'compact', kept: true } : null;
+  }
+  const kept = new Set(prev);
+  let lastKept = -1;
+  cur.forEach((c, i) => { if (kept.has(c.key)) lastKept = i; });
+  if (lastKept < 0) return { kind: 'compact', kept: false };
+  const newBefore = cur.slice(0, lastKept + 1).some(c => !kept.has(c.key));
+  const newInstruction = cur.slice(lastKept + 1).some(c => lastInstruction(surface, [input[c.index]]) !== null);
+  return { kind: newBefore || newInstruction ? 'compact' : 'truncate', kept: false };
 }
 
 /** The instruction's own words, the harness's reminders left out: what authorship is matched on. */

@@ -266,8 +266,16 @@ async function endpointTurn(text) {
   const turnId = randomUUID();
   const turnMetadata = JSON.stringify({ installation_id: install, session_id: sessionId, thread_id: sessionId, turn_id: turnId, window_id: `${sessionId}:0`, request_kind: 'turn', model: opts.model, reasoning_effort: effort ?? 'medium' });
   const tools = [{ type: 'function', name: 'exec_command', description: 'Runs a command', strict: false, parameters: { type: 'object', properties: { cmd: { type: 'string' } }, required: ['cmd'] } }];
-  const input = [{ type: 'message', role: 'user', content: [{ type: 'input_text', text }] }];
-  for (let step = 0; step < 4; step++) {
+  const first = { type: 'message', role: 'user', content: [{ type: 'input_text', text }] };
+  // `COMPACT` (once) or `COMPACT TWICE` in the task: after a tool call, codex compacts as 0.163 was measured to (trace
+  // feature C2, 27/11): a call of its own with no tools asking for a summary, a `compacted` line in its rollout, then
+  // a history of the task and the summary as a new user message. The long context codex sends ahead of a task stands
+  // for what the compaction drops, so the prompt after it is shorter; each summary is its own.
+  let compactions = /\bCOMPACT TWICE\b/.test(text) ? 2 : /\bCOMPACT\b/.test(text) ? 1 : 0;
+  const context = { type: 'message', role: 'developer', content: [{ type: 'input_text', text: `<environment_context>${' context'.repeat(600)}</environment_context>` }] };
+  let input = compactions > 0 ? [context, first] : [first];
+  let compacted = 0;
+  const ask = async (body) => {
     const res = await fetch(`${endpoint.baseUrl.replace(/\/+$/, '')}/responses`, {
       method: 'POST',
       headers: {
@@ -275,15 +283,21 @@ async function endpointTurn(text) {
         'session-id': sessionId, 'thread-id': sessionId, 'x-codex-window-id': `${sessionId}:0`, 'x-codex-turn-metadata': turnMetadata,
       },
       body: JSON.stringify({
-        model: opts.model, stream: false, instructions: 'You are Codex, a stand-in.', input, tools, tool_choice: 'auto', parallel_tool_calls: false,
+        model: opts.model, stream: false, instructions: 'You are Codex, a stand-in.', tool_choice: 'auto', parallel_tool_calls: false,
         reasoning: { effort: effort ?? 'medium' }, store: false, include: [], prompt_cache_key: sessionId,
         client_metadata: { 'x-codex-installation-id': install, thread_id: sessionId, turn_id: turnId, 'x-codex-turn-metadata': turnMetadata, 'x-codex-window-id': `${sessionId}:0`, session_id: sessionId },
+        ...body,
       }),
     });
-    const body = await res.json().catch(() => ({}));
-    log({ model: true, status: res.status, keyHead: key.slice(0, 4), session: sessionId });
+    const answer = await res.json().catch(() => ({}));
+    log({ model: true, status: res.status, keyHead: key.slice(0, 4), session: sessionId, compaction: !body.tools });
+    if (res.ok) write('token_usage_record', { session_id: sessionId, response_id: answer.id, usage: { input_tokens: answer.usage?.input_tokens ?? 0, output_tokens: answer.usage?.output_tokens ?? 0 } });
+    return { res, answer };
+  };
+  for (let step = 0; step < 8; step++) {
+    const { res, answer } = await ask({ input, tools });
     if (!res.ok) return `the endpoint answered ${res.status}`;
-    const items = Array.isArray(body.output) ? body.output : [];
+    const items = Array.isArray(answer.output) ? answer.output : [];
     const call = items.find(i => i.type === 'function_call');
     if (!call) return items.flatMap(i => i.content ?? []).map(c => c.text ?? '').join('') || 'no answer';
     let cmd = '';
@@ -291,8 +305,19 @@ async function endpointTurn(text) {
     const echoed = /^echo (.+)$/.exec(cmd.trim());
     input.push({ type: 'function_call', call_id: call.call_id, name: call.name, arguments: call.arguments });
     input.push({ type: 'function_call_output', call_id: call.call_id, output: echoed ? `${echoed[1]}\n` : `ran ${cmd}` });
+    if (compactions > 0) {
+      compactions--;
+      const prompt = { type: 'message', role: 'user', content: [{ type: 'input_text', text: 'You are performing a CONTEXT CHECKPOINT COMPACTION. Create a handoff summary for another LLM that will resume the task.' }] };
+      const { res: cres, answer: summary } = await ask({ input: [...input, prompt] });
+      if (!cres.ok) return `the endpoint answered ${cres.status}`;
+      const said = (summary.output ?? []).flatMap(i => i.content ?? []).map(c => c.text ?? '').join('') || 'no summary';
+      compacted++;
+      const bridge = `Another language model started to solve this problem and produced a summary of its thinking process. You also have access to the state of the tools that were used by that language model. Use this to build on the work that has already been done and avoid duplicating work. Here is the summary produced by the other language model, use the information in this summary to assist with your own analysis:\n${said} (summary ${compacted})`;
+      write('compacted', { message: bridge, compaction_response_id: summary.id });
+      input = [first, { type: 'message', role: 'user', content: [{ type: 'input_text', text: bridge }] }];
+    }
   }
-  return 'no answer in four requests';
+  return 'no answer in eight requests';
 }
 
 async function turn(text) {

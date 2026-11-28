@@ -290,7 +290,23 @@ from the window, or from an agent's drop file (`~/.tars/endpoint-keys/<name>.key
   sent no header or one that could not be read, never 0; a negative round trip is kept as measured. The session keeps
   the median of its round trips and the offset at its shortest one, negatives left out (`server-timing.ts`). The
   `Date` header is never used, and nothing is derived from the endpoint's times for the model's own TTFT;
-- a harness's installation id (codex sends one in its body) is taken out of a request before it is stored.
+- a harness's installation id (codex sends one in its body) is taken out of a request before it is stored;
+- an endpoint may carry its model's real context window and output cap (the owner's, in the window: a window of 1,024
+  to 10,000,000 tokens, a cap of 1 up to it). They reach the harness at launch through its own knob: codex
+  `-c model_context_window` and `-c model_max_output_tokens`, Qwen Code its settings file's `generationConfig` (both
+  measured: without them codex takes 258,400 tokens and Qwen Code 200,000 for a model they do not know), pi its
+  models.json, opencode its model's `limit` (from their docs). The session keeps what it was given and whether the
+  harness compacts on its own (`endpoint-harness.ts`);
+- a history rewritten since the last main request is a compaction or a truncation (`trace-wire.ts` historyRewrite):
+  that request is marked (`contextReset`, with the tokens it dropped) and stays in its turn, whatever its last message
+  looks like; only a new task typed through Tars opens one (kind `new`; typed words after an answer cut short, the
+  history kept, reset nothing). The same history sent again opens no turn. Histories are compared without the
+  harness's `<system-reminder>` blocks (Qwen Code 0.25.2 moves them between requests, measured), and only for the
+  harnesses whose history is measured (codex, Qwen Code); the others are never marked on the wire's guess.
+  At the session's end the harness's own log names the compactions, read only, asynchronously and bounded from the
+  agent's own folders (`harness-compactions.ts`): codex's `compacted` rollout line, Qwen Code's `chat_compression`
+  transcript line (among its 64 newest); one no log names stays, from the wire. A session keeps its newest 200
+  compactions and counts the rest (`compactionsOmitted`).
 
 Retention and a size cap come from Settings. The back-office reads it through `window.electronAPI.traces`. An external
 reader reads it through `GET /api/traces/*`, with its own token, as the reader's trace format tables.
@@ -306,8 +322,9 @@ consent, opted-in sessions are uploaded:
   `invalid_batch`), so it takes `side` before Tars sends it: the back-office is updated first. A batch it refuses
   stays unsent and is tried again on the backoff, never sent without the mark;
 - each session with its environment, its power events, the harness's own session id, its median round trip and its
-  clock offset, and each request with its live count, its round trip, its clock offset and the endpoint's queue and
-  upstream times, each field on its own line of the notice; the back-office takes them before Tars sends them, as
+  clock offset, what the harness was given, its compactions and how many were left out, and each request with its live count, its round
+  trip, its clock offset, the endpoint's queue and upstream times and its `contextReset`, each field on its own line
+  of the notice; the back-office takes them before Tars sends them, as
   for `side`. A harness version over 40 characters or a session id over 128, the back-office's limits, is left out,
   never cut;
 - resumed after a restart, with backoff.

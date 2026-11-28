@@ -1028,6 +1028,12 @@ export interface InferenceEndpoint {
   approvedExtraHeaders?: Record<string, string>;
   /** The owner allowed plain http to this public address (window only); private addresses need no allowance. */
   allowPlainHttp?: boolean;
+  /**
+   * The endpoint model's real context window and output cap, in tokens, set by the owner in the window: given to the
+   * harness at launch, through its own knob (endpoint-harness.ts). Unset: the harness keeps its own guess.
+   */
+  contextWindow?: number;
+  maxOutputTokens?: number;
   health?: { ok: boolean; status?: number; latencyMs?: number; at: string; error?: string };
 }
 

@@ -19,6 +19,9 @@ import type { TraceFilter, TraceStore } from './trace-store';
  * clock from ours and the endpoint's queue and upstream times (`rtt_ms`, `clock_offset_ms`, `queue_ms`,
  * `upstream_ms`), and the session the median round trip and the offset at its shortest one (`rtt_median_ms`,
  * `clock_offset_ms`); null when the endpoint sent none.
+ * What the harness was given at launch (`context_window_given`, `output_cap_given`, `auto_compaction`), its
+ * compactions (`compactions`, from its log or the wire) and, on each request after a rewrite of its history,
+ * `context_reset` (trace feature C2).
  */
 
 export interface SessionDocument {
@@ -43,6 +46,8 @@ export function sessionDocument(store: TraceStore, traceId: string, seen: Set<st
       tokens_out: x.tokensOut, final_status: x.finalStatus, mixed: x.mixed, unknown_turns: x.unknownTurns, outcome: s.outcome ?? null,
       native_session_id: x.nativeSessionId ?? null, environment: x.environment ?? null, events: x.events ?? [],
       rtt_median_ms: x.rttMedianMs ?? null, clock_offset_ms: x.clockOffsetMs ?? null,
+      context_window_given: x.contextWindowGiven ?? null, output_cap_given: x.outputCapGiven ?? null,
+      auto_compaction: x.autoCompaction ?? null, compactions: x.compactions ?? [], compactions_omitted: x.compactionsOmitted ?? 0,
     },
     turns: [], requests: [], request_messages: [], messages: [],
   };
@@ -75,7 +80,7 @@ export function sessionDocument(store: TraceStore, traceId: string, seen: Set<st
         error: r.error ?? null, finish_reason: r.finishReason ?? null, attempts: r.attempts, held_ms: r.heldMs,
         req_bytes: r.reqBytes, resp_bytes: r.respBytes, bodies_dropped: r.bodiesDropped, system_hash: systemHash, tools_hash: toolsHash,
         live_sessions: r.liveSessions ?? null, rtt_ms: r.rttMs ?? null, clock_offset_ms: r.clockOffsetMs ?? null,
-        queue_ms: r.queueMs ?? null, upstream_ms: r.upstreamMs ?? null,
+        queue_ms: r.queueMs ?? null, upstream_ms: r.upstreamMs ?? null, context_reset: r.contextReset ?? null,
       });
       if (!m) continue;
       const inputHashes = m.input.map(v => v.hash);

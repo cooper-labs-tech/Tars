@@ -88,6 +88,9 @@ export function registerTracesHandlers(deps: TracesHandlerDeps): void {
       allowPlainHttp: typeof i.allowPlainHttp === 'boolean' ? i.allowPlainHttp : undefined,
       // Checked by saveEndpoint (cleanExtraHeaders): anything but a map of header names to values is refused there.
       extraHeaders: i.extraHeaders,
+      // The model's real limits, checked by saveEndpoint (limitsError): a number, null to clear, or absent to keep.
+      contextWindow: 'contextWindow' in i ? i.contextWindow as number | null : undefined,
+      maxOutputTokens: 'maxOutputTokens' in i ? i.maxOutputTokens as number | null : undefined,
       // What the form showed when it opened: a save of an endpoint that exists is refused without it, or when an
       // agent changed the endpoint since (saveEndpoint), before anything is written, the grant-first path included.
       shown: i.shown && typeof i.shown === 'object' ? i.shown as { baseUrl?: unknown; extraHeaders?: unknown } : undefined,
@@ -329,6 +332,13 @@ export function registerTracesHandlers(deps: TracesHandlerDeps): void {
       'how long the endpoint waited for its model server, for each request',
       'each session\'s median round trip to the endpoint',
       'for each session, how far this computer\'s clock was from the endpoint\'s, at its fastest round trip',
+      // What the harness was given at launch, and how it compacted (trace feature C2).
+      'the context window Tars gave the harness, from the endpoint\'s settings',
+      'the output cap Tars gave the harness, from the endpoint\'s settings',
+      'whether the harness compacts its history on its own',
+      'when the harness compacted or cut its history, and the prompt\'s length before and after',
+      'which requests came after the history was rewritten, and how many tokens it dropped',
+      'how many of a session\'s compactions were left out past its newest 200',
       'an install id, to delete everything this install sent',
     ],
     stays: ['your keys and Tars\'s tokens (masked before upload)', 'sessions of projects and agents not opted in', 'the endpoints\' keys and addresses', 'anything outside traced sessions',
