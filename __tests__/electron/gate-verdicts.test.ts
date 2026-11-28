@@ -5,8 +5,9 @@ import * as path from 'node:path';
 import { execFileSync } from 'node:child_process';
 import { TraceStore } from '../../electron/services/trace-store';
 import { TraceUploader } from '../../electron/services/trace-upload';
-import { parseVerdict, recordVerdict, ciVerdicts, type VerdictDeps } from '../../electron/services/gate-verdicts';
-import { registerVerdictRoutes } from '../../electron/services/api-routes/verdict-routes';
+import { parseVerdict, recordVerdict, ciVerdicts, relinkSession, type VerdictDeps } from '../../electron/services/gate-verdicts';
+import { registerVerdictRoutes, type VerdictRouteDeps } from '../../electron/services/api-routes/verdict-routes';
+import { sessionDocument } from '../../electron/services/trace-export';
 
 /**
  * Gate verdicts as data (trace feature B2): QA's, the Audit's or CI's MERGE or NO-MERGE on a pull request's head,
@@ -35,6 +36,17 @@ import { registerVerdictRoutes } from '../../electron/services/api-routes/verdic
  * 12. A long session gated on many heads outgrows what the back office takes for an outcome (16 KiB): every verdict
  *     on a head lists every turn before it, so its upload is refused whole. The turns go as ranges, and the newest
  *     gates are kept within a budget, the others counted.
+ * Added before their code after the Audit's NO-MERGE at a3047a696 and the orchestrator's decision (28/11):
+ * 13. A verdict recorded while the session that made the head still runs is wiped when that session ends (its end
+ *     writes a whole new outcome), and its ancestor turns are never linked (the branch was read from the outcome,
+ *     which only the end writes).
+ * 14. An agent records gate `ci`, over the record Tars read from the pull request's checks.
+ * 15. An agent records a qa or audit verdict on its own work: one of its own traced turns moved its checkout to the
+ *     judged head or to a linked ancestor. A turn of its own that only sat on the head is not its work.
+ * 16. The recorder's name and role are not kept from the fleet with the verdict, or not exported, or taken from the
+ *     body; the upload carries the name, which it carries for no agent.
+ * 17. An end head from the store that is not a hash reaches git (as an option, for one starting with `-`).
+ * 18. The ancestor checks run on past an overall deadline (up to 200 heads, 5 s each).
  */
 
 let home: string;
@@ -44,21 +56,25 @@ const T = 1_800_000_000_000;
 const git = (...args: string[]) => execFileSync('git', ['-c', 'user.name=t', '-c', 'user.email=t@example.com', '-c', 'commit.gpgSign=false', ...args], { cwd: repo, encoding: 'utf8' }).trim();
 const commit = (file: string, text: string, msg: string) => { fs.writeFileSync(path.join(repo, file), text); git('add', '-A'); git('commit', '-q', '-m', msg); return git('rev-parse', 'HEAD'); };
 
-/** A session of `project` on `branch` whose turns ended on these heads. */
-function session(traceId: string, project: string, branch: string, heads: string[], startedAt = T) {
-  store.openTrace({ traceId, projectPath: project, agentId: 'worker', harness: 'qwen-code', endpointId: 'ep-000001', model: 'm', startedAt });
+/**
+ * A session of `project` on `branch` whose turns ended on these heads (started on `starts`, unknown when not given),
+ * by `agentId`; still running when `end` is false.
+ */
+function session(traceId: string, project: string, branch: string, heads: string[], startedAt = T, opts: { agentId?: string; starts?: string[]; end?: boolean } = {}) {
+  const agentId = opts.agentId ?? 'worker';
+  store.openTrace({ traceId, projectPath: project, agentId, harness: 'qwen-code', endpointId: 'ep-000001', model: 'm', startedAt });
   const body = (v: unknown) => Buffer.from(JSON.stringify(v));
   heads.forEach((h, i) => {
     const at = startedAt + 1000 * (i + 1);
     store.ingest({
-      traceId, agentId: 'worker', surface: 'openai_chat', startedAt: at, endedAt: at + 10, status: 200, contentType: 'application/json',
+      traceId, agentId, surface: 'openai_chat', startedAt: at, endedAt: at + 10, status: 200, contentType: 'application/json',
       requestBody: body({ model: 'm', messages: [{ role: 'system', content: 's' }, { role: 'user', content: `turn ${i}` }], tools: [{ type: 'function', function: { name: 'bash' } }] }),
       responseBody: body({ choices: [{ message: { role: 'assistant', content: 'done' }, finish_reason: 'stop' }], usage: { prompt_tokens: 1, completion_tokens: 1 } }),
       attempts: 1, heldMs: 0,
     });
-    store.setTurnWorkspace(traceId, at, { endHead: h });
+    store.setTurnWorkspace(traceId, at, { endHead: h, ...(opts.starts ? { startHead: opts.starts[i] } : {}) });
   });
-  store.endTrace(traceId, startedAt + 100_000, { branch, head: heads[heads.length - 1] });
+  if (opts.end !== false) store.endTrace(traceId, startedAt + 100_000, { branch, head: heads[heads.length - 1] });
 }
 
 const gatesOf = (traceId: string) => (store.session(traceId)!.outcome?.gates ?? []) as Array<Record<string, unknown>>;
@@ -245,4 +261,103 @@ describe('gate verdicts', () => {
     const row = (u.preview('long')!.document.batches[0].body as { sessions: Array<{ outcome?: unknown }> }).sessions[0];
     expect(Buffer.byteLength(JSON.stringify(row.outcome)), 'the uploaded outcome, under the back office\'s 16 KiB').toBeLessThanOrEqual(16 * 1024);
   }, 60_000);
+
+  /** The route, with these deps: a call gives its status and answer. */
+  function routeWith(rd: VerdictRouteDeps) {
+    const routes: Array<{ pattern: unknown; handler: (req: unknown, send: (d: unknown, s?: number) => void) => Promise<void> }> = [];
+    registerVerdictRoutes({ post: (p: unknown, h: never) => routes.push({ pattern: p, handler: h }), get: () => undefined } as never, rd);
+    const route = routes.find(r => r.pattern === '/api/verdicts')!;
+    return async (req: Record<string, unknown>) => {
+      let out: { data: unknown; status: number } = { data: null, status: 0 };
+      await route.handler({ body: {}, ...req }, (data, status = 200) => { out = { data, status }; });
+      return out;
+    };
+  }
+  const fleet: VerdictRouteDeps['callerOf'] = (id) => ({ agentId: id, projectPath: repo, folder: repo, name: id === 'qa-agent' ? 'QA' : 'Someone', role: 'worker' });
+  /** The session's outcome as the upload sends it. */
+  function uploadedOutcome(traceId: string) {
+    const u = new TraceUploader({
+      store, installFile: path.join(home, 'private', 'traces-install.json'), settings: () => ({ url: '' }), setDeletion: () => {},
+      eligible: () => true, scrubContext: () => ({ homeDirs: [os.homedir()], knownSecrets: [], envValues: [] }), withdrawConsent: () => {},
+      client: { name: 'tars', version: '0', platform: process.platform },
+    });
+    return (u.preview(traceId)!.document.batches[0].body as { sessions: Array<{ outcome?: { gates?: Array<Record<string, unknown>> } }> }).sessions[0].outcome;
+  }
+
+  it('13: a verdict recorded while the session runs survives its end, with the ancestors on its branch', async () => {
+    // Its branch while it runs: from the folder its workspace is recorded in.
+    session('run1', repo, 'feat/x', [c1, c2], T + 600_000, { end: false });
+    const r = await recordVerdict(deps({ branchOf: async (id) => (id === 'run1' ? 'feat/x' : null) }), caller(), v({ pr: 21 }));
+    expect(r.linked.filter(l => l.traceId === 'run1').map(l => l.turnIndex), 'while it runs').toEqual([0, 1]);
+    store.endTrace('run1', T + 700_000, { branch: 'feat/x', head: c2 });
+    expect(gatesOf('run1').find(g => g.pr === 21)?.turns, 'kept through its end').toEqual([[0, 1]]);
+    // Its branch unknown while it ran: the exact head, then the ancestors once it ended.
+    session('run2', repo, 'feat/x', [c1, c2], T + 800_000, { end: false });
+    await recordVerdict(deps(), caller(), v({ pr: 22 }));
+    expect(gatesOf('run2').find(g => g.pr === 22)?.turns).toEqual([[1, 1]]);
+    store.endTrace('run2', T + 900_000, { branch: 'feat/x', head: c2 });
+    expect(gatesOf('run2').find(g => g.pr === 22)?.turns, 'kept through its end').toEqual([[1, 1]]);
+    const seq = store.seqOf('run2')!;
+    expect(await relinkSession(deps(), 'run2', repo), 'linked again at its end').toBe(true);
+    expect(gatesOf('run2').find(g => g.pr === 22)?.turns, 'the ancestor on its branch').toEqual([[0, 1]]);
+    expect(store.seqOf('run2')!).toBeGreaterThan(seq);
+    expect(await relinkSession(deps(), 'run2', repo), 'again: nothing moves').toBe(false);
+  });
+
+  it('14: only Tars records CI: an agent\'s ci is refused at the route, and Tars\'s record stays', async () => {
+    const checks: VerdictDeps['gh'] = async (args) => (args.includes('checks') ? JSON.stringify([{ name: 't', bucket: 'pass' }]) : JSON.stringify({ headRefName: 'feat/x', headRefOid: c2 }));
+    await ciVerdicts(deps({ gh: checks }), caller(), 12);
+    const call = routeWith({ callerOf: fleet, record: (c, x) => recordVerdict(deps(), c, x) });
+    const out = await call({ body: { gate: 'ci', pr: 12, head: c2, verdict: 'no_merge' }, callerAgentId: 'qa-agent' });
+    expect(out.status).toBe(403);
+    expect(gatesOf('s1').filter(g => g.kind === 'ci')).toEqual([expect.objectContaining({ verdict: 'merge', by: 'tars' })]);
+  });
+
+  it('15: a qa or audit verdict on the recorder\'s own work is refused; a turn that only sat on the head is not its work', async () => {
+    // qa-agent's own traced turn made c1, from c0.
+    session('own', repo, 'feat/x', [c1], T + 600_000, { agentId: 'qa-agent', starts: [c0] });
+    expect(await recordVerdict(deps(), caller(), v({ pr: 31, head: c1 })), 'the head itself').toMatchObject({ recorded: false, refused: 'own-work' });
+    expect(await recordVerdict(deps(), caller(), v({ pr: 32, head: c2 })), 'an ancestor on the branch').toMatchObject({ recorded: false, refused: 'own-work' });
+    expect(store.verdictLinksOf('s1'), 'nothing written').toEqual([]);
+    const call = routeWith({ callerOf: fleet, record: (c, x) => recordVerdict(deps(), c, x) });
+    const out = await call({ body: { gate: 'qa', pr: 32, head: c2, verdict: 'merge', branch: 'feat/x' }, callerAgentId: 'qa-agent' });
+    expect(out.status).toBe(403);
+    expect(JSON.stringify(out.data)).toContain('own work');
+    // audit-agent's own turn only sat on c2 (it started there): not its work.
+    session('sat', repo, 'feat/x', [c2], T + 700_000, { agentId: 'audit-agent', starts: [c2] });
+    const audit = await recordVerdict(deps(), { ...caller(), agentId: 'audit-agent' }, v({ gate: 'audit', pr: 33, head: c2, branch: undefined }));
+    expect(audit.recorded).toBe(true);
+  });
+
+  it('16: the recorder\'s name and role come from the fleet, are exported, and only the role is uploaded', async () => {
+    const call = routeWith({ callerOf: fleet, record: (c, x) => recordVerdict(deps(), c, x) });
+    const out = await call({ body: { gate: 'qa', pr: 41, head: c2, verdict: 'merge', branch: 'feat/x', byName: 'Boss', byRole: 'orchestrator' }, callerAgentId: 'qa-agent' });
+    expect(out.status).toBe(200);
+    expect(gatesOf('s1').find(g => g.pr === 41), 'from the fleet, never the body').toMatchObject({ by: 'qa-agent', byName: 'QA', byRole: 'worker' });
+    const doc = sessionDocument(store, 's1')!;
+    expect((doc.trace.outcome as { gates: Array<Record<string, unknown>> }).gates.find(g => g.pr === 41), 'the read API').toMatchObject({ byName: 'QA', byRole: 'worker' });
+    const up = uploadedOutcome('s1')!.gates!.find(g => g.pr === 41)!;
+    expect(up.byRole, 'the upload').toBe('worker');
+    expect(up).not.toHaveProperty('byName');
+  });
+
+  it('17: an end head from the store that is not a hash never reaches git', async () => {
+    store.setTurnWorkspace('s1', T + 1000, { endHead: '--output=/tmp/x' });
+    session('more', repo, 'feat/x', [c1], T + 600_000);
+    const calls: string[][] = [];
+    const spy: VerdictDeps['git'] = async (_dir, args) => { calls.push(args); throw new Error('not an ancestor'); };
+    await recordVerdict(deps({ git: spy }), caller(), v({ pr: 51 }));
+    expect(calls.length).toBeGreaterThan(0);
+    for (const c of calls) expect(c.slice(2), JSON.stringify(c)).toEqual([expect.stringMatching(/^[0-9a-f]{40}$/), c2]);
+  });
+
+  it('18: the ancestor checks stop at an overall deadline, and the answer says so', async () => {
+    const heads = Array.from({ length: 12 }, (_, i) => `${'a'.repeat(38)}${i.toString(16).padStart(2, '0')}`);
+    session('wide', repo, 'feat/x', heads, T + 600_000);
+    const slow: VerdictDeps['git'] = () => new Promise((_, reject) => setTimeout(() => reject(new Error('slow')), 300));
+    const at = Date.now();
+    const r = await recordVerdict(deps({ git: slow, deadlineMs: 700 }), caller(), v({ pr: 61 }));
+    expect(Date.now() - at).toBeLessThan(2_000);
+    expect(r).toMatchObject({ recorded: true, incomplete: true });
+  });
 });
